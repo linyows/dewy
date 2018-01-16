@@ -5,7 +5,8 @@ VERSION = "$(shell awk -F\" '/^const Version/ { print $$2; exit }' version.go)"
 default: test
 
 deps:
-	go get -d -t ./...
+	go get -u github.com/golang/dep/...
+	dep ensure
 
 depsdev:
 	go get -u github.com/mitchellh/gox
