@@ -8,7 +8,9 @@ deps:
 	go get -u github.com/golang/dep/...
 	dep ensure
 
-depsdev:
+depsdev: deps
+	go get github.com/golang/lint/golint
+	go get github.com/pierrre/gotestcover
 	go get -u github.com/mitchellh/gox
 	go get -u github.com/tcnksm/ghr
 
