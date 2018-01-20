@@ -1,4 +1,5 @@
-package dewy
+//package dewy
+package main
 
 import (
 	"context"
@@ -12,19 +13,10 @@ import (
 )
 
 func main() {
-	//go polling()
-	Release()
-}
-
-func polling() {
-	t := time.NewTicker(3 * time.Second)
 	for {
-		select {
-		case <-t.C:
-			Release()
-		}
+		go Release()
+		time.Sleep(10 * time.Second)
 	}
-	t.Stop()
 }
 
 func Client(ctx context.Context, token string, endpoint string) *github.Client {
