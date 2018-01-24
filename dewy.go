@@ -6,20 +6,20 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"time"
+	"runtime"
 
+	"github.com/carlescere/scheduler"
 	"github.com/google/go-github/github"
 	"golang.org/x/oauth2"
 )
 
 func main() {
-	for {
-		go Release()
-		time.Sleep(10 * time.Second)
-	}
+	job := release()
+	scheduler.Every(10).Seconds().NotImmediately().Run(job)
+	runtime.Goexit()
 }
 
-func Client(ctx context.Context, token string, endpoint string) *github.Client {
+func client(ctx context.Context, token string, endpoint string) *github.Client {
 	if token == "" {
 		token = os.Getenv("GITHUB_TOKEN")
 	}
@@ -40,14 +40,20 @@ func Client(ctx context.Context, token string, endpoint string) *github.Client {
 	return client
 }
 
-func Release() {
-	ctx := context.Background()
-	owner := "linyows"
-	repo := "octopass"
-	c := Client(ctx, "", "")
-	release, _, err := c.Repositories.GetLatestRelease(ctx, owner, repo)
-	if err != nil {
-		panic(err)
+func release() func() {
+	return func() {
+		ctx := context.Background()
+		owner := "linyows"
+		repo := "octopass"
+		c := client(ctx, "", "")
+		release, _, err := c.Repositories.GetLatestRelease(ctx, owner, repo)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Printf("Assets: %d\n", len(release.Assets))
+		for _, v := range release.Assets {
+			fmt.Printf("%s -- Size: %d, Download: %d <%s>\n",
+				*v.Name, *v.Size, *v.DownloadCount, *v.BrowserDownloadURL)
+		}
 	}
-	fmt.Printf("%#v\n", release)
 }
