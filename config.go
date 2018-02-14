@@ -1,7 +1,7 @@
 package dewy
 
 import (
-	"github.com/lestrrat/go-server-starter"
+	starter "github.com/lestrrat-go/server-starter"
 )
 
 type Config struct {
