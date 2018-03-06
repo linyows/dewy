@@ -4,9 +4,6 @@ import (
 	"github.com/lestrrat-go/server-starter"
 )
 
-type Cache struct {
-}
-
 type Dewy struct {
 	config     Config
 	repository Repository
