@@ -10,11 +10,12 @@ import (
 )
 
 type Repository struct {
-	provider RepositoryProvider
-	token    string
-	endpoint string
-	owner    string
-	name     string
+	provider    RepositoryProvider
+	token       string
+	endpoint    string
+	owner       string
+	name        string
+	artifact    string
 }
 
 func NewRepository(c RepositoryConfig) *Repository {
@@ -24,6 +25,7 @@ func NewRepository(c RepositoryConfig) *Repository {
 		endpoint: c.Endpoint,
 		owner:    c.Owner,
 		name:     c.Name,
+		artifact: c.Artifact,
 	}
 }
 

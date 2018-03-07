@@ -50,6 +50,7 @@ type RepositoryConfig struct {
 	Name     string
 	Token    string
 	Endpoint string
+	Artifact string
 }
 
 type Config struct {
@@ -67,6 +68,10 @@ func (c *Config) OverrideWithEnv() {
 		githubEndpoint := os.Getenv("GITHUB_ENDPOINT")
 		if githubEndpoint != "" {
 			c.Repository.Endpoint = githubEndpoint
+		}
+		githubArtifact := os.Getenv("GITHUB_ARTIFACT")
+		if githubArtifact != "" {
+			c.Repository.Artifact = githubArtifact
 		}
 	}
 }
