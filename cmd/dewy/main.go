@@ -15,8 +15,9 @@ func main() {
 				Expiration: 10,
 			},
 			Repository: dewy.RepositoryConfig{
-				Name:  "octopass",
-				Owner: "linyows",
+				Name:     "octopass",
+				Owner:    "linyows",
+				Artifact: "octopass-0.4.0.tar.gz",
 			},
 		}
 		c.OverrideWithEnv()
