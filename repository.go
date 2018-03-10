@@ -16,6 +16,7 @@ type Repository struct {
 	owner       string
 	name        string
 	artifact    string
+	downloadURL string
 }
 
 func NewRepository(c RepositoryConfig) *Repository {
