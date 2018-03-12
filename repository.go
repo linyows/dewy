@@ -2,7 +2,6 @@ package dewy
 
 import (
 	"context"
-	"fmt"
 	"net/url"
 
 	"github.com/google/go-github/github"
@@ -40,10 +39,12 @@ func (r *Repository) Fetch() error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Assets: %d\n", len(release.Assets))
 	for _, v := range release.Assets {
-		fmt.Printf("%s -- Size: %d, Download: %d <%s>\n",
-			*v.Name, *v.Size, *v.DownloadCount, *v.BrowserDownloadURL)
+		if *v.Name == r.artifact {
+			r.downloadURL = *v.BrowserDownloadURL
+			break
+		}
+		//fmt.Printf("%s -- Size: %d, Download: %d <%s>\n", *v.Name, *v.Size, *v.DownloadCount, *v.BrowserDownloadURL)
 	}
 	return nil
 }
