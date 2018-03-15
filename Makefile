@@ -22,7 +22,7 @@ depsdev: deps
 	go get -u github.com/tcnksm/ghr
 
 test:
-	go test -v $(TEST) $(TESTARGS) $(TEST_OPTIONS)
+	go test $(TEST) $(TESTARGS) $(TEST_OPTIONS)
 	go test -race $(TEST) $(TESTARGS)
 
 ci: depsdev test
