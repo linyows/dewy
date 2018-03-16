@@ -25,6 +25,9 @@ test:
 	go test $(TEST) $(TESTARGS) $(TEST_OPTIONS)
 	go test -race $(TEST) $(TESTARGS)
 
+integration:
+	go test -integration $(TEST) $(TESTARGS) $(TEST_OPTIONS)
+
 ci: depsdev test
 
 dist:
