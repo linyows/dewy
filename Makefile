@@ -28,6 +28,9 @@ test:
 integration:
 	go test -integration $(TEST) $(TESTARGS) $(TEST_OPTIONS)
 
+lint:
+	golint -set_exit_status $(TEST)
+
 ci: depsdev test
 
 dist:
