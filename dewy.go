@@ -25,5 +25,6 @@ func (d *Dewy) Run() error {
 		return err
 	}
 	fmt.Printf("%s\n", r.downloadURL)
+	r.Download()
 	return nil
 }
