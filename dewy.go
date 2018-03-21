@@ -24,7 +24,7 @@ func (d *Dewy) Run() error {
 	if err := r.Fetch(); err != nil {
 		return err
 	}
-	fmt.Printf("%s\n", r.downloadURL)
+	fmt.Printf("%s\n", r)
 	r.Download()
 	return nil
 }
