@@ -53,6 +53,10 @@ type RepositoryConfig struct {
 	Artifact string
 }
 
+func (r RepositoryConfig) String() string {
+	return r.Provider.String() + ":" + r.Owner + "/" + r.Name
+}
+
 type Config struct {
 	Repository RepositoryConfig
 	Cache      CacheConfig
