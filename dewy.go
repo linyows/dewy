@@ -18,6 +18,8 @@ func New(c Config) *Dewy {
 }
 
 func (d *Dewy) Run() error {
+	c := NewCache(d.config.Cache)
+	c.Read(d.config.Repository.String())
 	r := NewRepository(d.config.Repository)
 	if err := r.Fetch(); err != nil {
 		return err
