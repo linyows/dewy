@@ -1,8 +1,6 @@
 package dewy
 
 import (
-	"fmt"
-
 	"github.com/lestrrat-go/server-starter"
 )
 
@@ -24,7 +22,6 @@ func (d *Dewy) Run() error {
 	if err := r.Fetch(); err != nil {
 		return err
 	}
-	fmt.Printf("%s\n", r)
 	r.Download()
 	return nil
 }
