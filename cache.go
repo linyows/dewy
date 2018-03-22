@@ -1,9 +1,19 @@
 package dewy
 
 type Cache interface {
-	Read()
-	Write()
-	IsExpired()
+	Read(key string) string
+	Write(data string) bool
+	Delete(key string) bool
+	List() []string
+}
+
+func NewCache(c CacheConfig) Cache {
+	switch c.Type {
+	case FILE:
+		return &FileCache{}
+	default:
+		panic("no cache provider")
+	}
 }
 
 type Data struct {
@@ -16,13 +26,19 @@ type MemoryCache struct {
 	Data Data
 }
 
-func (m *MemoryCache) Read() {
+func (m *MemoryCache) Read(key string) string {
+	return ""
 }
 
-func (m *MemoryCache) Write() {
+func (m *MemoryCache) Write(data string) bool {
+	return true
 }
 
-func (m *MemoryCache) IsExpired() {
+func (m *MemoryCache) Delete(key string) bool {
+	return true
+}
+
+func (m *MemoryCache) List() {
 }
 
 type FileCache struct {
@@ -31,13 +47,20 @@ type FileCache struct {
 	Path string
 }
 
-func (f *FileCache) Read() {
+func (f *FileCache) Read(key string) string {
+	return ""
 }
 
-func (f *FileCache) Write() {
+func (f *FileCache) Write(data string) bool {
+	return true
 }
 
-func (f *FileCache) IsExpired() {
+func (f *FileCache) Delete(key string) bool {
+	return true
+}
+
+func (f *FileCache) List() []string {
+	return []string{""}
 }
 
 type RedisCache struct {
@@ -49,13 +72,16 @@ type RedisCache struct {
 	TTL      int
 }
 
-func (r *RedisCache) Read() {
+func (r *RedisCache) Read(key string) {
 }
 
-func (r *RedisCache) Write() {
+func (r *RedisCache) Write(data string) {
 }
 
-func (r *RedisCache) IsExpired() {
+func (r *RedisCache) Delete(key string) {
+}
+
+func (r *RedisCache) List() {
 }
 
 type ConsulCache struct {
@@ -66,11 +92,14 @@ type ConsulCache struct {
 	Password string
 }
 
-func (c *ConsulCache) Read() {
+func (c *ConsulCache) Read(key string) {
 }
 
-func (c *ConsulCache) Write() {
+func (c *ConsulCache) Write(data string) {
 }
 
-func (c *ConsulCache) IsExpired() {
+func (c *ConsulCache) Delete(key string) {
+}
+
+func (c *ConsulCache) List() {
 }
