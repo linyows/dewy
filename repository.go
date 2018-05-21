@@ -1,12 +1,16 @@
 package dewy
 
 import (
+	"archive/zip"
 	"context"
+	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 
 	"github.com/google/go-github/github"
 	"golang.org/x/oauth2"
@@ -23,6 +27,7 @@ type GithubReleaseRepository struct {
 	owner       string
 	name        string
 	artifact    string
+	tag         string
 	downloadURL string
 }
 
@@ -52,11 +57,12 @@ func (g *GithubReleaseRepository) Fetch() error {
 		return err
 	}
 	for _, v := range release.Assets {
+		fmt.Printf("%s -- Size: %d, Download: %d <%s>\n", *v.Name, *v.Size, *v.DownloadCount, *v.BrowserDownloadURL)
 		if *v.Name == g.artifact {
 			g.downloadURL = *v.BrowserDownloadURL
+			g.tag = *release.TagName
 			break
 		}
-		//fmt.Printf("%s -- Size: %d, Download: %d <%s>\n", *v.Name, *v.Size, *v.DownloadCount, *v.BrowserDownloadURL)
 	}
 	return nil
 }
@@ -72,13 +78,29 @@ func (g *GithubReleaseRepository) Download() error {
 		return err
 	}
 
+	dir, err := ioutil.TempDir(os.TempDir(), g.name+"-")
+	if err != nil {
+		return err
+	}
+	//defer os.RemoveAll(dir)
+
 	_, filename := path.Split(g.downloadURL)
-	file, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY, 0644)
+	tmpfn := filepath.Join(dir, filename)
+	fmt.Printf("Download to %s\n", tmpfn)
+
+	file, err := os.OpenFile(tmpfn, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
 	file.Write(body)
+
+	tmpbin, err := g.unzip(tmpfn, dir)
+	if err != nil {
+		fmt.Printf("%#v\n", err)
+		return err
+	}
+	fmt.Printf("Unzip to %s\n", tmpbin)
 
 	return nil
 }
@@ -99,4 +121,39 @@ func (g *GithubReleaseRepository) client(ctx context.Context) (*github.Client, e
 	}
 
 	return client, nil
+}
+
+func (g *GithubReleaseRepository) unzip(src, dstDir string) (string, error) {
+	r, err := zip.OpenReader(src)
+	if err != nil {
+		return "", err
+	}
+	defer r.Close()
+	var dst string
+
+	for _, f := range r.File {
+		rc, err := f.Open()
+		if err != nil {
+			return "", err
+		}
+		defer rc.Close()
+
+		if f.FileInfo().IsDir() {
+			dst = filepath.Join(dstDir, f.Name)
+			os.MkdirAll(dst, f.Mode())
+		} else {
+			buf := make([]byte, f.UncompressedSize)
+			_, err = io.ReadFull(rc, buf)
+			if err != nil {
+				return "", err
+			}
+
+			dst = filepath.Join(dstDir, f.Name)
+			if err = ioutil.WriteFile(dst, buf, f.Mode()); err != nil {
+				return "", err
+			}
+		}
+	}
+
+	return dst, nil
 }
