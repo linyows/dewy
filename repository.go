@@ -78,29 +78,28 @@ func (g *GithubReleaseRepository) Download() error {
 		return err
 	}
 
-	dir, err := ioutil.TempDir(os.TempDir(), g.name+"-")
-	if err != nil {
-		return err
-	}
-	//defer os.RemoveAll(dir)
+	dir := ""
 
 	_, filename := path.Split(g.downloadURL)
-	tmpfn := filepath.Join(dir, filename)
-	fmt.Printf("Download to %s\n", tmpfn)
+	filePath := filepath.Join(dir, filename)
+	fmt.Printf("Download to %s\n", filePath)
 
-	file, err := os.OpenFile(tmpfn, os.O_CREATE|os.O_WRONLY, 0644)
+	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
 	file.Write(body)
 
-	tmpbin, err := g.unzip(tmpfn, dir)
+	binPath, err := g.unzip(filePath, dir)
 	if err != nil {
-		fmt.Printf("%#v\n", err)
 		return err
 	}
-	fmt.Printf("Unzip to %s\n", tmpbin)
+	fmt.Printf("Unzip to %s\n", binPath)
+
+	if err := os.Rename(binPath, binPath+"."+g.tag); err != nil {
+		return err
+	}
 
 	return nil
 }
