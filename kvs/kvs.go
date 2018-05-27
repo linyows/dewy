@@ -6,8 +6,8 @@ import (
 )
 
 type KVS interface {
-	Read(key string) string
-	Write(data string) bool
+	Read(key string) (*item, error)
+	Write(key string, data []byte) error
 	Delete(key string) bool
 	List() []string
 }
