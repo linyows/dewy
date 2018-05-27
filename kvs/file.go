@@ -26,7 +26,7 @@ func (f *File) Default() error {
 }
 
 func (f *File) Read(key string) (*item, error) {
-	return ""
+	return &item{}, nil
 }
 
 func (f *File) Write(key string, data []byte) error {
