@@ -156,3 +156,8 @@ func (g *GithubReleaseRepository) unzip(src, dstDir string) (string, error) {
 
 	return dst, nil
 }
+
+func isExists(f string) bool {
+	_, err := os.Stat(f)
+	return err == nil
+}
