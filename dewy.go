@@ -2,12 +2,13 @@ package dewy
 
 import (
 	"github.com/lestrrat-go/server-starter"
+	"github.com/linyows/dewy/kvs"
 )
 
 type Dewy struct {
 	config     Config
 	repository Repository
-	cache      Cache
+	cache      kvs.KVS
 	starter    starter.Config
 }
 
