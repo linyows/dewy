@@ -6,7 +6,7 @@ import (
 
 type File struct {
 	items    map[string]*item
-	path     string
+	dir      string
 	mutex    sync.Mutex
 	MaxItems int
 	MaxSize  int64
