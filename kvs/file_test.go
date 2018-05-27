@@ -12,3 +12,11 @@ func TestIsFileExist(t *testing.T) {
 		t.Error("expects return false")
 	}
 }
+
+func TestFileDefault(t *testing.T) {
+	f := &File{}
+	f.Default()
+	if isFileExist(f.dir) != true {
+		t.Error("file dir expects not setted")
+	}
+}
