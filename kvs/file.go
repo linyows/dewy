@@ -27,3 +27,8 @@ func (f *File) Delete(key string) bool {
 func (f *File) List() []string {
 	return []string{""}
 }
+
+func isFileExist(p string) bool {
+	_, err := os.Stat(p)
+	return !os.IsNotExist(err)
+}
