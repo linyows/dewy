@@ -23,6 +23,7 @@ func (f *File) Default() error {
 		return err
 	}
 	f.dir = dir
+	return nil
 }
 
 func (f *File) Read(key string) (*item, error) {
