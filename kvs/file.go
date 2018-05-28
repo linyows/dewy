@@ -23,6 +23,7 @@ func (f *File) Default() error {
 		return err
 	}
 	f.dir = dir
+	f.MaxSize = 64 * 1024 * 1024
 	return nil
 }
 
