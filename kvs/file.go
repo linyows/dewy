@@ -72,8 +72,18 @@ func (f *File) Delete(key string) error {
 	return nil
 }
 
-func (f *File) List() []string {
-	return []string{""}
+func (f *File) List() ([]string, error) {
+	files, err := ioutil.ReadDir(f.dir)
+	if err != nil {
+		return nil, err
+	}
+
+	var list []string
+	for _, file := range files {
+		list = append(list, file.Name())
+	}
+
+	return list, nil
 }
 
 func isFileExist(p string) bool {
