@@ -59,8 +59,17 @@ func (f *File) Write(key string, data []byte) error {
 	return nil
 }
 
-func (f *File) Delete(key string) bool {
-	return true
+func (f *File) Delete(key string) error {
+	p := filepath.Join(f.dir, key)
+	if !isFileExist(p) {
+		return errors.New(fmt.Sprintf("File not found: %s", p))
+	}
+
+	if err := os.Remove(p); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (f *File) List() []string {
