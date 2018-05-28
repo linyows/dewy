@@ -8,8 +8,8 @@ import (
 type KVS interface {
 	Read(key string) (*item, error)
 	Write(key string, data []byte) error
-	Delete(key string) bool
-	List() []string
+	Delete(key string) error
+	List() ([]string, error)
 }
 
 type Config struct {
