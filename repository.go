@@ -1,14 +1,15 @@
 package dewy
 
 import (
+	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
-	"path"
 	"path/filepath"
+	"strings"
 
 	"github.com/google/go-github/github"
 	"github.com/linyows/dewy/kvs"
@@ -72,33 +73,27 @@ func (g *GithubReleaseRepository) Download() error {
 		return err
 	}
 
-	body, err := ioutil.ReadAll(res.Body)
+	buf := new(bytes.Buffer)
+	io.Copy(buf, res.Body)
+	body := buf.Bytes()
+
+	key := strings.Replace(g.downloadURL, "/", "-", -1)
+	kv := &kvs.File{}
+	kv.Default()
+	if err := kv.Write(key, body); err != nil {
+		return err
+	}
+
+	dir, err := os.Getwd()
 	if err != nil {
 		return err
 	}
 
-	dir := ""
-
-	_, filename := path.Split(g.downloadURL)
-	filePath := filepath.Join(dir, filename)
-	fmt.Printf("Download to %s\n", filePath)
-
-	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY, 0644)
+	p, err := kvs.Unzip(filepath.Join(kv.GetDir(), key), dir)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
-	file.Write(body)
-
-	binPath, err := kvs.Unzip(filePath, dir)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("Unzip to %s\n", binPath)
-
-	if err := os.Rename(binPath, binPath+"."+g.tag); err != nil {
-		return err
-	}
+	fmt.Printf("Unzip to %s\n", p)
 
 	return nil
 }
