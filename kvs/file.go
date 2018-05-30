@@ -22,8 +22,10 @@ func (f *File) Default() error {
 	if err != nil {
 		return err
 	}
+
 	f.dir = dir
 	f.MaxSize = 64 * 1024 * 1024
+
 	return nil
 }
 
@@ -53,6 +55,7 @@ func (f *File) Write(key string, data []byte) error {
 	if err != nil {
 		return err
 	}
+
 	defer file.Close()
 	file.Write(data)
 
@@ -88,5 +91,6 @@ func (f *File) List() ([]string, error) {
 
 func isFileExist(p string) bool {
 	_, err := os.Stat(p)
+
 	return !os.IsNotExist(err)
 }
