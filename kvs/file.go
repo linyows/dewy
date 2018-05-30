@@ -19,6 +19,10 @@ type File struct {
 	MaxSize  int64
 }
 
+func (f *File) GetDir() string {
+	return f.dir
+}
+
 func (f *File) Default() error {
 	dir, err := ioutil.TempDir("", "dewy")
 	if err != nil {
