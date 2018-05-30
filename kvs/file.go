@@ -111,13 +111,13 @@ func isFileExist(p string) bool {
 	return !os.IsNotExist(err)
 }
 
-func Unzip(src, dstDir string) (string, error) {
+func Unzip(src, dst string) (string, error) {
 	r, err := zip.OpenReader(src)
 	if err != nil {
 		return "", err
 	}
 	defer r.Close()
-	var dst string
+	var unziped string
 
 	for _, f := range r.File {
 		rc, err := f.Open()
@@ -127,8 +127,8 @@ func Unzip(src, dstDir string) (string, error) {
 		defer rc.Close()
 
 		if f.FileInfo().IsDir() {
-			dst = filepath.Join(dstDir, f.Name)
-			os.MkdirAll(dst, f.Mode())
+			unziped = filepath.Join(dst, f.Name)
+			os.MkdirAll(unziped, f.Mode())
 		} else {
 			buf := make([]byte, f.UncompressedSize)
 			_, err = io.ReadFull(rc, buf)
@@ -136,12 +136,12 @@ func Unzip(src, dstDir string) (string, error) {
 				return "", err
 			}
 
-			dst = filepath.Join(dstDir, f.Name)
-			if err = ioutil.WriteFile(dst, buf, f.Mode()); err != nil {
+			unziped = filepath.Join(dst, f.Name)
+			if err = ioutil.WriteFile(unziped, buf, f.Mode()); err != nil {
 				return "", err
 			}
 		}
 	}
 
-	return dst, nil
+	return unziped, nil
 }
