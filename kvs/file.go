@@ -29,8 +29,18 @@ func (f *File) Default() error {
 	return nil
 }
 
-func (f *File) Read(key string) (*item, error) {
-	return &item{}, nil
+func (f *File) Read(key string) ([]byte, error) {
+	p := filepath.Join(f.dir, key)
+	if !isFileExist(p) {
+		return nil, errors.New(fmt.Sprintf("File not found: %s", p))
+	}
+
+	content, err := ioutil.ReadFile(p)
+	if err != nil {
+		return nil, err
+	}
+
+	return content, nil
 }
 
 func (f *File) Write(key string, data []byte) error {
