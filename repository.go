@@ -1,10 +1,8 @@
 package dewy
 
 import (
-	"archive/zip"
 	"context"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -13,6 +11,7 @@ import (
 	"path/filepath"
 
 	"github.com/google/go-github/github"
+	"github.com/linyows/dewy/kvs"
 	"golang.org/x/oauth2"
 )
 
@@ -91,7 +90,7 @@ func (g *GithubReleaseRepository) Download() error {
 	defer file.Close()
 	file.Write(body)
 
-	binPath, err := g.unzip(filePath, dir)
+	binPath, err := kvs.Unzip(filePath, dir)
 	if err != nil {
 		return err
 	}
@@ -120,44 +119,4 @@ func (g *GithubReleaseRepository) client(ctx context.Context) (*github.Client, e
 	}
 
 	return client, nil
-}
-
-func (g *GithubReleaseRepository) unzip(src, dstDir string) (string, error) {
-	r, err := zip.OpenReader(src)
-	if err != nil {
-		return "", err
-	}
-	defer r.Close()
-	var dst string
-
-	for _, f := range r.File {
-		rc, err := f.Open()
-		if err != nil {
-			return "", err
-		}
-		defer rc.Close()
-
-		if f.FileInfo().IsDir() {
-			dst = filepath.Join(dstDir, f.Name)
-			os.MkdirAll(dst, f.Mode())
-		} else {
-			buf := make([]byte, f.UncompressedSize)
-			_, err = io.ReadFull(rc, buf)
-			if err != nil {
-				return "", err
-			}
-
-			dst = filepath.Join(dstDir, f.Name)
-			if err = ioutil.WriteFile(dst, buf, f.Mode()); err != nil {
-				return "", err
-			}
-		}
-	}
-
-	return dst, nil
-}
-
-func isExists(f string) bool {
-	_, err := os.Stat(f)
-	return err == nil
 }

@@ -1,8 +1,10 @@
 package kvs
 
 import (
+	"archive/zip"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -103,4 +105,39 @@ func isFileExist(p string) bool {
 	_, err := os.Stat(p)
 
 	return !os.IsNotExist(err)
+}
+
+func Unzip(src, dstDir string) (string, error) {
+	r, err := zip.OpenReader(src)
+	if err != nil {
+		return "", err
+	}
+	defer r.Close()
+	var dst string
+
+	for _, f := range r.File {
+		rc, err := f.Open()
+		if err != nil {
+			return "", err
+		}
+		defer rc.Close()
+
+		if f.FileInfo().IsDir() {
+			dst = filepath.Join(dstDir, f.Name)
+			os.MkdirAll(dst, f.Mode())
+		} else {
+			buf := make([]byte, f.UncompressedSize)
+			_, err = io.ReadFull(rc, buf)
+			if err != nil {
+				return "", err
+			}
+
+			dst = filepath.Join(dstDir, f.Name)
+			if err = ioutil.WriteFile(dst, buf, f.Mode()); err != nil {
+				return "", err
+			}
+		}
+	}
+
+	return dst, nil
 }
