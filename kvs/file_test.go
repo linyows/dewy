@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -21,6 +22,25 @@ func TestFileDefault(t *testing.T) {
 	f.Default()
 	if isFileExist(f.dir) != true {
 		t.Error("file dir expects not setted")
+	}
+	defer os.RemoveAll(f.dir)
+}
+
+func TestFileRead(t *testing.T) {
+	f := &File{}
+	f.Default()
+	data := []byte("this is data for test")
+	err := f.Write("testread", data)
+	if err != nil {
+		t.Error(err.Error())
+	}
+	p := filepath.Join(f.dir, "testread")
+	if isFileExist(p) != true {
+		t.Error("file not created")
+	}
+	content, err := f.Read("testread")
+	if !reflect.DeepEqual(content, data) {
+		t.Error("return is not correct")
 	}
 	defer os.RemoveAll(f.dir)
 }
