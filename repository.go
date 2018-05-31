@@ -67,6 +67,14 @@ func (g *GithubReleaseRepository) Fetch() error {
 	return nil
 }
 
+func genKeyByURL(uu string) (string, error) {
+	u, err := url.Parse(uu)
+	if err != nil {
+		return "", err
+	}
+	return strings.Replace(fmt.Sprintf("%s%s", u.Host, u.RequestURI()), "/", "-", -1), nil
+}
+
 func (g *GithubReleaseRepository) Download() error {
 	res, err := http.Get(g.downloadURL)
 	if err != nil {
