@@ -11,6 +11,16 @@ import (
 	"sync"
 )
 
+var (
+	DefaultTempDir string = createTempDir()
+	DefaultMaxSize int64  = 64 * 1024 * 1024
+)
+
+func createTempDir() string {
+	dir, _ := ioutil.TempDir("", "dewy-")
+	return dir
+}
+
 type File struct {
 	items    map[string]*item
 	dir      string
@@ -23,16 +33,9 @@ func (f *File) GetDir() string {
 	return f.dir
 }
 
-func (f *File) Default() error {
-	dir, err := ioutil.TempDir("", "dewy")
-	if err != nil {
-		return err
-	}
-
-	f.dir = dir
-	f.MaxSize = 64 * 1024 * 1024
-
-	return nil
+func (f *File) Default() {
+	f.dir = DefaultTempDir
+	f.MaxSize = DefaultMaxSize
 }
 
 func (f *File) Read(key string) ([]byte, error) {
