@@ -1,8 +1,6 @@
 package kvs
 
 import (
-	"fmt"
-	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -23,7 +21,6 @@ func TestFileDefault(t *testing.T) {
 	if isFileExist(f.dir) != true {
 		t.Error("file dir expects not setted")
 	}
-	defer os.RemoveAll(f.dir)
 }
 
 func TestFileRead(t *testing.T) {
@@ -42,7 +39,6 @@ func TestFileRead(t *testing.T) {
 	if !reflect.DeepEqual(content, data) {
 		t.Error("return is not correct")
 	}
-	defer os.RemoveAll(f.dir)
 }
 
 func TestFileWrite(t *testing.T) {
@@ -56,7 +52,6 @@ func TestFileWrite(t *testing.T) {
 	if isFileExist(filepath.Join(f.dir, "test")) != true {
 		t.Error("file not found for cache")
 	}
-	defer os.RemoveAll(f.dir)
 }
 
 func TestFileDelete(t *testing.T) {
@@ -78,7 +73,6 @@ func TestFileDelete(t *testing.T) {
 	if isFileExist(p) != false {
 		t.Error("file not deleted")
 	}
-	defer os.RemoveAll(f.dir)
 }
 
 func TestFileList(t *testing.T) {
@@ -93,8 +87,14 @@ func TestFileList(t *testing.T) {
 	if err != nil {
 		t.Error(err.Error())
 	}
-	if fmt.Sprintf("%#v", list) != "[]string{\"testlist\"}" {
-		t.Error("return is not correct")
+
+	found := false
+	for _, v := range list {
+		if v == "testlist" {
+			found = true
+		}
 	}
-	defer os.RemoveAll(f.dir)
+	if !found {
+		t.Error("file not found in list")
+	}
 }
