@@ -76,6 +76,19 @@ func genKeyByURL(uu string) (string, error) {
 }
 
 func (g *GithubReleaseRepository) Download() error {
+	key, err := genKeyByURL(g.downloadURL)
+	if err != nil {
+		return err
+	}
+	kv := &kvs.File{}
+	kv.Default()
+
+	cached, err := kv.Read(key)
+	if cached != nil {
+		fmt.Printf("Cache found and Not download: %s\n", key)
+		return nil
+	}
+
 	res, err := http.Get(g.downloadURL)
 	if err != nil {
 		return err
@@ -85,9 +98,6 @@ func (g *GithubReleaseRepository) Download() error {
 	io.Copy(buf, res.Body)
 	body := buf.Bytes()
 
-	key := strings.Replace(g.downloadURL, "/", "-", -1)
-	kv := &kvs.File{}
-	kv.Default()
 	if err := kv.Write(key, body); err != nil {
 		return err
 	}
