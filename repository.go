@@ -57,8 +57,8 @@ func (g *GithubReleaseRepository) Fetch() error {
 		return err
 	}
 	for _, v := range release.Assets {
-		fmt.Printf("%s -- Size: %d, Download: %d <%s>\n", *v.Name, *v.Size, *v.DownloadCount, *v.BrowserDownloadURL)
 		if *v.Name == g.artifact {
+			fmt.Printf("%s -- Size: %d, Download: %d <%s>\n", *v.Name, *v.Size, *v.DownloadCount, *v.BrowserDownloadURL)
 			g.downloadURL = *v.BrowserDownloadURL
 			g.tag = *release.TagName
 			break
