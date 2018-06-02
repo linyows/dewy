@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/google/go-github/github"
@@ -107,7 +106,7 @@ func (g *GithubReleaseRepository) Download() error {
 		return err
 	}
 
-	p, err := kvs.Unzip(filepath.Join(kv.GetDir(), key), dir)
+	p, err := kv.Unzip(key, dir)
 	if err != nil {
 		return err
 	}
