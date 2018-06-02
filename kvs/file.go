@@ -108,6 +108,15 @@ func (f *File) List() ([]string, error) {
 	return list, nil
 }
 
+func (f *File) Unzip(key, dst string) (string, error) {
+	p := filepath.Join(f.dir, key)
+	if !isFileExist(p) {
+		return "", errors.New(fmt.Sprintf("File not found: %s", p))
+	}
+
+	return Unzip(p, dst)
+}
+
 func isFileExist(p string) bool {
 	_, err := os.Stat(p)
 
