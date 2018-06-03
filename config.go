@@ -60,7 +60,6 @@ func (r RepositoryConfig) String() string {
 }
 
 type Config struct {
-	LogLevel   string
 	Repository RepositoryConfig
 	Cache      CacheConfig
 	Starter    starter.Config
@@ -85,7 +84,6 @@ func (c *Config) OverrideWithEnv() {
 
 func DefaultConfig() Config {
 	return Config{
-		LogLevel: "DEBUG",
 		Cache: CacheConfig{
 			Type:       FILE,
 			Expiration: 10,
