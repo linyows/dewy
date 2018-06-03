@@ -1,7 +1,9 @@
 package dewy
 
 import (
+	"fmt"
 	"os"
+	"path"
 
 	starter "github.com/lestrrat-go/server-starter"
 )
@@ -54,7 +56,7 @@ type RepositoryConfig struct {
 }
 
 func (r RepositoryConfig) String() string {
-	return r.Provider.String() + ":" + r.Owner + "/" + r.Name
+	return path.Join(fmt.Sprintf("%s:%s", r.Provider.String(), r.Owner), r.Name)
 }
 
 type Config struct {
