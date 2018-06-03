@@ -15,6 +15,16 @@ const (
 	ExitErr int = 1
 )
 
+type CLI struct {
+	outStream, errStream io.Writer
+	Command              string
+	Config               string `long:"config" short:"c" description:"Path to configuration file"`
+	LogLevel             string `long:"log-level" short:"l" arg:"(debug|info|warn|error)" description:"Level displayed as log"`
+	Interval             string `long:"interval" short:"i" description:"The polling interval to the repository"`
+	Help                 bool   `long:"help" short:"h" description:"show this help message and exit"`
+	Version              bool   `long:"version" short:"v" description:"prints the version number"`
+}
+
 func main() {
 	job := func() {
 		c := dewy.Config{
