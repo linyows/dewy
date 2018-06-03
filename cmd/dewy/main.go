@@ -1,9 +1,18 @@
 package main
 
 import (
+	"bytes"
+	"fmt"
+	"io"
+	"log"
+	"os"
+	"reflect"
 	"runtime"
+	"strings"
 
 	"github.com/carlescere/scheduler"
+	"github.com/hashicorp/logutils"
+	flags "github.com/jessevdk/go-flags"
 	"github.com/linyows/dewy"
 )
 
@@ -98,22 +107,60 @@ Options:
 }
 
 func main() {
+	cli := &CLI{outStream: os.Stdout, errStream: os.Stderr}
+	cli.run(os.Args[1:])
+}
+
+// CLI executes for cli
+func (c *CLI) run(a []string) {
+	p := flags.NewParser(c, flags.PrintErrors|flags.PassDoubleDash)
+	args, err := p.ParseArgs(a)
+	if err != nil || c.Help {
+		c.showHelp()
+		os.Exit(ExitErr)
+		return
+	}
+
+	if c.Version {
+		fmt.Fprintf(c.errStream, "%s version %s\n", dewy.Name, dewy.Version)
+		os.Exit(ExitOK)
+		return
+	}
+
+	if len(args) == 0 {
+		fmt.Fprintf(c.errStream, "command not specified\n")
+		os.Exit(ExitErr)
+		return
+	}
+
+	c.Command = args[0]
+
+	if c.LogLevel != "" {
+		c.LogLevel = strings.ToUpper(c.LogLevel)
+	} else {
+		c.LogLevel = "ERROR"
+	}
+
+	filter := &logutils.LevelFilter{
+		Levels:   []logutils.LogLevel{"DEBUG", "INFO", "WARN", "ERROR"},
+		MinLevel: logutils.LogLevel(c.LogLevel),
+		Writer:   c.errStream,
+	}
+	log.SetOutput(filter)
+
 	job := func() {
-		c := dewy.Config{
-			Cache: dewy.CacheConfig{
-				Type:       dewy.FILE,
-				Expiration: 10,
-			},
-			Repository: dewy.RepositoryConfig{
-				Name:     "mox",
-				Owner:    "linyows",
-				Artifact: "darwin_amd64.zip",
-			},
+		conf := dewy.DefaultConfig()
+		conf.Repository = dewy.RepositoryConfig{
+			Name:     "mox",
+			Owner:    "linyows",
+			Artifact: "darwin_amd64.zip",
 		}
-		c.OverrideWithEnv()
-		d := dewy.New(c)
+		conf.OverrideWithEnv()
+		d := dewy.New(conf)
 		if err := d.Run(); err != nil {
-			panic(err)
+			fmt.Fprintf(c.errStream, "%s\n", err)
+			os.Exit(ExitErr)
+			return
 		}
 	}
 	scheduler.Every(10).Seconds().NotImmediately().Run(job)
