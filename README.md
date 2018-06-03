@@ -22,6 +22,21 @@ To install, use `go get`:
 $ go get -d github.com/linyows/dewy
 ```
 
+Useage
+------
+
+When the application functions as a server:
+
+```sh
+$ dewy server --config /etc/dewy.d/your-application.conf
+```
+
+When the application and server are separated, or when the server is unnecessary:
+
+```sh
+$ dewy assets --config /etc/dewy.d/your-assets.conf
+```
+
 Contribution
 ------------
 
