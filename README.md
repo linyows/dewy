@@ -22,8 +22,8 @@ To install, use `go get`:
 $ go get -d github.com/linyows/dewy
 ```
 
-Useage
-------
+Usage
+-----
 
 When the application functions as a server:
 
