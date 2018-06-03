@@ -1,10 +1,6 @@
 package dewy
 
 import (
-	"log"
-	"os"
-
-	"github.com/hashicorp/logutils"
 	"github.com/lestrrat-go/server-starter"
 	"github.com/linyows/dewy/kvs"
 )
@@ -17,13 +13,6 @@ type Dewy struct {
 }
 
 func New(c Config) *Dewy {
-	filter := &logutils.LevelFilter{
-		Levels:   []logutils.LogLevel{"DEBUG", "INFO", "WARN", "ERROR"},
-		MinLevel: logutils.LogLevel("DEBUG"),
-		Writer:   os.Stderr,
-	}
-	log.SetOutput(filter)
-
 	return &Dewy{
 		config: c,
 	}
