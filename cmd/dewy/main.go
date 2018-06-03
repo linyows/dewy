@@ -77,6 +77,26 @@ func (c *CLI) buildHelp(names []string) []string {
 	return help
 }
 
+// help shows help
+func (c *CLI) showHelp() {
+	opts := strings.Join(c.buildHelp([]string{
+		"Config",
+		"LogLevel",
+	}), "\n")
+
+	help := `
+Usage: dewy [--version] [--help] command <options>
+
+Commands:
+  server   Keep the app server up to date
+  assets   Keep assets up to date
+
+Options:
+%s
+`
+	fmt.Fprintf(c.outStream, help, opts)
+}
+
 func main() {
 	job := func() {
 		c := dewy.Config{
