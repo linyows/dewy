@@ -82,3 +82,13 @@ func (c *Config) OverrideWithEnv() {
 		}
 	}
 }
+
+func DefaultConfig() Config {
+	return Config{
+		LogLevel: "DEBUG",
+		Cache: CacheConfig{
+			Type:       FILE,
+			Expiration: 10,
+		},
+	}
+}
