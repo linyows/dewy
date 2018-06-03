@@ -7,6 +7,14 @@ import (
 	"github.com/linyows/dewy"
 )
 
+const (
+	// ExitOK for exit code
+	ExitOK int = 0
+
+	// ExitErr for exit code
+	ExitErr int = 1
+)
+
 func main() {
 	job := func() {
 		c := dewy.Config{
