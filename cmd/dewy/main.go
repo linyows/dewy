@@ -25,6 +25,58 @@ type CLI struct {
 	Version              bool   `long:"version" short:"v" description:"prints the version number"`
 }
 
+func (c *CLI) buildHelp(names []string) []string {
+	var help []string
+	t := reflect.TypeOf(CLI{})
+
+	for _, name := range names {
+		f, ok := t.FieldByName(name)
+		if !ok {
+			continue
+		}
+
+		tag := f.Tag
+		if tag == "" {
+			continue
+		}
+
+		var o, a string
+		if a = tag.Get("arg"); a != "" {
+			a = fmt.Sprintf("=%s", a)
+		}
+		if s := tag.Get("short"); s != "" {
+			o = fmt.Sprintf("-%s, --%s%s", tag.Get("short"), tag.Get("long"), a)
+		} else {
+			o = fmt.Sprintf("--%s%s", tag.Get("long"), a)
+		}
+
+		desc := tag.Get("description")
+		if i := strings.Index(desc, "\n"); i >= 0 {
+			var buf bytes.Buffer
+			buf.WriteString(desc[:i+1])
+			desc = desc[i+1:]
+			const indent = "                        "
+			for {
+				if i = strings.Index(desc, "\n"); i >= 0 {
+					buf.WriteString(indent)
+					buf.WriteString(desc[:i+1])
+					desc = desc[i+1:]
+					continue
+				}
+				break
+			}
+			if len(desc) > 0 {
+				buf.WriteString(indent)
+				buf.WriteString(desc)
+			}
+			desc = buf.String()
+		}
+		help = append(help, fmt.Sprintf("  %-40s %s", o, desc))
+	}
+
+	return help
+}
+
 func main() {
 	job := func() {
 		c := dewy.Config{
