@@ -60,6 +60,7 @@ func (r RepositoryConfig) String() string {
 }
 
 type Config struct {
+	LogLevel   string
 	Repository RepositoryConfig
 	Cache      CacheConfig
 	Starter    starter.Config
