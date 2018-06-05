@@ -18,6 +18,7 @@ import (
 type Repository interface {
 	Fetch() error
 	Download() error
+	IsDownloadNecessary() bool
 }
 
 type GithubReleaseRepository struct {
