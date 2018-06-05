@@ -25,7 +25,8 @@ func (d *Dewy) Run() error {
 	// c := New("file", kvs.Config)
 	// c.Read(d.config.Repository.String())
 	d.config.Repository.String()
-	r := NewRepository(d.config.Repository)
+	r := NewRepository(d.config.Repository, d.cache)
+
 	if err := r.Fetch(); err != nil {
 		return err
 	}
