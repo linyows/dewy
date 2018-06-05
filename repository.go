@@ -33,7 +33,7 @@ type GithubReleaseRepository struct {
 	cache       kvs.KVS
 }
 
-func NewRepository(c RepositoryConfig) Repository {
+func NewRepository(c RepositoryConfig, d kvs.KVS) Repository {
 	switch c.Provider {
 	case GITHUB:
 		return &GithubReleaseRepository{
@@ -42,6 +42,7 @@ func NewRepository(c RepositoryConfig) Repository {
 			owner:    c.Owner,
 			name:     c.Name,
 			artifact: c.Artifact,
+			cache:    d,
 		}
 	default:
 		panic("no repository provider")
