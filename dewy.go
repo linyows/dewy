@@ -26,6 +26,9 @@ func (d *Dewy) Run() error {
 	if err := r.Fetch(); err != nil {
 		return err
 	}
-	r.Download()
+	if err := r.Download(); err != nil {
+		return err
+	}
+
 	return nil
 }

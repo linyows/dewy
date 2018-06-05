@@ -84,8 +84,7 @@ func (g *GithubReleaseRepository) Download() error {
 
 	cached, err := kv.Read(key)
 	if cached != nil {
-		fmt.Printf("Cache found and Not download: %s\n", key)
-		return nil
+		return fmt.Errorf("Download skipped, the reason was cache found: %s\n", key)
 	}
 
 	res, err := http.Get(g.downloadURL)
