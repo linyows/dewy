@@ -29,6 +29,8 @@ type GithubReleaseRepository struct {
 	artifact    string
 	tag         string
 	downloadURL string
+	cacheKey    string
+	cache       kvs.KVS
 }
 
 func NewRepository(c RepositoryConfig) Repository {
