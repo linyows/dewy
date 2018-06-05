@@ -13,8 +13,11 @@ type Dewy struct {
 }
 
 func New(c Config) *Dewy {
+	kv := &kvs.File{}
+	kv.Default()
 	return &Dewy{
 		config: c,
+		cache:  kv,
 	}
 }
 
