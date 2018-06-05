@@ -111,7 +111,7 @@ func (g *GithubReleaseRepository) Download() error {
 	io.Copy(buf, res.Body)
 	body := buf.Bytes()
 
-	if err := kv.Write(key, body); err != nil {
+	if err := g.cache.Write(g.cacheKey, body); err != nil {
 		return err
 	}
 
@@ -120,7 +120,7 @@ func (g *GithubReleaseRepository) Download() error {
 		return err
 	}
 
-	p, err := kv.Unzip(key, dir)
+	p, err := g.cache.Unzip(g.cacheKey, dir)
 	if err != nil {
 		return err
 	}
