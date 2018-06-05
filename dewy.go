@@ -1,6 +1,8 @@
 package dewy
 
 import (
+	"log"
+
 	"github.com/lestrrat-go/server-starter"
 	"github.com/linyows/dewy/kvs"
 )
@@ -30,6 +32,12 @@ func (d *Dewy) Run() error {
 	if err := r.Fetch(); err != nil {
 		return err
 	}
+
+	if !r.IsDownloadNecessary() {
+		log.Print("[DEBUG] Download skipped")
+		return nil
+	}
+
 	if err := r.Download(); err != nil {
 		return err
 	}
