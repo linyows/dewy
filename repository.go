@@ -66,27 +66,33 @@ func (g *GithubReleaseRepository) Fetch() error {
 	return nil
 }
 
-func genKeyByURL(uu string) (string, error) {
-	u, err := url.Parse(uu)
-	if err != nil {
-		return "", err
-	}
-	return strings.Replace(fmt.Sprintf("%s%s", u.Host, u.RequestURI()), "/", "-", -1), nil
-}
-
-func (g *GithubReleaseRepository) Download() error {
-	key, err := genKeyByURL(g.downloadURL)
+func (g *GithubReleaseRepository) setCacheKey() error {
+	u, err := url.Parse(g.downloadURL)
 	if err != nil {
 		return err
 	}
-	kv := &kvs.File{}
-	kv.Default()
+	g.cacheKey = strings.Replace(fmt.Sprintf("%s%s", u.Host, u.RequestURI()), "/", "-", -1)
 
-	cached, err := kv.Read(key)
-	if cached != nil {
-		return fmt.Errorf("Download skipped, the reason was cache found: %s\n", key)
+	return nil
+}
+
+func (g *GithubReleaseRepository) IsDownloadNecessary() bool {
+	list, err := g.cache.List()
+	if err != nil {
+		log.Printf("[ERROR] %s", err)
+		return false
 	}
 
+	for _, key := range list {
+		if key == g.cacheKey {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (g *GithubReleaseRepository) Download() error {
 	res, err := http.Get(g.downloadURL)
 	if err != nil {
 		return err
