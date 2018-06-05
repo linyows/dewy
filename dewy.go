@@ -1,7 +1,12 @@
 package dewy
 
 import (
+	"fmt"
 	"log"
+	"os"
+	"path"
+	"path/filepath"
+	"time"
 
 	"github.com/lestrrat-go/server-starter"
 	"github.com/linyows/dewy/kvs"
@@ -40,6 +45,15 @@ func (d *Dewy) Run() error {
 
 	if err := r.Download(); err != nil {
 		return err
+	}
+
+	if d.config.Starter.Command() != nil {
+		cmd := d.config.Starter.Command()
+		if kvs.IsFileExist(cmd) {
+			n := fmt.Sprintf("%s-%s", path.Base(cmd), time.Now().Format("20060102150405MST"))
+			p := filepath.Join("/var/dewy/backup", n)
+			err := os.Rename(cmd, p)
+		}
 	}
 
 	return nil
