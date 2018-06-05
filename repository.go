@@ -67,6 +67,11 @@ func (g *GithubReleaseRepository) Fetch() error {
 			break
 		}
 	}
+
+	if err := g.setCacheKey(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
