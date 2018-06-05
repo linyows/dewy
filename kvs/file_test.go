@@ -7,10 +7,10 @@ import (
 )
 
 func TestIsFileExist(t *testing.T) {
-	if isFileExist("/tmp") != true {
+	if IsFileExist("/tmp") != true {
 		t.Error("expects return true")
 	}
-	if isFileExist("/tmpfoo") != false {
+	if IsFileExist("/tmpfoo") != false {
 		t.Error("expects return false")
 	}
 }
@@ -18,7 +18,7 @@ func TestIsFileExist(t *testing.T) {
 func TestFileDefault(t *testing.T) {
 	f := &File{}
 	f.Default()
-	if isFileExist(f.dir) != true {
+	if IsFileExist(f.dir) != true {
 		t.Error("file dir expects not setted")
 	}
 }
@@ -32,7 +32,7 @@ func TestFileRead(t *testing.T) {
 		t.Error(err.Error())
 	}
 	p := filepath.Join(f.dir, "testread")
-	if isFileExist(p) != true {
+	if IsFileExist(p) != true {
 		t.Error("file not created")
 	}
 	content, err := f.Read("testread")
@@ -49,7 +49,7 @@ func TestFileWrite(t *testing.T) {
 	if err != nil {
 		t.Error(err.Error())
 	}
-	if isFileExist(filepath.Join(f.dir, "test")) != true {
+	if IsFileExist(filepath.Join(f.dir, "test")) != true {
 		t.Error("file not found for cache")
 	}
 }
@@ -63,14 +63,14 @@ func TestFileDelete(t *testing.T) {
 		t.Error(err.Error())
 	}
 	p := filepath.Join(f.dir, "testdelete")
-	if isFileExist(p) != true {
+	if IsFileExist(p) != true {
 		t.Error("file not created")
 	}
 	err = f.Delete("testdelete")
 	if err != nil {
 		t.Error(err.Error())
 	}
-	if isFileExist(p) != false {
+	if IsFileExist(p) != false {
 		t.Error("file not deleted")
 	}
 }

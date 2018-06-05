@@ -40,7 +40,7 @@ func (f *File) Default() {
 
 func (f *File) Read(key string) ([]byte, error) {
 	p := filepath.Join(f.dir, key)
-	if !isFileExist(p) {
+	if !IsFileExist(p) {
 		return nil, errors.New(fmt.Sprintf("File not found: %s", p))
 	}
 
@@ -66,7 +66,7 @@ func (f *File) Write(key string, data []byte) error {
 	}
 
 	p := filepath.Join(f.dir, key)
-	if isFileExist(p) {
+	if IsFileExist(p) {
 		return errors.New(fmt.Sprintf("File already exists: %s", p))
 	}
 
@@ -83,7 +83,7 @@ func (f *File) Write(key string, data []byte) error {
 
 func (f *File) Delete(key string) error {
 	p := filepath.Join(f.dir, key)
-	if !isFileExist(p) {
+	if !IsFileExist(p) {
 		return errors.New(fmt.Sprintf("File not found: %s", p))
 	}
 
@@ -110,14 +110,14 @@ func (f *File) List() ([]string, error) {
 
 func (f *File) Unzip(key, dst string) (string, error) {
 	p := filepath.Join(f.dir, key)
-	if !isFileExist(p) {
+	if !IsFileExist(p) {
 		return "", errors.New(fmt.Sprintf("File not found: %s", p))
 	}
 
 	return Unzip(p, dst)
 }
 
-func isFileExist(p string) bool {
+func IsFileExist(p string) bool {
 	_, err := os.Stat(p)
 
 	return !os.IsNotExist(err)
