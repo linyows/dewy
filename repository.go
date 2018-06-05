@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -61,7 +62,7 @@ func (g *GithubReleaseRepository) Fetch() error {
 	}
 	for _, v := range release.Assets {
 		if *v.Name == g.artifact {
-			fmt.Printf("%s -- Size: %d, Download: %d <%s>\n", *v.Name, *v.Size, *v.DownloadCount, *v.BrowserDownloadURL)
+			log.Printf("[DEBUG] Fetched: %+v", v)
 			g.downloadURL = *v.BrowserDownloadURL
 			g.tag = *release.TagName
 			break
@@ -106,6 +107,7 @@ func (g *GithubReleaseRepository) Download() error {
 	if err != nil {
 		return err
 	}
+	log.Printf("[INFO] Downloaded from %s", g.downloadURL)
 
 	buf := new(bytes.Buffer)
 	io.Copy(buf, res.Body)
@@ -114,6 +116,7 @@ func (g *GithubReleaseRepository) Download() error {
 	if err := g.cache.Write(g.cacheKey, body); err != nil {
 		return err
 	}
+	log.Printf("[INFO] Cached as %s", g.cacheKey)
 
 	dir, err := os.Getwd()
 	if err != nil {
@@ -124,7 +127,7 @@ func (g *GithubReleaseRepository) Download() error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Unzip to %s\n", p)
+	log.Printf("[INFO] Unzipped to %s", p)
 
 	return nil
 }
