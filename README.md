@@ -1,17 +1,13 @@
-DEWY
-====
+<p align="center">
+<strong>DEWY</strong>: The application server for deployment with distributed polling.
+</p>
 
-The application server for deployment with distributed polling.
-
-[![Travis](https://img.shields.io/travis/linyows/dewy.svg?style=flat-square)][travis]
-[![GitHub release](http://img.shields.io/github/release/linyows/dewy.svg?style=flat-square)][release]
-[![MIT License](http://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)][license]
-[![Go Documentation](http://img.shields.io/badge/go-documentation-blue.svg?style=flat-square)][godocs]
-
-[travis]: https://travis-ci.org/linyows/dewy
-[release]: https://github.com/linyows/dewy/releases
-[license]: https://github.com/linyows/dewy/blob/master/LICENSE
-[godocs]: http://godoc.org/github.com/linyows/dewy
+<p align="center">
+<a href="https://travis-ci.org/linyows/dewy"><img src="https://img.shields.io/travis/linyows/dewy.svg?style=for-the-badge" alt="travis"></a>
+<a href="https://github.com/linyows/dewy/releases"><img src="http://img.shields.io/github/release/linyows/dewy.svg?style=for-the-badge" alt="GitHub Release"></a>
+<a href="https://github.com/linyows/dewy/blob/master/LICENSE"><img src="http://img.shields.io/badge/license-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
+<a href="http://godoc.org/github.com/linyows/dewy"><img src="http://img.shields.io/badge/go-documentation-blue.svg?style=for-the-badge" alt="Go Documentation"></a>
+</p>
 
 Installation
 ------------
