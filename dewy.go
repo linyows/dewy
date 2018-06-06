@@ -62,3 +62,11 @@ func (d *Dewy) Run() error {
 
 	return nil
 }
+
+func (d *Dewy) StartServer() error {
+	return nil
+}
+
+func (d *Dewy) RestartServer() error {
+	return nil
+}
