@@ -47,12 +47,16 @@ func (d *Dewy) Run() error {
 		return err
 	}
 
-	if d.config.Starter.Command() != nil {
-		cmd := d.config.Starter.Command()
-		if kvs.IsFileExist(cmd) {
-			n := fmt.Sprintf("%s-%s", path.Base(cmd), time.Now().Format("20060102150405MST"))
-			p := filepath.Join("/var/dewy/backup", n)
-			err := os.Rename(cmd, p)
+	if d.config.Starter.Command() == "" {
+		return nil
+	}
+
+	cmd := d.config.Starter.Command()
+	if kvs.IsFileExist(cmd) {
+		n := fmt.Sprintf("%s-%s", path.Base(cmd), time.Now().Format("20060102150405MST"))
+		p := filepath.Join("/var/dewy/backup", n)
+		if err := os.Rename(cmd, p); err != nil {
+			return err
 		}
 	}
 
