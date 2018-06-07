@@ -1,10 +1,12 @@
 package dewy
 
 import (
+	"errors"
 	"log"
 	"os"
+	"path/filepath"
+	"time"
 
-	"github.com/lestrrat-go/server-starter"
 	"github.com/linyows/dewy/kvs"
 )
 
@@ -42,23 +44,37 @@ func (d *Dewy) Run() error {
 		return err
 	}
 
-	preserveDir := "/var/dewy/preserves"
+	//preserveDir := "/var/dewy/preserves"
+	preserveDir, err := os.Getwd()
+	if err != nil {
+		return err
+	}
 
 	linkFrom, err := r.Preserve(preserveDir)
 	if err != nil {
 		return err
 	}
 
-	linkTo := d.config.Starter.Command()
-	os.Symlink(linkFrom, linkTo)
+	//linkTo := d.config.Starter.Command()
+	linkTo := filepath.Join(preserveDir, "mox")
+	if err := os.Symlink(linkFrom, linkTo); err != nil {
+		return err
+	}
 
 	ch := make(chan error)
 	go func() {
-		s, err := starter.NewStarter(d.config.Starter)
-		if err != nil {
-			return
+		counter := 0
+		for {
+			counter++
+			time.Sleep(1 * time.Second)
+			log.Printf("==> %d", counter)
 		}
-		ch <- s.Run()
+		//s, err := starter.NewStarter(d.config.Starter)
+		//if err != nil {
+		//	return
+		//}
+		//ch <- s.Run()
+		ch <- errors.New("yo")
 	}()
 
 	return nil
