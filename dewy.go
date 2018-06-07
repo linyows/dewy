@@ -53,13 +53,14 @@ func (d *Dewy) Run() error {
 	linkTo := d.config.Starter.Command()
 	os.Symlink(linkFrom, linkTo)
 
-	return nil
-}
+	ch := make(chan error)
+	go func() {
+		s, err := starter.NewStarter(d.starter.Config)
+		if err != nil {
+			return err
+		}
+		ch <- s.Run()
+	}()
 
-func (d *Dewy) StartServer() error {
-	return nil
-}
-
-func (d *Dewy) RestartServer() error {
 	return nil
 }
