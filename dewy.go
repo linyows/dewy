@@ -12,7 +12,6 @@ type Dewy struct {
 	config     Config
 	repository Repository
 	cache      kvs.KVS
-	starter    starter.Config
 }
 
 func New(c Config) *Dewy {
@@ -55,9 +54,9 @@ func (d *Dewy) Run() error {
 
 	ch := make(chan error)
 	go func() {
-		s, err := starter.NewStarter(d.starter.Config)
+		s, err := starter.NewStarter(d.config.Starter)
 		if err != nil {
-			return err
+			return
 		}
 		ch <- s.Run()
 	}()
