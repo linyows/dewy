@@ -5,23 +5,36 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/linyows/dewy/kvs"
 )
 
 type Dewy struct {
-	config     Config
-	repository Repository
-	cache      kvs.KVS
+	config          Config
+	repository      Repository
+	cache           kvs.KVS
+	isServerRunning bool
+	sync.RWMutex
+	root string
 }
 
 func New(c Config) *Dewy {
 	kv := &kvs.File{}
 	kv.Default()
+
+	wd, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
+
 	return &Dewy{
-		config: c,
-		cache:  kv,
+		config:          c,
+		cache:           kv,
+		isServerRunning: false,
+		root:            wd,
 	}
 }
 
@@ -40,28 +53,70 @@ func (d *Dewy) Run() error {
 		return nil
 	}
 
-	if err := r.Download(); err != nil {
-		return err
-	}
-
-	//preserveDir := "/var/dewy/preserves"
-	preserveDir, err := os.Getwd()
+	key, err := r.Download()
 	if err != nil {
 		return err
 	}
 
-	linkFrom, err := r.Preserve(preserveDir)
+	p := filepath.Join(d.cache.GetDir(), key)
+	linkFrom, err := d.preserve(p)
 	if err != nil {
 		return err
 	}
 
-	//linkTo := d.config.Starter.Command()
-	linkTo := filepath.Join(preserveDir, "mox")
+	linkTo := filepath.Join(d.root, "current")
 	if err := os.Symlink(linkFrom, linkTo); err != nil {
 		return err
 	}
 
+	log.Print("[DEBUG] aaa")
+	if d.isServerRunning {
+		log.Print("[DEBUG] bbb")
+		return d.restartServer()
+	}
+
+	log.Print("[DEBUG] ccc")
+	return d.startServer()
+}
+
+func (d *Dewy) preserve(p string) (string, error) {
+	const prefix = "20060102150405MST"
+	dst := filepath.Join(d.root, "preserves", time.Now().Format(prefix))
+	if err := os.MkdirAll(dst, 0755); err != nil {
+		return "", err
+	}
+
+	if err := kvs.ExtractArchive(p, dst); err != nil {
+		return "", err
+	}
+	log.Printf("[INFO] Extract archive to %s", dst)
+
+	return dst, nil
+}
+
+func (d *Dewy) restartServer() error {
+	d.Lock()
+	defer d.Unlock()
+
+	p, _ := os.FindProcess(os.Getpid())
+	err := p.Signal(syscall.SIGHUP)
+	if err != nil {
+		return err
+	}
+	log.Print("[INFO] Send SIGHUP for server restart")
+
+	return nil
+}
+
+func (d *Dewy) startServer() error {
+	d.Lock()
+	defer d.Unlock()
+
+	d.isServerRunning = true
+
+	log.Print("[INFO] Start server")
 	ch := make(chan error)
+
 	go func() {
 		counter := 0
 		for {
@@ -69,12 +124,12 @@ func (d *Dewy) Run() error {
 			time.Sleep(1 * time.Second)
 			log.Printf("==> %d", counter)
 		}
+		ch <- errors.New("yo")
 		//s, err := starter.NewStarter(d.config.Starter)
 		//if err != nil {
 		//	return
 		//}
 		//ch <- s.Run()
-		ch <- errors.New("yo")
 	}()
 
 	return nil
