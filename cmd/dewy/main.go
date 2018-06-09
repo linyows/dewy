@@ -151,9 +151,9 @@ func (c *CLI) run(a []string) {
 	job := func() {
 		conf := dewy.DefaultConfig()
 		conf.Repository = dewy.RepositoryConfig{
-			Name:     "mox",
+			Name:     "dewy-testapp",
 			Owner:    "linyows",
-			Artifact: "darwin_amd64.zip",
+			Artifact: "dewy-testapp_darwin_amd64.tar.gz",
 		}
 		conf.OverrideWithEnv()
 		d := dewy.New(conf)
