@@ -8,11 +8,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"os"
-	"path"
-	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/google/go-github/github"
 	"github.com/linyows/dewy/kvs"
@@ -21,9 +17,8 @@ import (
 
 type Repository interface {
 	Fetch() error
-	Download() error
+	Download() (string, error)
 	IsDownloadNecessary() bool
-	Preserve(dst string) (string, error)
 }
 
 type GithubReleaseRepository struct {
@@ -106,10 +101,10 @@ func (g *GithubReleaseRepository) IsDownloadNecessary() bool {
 	return true
 }
 
-func (g *GithubReleaseRepository) Download() error {
+func (g *GithubReleaseRepository) Download() (string, error) {
 	res, err := http.Get(g.downloadURL)
 	if err != nil {
-		return err
+		return "", err
 	}
 	log.Printf("[INFO] Downloaded from %s", g.downloadURL)
 
@@ -118,28 +113,11 @@ func (g *GithubReleaseRepository) Download() error {
 	body := buf.Bytes()
 
 	if err := g.cache.Write(g.cacheKey, body); err != nil {
-		return err
+		return "", err
 	}
 	log.Printf("[INFO] Cached as %s", g.cacheKey)
 
-	return nil
-}
-
-func (g *GithubReleaseRepository) Preserve(dst string) (string, error) {
-	p, err := g.cache.Unzip(g.cacheKey, dst)
-	if err != nil {
-		return "", err
-	}
-	log.Printf("[INFO] Unzip to %s", p)
-
-	const prefix = "20060102150405MST"
-	path := filepath.Join(dst, fmt.Sprintf("%s-%s", path.Base(p), time.Now().Format(prefix)))
-	if err := os.Rename(p, path); err != nil {
-		return "", err
-	}
-	log.Printf("[INFO] Preserved as %s", path)
-
-	return path, nil
+	return g.cacheKey, nil
 }
 
 func (g *GithubReleaseRepository) client(ctx context.Context) (*github.Client, error) {
