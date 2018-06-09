@@ -1,14 +1,14 @@
 package kvs
 
 import (
-	"archive/zip"
 	"errors"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/mholt/archiver"
 )
 
 var (
@@ -108,52 +108,22 @@ func (f *File) List() ([]string, error) {
 	return list, nil
 }
 
-func (f *File) Unzip(key, dst string) (string, error) {
-	p := filepath.Join(f.dir, key)
-	if !IsFileExist(p) {
-		return "", errors.New(fmt.Sprintf("File not found: %s", p))
+func ExtractArchive(src, dst string) error {
+	if !IsFileExist(src) {
+		return fmt.Errorf("File not found: %s", src)
 	}
 
-	return Unzip(p, dst)
+	name := filepath.Base(src)
+	ff := archiver.MatchingFormat(name)
+	if ff == nil {
+		return fmt.Errorf("Unsupported file extension: %s", name)
+	}
+
+	return ff.Open(src, dst)
 }
 
 func IsFileExist(p string) bool {
 	_, err := os.Stat(p)
 
 	return !os.IsNotExist(err)
-}
-
-func Unzip(src, dst string) (string, error) {
-	r, err := zip.OpenReader(src)
-	if err != nil {
-		return "", err
-	}
-	defer r.Close()
-	var unziped string
-
-	for _, f := range r.File {
-		rc, err := f.Open()
-		if err != nil {
-			return "", err
-		}
-		defer rc.Close()
-
-		if f.FileInfo().IsDir() {
-			unziped = filepath.Join(dst, f.Name)
-			os.MkdirAll(unziped, f.Mode())
-		} else {
-			buf := make([]byte, f.UncompressedSize)
-			_, err = io.ReadFull(rc, buf)
-			if err != nil {
-				return "", err
-			}
-
-			unziped = filepath.Join(dst, f.Name)
-			if err = ioutil.WriteFile(unziped, buf, f.Mode()); err != nil {
-				return "", err
-			}
-		}
-	}
-
-	return unziped, nil
 }

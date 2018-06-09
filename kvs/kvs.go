@@ -10,7 +10,7 @@ type KVS interface {
 	Write(key string, data []byte) error
 	Delete(key string) error
 	List() ([]string, error)
-	Unzip(key, dst string) (string, error)
+	GetDir() string
 }
 
 type Config struct {
