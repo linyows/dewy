@@ -55,8 +55,9 @@ func (g *GithubReleaseRepository) Fetch() error {
 	if err != nil {
 		return err
 	}
-	release, _, err := c.Repositories.GetLatestRelease(ctx, g.owner, g.name)
+	release, res, err := c.Repositories.GetLatestRelease(ctx, g.owner, g.name)
 	if err != nil {
+		log.Printf("[ERROR] Github releases reponse: %#v", res)
 		return err
 	}
 	for _, v := range release.Assets {
