@@ -141,7 +141,7 @@ Options:
 }
 
 func main() {
-	cli := &CLI{outStream: os.Stdout, errStream: os.Stderr}
+	cli := &CLI{outStream: os.Stdout, errStream: os.Stderr, Interval: -1}
 	cli.run(os.Args[1:])
 }
 
