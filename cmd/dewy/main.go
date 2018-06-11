@@ -190,22 +190,23 @@ func (c *CLI) run(a []string) {
 	}
 	log.SetOutput(filter)
 
-	job := func() {
-		conf := dewy.DefaultConfig()
+	conf := dewy.DefaultConfig()
 
-		repo := strings.Split(c.Repository, "/")
-		conf.Repository = dewy.RepositoryConfig{
-			Name:     repo[1],
-			Owner:    repo[0],
-			Artifact: c.Artifact,
-		}
-		conf.Starter = &StarterConfig{
-			ports:   []string{c.Port},
-			command: c.Command,
-			args:    c.Args,
-		}
-		conf.OverrideWithEnv()
-		d := dewy.New(conf)
+	repo := strings.Split(c.Repository, "/")
+	conf.Repository = dewy.RepositoryConfig{
+		Name:     repo[1],
+		Owner:    repo[0],
+		Artifact: c.Artifact,
+	}
+	conf.Starter = &StarterConfig{
+		ports:   []string{c.Port},
+		command: c.Command,
+		args:    c.Args,
+	}
+	conf.OverrideWithEnv()
+	d := dewy.New(conf)
+
+	job := func() {
 		if err := d.Run(); err != nil {
 			fmt.Fprintf(c.errStream, "%s\n", err)
 			os.Exit(ExitErr)
