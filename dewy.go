@@ -1,7 +1,6 @@
 package dewy
 
 import (
-	"errors"
 	"log"
 	"os"
 	"path/filepath"
@@ -9,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	starter "github.com/lestrrat-go/server-starter"
 	"github.com/linyows/dewy/kvs"
 )
 
@@ -72,13 +72,10 @@ func (d *Dewy) Run() error {
 		return err
 	}
 
-	log.Print("[DEBUG] aaa")
 	if d.isServerRunning {
-		log.Print("[DEBUG] bbb")
 		return d.restartServer()
 	}
 
-	log.Print("[DEBUG] ccc")
 	return d.startServer()
 }
 
@@ -121,18 +118,12 @@ func (d *Dewy) startServer() error {
 	ch := make(chan error)
 
 	go func() {
-		counter := 0
-		for {
-			counter++
-			time.Sleep(1 * time.Second)
-			log.Printf("==> %d", counter)
+		s, err := starter.NewStarter(d.config.Starter)
+		if err != nil {
+			log.Printf("[ERROR] Starter failure: %#v", err)
+			return
 		}
-		ch <- errors.New("yo")
-		//s, err := starter.NewStarter(d.config.Starter)
-		//if err != nil {
-		//	return
-		//}
-		//ch <- s.Run()
+		ch <- s.Run()
 	}()
 
 	return nil
