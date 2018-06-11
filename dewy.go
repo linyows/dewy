@@ -65,6 +65,9 @@ func (d *Dewy) Run() error {
 	}
 
 	linkTo := filepath.Join(d.root, "current")
+	if _, err := os.Lstat(linkTo); err == nil {
+		os.Remove(linkTo)
+	}
 	if err := os.Symlink(linkFrom, linkTo); err != nil {
 		return err
 	}
