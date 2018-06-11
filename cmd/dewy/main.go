@@ -53,9 +53,13 @@ func (c StarterConfig) StatusFile() string      { return c.statusfile }
 type CLI struct {
 	outStream, errStream io.Writer
 	Command              string
+	Args                 []string
 	Config               string `long:"config" short:"c" description:"Path to configuration file"`
 	LogLevel             string `long:"log-level" short:"l" arg:"(debug|info|warn|error)" description:"Level displayed as log"`
-	Interval             string `long:"interval" short:"i" description:"The polling interval to the repository"`
+	Interval             int    `long:"interval" arg:"seconds" short:"i" description:"The polling interval to the repository (default: 10)"`
+	Port                 string `long:"port" short:"p" description:"TCP port to listen"`
+	Repository           string `long:"repository" short:"r" description:"Repository for application"`
+	Artifact             string `long:"artifact" short:"a" description:"Artifact for application"`
 	Help                 bool   `long:"help" short:"h" description:"show this help message and exit"`
 	Version              bool   `long:"version" short:"v" description:"prints the version number"`
 }
@@ -116,6 +120,10 @@ func (c *CLI) buildHelp(names []string) []string {
 func (c *CLI) showHelp() {
 	opts := strings.Join(c.buildHelp([]string{
 		"Config",
+		"Interval",
+		"Repository",
+		"Artifact",
+		"Port",
 		"LogLevel",
 	}), "\n")
 
@@ -159,7 +167,15 @@ func (c *CLI) run(a []string) {
 		return
 	}
 
+	if c.Interval < 0 {
+		c.Interval = 10
+	}
+
 	c.Command = args[0]
+
+	if len(args) > 1 {
+		c.Args = args[1:]
+	}
 
 	if c.LogLevel != "" {
 		c.LogLevel = strings.ToUpper(c.LogLevel)
@@ -176,10 +192,17 @@ func (c *CLI) run(a []string) {
 
 	job := func() {
 		conf := dewy.DefaultConfig()
+
+		repo := strings.Split(c.Repository, "/")
 		conf.Repository = dewy.RepositoryConfig{
-			Name:     "dewy-testapp",
-			Owner:    "linyows",
-			Artifact: "dewy-testapp_darwin_amd64.tar.gz",
+			Name:     repo[1],
+			Owner:    repo[0],
+			Artifact: c.Artifact,
+		}
+		conf.Starter = &StarterConfig{
+			ports:   []string{c.Port},
+			command: c.Command,
+			args:    c.Args,
 		}
 		conf.OverrideWithEnv()
 		d := dewy.New(conf)
@@ -189,6 +212,7 @@ func (c *CLI) run(a []string) {
 			return
 		}
 	}
-	scheduler.Every(10).Seconds().NotImmediately().Run(job)
+
+	scheduler.Every(c.Interval).Seconds().NotImmediately().Run(job)
 	runtime.Goexit()
 }
