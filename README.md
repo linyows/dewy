@@ -9,6 +9,10 @@
 <a href="http://godoc.org/github.com/linyows/dewy"><img src="http://img.shields.io/badge/go-documentation-blue.svg?style=for-the-badge" alt="Go Documentation"></a>
 </p>
 
+<p align="center"><br><br>
+<img src="https://github.com/linyows/dewy/raw/master/misc/dewy-logo.png" width="200"><br><br>
+</p>
+
 Installation
 ------------
 
