@@ -31,3 +31,7 @@
 [[constraint]]
   branch = "master"
   name = "github.com/carlescere/scheduler"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/mholt/archiver"
