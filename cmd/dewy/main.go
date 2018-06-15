@@ -200,8 +200,8 @@ func (c *CLI) run(a []string) {
 	}
 	conf.Starter = &StarterConfig{
 		ports:   []string{c.Port},
-		command: c.Command,
-		args:    c.Args,
+		command: c.Args[0],
+		args:    c.Args[1:],
 	}
 	conf.OverrideWithEnv()
 	d := dewy.New(conf)
