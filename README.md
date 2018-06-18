@@ -1,3 +1,7 @@
+<p align="center"><br><br>
+<img src="https://github.com/linyows/dewy/raw/master/misc/dewy-logo.png" width="150"><br><br><br><br>
+</p>
+
 <p align="center">
 <strong>DEWY</strong>: The application server for deployment with distributed polling.
 </p>
@@ -7,7 +11,7 @@
 <a href="https://github.com/linyows/dewy/releases"><img src="http://img.shields.io/github/release/linyows/dewy.svg?style=for-the-badge" alt="GitHub Release"></a>
 <a href="https://github.com/linyows/dewy/blob/master/LICENSE"><img src="http://img.shields.io/badge/license-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
 <a href="http://godoc.org/github.com/linyows/dewy"><img src="http://img.shields.io/badge/go-documentation-blue.svg?style=for-the-badge" alt="Go Documentation"></a>
-</p>
+</p><br><br>
 
 Installation
 ------------
