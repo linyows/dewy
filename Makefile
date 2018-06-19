@@ -1,6 +1,7 @@
 TEST?=./...
 NAME = "$(shell awk -F\" '/^const Name/ { print $$2; exit }' version.go)"
 VERSION = "$(shell awk -F\" '/^const Version/ { print $$2; exit }' version.go)"
+GOVERSION = $(shell go version | awk '{ if (sub(/go version go/, "v")) print }' | awk '{print $$1 "-" $$2}')
 
 ifeq ("$(shell uname)","Darwin")
 NCPU ?= $(shell sysctl hw.ncpu | cut -f2 -d' ')
@@ -18,8 +19,7 @@ deps:
 depsdev: deps
 	go get github.com/golang/lint/golint
 	go get github.com/pierrre/gotestcover
-	go get -u github.com/mitchellh/gox
-	go get -u github.com/tcnksm/ghr
+	go get github.com/goreleaser/goreleaser
 
 test:
 	go test $(TEST) $(TESTARGS) $(TEST_OPTIONS)
@@ -34,6 +34,8 @@ lint:
 ci: depsdev test
 
 dist:
-	ghr v$(VERSION) pkg
+	git tag | grep v$(VERSION) || git tag v$(VERSION)
+	git push origin v$(VERSION)
+	GOVERSION=$(GOVERSION) goreleaser --rm-dist
 
 .PHONY: default dist test test deps
