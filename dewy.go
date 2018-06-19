@@ -55,7 +55,7 @@ func (d *Dewy) Run() error {
 
 	key, err := r.Download()
 	if err != nil {
-		return err
+		return nil
 	}
 
 	p := filepath.Join(d.cache.GetDir(), key)
