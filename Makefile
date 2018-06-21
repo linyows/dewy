@@ -39,4 +39,4 @@ dist:
 	git push origin v$(VERSION)
 	GOVERSION=$(GOVERSION) goreleaser --rm-dist
 
-.PHONY: default dist test test deps
+.PHONY: default dist test deps
