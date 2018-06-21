@@ -20,7 +20,6 @@ deps:
 depsdev: deps
 	go get github.com/golang/lint/golint
 	go get github.com/pierrre/gotestcover
-	go get github.com/goreleaser/goreleaser
 
 test:
 	go test $(TEST) $(TESTARGS) $(TEST_OPTIONS)
@@ -35,6 +34,7 @@ lint:
 ci: depsdev test
 
 dist:
+	go get github.com/goreleaser/goreleaser
 	git tag | grep v$(VERSION) || git tag v$(VERSION)
 	git push origin v$(VERSION)
 	GOVERSION=$(GOVERSION) goreleaser --rm-dist
