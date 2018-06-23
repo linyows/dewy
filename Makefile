@@ -22,7 +22,7 @@ depsdev: deps
 	go get github.com/pierrre/gotestcover
 
 test:
-	go test $(TEST) $(TESTARGS) $(TEST_OPTIONS)
+	go test -v $(TEST) $(TESTARGS) $(TEST_OPTIONS)
 	go test -race $(TEST) $(TESTARGS)
 
 integration:
