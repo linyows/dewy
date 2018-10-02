@@ -39,6 +39,9 @@ lint:
 ci: deps test
 
 dist:
+	@test -z $(GITHUB_TOKEN) || $(MAKE) goreleaser
+
+goreleaser:
 	git tag | grep v$(VERSION) || git tag v$(VERSION)
 	git push origin v$(VERSION)
 	GOVERSION=$(GOVERSION) goreleaser --rm-dist
