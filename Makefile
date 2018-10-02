@@ -46,6 +46,6 @@ dist:
 goreleaser:
 	git tag | grep v$(VERSION) || git tag v$(VERSION)
 	git push origin v$(VERSION)
-	GOVERSION=$(GOVERSION) REVISION=$(REVISION) DATE='$(DATE)' goreleaser --rm-dist
+	GOVERSION=$(GOVERSION) REVISION=$(REVISION) DATE=$(DATE) goreleaser --rm-dist
 
 .PHONY: default dist test deps
