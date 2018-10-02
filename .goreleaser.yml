@@ -4,8 +4,6 @@ builds:
   - main: ./cmd/dewy/main.go
     env:
       - CGO_ENABLED=0
-    ldflags:
-      - -s -w -X main.version={{.Version}} -X main.goversion={{.Env.GOVERSION}} -X main.revision={{.Env.REVISION}} -X main.date={{.Env.DATE}}
     goos:
       - darwin
       - linux
@@ -17,6 +15,8 @@ archive:
     - none*
 checksum:
   name_template: 'checksums.txt'
+git:
+  short_hash: true
 snapshot:
   name_template: "{{ .Tag }}-next"
 changelog:

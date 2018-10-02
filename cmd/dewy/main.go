@@ -28,6 +28,12 @@ const (
 	ExitErr int = 1
 )
 
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
 type StarterConfig struct {
 	args       []string
 	command    string
@@ -158,7 +164,7 @@ func (c *CLI) run(a []string) {
 	}
 
 	if c.Version {
-		fmt.Fprintf(c.errStream, "%s version %s\n", dewy.Name, dewy.Version)
+		fmt.Fprintf(c.errStream, "%s version %s [%v, %v]\n", dewy.Name, dewy.Version, commit, date)
 		os.Exit(ExitOK)
 		return
 	}
