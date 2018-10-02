@@ -6,9 +6,11 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/signal"
 	"reflect"
 	"runtime"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/carlescere/scheduler"
@@ -210,8 +212,13 @@ func (c *CLI) run(a []string) {
 		if err := d.Run(); err != nil {
 			fmt.Fprintf(c.errStream, "%s\n", err)
 			os.Exit(ExitErr)
-			return
 		}
+
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+		sigReceived := <-sigCh
+		log.Printf("[DEBUG] PID %d received signal as %s", os.Getpid(), sigReceived)
+		os.Exit(ExitOK)
 	}
 
 	scheduler.Every(c.Interval).Seconds().NotImmediately().Run(job)

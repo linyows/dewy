@@ -121,6 +121,7 @@ func (d *Dewy) startServer() error {
 			log.Printf("[ERROR] Starter failure: %#v", err)
 			return
 		}
+
 		ch <- s.Run()
 	}()
 
