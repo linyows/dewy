@@ -3,14 +3,17 @@ package notice
 import "context"
 
 type Notice interface {
-	Notify(ctx context.Context) error
+	Name() string
+	Notify(message string, ctx context.Context)
+	Default()
 }
 
-func New(t string, c Config) Notice {
-	switch t {
+func New(n Notice) Notice {
+	switch n.Name() {
 	case "slack":
-		return &Slack{}
+		n.Default()
+		return n
 	default:
-		panic("no provider")
+		panic("no noticer")
 	}
 }
