@@ -1,6 +1,7 @@
 package dewy
 
 import (
+	"context"
 	"log"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 
 	starter "github.com/lestrrat-go/server-starter"
 	"github.com/linyows/dewy/kvs"
+	"github.com/linyows/dewy/notice"
 )
 
 type Dewy struct {
@@ -39,6 +41,12 @@ func New(c Config) *Dewy {
 }
 
 func (d *Dewy) Run() error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ntc := notice.New(&notice.Slack{Token: os.Getenv("SLACK_TOKEN")})
+	ntc.Notify("Run starting", ctx)
+
 	d.config.Repository.String()
 	r := NewRepository(d.config.Repository, d.cache)
 
@@ -50,6 +58,7 @@ func (d *Dewy) Run() error {
 		log.Print("[DEBUG] Download skipped")
 		return nil
 	}
+	ntc.Notify("Release downloading", ctx)
 
 	key, err := r.Download()
 	if err != nil {
@@ -71,9 +80,11 @@ func (d *Dewy) Run() error {
 	}
 
 	if d.isServerRunning {
+		ntc.Notify("Server restarting", ctx)
 		return d.restartServer()
 	}
 
+	ntc.Notify("Server starting", ctx)
 	return d.startServer()
 }
 
