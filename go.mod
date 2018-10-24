@@ -25,7 +25,9 @@ require (
 	github.com/ianlancetaylor/demangle v0.0.0-20180714043527-fcd258a6f0b4 // indirect
 	github.com/imdario/mergo v0.3.6 // indirect
 	github.com/jessevdk/go-flags v1.4.0
+	github.com/lestrrat-go/pdebug v0.0.0-20180220043849-39f9a71bcabe // indirect
 	github.com/lestrrat-go/server-starter v0.0.0-20150105222616-88699d57aeee
+	github.com/lestrrat-go/slack v0.0.0-20180726073730-18d3cce844c0
 	github.com/mattn/go-colorable v0.0.9 // indirect
 	github.com/mattn/go-isatty v0.0.4 // indirect
 	github.com/mattn/go-zglob v0.0.0-20180803001819-2ea3427bfa53 // indirect
