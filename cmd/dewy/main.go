@@ -170,7 +170,8 @@ func (c *CLI) run(a []string) {
 	}
 
 	if len(args) == 0 {
-		fmt.Fprintf(c.errStream, "command not specified\n")
+		fmt.Fprintf(c.errStream, "Error: command not specified\n")
+		c.showHelp()
 		os.Exit(ExitErr)
 		return
 	}
