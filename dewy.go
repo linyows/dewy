@@ -4,11 +4,13 @@ import (
 	"context"
 	"log"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
 
+	"github.com/carlescere/scheduler"
 	starter "github.com/lestrrat-go/server-starter"
 	"github.com/linyows/dewy/kvs"
 	"github.com/linyows/dewy/notice"
@@ -20,7 +22,9 @@ type Dewy struct {
 	cache           kvs.KVS
 	isServerRunning bool
 	sync.RWMutex
-	root string
+	root   string
+	job    *scheduler.Job
+	notice notice.Notice
 }
 
 func New(c Config) *Dewy {
@@ -40,28 +44,56 @@ func New(c Config) *Dewy {
 	}
 }
 
+func (d *Dewy) Start(i int) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	d.notice = notice.New(&notice.Slack{
+		RepositoryURL: "https://" + d.config.Repository.String(),
+		Token:         os.Getenv("SLACK_TOKEN"),
+	})
+	d.notice.Notify("Scheduler starting", ctx)
+
+	var err error
+	d.job, err = scheduler.Every(i).Seconds().Run(func() {
+		d.Run()
+	})
+
+	if err != nil {
+		log.Printf("[ERROR] Scheduler failure: %#v", err)
+	}
+
+	d.waitSigs()
+	d.notice.Notify("Scheduler killed", ctx)
+}
+
+func (d *Dewy) waitSigs() {
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	sigReceived := <-sigCh
+	log.Printf("[DEBUG] PID %d received signal as %s", os.Getpid(), sigReceived)
+	d.job.Quit <- true
+}
+
 func (d *Dewy) Run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	ntc := notice.New(&notice.Slack{Token: os.Getenv("SLACK_TOKEN")})
-	ntc.Notify("Run starting", ctx)
-
 	d.config.Repository.String()
-	r := NewRepository(d.config.Repository, d.cache)
+	d.repository = NewRepository(d.config.Repository, d.cache)
 
-	if err := r.Fetch(); err != nil {
+	if err := d.repository.Fetch(); err != nil {
 		log.Printf("[ERROR] Fetch failure: %#v", err)
 		return err
 	}
 
-	if !r.IsDownloadNecessary() {
+	if !d.repository.IsDownloadNecessary() {
 		log.Print("[DEBUG] Download skipped")
 		return nil
 	}
 
-	ntc.Notify("Release downloading", ctx)
-	key, err := r.Download()
+	d.notice.Notify("Release downloading", ctx)
+	key, err := d.repository.Download()
 	if err != nil {
 		log.Printf("[ERROR] Download failure: %#v", err)
 		return nil
