@@ -21,10 +21,11 @@ var (
 )
 
 type Slack struct {
-	Token    string
-	Username string
-	Channel  string
-	IconURL  string
+	RepositoryURL string
+	Token         string
+	Username      string
+	Channel       string
+	IconURL       string
 }
 
 func (s *Slack) Name() string {
@@ -35,6 +36,11 @@ func (s *Slack) Default() {
 	s.Username = defaultSlackUsername
 	s.Channel = defaultSlackChannel
 	s.IconURL = defaultSlackIconURL
+}
+
+func (s *Slack) appName() string {
+	sp := strings.Split(s.RepositoryURL, "/")
+	return sp[len(sp)-1]
 }
 
 func (s *Slack) hostname() string {
@@ -49,6 +55,7 @@ func (s *Slack) Notify(m string, ctx context.Context) {
 	if s.Token == "" {
 		err := errors.New(fmt.Sprintf("Slack Token not found"))
 		log.Printf("[ERROR] Failed %s notice: %#v", s.Name(), err)
+		return
 	}
 
 	if m == "" {
@@ -58,7 +65,7 @@ func (s *Slack) Notify(m string, ctx context.Context) {
 	cl := slack.New(s.Token)
 	var at objects.Attachment
 	at.Color = s.genColor()
-	at.Text = fmt.Sprintf("%s on %s", m, s.hostname())
+	at.Text = fmt.Sprintf("%s of <%s|%s> on %s", m, s.RepositoryURL, s.appName(), s.hostname())
 
 	_, err := cl.Chat().PostMessage(s.Channel).
 		Username(s.Username).
