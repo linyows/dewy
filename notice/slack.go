@@ -2,21 +2,22 @@ package notice
 
 import (
 	"context"
+	"crypto/md5"
 	"errors"
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/lestrrat-go/slack"
 	"github.com/lestrrat-go/slack/objects"
 )
 
 var (
-	defaultSlackUsername        string = "Dewy"
-	defaultSlackChannel         string = "general"
-	defaultSlackMessage         string = "Hi guys, This is a default message."
-	defaultSlackIconURL         string = "https://raw.githubusercontent.com/linyows/dewy/master/misc/dewy-icon.512.png"
-	defaultSlackAttachmentColor string = "#3e7c96"
+	defaultSlackUsername string = "Dewy"
+	defaultSlackChannel  string = "general"
+	defaultSlackMessage  string = "Hi guys, This is a default message."
+	defaultSlackIconURL  string = "https://raw.githubusercontent.com/linyows/dewy/master/misc/dewy-icon.512.png"
 )
 
 type Slack struct {
@@ -56,7 +57,7 @@ func (s *Slack) Notify(m string, ctx context.Context) {
 
 	cl := slack.New(s.Token)
 	var at objects.Attachment
-	at.Color = defaultSlackAttachmentColor
+	at.Color = s.genColor()
 	at.Text = fmt.Sprintf("%s on %s", m, s.hostname())
 
 	_, err := cl.Chat().PostMessage(s.Channel).
@@ -69,4 +70,9 @@ func (s *Slack) Notify(m string, ctx context.Context) {
 	if err != nil {
 		log.Printf("[ERROR] Failed %s notice: %#v", s.Name(), err)
 	}
+}
+
+func (s *Slack) genColor() string {
+	k := []byte(s.hostname())
+	return strings.ToUpper(fmt.Sprintf("#%x", md5.Sum(k))[0:7])
 }
