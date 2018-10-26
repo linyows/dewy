@@ -6,6 +6,7 @@ REVISION = $$(git describe --always)
 DATE = $$(LC_ALL=c date -u +%a,\ %d\ %b\ %Y\ %H:%M:%S\ GMT)
 GOVERSION = $(shell go version | awk '{ if (sub(/go version go/, "v")) print }' | awk '{print $$1 "-" $$2}')
 GOENV ?= GO111MODULE=on
+LOGLEVEL ?= info
 
 ifeq ("$(shell uname)","Darwin")
 NCPU ?= $(shell sysctl hw.ncpu | cut -f2 -d' ')
@@ -21,7 +22,7 @@ build:
 
 run: build
 	$(GOENV) ./dewy server -r linyows/dewy-testapp -a dewy-testapp_darwin_amd64.tar.gz \
-		-p 8000 -l info -- $(HOME)/.go/src/github.com/linyows/dewy/current/dewy-testapp
+		-p 8000 -l $(LOGLEVEL) -- $(HOME)/.go/src/github.com/linyows/dewy/current/dewy-testapp
 
 deps:
 	$(GOENV) go get github.com/golang/lint/golint
