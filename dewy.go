@@ -51,6 +51,7 @@ func (d *Dewy) Run() error {
 	r := NewRepository(d.config.Repository, d.cache)
 
 	if err := r.Fetch(); err != nil {
+		log.Printf("[ERROR] Fetch failure: %#v", err)
 		return err
 	}
 
