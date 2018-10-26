@@ -55,9 +55,8 @@ func (g *GithubReleaseRepository) Fetch() error {
 	if err != nil {
 		return err
 	}
-	release, res, err := c.Repositories.GetLatestRelease(ctx, g.owner, g.name)
+	release, _, err := c.Repositories.GetLatestRelease(ctx, g.owner, g.name)
 	if err != nil {
-		log.Printf("[ERROR] Github releases reponse: %#v", res)
 		return err
 	}
 	for _, v := range release.Assets {
@@ -79,7 +78,6 @@ func (g *GithubReleaseRepository) Fetch() error {
 func (g *GithubReleaseRepository) setCacheKey() error {
 	u, err := url.Parse(g.downloadURL)
 	if err != nil {
-		log.Printf("[ERROR] URL parth error: %s", g.downloadURL)
 		return err
 	}
 	g.cacheKey = strings.Replace(fmt.Sprintf("%s%s", u.Host, u.RequestURI()), "/", "-", -1)
@@ -90,7 +88,6 @@ func (g *GithubReleaseRepository) setCacheKey() error {
 func (g *GithubReleaseRepository) IsDownloadNecessary() bool {
 	list, err := g.cache.List()
 	if err != nil {
-		log.Printf("[ERROR] %s", err)
 		return false
 	}
 
@@ -106,7 +103,6 @@ func (g *GithubReleaseRepository) IsDownloadNecessary() bool {
 func (g *GithubReleaseRepository) Download() (string, error) {
 	res, err := http.Get(g.downloadURL)
 	if err != nil {
-		log.Printf("[ERROR] HTTP get error: %#v", err)
 		return "", err
 	}
 	log.Printf("[INFO] Downloaded from %s", g.downloadURL)
@@ -133,7 +129,6 @@ func (g *GithubReleaseRepository) client(ctx context.Context) (*github.Client, e
 	if g.endpoint != "" {
 		url, err := url.Parse(g.endpoint)
 		if err != nil {
-			log.Printf("[ERROR] URL parth error: %s", g.endpoint)
 			return nil, err
 		}
 		client.BaseURL = url
