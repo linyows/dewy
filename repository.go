@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/google/go-github/github"
+	"github.com/google/go-querystring/query"
 	"github.com/linyows/dewy/kvs"
 	"golang.org/x/oauth2"
 )
@@ -19,6 +20,7 @@ type Repository interface {
 	Fetch() error
 	Download() (string, error)
 	IsDownloadNecessary() bool
+	Record() error
 }
 
 type GithubReleaseRepository struct {
@@ -31,6 +33,8 @@ type GithubReleaseRepository struct {
 	downloadURL string
 	cacheKey    string
 	cache       kvs.KVS
+	releaseID   *int64
+	cl          *github.Client
 }
 
 func NewRepository(c RepositoryConfig, d kvs.KVS) Repository {
@@ -56,9 +60,12 @@ func (g *GithubReleaseRepository) Fetch() error {
 		return err
 	}
 	release, _, err := c.Repositories.GetLatestRelease(ctx, g.owner, g.name)
+
 	if err != nil {
 		return err
 	}
+	g.releaseID = release.ID
+
 	for _, v := range release.Assets {
 		if *v.Name == g.artifact {
 			log.Printf("[DEBUG] Fetched: %+v", v)
@@ -120,19 +127,47 @@ func (g *GithubReleaseRepository) Download() (string, error) {
 }
 
 func (g *GithubReleaseRepository) client(ctx context.Context) (*github.Client, error) {
+	if g.cl != nil {
+		return g.cl, nil
+	}
+
 	ts := oauth2.StaticTokenSource(
 		&oauth2.Token{AccessToken: g.token},
 	)
 	tc := oauth2.NewClient(ctx, ts)
-	client := github.NewClient(tc)
+	g.cl = github.NewClient(tc)
 
 	if g.endpoint != "" {
 		url, err := url.Parse(g.endpoint)
 		if err != nil {
 			return nil, err
 		}
-		client.BaseURL = url
+		g.cl.BaseURL = url
 	}
 
-	return client, nil
+	return g.cl, nil
+}
+
+func (g *GithubReleaseRepository) Record() error {
+	ctx := context.Background()
+	c, err := g.client(ctx)
+	if err != nil {
+		return err
+	}
+
+	s := fmt.Sprintf("repos/%s/%s/releases/%d/assets", g.owner, g.name, g.releaseID)
+	opt := &github.UploadOptions{Name: "Shipped to foo"}
+
+	u, err := url.Parse(s)
+	if err != nil {
+		return err
+	}
+	qs, err := query.Values(opt)
+	u.RawQuery = qs.Encode()
+
+	byteData := []byte("dewy test release")
+	r := bytes.NewReader(byteData)
+	_, err = c.NewUploadRequest(u.String(), r, int64(len(byteData)), "text/plain")
+
+	return err
 }

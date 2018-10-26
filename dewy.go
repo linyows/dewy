@@ -104,12 +104,15 @@ func (d *Dewy) Run() error {
 	}
 
 	if d.isServerRunning {
-		ntc.Notify("Server restarting", ctx)
-		return d.restartServer()
+		d.notice.Notify("Server restarting", ctx)
+		err = d.restartServer()
+	} else {
+		d.notice.Notify("Server starting", ctx)
+		err = d.startServer()
 	}
 
-	ntc.Notify("Server starting", ctx)
-	return d.startServer()
+	d.finalizeDeploy()
+	return err
 }
 
 func (d *Dewy) deploy(key string) error {
@@ -181,4 +184,13 @@ func (d *Dewy) startServer() error {
 	}()
 
 	return nil
+}
+
+func (d *Dewy) finalizeDeploy() {
+	log.Print("[DEBUG] Deploy finalizing")
+
+	err := d.repository.Record()
+	if err != nil {
+		log.Printf("[ERROR] Record failure: %#v", err)
+	}
 }
