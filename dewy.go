@@ -59,24 +59,15 @@ func (d *Dewy) Run() error {
 		log.Print("[DEBUG] Download skipped")
 		return nil
 	}
-	ntc.Notify("Release downloading", ctx)
 
+	ntc.Notify("Release downloading", ctx)
 	key, err := r.Download()
 	if err != nil {
+		log.Printf("[ERROR] Download failure: %#v", err)
 		return nil
 	}
 
-	p := filepath.Join(d.cache.GetDir(), key)
-	linkFrom, err := d.preserve(p)
-	if err != nil {
-		return err
-	}
-
-	linkTo := filepath.Join(d.root, "current")
-	if _, err := os.Lstat(linkTo); err == nil {
-		os.Remove(linkTo)
-	}
-	if err := os.Symlink(linkFrom, linkTo); err != nil {
+	if err := d.deploy(key); err != nil {
 		return err
 	}
 
@@ -87,6 +78,26 @@ func (d *Dewy) Run() error {
 
 	ntc.Notify("Server starting", ctx)
 	return d.startServer()
+}
+
+func (d *Dewy) deploy(key string) error {
+	p := filepath.Join(d.cache.GetDir(), key)
+	linkFrom, err := d.preserve(p)
+	if err != nil {
+		return err
+	}
+
+	linkTo := filepath.Join(d.root, "current")
+	if _, err := os.Lstat(linkTo); err == nil {
+		os.Remove(linkTo)
+	}
+
+	log.Printf("[INFO] Create symlink to %s from %s", linkTo, linkFrom)
+	if err := os.Symlink(linkFrom, linkTo); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (d *Dewy) preserve(p string) (string, error) {
