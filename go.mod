@@ -13,13 +13,13 @@ require (
 	github.com/carlescere/scheduler v0.0.0-20170109141437-ee74d2f83d82
 	github.com/dsnet/compress v0.0.0-20171208185109-cc9eb1d7ad76
 	github.com/fatih/color v1.7.0 // indirect
-	github.com/golang/lint v0.0.0-20181023015148-c2de83ec1785 // indirect
+	github.com/golang/lint v0.0.0-20181023182221-1baf3a9d7d67 // indirect
 	github.com/golang/protobuf v1.0.0
 	github.com/golang/snappy v0.0.0-20180518054509-2e65f85255db
 	github.com/google/go-github v15.0.0+incompatible
 	github.com/google/go-querystring v0.0.0-20170111101155-53e6ce116135
 	github.com/google/pprof v0.0.0-20180926163344-782e5fd74720 // indirect
-	github.com/goreleaser/goreleaser v0.91.1 // indirect
+	github.com/goreleaser/goreleaser v0.91.3 // indirect
 	github.com/goreleaser/nfpm v0.9.5 // indirect
 	github.com/hashicorp/logutils v0.0.0-20150609070431-0dc08b1671f3
 	github.com/ianlancetaylor/demangle v0.0.0-20180714043527-fcd258a6f0b4 // indirect

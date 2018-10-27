@@ -24,6 +24,8 @@ github.com/fatih/color v1.7.0 h1:DkWD4oS2D8LGGgTQ6IvwJJXSL5Vp2ffcQg58nFV38Ys=
 github.com/fatih/color v1.7.0/go.mod h1:Zm6kSWBoL9eyXnKyktHP6abPY2pDugNf5KwzbycvMj4=
 github.com/golang/lint v0.0.0-20181023015148-c2de83ec1785 h1:sGhixemAMGCzlhMgdTRNA82v/InipELABbM2ydAkv/M=
 github.com/golang/lint v0.0.0-20181023015148-c2de83ec1785/go.mod h1:tluoj9z5200jBnyusfRPU2LqT6J+DAorxEvtC7LHB+E=
+github.com/golang/lint v0.0.0-20181023182221-1baf3a9d7d67 h1:6RKekS/ELXLFNqWKZimcPt4zk1zFEWcdydkB38OPmHI=
+github.com/golang/lint v0.0.0-20181023182221-1baf3a9d7d67/go.mod h1:tluoj9z5200jBnyusfRPU2LqT6J+DAorxEvtC7LHB+E=
 github.com/golang/protobuf v1.0.0/go.mod h1:6lQm79b+lXiMfvg/cZm0SGofjICqVBUtrP5yJMmIC1U=
 github.com/golang/snappy v0.0.0-20180518054509-2e65f85255db h1:woRePGFeVFfLKN/pOkfl+p/TAqKOfFu+7KPlMVpok/w=
 github.com/golang/snappy v0.0.0-20180518054509-2e65f85255db/go.mod h1:/XxbfmMg8lxefKM7IXC3fBNl/7bRcc72aCRzEWrmP2Q=
@@ -35,6 +37,8 @@ github.com/google/pprof v0.0.0-20180926163344-782e5fd74720 h1:1yA+Zrsya7xNoSNoSC
 github.com/google/pprof v0.0.0-20180926163344-782e5fd74720/go.mod h1:zfwlbNMJ+OItoe0UupaVj+oy1omPYYDuagoSzA8v9mc=
 github.com/goreleaser/goreleaser v0.91.1 h1:7yQdUg8KK/swLfrFAm0/K8kun2DZ2UVvqa1pBaPcfl8=
 github.com/goreleaser/goreleaser v0.91.1/go.mod h1:r02//RU0qOOAsbJvZ6Igcu34zJeqR2RTNqABERY20GM=
+github.com/goreleaser/goreleaser v0.91.3 h1:EpVaLhSH2vf6K21jhbccCclkrclHi70qo3skbiQNCN0=
+github.com/goreleaser/goreleaser v0.91.3/go.mod h1:r02//RU0qOOAsbJvZ6Igcu34zJeqR2RTNqABERY20GM=
 github.com/goreleaser/nfpm v0.9.5 h1:ntRGZSucXRjoCk6FdwJaXcCZxZZu7YoqX7UH5IC13l4=
 github.com/goreleaser/nfpm v0.9.5/go.mod h1:kn0Dps10Osi7V2icEXFTBRZhmiuGPUizzZVw/WQtQ/k=
 github.com/hashicorp/logutils v0.0.0-20150609070431-0dc08b1671f3 h1:oD64EFjELI9RY9yoWlfua58r+etdnoIC871z+rr6lkA=
