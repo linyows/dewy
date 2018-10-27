@@ -35,7 +35,7 @@ type GithubReleaseRepository struct {
 	downloadURL string
 	cacheKey    string
 	cache       kvs.KVS
-	releaseID   *int64
+	releaseID   int64
 	cl          *github.Client
 }
 
@@ -66,7 +66,7 @@ func (g *GithubReleaseRepository) Fetch() error {
 	if err != nil {
 		return err
 	}
-	g.releaseID = release.ID
+	g.releaseID = *release.ID
 
 	for _, v := range release.Assets {
 		if *v.Name == g.artifact {
