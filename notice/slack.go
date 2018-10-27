@@ -48,7 +48,7 @@ func (s *Slack) hostname() string {
 	if err != nil {
 		return fmt.Sprintf("%#v", err)
 	}
-	return name
+	return strings.ToLower(name)
 }
 
 func (s *Slack) Notify(m string, ctx context.Context) {
