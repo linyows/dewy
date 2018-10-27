@@ -8,7 +8,9 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/google/go-github/github"
 	"github.com/google/go-querystring/query"
@@ -155,19 +157,33 @@ func (g *GithubReleaseRepository) Record() error {
 		return err
 	}
 
+	ISO8601 := "20060102T150405Z0700"
+	now := time.Now().UTC().Format(ISO8601)
+	hostname, _ := os.Hostname()
+	info := fmt.Sprintf("shipped to %s at %s", strings.ToLower(hostname), now)
+
 	s := fmt.Sprintf("repos/%s/%s/releases/%d/assets", g.owner, g.name, g.releaseID)
-	opt := &github.UploadOptions{Name: "Shipped to foo"}
+	opt := &github.UploadOptions{Name: strings.Replace(info, " ", "_", -1) + ".txt"}
 
 	u, err := url.Parse(s)
 	if err != nil {
 		return err
 	}
 	qs, err := query.Values(opt)
+	if err != nil {
+		return err
+	}
 	u.RawQuery = qs.Encode()
 
-	byteData := []byte("dewy test release")
+	byteData := []byte(info)
 	r := bytes.NewReader(byteData)
-	_, err = c.NewUploadRequest(u.String(), r, int64(len(byteData)), "text/plain")
+	req, err := c.NewUploadRequest(u.String(), r, int64(len(byteData)), "text/plain")
+	if err != nil {
+		return err
+	}
+
+	asset := new(github.ReleaseAsset)
+	_, err = c.Do(ctx, req, asset)
 
 	return err
 }

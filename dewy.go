@@ -136,8 +136,8 @@ func (d *Dewy) deploy(key string) error {
 }
 
 func (d *Dewy) preserve(p string) (string, error) {
-	const prefix = "20060102150405MST"
-	dst := filepath.Join(d.root, "preserves", time.Now().Format(prefix))
+	ISO8601 := "20060102T150405Z0700"
+	dst := filepath.Join(d.root, "preserves", time.Now().UTC().Format(ISO8601))
 	if err := os.MkdirAll(dst, 0755); err != nil {
 		return "", err
 	}
