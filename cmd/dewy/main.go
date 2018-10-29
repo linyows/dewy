@@ -203,11 +203,18 @@ func (c *CLI) run(a []string) {
 		Owner:    repo[0],
 		Artifact: c.Artifact,
 	}
-	conf.Starter = &StarterConfig{
-		ports:   []string{c.Port},
-		command: c.Args[0],
-		args:    c.Args[1:],
+
+	if c.Command == "server" {
+		conf.Command = dewy.SERVER
+		conf.Starter = &StarterConfig{
+			ports:   []string{c.Port},
+			command: c.Args[0],
+			args:    c.Args[1:],
+		}
+	} else {
+		conf.Command = dewy.ASSETS
 	}
+
 	conf.OverrideWithEnv()
 	d := dewy.New(conf)
 
