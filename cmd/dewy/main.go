@@ -6,14 +6,10 @@ import (
 	"io"
 	"log"
 	"os"
-	"os/signal"
 	"reflect"
-	"runtime"
 	"strings"
-	"syscall"
 	"time"
 
-	"github.com/carlescere/scheduler"
 	"github.com/hashicorp/logutils"
 	flags "github.com/jessevdk/go-flags"
 	starter "github.com/lestrrat-go/server-starter"
@@ -170,7 +166,8 @@ func (c *CLI) run(a []string) {
 	}
 
 	if len(args) == 0 {
-		fmt.Fprintf(c.errStream, "command not specified\n")
+		fmt.Fprintf(c.errStream, "Error: command not specified\n")
+		c.showHelp()
 		os.Exit(ExitErr)
 		return
 	}
@@ -214,19 +211,6 @@ func (c *CLI) run(a []string) {
 	conf.OverrideWithEnv()
 	d := dewy.New(conf)
 
-	job := func() {
-		if err := d.Run(); err != nil {
-			fmt.Fprintf(c.errStream, "%s\n", err)
-			os.Exit(ExitErr)
-		}
-
-		sigCh := make(chan os.Signal, 1)
-		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
-		sigReceived := <-sigCh
-		log.Printf("[DEBUG] PID %d received signal as %s", os.Getpid(), sigReceived)
-		os.Exit(ExitOK)
-	}
-
-	scheduler.Every(c.Interval).Seconds().NotImmediately().Run(job)
-	runtime.Goexit()
+	d.Start(c.Interval)
+	os.Exit(ExitOK)
 }

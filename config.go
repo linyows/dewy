@@ -1,7 +1,6 @@
 package dewy
 
 import (
-	"fmt"
 	"os"
 	"path"
 
@@ -40,7 +39,7 @@ const (
 func (r RepositoryProvider) String() string {
 	switch r {
 	case GITHUB:
-		return "github"
+		return "github.com"
 	default:
 		return "unknown"
 	}
@@ -56,7 +55,7 @@ type RepositoryConfig struct {
 }
 
 func (r RepositoryConfig) String() string {
-	return path.Join(fmt.Sprintf("%s:%s", r.Provider.String(), r.Owner), r.Name)
+	return path.Join(r.Provider.String(), r.Owner, r.Name)
 }
 
 type Config struct {
