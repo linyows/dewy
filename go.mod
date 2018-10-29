@@ -19,7 +19,7 @@ require (
 	github.com/google/go-github v15.0.0+incompatible
 	github.com/google/go-querystring v0.0.0-20170111101155-53e6ce116135
 	github.com/google/pprof v0.0.0-20180926163344-782e5fd74720 // indirect
-	github.com/goreleaser/goreleaser v0.91.3 // indirect
+	github.com/goreleaser/goreleaser v0.92.0 // indirect
 	github.com/goreleaser/nfpm v0.9.5 // indirect
 	github.com/hashicorp/logutils v0.0.0-20150609070431-0dc08b1671f3
 	github.com/ianlancetaylor/demangle v0.0.0-20180714043527-fcd258a6f0b4 // indirect
