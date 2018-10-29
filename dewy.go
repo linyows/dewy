@@ -2,6 +2,7 @@ package dewy
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -93,12 +94,13 @@ func (d *Dewy) Run() error {
 		return nil
 	}
 
-	d.notice.Notify("Release downloading", ctx)
 	key, err := d.repository.Download()
 	if err != nil {
-		log.Printf("[ERROR] Download failure: %#v", err)
+		log.Printf("[DEBUG] Download failure: %#v", err)
 		return nil
 	}
+
+	d.notice.Notify("New release was downloaded", ctx)
 
 	if err := d.deploy(key); err != nil {
 		return err
