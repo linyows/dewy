@@ -45,11 +45,13 @@ func (c CacheType) String() string {
 	}
 }
 
+// CacheConfig
 type CacheConfig struct {
 	Type       CacheType
 	Expiration int
 }
 
+// RepositoryProvider
 type RepositoryProvider int
 
 const (
@@ -65,6 +67,7 @@ func (r RepositoryProvider) String() string {
 	}
 }
 
+// RepositoryConfig
 type RepositoryConfig struct {
 	Provider RepositoryProvider
 	Owner    string
