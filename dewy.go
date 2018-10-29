@@ -107,6 +107,10 @@ func (d *Dewy) Run() error {
 		return err
 	}
 
+	if d.config.Command != SERVER {
+		return nil
+	}
+
 	if d.isServerRunning {
 		d.notice.Notify("Server restarting", ctx)
 		err = d.restartServer()
