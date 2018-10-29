@@ -165,8 +165,8 @@ func (c *CLI) run(a []string) {
 		return
 	}
 
-	if len(args) == 0 {
-		fmt.Fprintf(c.errStream, "Error: command not specified\n")
+	if len(args) == 0 || (args[0] != "server" && args[0] != "assets") {
+		fmt.Fprintf(c.errStream, "Error: command is not available\n")
 		c.showHelp()
 		os.Exit(ExitErr)
 		return
