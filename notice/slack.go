@@ -26,16 +26,26 @@ type Slack struct {
 	Username      string
 	Channel       string
 	IconURL       string
+	Message       string
 }
 
 func (s *Slack) Name() string {
 	return "slack"
 }
 
-func (s *Slack) Default() {
-	s.Username = defaultSlackUsername
-	s.Channel = defaultSlackChannel
-	s.IconURL = defaultSlackIconURL
+func (s *Slack) setDefault() {
+	if s.Username == "" {
+		s.Username = defaultSlackUsername
+	}
+	if s.Channel == "" {
+		s.Channel = defaultSlackChannel
+	}
+	if s.IconURL == "" {
+		s.IconURL = defaultSlackIconURL
+	}
+	if s.Message == "" {
+		s.Message = defaultSlackMessage
+	}
 }
 
 func (s *Slack) appName() string {
@@ -58,9 +68,7 @@ func (s *Slack) Notify(m string, ctx context.Context) {
 		return
 	}
 
-	if m == "" {
-		m = defaultSlackMessage
-	}
+	s.setDefault()
 
 	cl := slack.New(s.Token)
 	var at objects.Attachment

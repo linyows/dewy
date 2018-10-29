@@ -51,6 +51,7 @@ func (d *Dewy) Start(i int) {
 	d.notice = notice.New(&notice.Slack{
 		RepositoryURL: "https://" + d.config.Repository.String(),
 		Token:         os.Getenv("SLACK_TOKEN"),
+		Channel:       os.Getenv("SLACK_CHANNEL"),
 	})
 	d.notice.Notify("Scheduler starting", ctx)
 
