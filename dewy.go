@@ -100,7 +100,8 @@ func (d *Dewy) Run() error {
 		return nil
 	}
 
-	d.notice.Notify("New release was downloaded", ctx)
+	d.notice.Notify(fmt.Sprintf("New release <%s|%s> was downloaded",
+		d.repository.ReleaseHTMLURL(), d.repository.ReleaseTag()), ctx)
 
 	if err := d.deploy(key); err != nil {
 		return err
