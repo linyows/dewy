@@ -8,7 +8,6 @@ import (
 	"os/signal"
 	"os/user"
 	"path/filepath"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -85,16 +84,16 @@ func (d *Dewy) Start(i int) {
 		log.Printf("[ERROR] Scheduler failure: %#v", err)
 	}
 
-	d.waitSigs()
+	d.notice.Notify(fmt.Sprintf("Stop receiving \"%s\" signal", d.waitSigs()), nil, ctx)
 }
 
-func (d *Dewy) waitSigs() {
+func (d *Dewy) waitSigs() os.Signal {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	sigReceived := <-sigCh
 	log.Printf("[DEBUG] PID %d received signal as %s", os.Getpid(), sigReceived)
 	d.job.Quit <- true
-	d.notice.Notify(fmt.Sprintf("Stop receiving %s signal", sigReceived), nil, ctx)
+	return sigReceived
 }
 
 func (d *Dewy) Run() error {
@@ -227,5 +226,5 @@ func hostname() string {
 	if err != nil {
 		return fmt.Sprintf("%#v", err)
 	}
-	return strings.ToLower(name)
+	return name
 }
