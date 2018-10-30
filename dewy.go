@@ -50,13 +50,25 @@ func (d *Dewy) Start(i int) {
 	defer cancel()
 
 	d.notice = notice.New(&notice.Slack{
-		RepositoryURL: "https://" + d.config.Repository.String(),
-		Token:         os.Getenv("SLACK_TOKEN"),
-		Channel:       os.Getenv("SLACK_CHANNEL"),
+		Name:    fmt.Sprintf("%s/%s", d.config.Repository.Owner, d.config.Repository.Name),
+		Link:    "https://" + d.config.Repository.String(),
+		Host:    hostname(),
+		Token:   os.Getenv("SLACK_TOKEN"),
+		Channel: os.Getenv("SLACK_CHANNEL"),
 	})
-	d.notice.Notify("Scheduler starting", ctx)
 
-	var err error
+	cwd, err := os.Getwd()
+	user, err := user.Current()
+	if err != nil {
+		panic(err.Error())
+	}
+	var fields []*notice.Field
+	fields = append(fields, &notice.Field{Title: "Command", Value: d.config.Command.String(), Short: true})
+	fields = append(fields, &notice.Field{Title: "User", Value: user.Name, Short: true})
+	fields = append(fields, &notice.Field{Title: "Artifact", Value: d.config.Repository.Artifact, Short: true})
+	fields = append(fields, &notice.Field{Title: "Working directory", Value: cwd, Short: false})
+	d.notice.Notify("Automatic shipping started by Dewy", fields, ctx)
+
 	d.job, err = scheduler.Every(i).Seconds().Run(func() {
 		d.Run()
 	})
@@ -66,7 +78,7 @@ func (d *Dewy) Start(i int) {
 	}
 
 	d.waitSigs()
-	d.notice.Notify("Scheduler killed", ctx)
+	d.notice.Notify("Killed", nil, ctx)
 }
 
 func (d *Dewy) waitSigs() {
@@ -101,7 +113,7 @@ func (d *Dewy) Run() error {
 	}
 
 	d.notice.Notify(fmt.Sprintf("New release <%s|%s> was downloaded",
-		d.repository.ReleaseHTMLURL(), d.repository.ReleaseTag()), ctx)
+		d.repository.ReleaseHTMLURL(), d.repository.ReleaseTag()), nil, ctx)
 
 	if err := d.deploy(key); err != nil {
 		return err
@@ -112,10 +124,10 @@ func (d *Dewy) Run() error {
 	}
 
 	if d.isServerRunning {
-		d.notice.Notify("Server restarting", ctx)
+		d.notice.Notify("Server restarting", nil, ctx)
 		err = d.restartServer()
 	} else {
-		d.notice.Notify("Server starting", ctx)
+		d.notice.Notify("Server starting", nil, ctx)
 		err = d.startServer()
 	}
 
@@ -201,4 +213,12 @@ func (d *Dewy) finalizeDeploy() {
 	if err != nil {
 		log.Printf("[ERROR] Record failure: %#v", err)
 	}
+}
+
+func hostname() string {
+	name, err := os.Hostname()
+	if err != nil {
+		return fmt.Sprintf("%#v", err)
+	}
+	return strings.ToLower(name)
 }
