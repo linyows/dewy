@@ -19,6 +19,13 @@ import (
 	"github.com/linyows/dewy/notice"
 )
 
+const (
+	ISO8601     string = "20060102T150405Z0700"
+	releaseDir  string = ISO8601
+	releasesDir string = "releases"
+	symlinkDir  string = "current"
+)
+
 type Dewy struct {
 	config          Config
 	repository      Repository
@@ -74,13 +81,11 @@ func (d *Dewy) Start(i int) {
 	d.job, err = scheduler.Every(i).Seconds().Run(func() {
 		d.Run()
 	})
-
 	if err != nil {
 		log.Printf("[ERROR] Scheduler failure: %#v", err)
 	}
 
 	d.waitSigs()
-	d.notice.Notify("Killed", nil, ctx)
 }
 
 func (d *Dewy) waitSigs() {
@@ -89,6 +94,7 @@ func (d *Dewy) waitSigs() {
 	sigReceived := <-sigCh
 	log.Printf("[DEBUG] PID %d received signal as %s", os.Getpid(), sigReceived)
 	d.job.Quit <- true
+	d.notice.Notify(fmt.Sprintf("Stop receiving %s signal", sigReceived), nil, ctx)
 }
 
 func (d *Dewy) Run() error {
@@ -144,7 +150,7 @@ func (d *Dewy) deploy(key string) error {
 		return err
 	}
 
-	linkTo := filepath.Join(d.root, "current")
+	linkTo := filepath.Join(d.root, symlinkDir)
 	if _, err := os.Lstat(linkTo); err == nil {
 		os.Remove(linkTo)
 	}
@@ -158,8 +164,7 @@ func (d *Dewy) deploy(key string) error {
 }
 
 func (d *Dewy) preserve(p string) (string, error) {
-	ISO8601 := "20060102T150405Z0700"
-	dst := filepath.Join(d.root, "preserves", time.Now().UTC().Format(ISO8601))
+	dst := filepath.Join(d.root, releasesDir, time.Now().UTC().Format(releaseDir))
 	if err := os.MkdirAll(dst, 0755); err != nil {
 		return "", err
 	}
