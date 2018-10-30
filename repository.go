@@ -19,27 +19,31 @@ import (
 )
 
 type Repository interface {
+	String() string
 	Fetch() error
 	Download() (string, error)
 	IsDownloadNecessary() bool
-	Record() error
+	RecordShipment() error
 	ReleaseTag() string
-	ReleaseHTMLURL() string
+	ReleaseURL() string
+	OwnerURL() string
+	OwnerIconURL() string
+	URL() string
 }
 
 type GithubReleaseRepository struct {
-	token          string
-	endpoint       string
-	owner          string
-	name           string
-	artifact       string
-	downloadURL    string
-	cacheKey       string
-	cache          kvs.KVS
-	releaseID      int64
-	releaseHTMLURL string
-	releaseTag     string
-	cl             *github.Client
+	token       string
+	endpoint    string
+	owner       string
+	name        string
+	artifact    string
+	downloadURL string
+	cacheKey    string
+	cache       kvs.KVS
+	releaseID   int64
+	releaseURL  string
+	releaseTag  string
+	cl          *github.Client
 }
 
 func NewRepository(c RepositoryConfig, d kvs.KVS) Repository {
@@ -58,12 +62,28 @@ func NewRepository(c RepositoryConfig, d kvs.KVS) Repository {
 	}
 }
 
+func (g *GithubReleaseRepository) String() string {
+	return "github.com"
+}
+
+func (g *GithubReleaseRepository) OwnerURL() string {
+	return fmt.Sprintf("https://%s/%s", g, g.owner)
+}
+
+func (g *GithubReleaseRepository) OwnerIconURL() string {
+	return fmt.Sprintf("%s.png?size=200", g.OwnerURL())
+}
+
+func (g *GithubReleaseRepository) URL() string {
+	return fmt.Sprintf("%s/%s", g.OwnerURL(), g.name)
+}
+
 func (g *GithubReleaseRepository) ReleaseTag() string {
 	return g.releaseTag
 }
 
-func (g *GithubReleaseRepository) ReleaseHTMLURL() string {
-	return g.releaseHTMLURL
+func (g *GithubReleaseRepository) ReleaseURL() string {
+	return g.releaseURL
 }
 
 func (g *GithubReleaseRepository) Fetch() error {
@@ -78,7 +98,7 @@ func (g *GithubReleaseRepository) Fetch() error {
 		return err
 	}
 	g.releaseID = *release.ID
-	g.releaseHTMLURL = *release.HTMLURL
+	g.releaseURL = *release.HTMLURL
 
 	for _, v := range release.Assets {
 		if *v.Name == g.artifact {
@@ -162,14 +182,13 @@ func (g *GithubReleaseRepository) client(ctx context.Context) (*github.Client, e
 	return g.cl, nil
 }
 
-func (g *GithubReleaseRepository) Record() error {
+func (g *GithubReleaseRepository) RecordShipment() error {
 	ctx := context.Background()
 	c, err := g.client(ctx)
 	if err != nil {
 		return err
 	}
 
-	ISO8601 := "20060102T150405Z0700"
 	now := time.Now().UTC().Format(ISO8601)
 	hostname, _ := os.Hostname()
 	info := fmt.Sprintf("shipped to %s at %s", strings.ToLower(hostname), now)

@@ -3,9 +3,9 @@ package notice
 import (
 	"context"
 	"crypto/md5"
-	"errors"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -14,99 +14,75 @@ import (
 )
 
 var (
-	defaultSlackUsername string = "Dewy"
-	defaultSlackChannel  string = "general"
-	defaultSlackMessage  string = "Hi guys, This is a default message."
-	defaultSlackIconURL  string = "https://raw.githubusercontent.com/linyows/dewy/master/misc/dewy-icon.512.png"
-	SlackFooter          string = "Dewy notice/slack"
-	SlackFooterIcon      string = defaultSlackIconURL
+	defaultSlackChannel string = "general"
+	SlackUsername       string = "Dewy"
+	SlackIconURL        string = "https://raw.githubusercontent.com/linyows/dewy/master/misc/dewy-icon.512.png"
+	SlackFooter         string = "Dewy notice/slack"
+	SlackFooterIcon     string = SlackIconURL
 )
 
 type Slack struct {
-	Token         string
-	Username      string
-	Channel       string
-	IconURL       string
-	Message       string
-	RepoOwner     string
-	RepoName      string
-	RepoLink      string
-	RepoOwnerIcon string
-	RepoOwnerLink string
-	Host          string
+	Token   string
+	Channel string
+	Meta    *NoticeConfig
 }
 
 func (s *Slack) String() string {
 	return "slack"
 }
 
-func (s *Slack) setDefault() {
-	if s.Username == "" {
-		s.Username = defaultSlackUsername
+func (s *Slack) Notify(ctx context.Context, message string) {
+	if t := os.Getenv("SLACK_TOKEN"); t != "" {
+		s.Token = t
+	}
+	if c := os.Getenv("SLACK_CHANNEL"); c != "" {
+		s.Channel = c
 	}
 	if s.Channel == "" {
 		s.Channel = defaultSlackChannel
 	}
-	if s.IconURL == "" {
-		s.IconURL = defaultSlackIconURL
-	}
-	if s.Message == "" {
-		s.Message = defaultSlackMessage
-	}
-}
-
-func (s *Slack) Notify(m string, fields []*Field, ctx context.Context) {
 	if s.Token == "" {
-		err := errors.New(fmt.Sprintf("Slack token not found"))
-		log.Printf("[ERROR] Failed %s notice: %#v", s, err)
+		log.Printf("[ERROR] Slack token is required")
 		return
 	}
 
-	s.setDefault()
-
 	cl := slack.New(s.Token)
+	at := s.buildAttachment(message, ctx.Value("meta") != nil)
 
-	var at objects.Attachment
-	at.Color = s.genColor()
-
-	if len(fields) > 0 {
-		at.Title = s.RepoName
-		at.TitleLink = s.RepoLink
-		at.Text = m
-		at.AuthorName = s.RepoOwner
-		at.AuthorLink = s.RepoOwnerLink
-		at.AuthorIcon = s.RepoOwnerIcon
-		at.Footer = SlackFooter
-		at.FooterIcon = SlackFooterIcon
-		at.Timestamp = objects.Timestamp(time.Now().Unix())
-		at.Fields.Append(&objects.AttachmentField{
-			Title: "Host",
-			Value: s.Host,
-			Short: true,
-		})
-		for _, f := range fields {
-			at.Fields.Append(&objects.AttachmentField{
-				Title: f.Title,
-				Value: f.Value,
-				Short: f.Short,
-			})
-		}
-	} else {
-		at.Text = fmt.Sprintf("%s of <%s|%s> on %s", m, s.RepoLink, s.RepoName, s.Host)
-	}
-
-	_, err := cl.Chat().PostMessage(s.Channel).
-		Username(s.Username).
-		IconURL(s.IconURL).
-		Attachment(&at).
-		Text("").
-		Do(ctx)
-
+	_, err := cl.Chat().PostMessage(s.Channel).Username(SlackUsername).
+		IconURL(SlackIconURL).Attachment(&at).Text("").Do(ctx)
 	if err != nil {
-		log.Printf("[ERROR] Failed %s notice: %#v", s, err)
+		log.Printf("[ERROR] Slack postMessage failure: %#v", err)
 	}
 }
 
 func (s *Slack) genColor() string {
-	return strings.ToUpper(fmt.Sprintf("#%x", md5.Sum([]byte(s.Host)))[0:7])
+	return strings.ToUpper(fmt.Sprintf("#%x", md5.Sum([]byte(s.Meta.Host)))[0:7])
+}
+
+func (s *Slack) buildAttachment(message string, meta bool) objects.Attachment {
+	var at objects.Attachment
+	at.Color = s.genColor()
+
+	if meta {
+		at.Text = message
+		at.Title = s.Meta.RepoName
+		at.TitleLink = s.Meta.RepoLink
+		at.AuthorName = s.Meta.RepoOwner
+		at.AuthorLink = s.Meta.RepoOwnerLink
+		at.AuthorIcon = s.Meta.RepoOwnerIcon
+		at.Footer = SlackFooter
+		at.FooterIcon = SlackFooterIcon
+		at.Timestamp = objects.Timestamp(time.Now().Unix())
+		at.Fields.
+			Append(&objects.AttachmentField{Title: "Command", Value: s.Meta.Command, Short: true}).
+			Append(&objects.AttachmentField{Title: "Host", Value: s.Meta.Host, Short: true}).
+			Append(&objects.AttachmentField{Title: "User", Value: s.Meta.User, Short: true}).
+			Append(&objects.AttachmentField{Title: "Source", Value: s.Meta.Source, Short: true}).
+			Append(&objects.AttachmentField{Title: "Working directory", Value: s.Meta.WorkingDirectory, Short: false})
+	} else {
+		at.Text = fmt.Sprintf("%s of <%s|%s> on %s", message, s.Meta.RepoLink, s.Meta.RepoName, s.Meta.Host)
+	}
+
+	return at
 }

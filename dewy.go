@@ -48,39 +48,33 @@ func New(c Config) *Dewy {
 	return &Dewy{
 		config:          c,
 		cache:           kv,
+		repository:      NewRepository(c.Repository, kv),
 		isServerRunning: false,
 		root:            wd,
 	}
 }
 
 func (d *Dewy) Start(i int) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.WithValue(context.Background(), "meta", true))
 	defer cancel()
 
-	o := fmt.Sprintf("https://%s/%s", d.config.Repository.Provider, d.config.Repository.Owner)
-	d.notice = notice.New(&notice.Slack{
-		RepoOwner:     d.config.Repository.Owner,
-		RepoName:      d.config.Repository.Name,
-		RepoOwnerLink: o,
-		RepoOwnerIcon: fmt.Sprintf("%s.png?size=200", o),
-		RepoLink:      fmt.Sprintf("%s/%s", o, d.config.Repository),
-		Host:          hostname(),
-		Token:         os.Getenv("SLACK_TOKEN"),
-		Channel:       os.Getenv("SLACK_CHANNEL"),
-	})
+	d.notice = notice.New(&notice.Slack{Meta: &notice.NoticeConfig{
+		RepoOwnerLink:    d.repository.OwnerURL(),
+		RepoOwnerIcon:    d.repository.OwnerIconURL(),
+		RepoLink:         d.repository.URL(),
+		RepoOwner:        d.config.Repository.Owner,
+		RepoName:         d.config.Repository.Name,
+		Source:           d.config.Repository.Artifact,
+		Command:          d.config.Command.String(),
+		Host:             hostname(),
+		User:             username(),
+		WorkingDirectory: cwd(),
+	}})
 
-	cwd, err := os.Getwd()
-	user, err := user.Current()
-	if err != nil {
-		panic(err.Error())
-	}
-	var fields []*notice.Field
-	fields = append(fields, &notice.Field{Title: "Command", Value: d.config.Command.String(), Short: true})
-	fields = append(fields, &notice.Field{Title: "User", Value: user.Name, Short: true})
-	fields = append(fields, &notice.Field{Title: "Artifact", Value: d.config.Repository.Artifact, Short: true})
-	fields = append(fields, &notice.Field{Title: "Working directory", Value: cwd, Short: false})
-	d.notice.Notify("Automatic shipping started by Dewy", fields, ctx)
+	d.notice.Notify(ctx, "Automatic shipping started by Dewy")
+	ctx, cancel = context.WithCancel(context.Background())
 
+	var err error
 	d.job, err = scheduler.Every(i).Seconds().Run(func() {
 		d.Run()
 	})
@@ -88,7 +82,7 @@ func (d *Dewy) Start(i int) {
 		log.Printf("[ERROR] Scheduler failure: %#v", err)
 	}
 
-	d.notice.Notify(fmt.Sprintf("Stop receiving \"%s\" signal", d.waitSigs()), nil, ctx)
+	d.notice.Notify(ctx, fmt.Sprintf("Stop receiving \"%s\" signal", d.waitSigs()))
 }
 
 func (d *Dewy) waitSigs() os.Signal {
@@ -103,9 +97,6 @@ func (d *Dewy) waitSigs() os.Signal {
 func (d *Dewy) Run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	d.config.Repository.String()
-	d.repository = NewRepository(d.config.Repository, d.cache)
 
 	if err := d.repository.Fetch(); err != nil {
 		log.Printf("[ERROR] Fetch failure: %#v", err)
@@ -123,27 +114,30 @@ func (d *Dewy) Run() error {
 		return nil
 	}
 
-	d.notice.Notify(fmt.Sprintf("New release <%s|%s> was downloaded",
-		d.repository.ReleaseHTMLURL(), d.repository.ReleaseTag()), nil, ctx)
+	d.notice.Notify(ctx, fmt.Sprintf("New release <%s|%s> was downloaded",
+		d.repository.ReleaseURL(), d.repository.ReleaseTag()))
 
 	if err := d.deploy(key); err != nil {
 		return err
 	}
 
-	if d.config.Command != SERVER {
-		return nil
+	if d.config.Command == SERVER {
+		if d.isServerRunning {
+			d.notice.Notify(ctx, "Server restarting")
+			err = d.restartServer()
+		} else {
+			d.notice.Notify(ctx, "Server starting")
+			err = d.startServer()
+		}
 	}
 
-	if d.isServerRunning {
-		d.notice.Notify("Server restarting", nil, ctx)
-		err = d.restartServer()
-	} else {
-		d.notice.Notify("Server starting", nil, ctx)
-		err = d.startServer()
+	log.Print("[DEBUG] Record shipment")
+	err = d.repository.RecordShipment()
+	if err != nil {
+		log.Printf("[ERROR] Record shipment failure: %#v", err)
 	}
 
-	d.finalizeDeploy()
-	return err
+	return nil
 }
 
 func (d *Dewy) deploy(key string) error {
@@ -216,19 +210,26 @@ func (d *Dewy) startServer() error {
 	return nil
 }
 
-func (d *Dewy) finalizeDeploy() {
-	log.Print("[DEBUG] Deploy finalizing")
-
-	err := d.repository.Record()
-	if err != nil {
-		log.Printf("[ERROR] Record failure: %#v", err)
-	}
-}
-
 func hostname() string {
-	name, err := os.Hostname()
+	n, err := os.Hostname()
 	if err != nil {
 		return fmt.Sprintf("%#v", err)
 	}
-	return name
+	return n
+}
+
+func cwd() string {
+	c, err := os.Getwd()
+	if err != nil {
+		return fmt.Sprintf("%#v", err)
+	}
+	return c
+}
+
+func username() string {
+	u, err := user.Current()
+	if err != nil {
+		return fmt.Sprintf("%#v", err)
+	}
+	return u.Name
 }
