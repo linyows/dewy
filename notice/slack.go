@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"os"
 	"strings"
+	"time"
 
 	"github.com/lestrrat-go/slack"
 	"github.com/lestrrat-go/slack/objects"
@@ -18,18 +18,22 @@ var (
 	defaultSlackChannel  string = "general"
 	defaultSlackMessage  string = "Hi guys, This is a default message."
 	defaultSlackIconURL  string = "https://raw.githubusercontent.com/linyows/dewy/master/misc/dewy-icon.512.png"
+	SlackFooter          string = "Dewy notice/slack"
+	SlackFooterIcon      string = defaultSlackIconURL
 )
 
 type Slack struct {
-	RepositoryURL string
-	Token         string
-	Username      string
-	Channel       string
-	IconURL       string
-	Message       string
+	Token    string
+	Username string
+	Channel  string
+	IconURL  string
+	Message  string
+	Name     string
+	Link     string
+	Host     string
 }
 
-func (s *Slack) Name() string {
+func (s *Slack) String() string {
 	return "slack"
 }
 
@@ -48,32 +52,42 @@ func (s *Slack) setDefault() {
 	}
 }
 
-func (s *Slack) appName() string {
-	sp := strings.Split(s.RepositoryURL, "/")
-	return sp[len(sp)-1]
-}
-
-func (s *Slack) hostname() string {
-	name, err := os.Hostname()
-	if err != nil {
-		return fmt.Sprintf("%#v", err)
-	}
-	return strings.ToLower(name)
-}
-
-func (s *Slack) Notify(m string, ctx context.Context) {
+func (s *Slack) Notify(m string, fields []*Field, ctx context.Context) {
 	if s.Token == "" {
-		err := errors.New(fmt.Sprintf("Slack Token not found"))
-		log.Printf("[ERROR] Failed %s notice: %#v", s.Name(), err)
+		err := errors.New(fmt.Sprintf("Slack token not found"))
+		log.Printf("[ERROR] Failed %s notice: %#v", s, err)
 		return
 	}
 
 	s.setDefault()
 
 	cl := slack.New(s.Token)
+
 	var at objects.Attachment
 	at.Color = s.genColor()
-	at.Text = fmt.Sprintf("%s of <%s|%s> on %s", m, s.RepositoryURL, s.appName(), s.hostname())
+
+	if len(fields) > 0 {
+		at.Title = s.Name
+		at.TitleLink = s.Link
+		at.Text = m
+		at.Footer = SlackFooter
+		at.FooterIcon = SlackFooterIcon
+		at.Timestamp = objects.Timestamp(time.Now().Unix())
+		at.Fields.Append(&objects.AttachmentField{
+			Title: "Host",
+			Value: s.Host,
+			Short: true,
+		})
+		for _, f := range fields {
+			at.Fields.Append(&objects.AttachmentField{
+				Title: f.Title,
+				Value: f.Value,
+				Short: f.Short,
+			})
+		}
+	} else {
+		at.Text = fmt.Sprintf("%s of <%s|%s> on %s", m, s.Link, s.Name, s.Host)
+	}
 
 	_, err := cl.Chat().PostMessage(s.Channel).
 		Username(s.Username).
@@ -83,11 +97,10 @@ func (s *Slack) Notify(m string, ctx context.Context) {
 		Do(ctx)
 
 	if err != nil {
-		log.Printf("[ERROR] Failed %s notice: %#v", s.Name(), err)
+		log.Printf("[ERROR] Failed %s notice: %#v", s, err)
 	}
 }
 
 func (s *Slack) genColor() string {
-	k := []byte(s.hostname())
-	return strings.ToUpper(fmt.Sprintf("#%x", md5.Sum(k))[0:7])
+	return strings.ToUpper(fmt.Sprintf("#%x", md5.Sum([]byte(s.Host)))[0:7])
 }
