@@ -30,10 +30,10 @@ type Dewy struct {
 	repository      Repository
 	cache           kvs.KVS
 	isServerRunning bool
+	root            string
+	job             *scheduler.Job
+	notice          notice.Notice
 	sync.RWMutex
-	root   string
-	job    *scheduler.Job
-	notice notice.Notice
 }
 
 func New(c Config) *Dewy {
