@@ -23,14 +23,17 @@ var (
 )
 
 type Slack struct {
-	Token    string
-	Username string
-	Channel  string
-	IconURL  string
-	Message  string
-	Name     string
-	Link     string
-	Host     string
+	Token         string
+	Username      string
+	Channel       string
+	IconURL       string
+	Message       string
+	RepoOwner     string
+	RepoName      string
+	RepoLink      string
+	RepoOwnerIcon string
+	RepoOwnerLink string
+	Host          string
 }
 
 func (s *Slack) String() string {
@@ -67,9 +70,12 @@ func (s *Slack) Notify(m string, fields []*Field, ctx context.Context) {
 	at.Color = s.genColor()
 
 	if len(fields) > 0 {
-		at.Title = s.Name
-		at.TitleLink = s.Link
+		at.Title = s.RepoName
+		at.TitleLink = s.RepoLink
 		at.Text = m
+		at.AuthorName = s.RepoOwner
+		at.AuthorLink = s.RepoOwnerLink
+		at.AuthorIcon = s.RepoOwnerIcon
 		at.Footer = SlackFooter
 		at.FooterIcon = SlackFooterIcon
 		at.Timestamp = objects.Timestamp(time.Now().Unix())
@@ -86,7 +92,7 @@ func (s *Slack) Notify(m string, fields []*Field, ctx context.Context) {
 			})
 		}
 	} else {
-		at.Text = fmt.Sprintf("%s of <%s|%s> on %s", m, s.Link, s.Name, s.Host)
+		at.Text = fmt.Sprintf("%s of <%s|%s> on %s", m, s.RepoLink, s.RepoName, s.Host)
 	}
 
 	_, err := cl.Chat().PostMessage(s.Channel).

@@ -57,12 +57,16 @@ func (d *Dewy) Start(i int) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	o := fmt.Sprintf("https://%s/%s", d.config.Repository.Provider, d.config.Repository.Owner)
 	d.notice = notice.New(&notice.Slack{
-		Name:    fmt.Sprintf("%s/%s", d.config.Repository.Owner, d.config.Repository.Name),
-		Link:    "https://" + d.config.Repository.String(),
-		Host:    hostname(),
-		Token:   os.Getenv("SLACK_TOKEN"),
-		Channel: os.Getenv("SLACK_CHANNEL"),
+		RepoOwner:     d.config.Repository.Owner,
+		RepoName:      d.config.Repository.Name,
+		RepoOwnerLink: o,
+		RepoOwnerIcon: fmt.Sprintf("%s.png?size=200", o),
+		RepoLink:      fmt.Sprintf("%s/%s", o, d.config.Repository),
+		Host:          hostname(),
+		Token:         os.Getenv("SLACK_TOKEN"),
+		Channel:       os.Getenv("SLACK_CHANNEL"),
 	})
 
 	cwd, err := os.Getwd()
