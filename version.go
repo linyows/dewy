@@ -4,4 +4,4 @@ package dewy
 const Name string = "dewy"
 
 // Version of package
-const Version string = "0.1.0"
+const Version string = "0.2.0"
