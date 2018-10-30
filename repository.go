@@ -23,20 +23,23 @@ type Repository interface {
 	Download() (string, error)
 	IsDownloadNecessary() bool
 	Record() error
+	ReleaseTag() string
+	ReleaseHTMLURL() string
 }
 
 type GithubReleaseRepository struct {
-	token       string
-	endpoint    string
-	owner       string
-	name        string
-	artifact    string
-	tag         string
-	downloadURL string
-	cacheKey    string
-	cache       kvs.KVS
-	releaseID   int64
-	cl          *github.Client
+	token          string
+	endpoint       string
+	owner          string
+	name           string
+	artifact       string
+	downloadURL    string
+	cacheKey       string
+	cache          kvs.KVS
+	releaseID      int64
+	releaseHTMLURL string
+	releaseTag     string
+	cl             *github.Client
 }
 
 func NewRepository(c RepositoryConfig, d kvs.KVS) Repository {
@@ -55,6 +58,14 @@ func NewRepository(c RepositoryConfig, d kvs.KVS) Repository {
 	}
 }
 
+func (g *GithubReleaseRepository) ReleaseTag() string {
+	return g.releaseTag
+}
+
+func (g *GithubReleaseRepository) ReleaseHTMLURL() string {
+	return g.releaseHTMLURL
+}
+
 func (g *GithubReleaseRepository) Fetch() error {
 	ctx := context.Background()
 	c, err := g.client(ctx)
@@ -67,12 +78,13 @@ func (g *GithubReleaseRepository) Fetch() error {
 		return err
 	}
 	g.releaseID = *release.ID
+	g.releaseHTMLURL = *release.HTMLURL
 
 	for _, v := range release.Assets {
 		if *v.Name == g.artifact {
 			log.Printf("[DEBUG] Fetched: %+v", v)
 			g.downloadURL = *v.BrowserDownloadURL
-			g.tag = *release.TagName
+			g.releaseTag = *release.TagName
 			break
 		}
 	}

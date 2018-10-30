@@ -20,9 +20,12 @@ default: test
 build:
 	$(GOENV) go build -o dewy cmd/dewy/main.go
 
-run: build
+server: build
 	$(GOENV) ./dewy server -r linyows/dewy-testapp -a dewy-testapp_darwin_amd64.tar.gz \
 		-p 8000 -l $(LOGLEVEL) -- $(HOME)/.go/src/github.com/linyows/dewy/current/dewy-testapp
+
+assets: build
+	$(GOENV) ./dewy assets -r linyows/dewy-testapp -a dewy-testapp_darwin_amd64.tar.gz -p 8000 -l $(LOGLEVEL)
 
 deps:
 	$(GOENV) go get github.com/golang/lint/golint

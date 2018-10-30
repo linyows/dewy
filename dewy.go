@@ -2,9 +2,11 @@ package dewy
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
+	"os/user"
 	"path/filepath"
 	"sync"
 	"syscall"
@@ -14,6 +16,13 @@ import (
 	starter "github.com/lestrrat-go/server-starter"
 	"github.com/linyows/dewy/kvs"
 	"github.com/linyows/dewy/notice"
+)
+
+const (
+	ISO8601     string = "20060102T150405Z0700"
+	releaseDir  string = ISO8601
+	releasesDir string = "releases"
+	symlinkDir  string = "current"
 )
 
 type Dewy struct {
@@ -49,31 +58,42 @@ func (d *Dewy) Start(i int) {
 	defer cancel()
 
 	d.notice = notice.New(&notice.Slack{
-		RepositoryURL: "https://" + d.config.Repository.String(),
-		Token:         os.Getenv("SLACK_TOKEN"),
-		Channel:       os.Getenv("SLACK_CHANNEL"),
+		Name:    fmt.Sprintf("%s/%s", d.config.Repository.Owner, d.config.Repository.Name),
+		Link:    "https://" + d.config.Repository.String(),
+		Host:    hostname(),
+		Token:   os.Getenv("SLACK_TOKEN"),
+		Channel: os.Getenv("SLACK_CHANNEL"),
 	})
-	d.notice.Notify("Scheduler starting", ctx)
 
-	var err error
+	cwd, err := os.Getwd()
+	user, err := user.Current()
+	if err != nil {
+		panic(err.Error())
+	}
+	var fields []*notice.Field
+	fields = append(fields, &notice.Field{Title: "Command", Value: d.config.Command.String(), Short: true})
+	fields = append(fields, &notice.Field{Title: "User", Value: user.Name, Short: true})
+	fields = append(fields, &notice.Field{Title: "Artifact", Value: d.config.Repository.Artifact, Short: true})
+	fields = append(fields, &notice.Field{Title: "Working directory", Value: cwd, Short: false})
+	d.notice.Notify("Automatic shipping started by Dewy", fields, ctx)
+
 	d.job, err = scheduler.Every(i).Seconds().Run(func() {
 		d.Run()
 	})
-
 	if err != nil {
 		log.Printf("[ERROR] Scheduler failure: %#v", err)
 	}
 
-	d.waitSigs()
-	d.notice.Notify("Scheduler killed", ctx)
+	d.notice.Notify(fmt.Sprintf("Stop receiving \"%s\" signal", d.waitSigs()), nil, ctx)
 }
 
-func (d *Dewy) waitSigs() {
+func (d *Dewy) waitSigs() os.Signal {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	sigReceived := <-sigCh
 	log.Printf("[DEBUG] PID %d received signal as %s", os.Getpid(), sigReceived)
 	d.job.Quit <- true
+	return sigReceived
 }
 
 func (d *Dewy) Run() error {
@@ -93,22 +113,28 @@ func (d *Dewy) Run() error {
 		return nil
 	}
 
-	d.notice.Notify("Release downloading", ctx)
 	key, err := d.repository.Download()
 	if err != nil {
-		log.Printf("[ERROR] Download failure: %#v", err)
+		log.Printf("[DEBUG] Download failure: %#v", err)
 		return nil
 	}
+
+	d.notice.Notify(fmt.Sprintf("New release <%s|%s> was downloaded",
+		d.repository.ReleaseHTMLURL(), d.repository.ReleaseTag()), nil, ctx)
 
 	if err := d.deploy(key); err != nil {
 		return err
 	}
 
+	if d.config.Command != SERVER {
+		return nil
+	}
+
 	if d.isServerRunning {
-		d.notice.Notify("Server restarting", ctx)
+		d.notice.Notify("Server restarting", nil, ctx)
 		err = d.restartServer()
 	} else {
-		d.notice.Notify("Server starting", ctx)
+		d.notice.Notify("Server starting", nil, ctx)
 		err = d.startServer()
 	}
 
@@ -123,7 +149,7 @@ func (d *Dewy) deploy(key string) error {
 		return err
 	}
 
-	linkTo := filepath.Join(d.root, "current")
+	linkTo := filepath.Join(d.root, symlinkDir)
 	if _, err := os.Lstat(linkTo); err == nil {
 		os.Remove(linkTo)
 	}
@@ -137,8 +163,7 @@ func (d *Dewy) deploy(key string) error {
 }
 
 func (d *Dewy) preserve(p string) (string, error) {
-	ISO8601 := "20060102T150405Z0700"
-	dst := filepath.Join(d.root, "preserves", time.Now().UTC().Format(ISO8601))
+	dst := filepath.Join(d.root, releasesDir, time.Now().UTC().Format(releaseDir))
 	if err := os.MkdirAll(dst, 0755); err != nil {
 		return "", err
 	}
@@ -194,4 +219,12 @@ func (d *Dewy) finalizeDeploy() {
 	if err != nil {
 		log.Printf("[ERROR] Record failure: %#v", err)
 	}
+}
+
+func hostname() string {
+	name, err := os.Hostname()
+	if err != nil {
+		return fmt.Sprintf("%#v", err)
+	}
+	return name
 }

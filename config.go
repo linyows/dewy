@@ -7,6 +7,26 @@ import (
 	starter "github.com/lestrrat-go/server-starter"
 )
 
+// Command
+type Command int
+
+const (
+	SERVER Command = iota
+	ASSETS
+)
+
+func (c Command) String() string {
+	switch c {
+	case SERVER:
+		return "server"
+	case ASSETS:
+		return "assets"
+	default:
+		return "unknown"
+	}
+}
+
+// CacheType
 type CacheType int
 
 const (
@@ -25,11 +45,13 @@ func (c CacheType) String() string {
 	}
 }
 
+// CacheConfig
 type CacheConfig struct {
 	Type       CacheType
 	Expiration int
 }
 
+// RepositoryProvider
 type RepositoryProvider int
 
 const (
@@ -45,6 +67,7 @@ func (r RepositoryProvider) String() string {
 	}
 }
 
+// RepositoryConfig
 type RepositoryConfig struct {
 	Provider RepositoryProvider
 	Owner    string
@@ -58,7 +81,9 @@ func (r RepositoryConfig) String() string {
 	return path.Join(r.Provider.String(), r.Owner, r.Name)
 }
 
+// Config
 type Config struct {
+	Command    Command
 	Repository RepositoryConfig
 	Cache      CacheConfig
 	Starter    starter.Config

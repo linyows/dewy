@@ -165,8 +165,8 @@ func (c *CLI) run(a []string) {
 		return
 	}
 
-	if len(args) == 0 {
-		fmt.Fprintf(c.errStream, "Error: command not specified\n")
+	if len(args) == 0 || (args[0] != "server" && args[0] != "assets") {
+		fmt.Fprintf(c.errStream, "Error: command is not available\n")
 		c.showHelp()
 		os.Exit(ExitErr)
 		return
@@ -203,11 +203,18 @@ func (c *CLI) run(a []string) {
 		Owner:    repo[0],
 		Artifact: c.Artifact,
 	}
-	conf.Starter = &StarterConfig{
-		ports:   []string{c.Port},
-		command: c.Args[0],
-		args:    c.Args[1:],
+
+	if c.Command == "server" {
+		conf.Command = dewy.SERVER
+		conf.Starter = &StarterConfig{
+			ports:   []string{c.Port},
+			command: c.Args[0],
+			args:    c.Args[1:],
+		}
+	} else {
+		conf.Command = dewy.ASSETS
 	}
+
 	conf.OverrideWithEnv()
 	d := dewy.New(conf)
 
