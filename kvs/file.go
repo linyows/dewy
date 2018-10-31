@@ -12,8 +12,10 @@ import (
 )
 
 var (
-	DefaultTempDir string = createTempDir()
-	DefaultMaxSize int64  = 64 * 1024 * 1024
+	// DefaultTempDir creates temp dir
+	DefaultTempDir = createTempDir()
+	// DefaultMaxSize for data size
+	DefaultMaxSize int64 = 64 * 1024 * 1024
 )
 
 func createTempDir() string {
@@ -21,6 +23,7 @@ func createTempDir() string {
 	return dir
 }
 
+// File struct
 type File struct {
 	items    map[string]*item
 	dir      string
@@ -29,19 +32,22 @@ type File struct {
 	MaxSize  int64
 }
 
+// GetDir returns dir
 func (f *File) GetDir() string {
 	return f.dir
 }
 
+// Default sets to struct
 func (f *File) Default() {
 	f.dir = DefaultTempDir
 	f.MaxSize = DefaultMaxSize
 }
 
+// Read data by key from file
 func (f *File) Read(key string) ([]byte, error) {
 	p := filepath.Join(f.dir, key)
 	if !IsFileExist(p) {
-		return nil, errors.New(fmt.Sprintf("File not found: %s", p))
+		return nil, fmt.Errorf("File not found: %s", p)
 	}
 
 	content, err := ioutil.ReadFile(p)
@@ -52,6 +58,7 @@ func (f *File) Read(key string) ([]byte, error) {
 	return content, nil
 }
 
+// Write data to file
 func (f *File) Write(key string, data []byte) error {
 	dirstat, err := os.Stat(f.dir)
 	if err != nil {
@@ -67,7 +74,7 @@ func (f *File) Write(key string, data []byte) error {
 
 	p := filepath.Join(f.dir, key)
 	if IsFileExist(p) {
-		return errors.New(fmt.Sprintf("File already exists: %s", p))
+		return fmt.Errorf("File already exists: %s", p)
 	}
 
 	file, err := os.OpenFile(p, os.O_CREATE|os.O_WRONLY, 0644)
@@ -81,10 +88,11 @@ func (f *File) Write(key string, data []byte) error {
 	return nil
 }
 
+// Delete data on file
 func (f *File) Delete(key string) error {
 	p := filepath.Join(f.dir, key)
 	if !IsFileExist(p) {
-		return errors.New(fmt.Sprintf("File not found: %s", p))
+		return fmt.Errorf("File not found: %s", p)
 	}
 
 	if err := os.Remove(p); err != nil {
@@ -94,6 +102,7 @@ func (f *File) Delete(key string) error {
 	return nil
 }
 
+// List returns keys from file
 func (f *File) List() ([]string, error) {
 	files, err := ioutil.ReadDir(f.dir)
 	if err != nil {
@@ -108,6 +117,7 @@ func (f *File) List() ([]string, error) {
 	return list, nil
 }
 
+// ExtractArchive extracts by archive
 func ExtractArchive(src, dst string) error {
 	if !IsFileExist(src) {
 		return fmt.Errorf("File not found: %s", src)
@@ -122,6 +132,7 @@ func ExtractArchive(src, dst string) error {
 	return ff.Open(src, dst)
 }
 
+// IsFileExist checks file exists
 func IsFileExist(p string) bool {
 	_, err := os.Stat(p)
 

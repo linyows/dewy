@@ -19,12 +19,14 @@ import (
 )
 
 const (
-	ISO8601     string = "20060102T150405Z0700"
-	releaseDir  string = ISO8601
-	releasesDir string = "releases"
-	symlinkDir  string = "current"
+	// ISO8601 for time format
+	ISO8601     = "20060102T150405Z0700"
+	releaseDir  = ISO8601
+	releasesDir = "releases"
+	symlinkDir  = "current"
 )
 
+// Dewy struct
 type Dewy struct {
 	config          Config
 	repository      Repository
@@ -36,6 +38,7 @@ type Dewy struct {
 	sync.RWMutex
 }
 
+// New returns Dewy
 func New(c Config) *Dewy {
 	kv := &kvs.File{}
 	kv.Default()
@@ -54,11 +57,12 @@ func New(c Config) *Dewy {
 	}
 }
 
+// Start dewy
 func (d *Dewy) Start(i int) {
-	ctx, cancel := context.WithCancel(context.WithValue(context.Background(), "meta", true))
+	ctx, cancel := context.WithCancel(context.WithValue(context.Background(), notice.MetaContextKey, true))
 	defer cancel()
 
-	d.notice = notice.New(&notice.Slack{Meta: &notice.NoticeConfig{
+	d.notice = notice.New(&notice.Slack{Meta: &notice.Config{
 		RepoOwnerLink:    d.repository.OwnerURL(),
 		RepoOwnerIcon:    d.repository.OwnerIconURL(),
 		RepoLink:         d.repository.URL(),
@@ -94,6 +98,7 @@ func (d *Dewy) waitSigs() os.Signal {
 	return sigReceived
 }
 
+// Run dewy
 func (d *Dewy) Run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

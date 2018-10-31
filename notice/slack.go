@@ -14,23 +14,32 @@ import (
 )
 
 var (
-	defaultSlackChannel string = "general"
-	SlackUsername       string = "Dewy"
-	SlackIconURL        string = "https://raw.githubusercontent.com/linyows/dewy/master/misc/dewy-icon.512.png"
-	SlackFooter         string = "Dewy notice/slack"
-	SlackFooterIcon     string = SlackIconURL
+	defaultSlackChannel = "general"
+	// SlackUsername variable
+	SlackUsername = "Dewy"
+	// SlackIconURL variable
+	SlackIconURL = "https://raw.githubusercontent.com/linyows/dewy/master/misc/dewy-icon.512.png"
+	// SlackFooter variable
+	SlackFooter = "Dewy notice/slack"
+	// SlackFooterIcon variable
+	SlackFooterIcon = SlackIconURL
 )
 
+// MetaContextKey for context key
+const MetaContextKey = "meta"
+
+// Slack struct
 type Slack struct {
 	Token   string
 	Channel string
-	Meta    *NoticeConfig
+	Meta    *Config
 }
 
 func (s *Slack) String() string {
 	return "slack"
 }
 
+// Notify posts message to Slack channel
 func (s *Slack) Notify(ctx context.Context, message string) {
 	if t := os.Getenv("SLACK_TOKEN"); t != "" {
 		s.Token = t
@@ -47,7 +56,7 @@ func (s *Slack) Notify(ctx context.Context, message string) {
 	}
 
 	cl := slack.New(s.Token)
-	at := s.buildAttachment(message, ctx.Value("meta") != nil)
+	at := s.buildAttachment(message, ctx.Value(MetaContextKey) != nil)
 
 	_, err := cl.Chat().PostMessage(s.Channel).Username(SlackUsername).
 		IconURL(SlackIconURL).Attachment(&at).Text("").Do(ctx)

@@ -7,14 +7,17 @@ import (
 	starter "github.com/lestrrat-go/server-starter"
 )
 
-// Command
+// Command for CLI
 type Command int
 
 const (
+	// SERVER command
 	SERVER Command = iota
+	// ASSETS command
 	ASSETS
 )
 
+// String to string for Command
 func (c Command) String() string {
 	switch c {
 	case SERVER:
@@ -26,14 +29,17 @@ func (c Command) String() string {
 	}
 }
 
-// CacheType
+// CacheType for cache type
 type CacheType int
 
 const (
+	// NONE cache type
 	NONE CacheType = iota
+	// FILE cache type
 	FILE
 )
 
+// String to string for CacheType
 func (c CacheType) String() string {
 	switch c {
 	case NONE:
@@ -45,19 +51,21 @@ func (c CacheType) String() string {
 	}
 }
 
-// CacheConfig
+// CacheConfig struct
 type CacheConfig struct {
 	Type       CacheType
 	Expiration int
 }
 
-// RepositoryProvider
+// RepositoryProvider for repository provider
 type RepositoryProvider int
 
 const (
+	// GITHUB repository provider
 	GITHUB RepositoryProvider = iota
 )
 
+// String to string for RepositoryProvider
 func (r RepositoryProvider) String() string {
 	switch r {
 	case GITHUB:
@@ -67,7 +75,7 @@ func (r RepositoryProvider) String() string {
 	}
 }
 
-// RepositoryConfig
+// RepositoryConfig struct
 type RepositoryConfig struct {
 	Provider RepositoryProvider
 	Owner    string
@@ -77,11 +85,12 @@ type RepositoryConfig struct {
 	Artifact string
 }
 
+// String to string for RepositoryConfig
 func (r RepositoryConfig) String() string {
 	return path.Join(r.Provider.String(), r.Owner, r.Name)
 }
 
-// Config
+// Config struct
 type Config struct {
 	Command    Command
 	Repository RepositoryConfig
@@ -89,6 +98,7 @@ type Config struct {
 	Starter    starter.Config
 }
 
+// OverrideWithEnv overrides by environments
 func (c *Config) OverrideWithEnv() {
 	if c.Repository.Provider == GITHUB {
 		githubToken := os.Getenv("GITHUB_TOKEN")
@@ -106,6 +116,7 @@ func (c *Config) OverrideWithEnv() {
 	}
 }
 
+// DefaultConfig returns default Config
 func DefaultConfig() Config {
 	return Config{
 		Cache: CacheConfig{
