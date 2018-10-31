@@ -18,6 +18,7 @@ import (
 	"golang.org/x/oauth2"
 )
 
+// Repository interface
 type Repository interface {
 	String() string
 	Fetch() error
@@ -31,6 +32,7 @@ type Repository interface {
 	URL() string
 }
 
+// GithubReleaseRepository struct
 type GithubReleaseRepository struct {
 	token       string
 	endpoint    string
@@ -46,6 +48,7 @@ type GithubReleaseRepository struct {
 	cl          *github.Client
 }
 
+// NewRepository returns repository
 func NewRepository(c RepositoryConfig, d kvs.KVS) Repository {
 	switch c.Provider {
 	case GITHUB:
@@ -62,30 +65,37 @@ func NewRepository(c RepositoryConfig, d kvs.KVS) Repository {
 	}
 }
 
+// String to string
 func (g *GithubReleaseRepository) String() string {
 	return "github.com"
 }
 
+// OwnerURL returns owner URL
 func (g *GithubReleaseRepository) OwnerURL() string {
 	return fmt.Sprintf("https://%s/%s", g, g.owner)
 }
 
+// OwnerIconURL returns owner icon URL
 func (g *GithubReleaseRepository) OwnerIconURL() string {
 	return fmt.Sprintf("%s.png?size=200", g.OwnerURL())
 }
 
+// URL returns repository URL
 func (g *GithubReleaseRepository) URL() string {
 	return fmt.Sprintf("%s/%s", g.OwnerURL(), g.name)
 }
 
+// ReleaseTag returns tag
 func (g *GithubReleaseRepository) ReleaseTag() string {
 	return g.releaseTag
 }
 
+// ReleaseURL returns release URL
 func (g *GithubReleaseRepository) ReleaseURL() string {
 	return g.releaseURL
 }
 
+// Fetch to latest github release
 func (g *GithubReleaseRepository) Fetch() error {
 	ctx := context.Background()
 	c, err := g.client(ctx)
@@ -126,6 +136,7 @@ func (g *GithubReleaseRepository) setCacheKey() error {
 	return nil
 }
 
+// IsDownloadNecessary checks necessary for download
 func (g *GithubReleaseRepository) IsDownloadNecessary() bool {
 	list, err := g.cache.List()
 	if err != nil {
@@ -141,6 +152,7 @@ func (g *GithubReleaseRepository) IsDownloadNecessary() bool {
 	return true
 }
 
+// Download artifact from github
 func (g *GithubReleaseRepository) Download() (string, error) {
 	res, err := http.Get(g.downloadURL)
 	if err != nil {
@@ -182,6 +194,7 @@ func (g *GithubReleaseRepository) client(ctx context.Context) (*github.Client, e
 	return g.cl, nil
 }
 
+// RecordShipment save shipment to github
 func (g *GithubReleaseRepository) RecordShipment() error {
 	ctx := context.Background()
 	c, err := g.client(ctx)

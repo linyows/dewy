@@ -2,18 +2,21 @@ package notice
 
 import "context"
 
+// Notice interface
 type Notice interface {
 	String() string
 	Notify(ctx context.Context, message string)
 }
 
+// Field struct
 type Field struct {
 	Title string
 	Value string
 	Short bool
 }
 
-type NoticeConfig struct {
+// Config struct
+type Config struct {
 	Host             string
 	Command          string
 	User             string
@@ -26,6 +29,7 @@ type NoticeConfig struct {
 	RepoOwnerLink    string
 }
 
+// New returns Notice
 func New(n Notice) Notice {
 	switch n.String() {
 	case "slack":
