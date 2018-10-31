@@ -18,7 +18,7 @@ TEST_OPTIONS=-timeout 30s -parallel $(NCPU)
 default: test
 
 build:
-	$(GOENV) go build -o dewy cmd/dewy/main.go
+	$(GOENV) go build -o dewy github.com/linyows/dewy/cmd/dewy
 
 server: build
 	$(GOENV) ./dewy server -r linyows/dewy-testapp -a dewy-testapp_darwin_amd64.tar.gz \
