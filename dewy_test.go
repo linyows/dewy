@@ -35,11 +35,9 @@ func (c StarterConfig) SignalOnTERM() os.Signal { return starter.SigFromName(c.s
 func (c StarterConfig) StatusFile() string      { return c.statusfile }
 
 func TestNew(t *testing.T) {
-	conf := DefaultConfig()
-	dewy := New(conf)
-
-	root, _ := os.Getwd()
-	config := Config{
+	dewy := New(DefaultConfig())
+	r, _ := os.Getwd()
+	c := Config{
 		Repository: RepositoryConfig{},
 		Cache: CacheConfig{
 			Type:       FILE,
@@ -49,12 +47,12 @@ func TestNew(t *testing.T) {
 	}
 
 	expect := &Dewy{
-		config:          config,
-		repository:      nil,
+		config:          c,
+		repository:      NewRepository(c.Repository, dewy.cache),
 		cache:           dewy.cache,
 		isServerRunning: false,
 		RWMutex:         sync.RWMutex{},
-		root:            root,
+		root:            r,
 	}
 
 	if !reflect.DeepEqual(dewy, expect) {
