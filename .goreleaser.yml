@@ -4,6 +4,7 @@ builds:
   - main: github.com/linyows/dewy/cmd/dewy
     env:
       - CGO_ENABLED=0
+      - GO111MODULE=on
     goos:
       - darwin
       - linux
