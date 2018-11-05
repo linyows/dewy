@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -43,6 +42,7 @@ type GithubReleaseRepository struct {
 	cacheKey    string
 	cache       kvs.KVS
 	releaseID   int64
+	assetID     int64
 	releaseURL  string
 	releaseTag  string
 	cl          *github.Client
@@ -120,6 +120,7 @@ func (g *GithubReleaseRepository) Fetch() error {
 			log.Printf("[DEBUG] Fetched: %+v", v)
 			g.downloadURL = *v.BrowserDownloadURL
 			g.releaseTag = *release.TagName
+			g.assetID = *v.ID
 			break
 		}
 	}
@@ -159,17 +160,25 @@ func (g *GithubReleaseRepository) IsDownloadNecessary() bool {
 
 // Download artifact from github
 func (g *GithubReleaseRepository) Download() (string, error) {
-	res, err := http.Get(g.downloadURL)
+	ctx := context.Background()
+	c, err := g.client(ctx)
 	if err != nil {
 		return "", err
 	}
+
+	reader, _, err := c.Repositories.DownloadReleaseAsset(ctx, g.owner, g.name, g.assetID)
+	if err != nil {
+		return "", err
+	}
+
 	log.Printf("[INFO] Downloaded from %s", g.downloadURL)
-
 	buf := new(bytes.Buffer)
-	io.Copy(buf, res.Body)
-	body := buf.Bytes()
+	_, err = io.Copy(buf, reader)
+	if err != nil {
+		return "", err
+	}
 
-	if err := g.cache.Write(g.cacheKey, body); err != nil {
+	if err := g.cache.Write(g.cacheKey, buf.Bytes()); err != nil {
 		return "", err
 	}
 	log.Printf("[INFO] Cached as %s", g.cacheKey)
