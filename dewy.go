@@ -146,11 +146,14 @@ func (d *Dewy) Run() error {
 }
 
 func (d *Dewy) deploy(key string) error {
+
 	p := filepath.Join(d.cache.GetDir(), key)
 	linkFrom, err := d.preserve(p)
 	if err != nil {
+		log.Printf("[ERROR] Preserve failure: %#v", err)
 		return err
 	}
+	log.Printf("[INFO] Extract archive to %s", linkFrom)
 
 	linkTo := filepath.Join(d.root, symlinkDir)
 	if _, err := os.Lstat(linkTo); err == nil {
@@ -174,7 +177,6 @@ func (d *Dewy) preserve(p string) (string, error) {
 	if err := kvs.ExtractArchive(p, dst); err != nil {
 		return "", err
 	}
-	log.Printf("[INFO] Extract archive to %s", dst)
 
 	return dst, nil
 }
