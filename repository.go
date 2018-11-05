@@ -67,7 +67,12 @@ func NewRepository(c RepositoryConfig, d kvs.KVS) Repository {
 
 // String to string
 func (g *GithubReleaseRepository) String() string {
-	return "github.com"
+	ctx := context.Background()
+	c, err := g.client(ctx)
+	if err != nil {
+		return err.Error()
+	}
+	return c.BaseURL.Host
 }
 
 // OwnerURL returns owner URL
