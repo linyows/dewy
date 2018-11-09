@@ -35,7 +35,8 @@ type Repository interface {
 // GithubReleaseRepository struct
 type GithubReleaseRepository struct {
 	token       string
-	endpoint    string
+	baseURL     string
+	uploadURL   string
 	owner       string
 	name        string
 	artifact    string
@@ -53,14 +54,21 @@ type GithubReleaseRepository struct {
 func NewRepository(c RepositoryConfig, d kvs.KVS) Repository {
 	switch c.Provider {
 	case GITHUB:
-		return &GithubReleaseRepository{
+		g := &GithubReleaseRepository{
 			token:    c.Token,
-			endpoint: c.Endpoint,
 			owner:    c.Owner,
 			name:     c.Name,
 			artifact: c.Artifact,
 			cache:    d,
 		}
+		if c.Endpoint != "" {
+			if !strings.HasSuffix(c.Endpoint, "/") {
+				c.Endpoint += "/"
+			}
+			g.baseURL = c.Endpoint
+			g.uploadURL = c.Endpoint + "../uploads/"
+		}
+		return g
 	default:
 		panic("no repository provider")
 	}
@@ -203,14 +211,15 @@ func (g *GithubReleaseRepository) client(ctx context.Context) (*github.Client, e
 		&oauth2.Token{AccessToken: g.token},
 	)
 	tc := oauth2.NewClient(ctx, ts)
-	g.cl = github.NewClient(tc)
 
-	if g.endpoint != "" {
-		url, err := url.Parse(g.endpoint)
+	if g.baseURL == "" {
+		g.cl = github.NewClient(tc)
+	} else {
+		var err error
+		g.cl, err = github.NewEnterpriseClient(g.baseURL, g.uploadURL, tc)
 		if err != nil {
 			return nil, err
 		}
-		g.cl.BaseURL = url
 	}
 
 	return g.cl, nil
