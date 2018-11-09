@@ -35,7 +35,8 @@ type Repository interface {
 // GithubReleaseRepository struct
 type GithubReleaseRepository struct {
 	token       string
-	endpoint    string
+	baseURL     string
+	uploadURL   string
 	owner       string
 	name        string
 	artifact    string
@@ -43,6 +44,7 @@ type GithubReleaseRepository struct {
 	cacheKey    string
 	cache       kvs.KVS
 	releaseID   int64
+	assetID     int64
 	releaseURL  string
 	releaseTag  string
 	cl          *github.Client
@@ -52,14 +54,21 @@ type GithubReleaseRepository struct {
 func NewRepository(c RepositoryConfig, d kvs.KVS) Repository {
 	switch c.Provider {
 	case GITHUB:
-		return &GithubReleaseRepository{
+		g := &GithubReleaseRepository{
 			token:    c.Token,
-			endpoint: c.Endpoint,
 			owner:    c.Owner,
 			name:     c.Name,
 			artifact: c.Artifact,
 			cache:    d,
 		}
+		if c.Endpoint != "" {
+			if !strings.HasSuffix(c.Endpoint, "/") {
+				c.Endpoint += "/"
+			}
+			g.baseURL = c.Endpoint
+			g.uploadURL = c.Endpoint + "../uploads/"
+		}
+		return g
 	default:
 		panic("no repository provider")
 	}
@@ -67,7 +76,12 @@ func NewRepository(c RepositoryConfig, d kvs.KVS) Repository {
 
 // String to string
 func (g *GithubReleaseRepository) String() string {
-	return "github.com"
+	ctx := context.Background()
+	c, err := g.client(ctx)
+	if err != nil {
+		return err.Error()
+	}
+	return c.BaseURL.Host
 }
 
 // OwnerURL returns owner URL
@@ -115,6 +129,7 @@ func (g *GithubReleaseRepository) Fetch() error {
 			log.Printf("[DEBUG] Fetched: %+v", v)
 			g.downloadURL = *v.BrowserDownloadURL
 			g.releaseTag = *release.TagName
+			g.assetID = *v.ID
 			break
 		}
 	}
@@ -154,17 +169,32 @@ func (g *GithubReleaseRepository) IsDownloadNecessary() bool {
 
 // Download artifact from github
 func (g *GithubReleaseRepository) Download() (string, error) {
-	res, err := http.Get(g.downloadURL)
+	ctx := context.Background()
+	c, err := g.client(ctx)
 	if err != nil {
 		return "", err
 	}
+
+	reader, url, err := c.Repositories.DownloadReleaseAsset(ctx, g.owner, g.name, g.assetID)
+	if err != nil {
+		return "", err
+	}
+	if url != "" {
+		res, err := http.Get(url)
+		if err != nil {
+			return "", err
+		}
+		reader = res.Body
+	}
+
 	log.Printf("[INFO] Downloaded from %s", g.downloadURL)
-
 	buf := new(bytes.Buffer)
-	io.Copy(buf, res.Body)
-	body := buf.Bytes()
+	_, err = io.Copy(buf, reader)
+	if err != nil {
+		return "", err
+	}
 
-	if err := g.cache.Write(g.cacheKey, body); err != nil {
+	if err := g.cache.Write(g.cacheKey, buf.Bytes()); err != nil {
 		return "", err
 	}
 	log.Printf("[INFO] Cached as %s", g.cacheKey)
@@ -181,14 +211,15 @@ func (g *GithubReleaseRepository) client(ctx context.Context) (*github.Client, e
 		&oauth2.Token{AccessToken: g.token},
 	)
 	tc := oauth2.NewClient(ctx, ts)
-	g.cl = github.NewClient(tc)
 
-	if g.endpoint != "" {
-		url, err := url.Parse(g.endpoint)
+	if g.baseURL == "" {
+		g.cl = github.NewClient(tc)
+	} else {
+		var err error
+		g.cl, err = github.NewEnterpriseClient(g.baseURL, g.uploadURL, tc)
 		if err != nil {
 			return nil, err
 		}
-		g.cl.BaseURL = url
 	}
 
 	return g.cl, nil
