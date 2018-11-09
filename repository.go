@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -166,9 +167,16 @@ func (g *GithubReleaseRepository) Download() (string, error) {
 		return "", err
 	}
 
-	reader, _, err := c.Repositories.DownloadReleaseAsset(ctx, g.owner, g.name, g.assetID)
+	reader, url, err := c.Repositories.DownloadReleaseAsset(ctx, g.owner, g.name, g.assetID)
 	if err != nil {
 		return "", err
+	}
+	if url != "" {
+		res, err := http.Get(url)
+		if err != nil {
+			return "", err
+		}
+		reader = res.Body
 	}
 
 	log.Printf("[INFO] Downloaded from %s", g.downloadURL)
