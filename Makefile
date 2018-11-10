@@ -52,4 +52,7 @@ goreleaser:
 	git push origin v$(VERSION)
 	GOVERSION=$(GOVERSION) REVISION=$(REVISION) DATE=$(DATE) goreleaser --rm-dist
 
+clean:
+	rm -rf dewy releases current dist
+
 .PHONY: default dist test deps
