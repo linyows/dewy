@@ -41,6 +41,7 @@ type GithubRelease struct {
 	cl          *github.Client
 }
 
+// NewGithubRelease returns GithubRelease
 func NewGithubRelease(c Config, d kvs.KVS) *GithubRelease {
 	g := &GithubRelease{
 		token:    c.Token,

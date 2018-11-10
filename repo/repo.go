@@ -38,6 +38,7 @@ func (r Provider) String() string {
 	}
 }
 
+// Config struct
 type Config struct {
 	Provider
 	Owner    string
