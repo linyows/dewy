@@ -16,12 +16,11 @@ import (
 	starter "github.com/lestrrat-go/server-starter"
 	"github.com/linyows/dewy/kvs"
 	"github.com/linyows/dewy/notice"
+	"github.com/linyows/dewy/repo"
 )
 
 const (
-	// ISO8601 for time format
-	ISO8601     = "20060102T150405Z0700"
-	releaseDir  = ISO8601
+	releaseDir  = repo.ISO8601
 	releasesDir = "releases"
 	symlinkDir  = "current"
 )
@@ -29,7 +28,7 @@ const (
 // Dewy struct
 type Dewy struct {
 	config          Config
-	repository      Repository
+	repo            repo.Repo
 	cache           kvs.KVS
 	isServerRunning bool
 	root            string
@@ -51,7 +50,7 @@ func New(c Config) *Dewy {
 	return &Dewy{
 		config:          c,
 		cache:           kv,
-		repository:      NewRepository(c.Repository, kv),
+		repo:            repo.New(c.Repository, kv),
 		isServerRunning: false,
 		root:            wd,
 	}
@@ -63,9 +62,9 @@ func (d *Dewy) Start(i int) {
 	defer cancel()
 
 	d.notice = notice.New(&notice.Slack{Meta: &notice.Config{
-		RepoOwnerLink:    d.repository.OwnerURL(),
-		RepoOwnerIcon:    d.repository.OwnerIconURL(),
-		RepoLink:         d.repository.URL(),
+		RepoOwnerLink:    d.repo.OwnerURL(),
+		RepoOwnerIcon:    d.repo.OwnerIconURL(),
+		RepoLink:         d.repo.URL(),
 		RepoOwner:        d.config.Repository.Owner,
 		RepoName:         d.config.Repository.Name,
 		Source:           d.config.Repository.Artifact,
@@ -103,24 +102,24 @@ func (d *Dewy) Run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	if err := d.repository.Fetch(); err != nil {
+	if err := d.repo.Fetch(); err != nil {
 		log.Printf("[ERROR] Fetch failure: %#v", err)
 		return err
 	}
 
-	if !d.repository.IsDownloadNecessary() {
+	if !d.repo.IsDownloadNecessary() {
 		log.Print("[DEBUG] Download skipped")
 		return nil
 	}
 
-	key, err := d.repository.Download()
+	key, err := d.repo.Download()
 	if err != nil {
 		log.Printf("[DEBUG] Download failure: %#v", err)
 		return nil
 	}
 
 	d.notice.Notify(ctx, fmt.Sprintf("New release <%s|%s> was downloaded",
-		d.repository.ReleaseURL(), d.repository.ReleaseTag()))
+		d.repo.ReleaseURL(), d.repo.ReleaseTag()))
 
 	if err := d.deploy(key); err != nil {
 		return err
@@ -137,7 +136,7 @@ func (d *Dewy) Run() error {
 	}
 
 	log.Print("[DEBUG] Record shipment")
-	err = d.repository.RecordShipment()
+	err = d.repo.RecordShipment()
 	if err != nil {
 		log.Printf("[ERROR] Record shipment failure: %#v", err)
 	}

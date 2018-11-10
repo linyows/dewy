@@ -8,6 +8,7 @@ import (
 	"time"
 
 	starter "github.com/lestrrat-go/server-starter"
+	"github.com/linyows/dewy/repo"
 )
 
 type StarterConfig struct {
@@ -38,7 +39,7 @@ func TestNew(t *testing.T) {
 	dewy := New(DefaultConfig())
 	r, _ := os.Getwd()
 	c := Config{
-		Repository: RepositoryConfig{},
+		Repository: repo.Config{},
 		Cache: CacheConfig{
 			Type:       FILE,
 			Expiration: 10,
@@ -48,7 +49,7 @@ func TestNew(t *testing.T) {
 
 	expect := &Dewy{
 		config:          c,
-		repository:      NewRepository(c.Repository, dewy.cache),
+		repo:            repo.New(c.Repository, dewy.cache),
 		cache:           dewy.cache,
 		isServerRunning: false,
 		RWMutex:         sync.RWMutex{},
