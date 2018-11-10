@@ -28,13 +28,21 @@ Usage
 When the application functions as a server:
 
 ```sh
-$ dewy server --config /etc/dewy.d/your-application.conf
+$ cd /opt/yourapp
+$ env GITHUB_TOKEN=xxx... SLACK_TOKEN=xxx... \
+  dewy server --repository yourname/yourapp \
+              --artifact yourapp_linux_amd64.tar.gz \
+              --port 3000 \
+              -- /opt/yourapp/current/yourapp
 ```
 
 When the application and server are separated, or when the server is unnecessary:
 
 ```sh
-$ dewy assets --config /etc/dewy.d/your-assets.conf
+$ cd /opt/yourapp
+$ env GITHUB_TOKEN=xxx... SLACK_TOKEN=xxx... \
+  dewy assets --repository yourname/yourapp \
+              --artifact yourapp_linux_amd64.tar.gz
 ```
 
 Contribution
