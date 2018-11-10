@@ -1,4 +1,4 @@
-package dewy
+package repo
 
 import (
 	"bytes"
@@ -18,22 +18,13 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// Repository interface
-type Repository interface {
-	String() string
-	Fetch() error
-	Download() (string, error)
-	IsDownloadNecessary() bool
-	RecordShipment() error
-	ReleaseTag() string
-	ReleaseURL() string
-	OwnerURL() string
-	OwnerIconURL() string
-	URL() string
-}
+const (
+	// ISO8601 for time format
+	ISO8601 = "20060102T150405Z0700"
+)
 
-// GithubReleaseRepository struct
-type GithubReleaseRepository struct {
+// GithubRelease struct
+type GithubRelease struct {
 	token       string
 	baseURL     string
 	uploadURL   string
@@ -50,32 +41,26 @@ type GithubReleaseRepository struct {
 	cl          *github.Client
 }
 
-// NewRepository returns repository
-func NewRepository(c RepositoryConfig, d kvs.KVS) Repository {
-	switch c.Provider {
-	case GITHUB:
-		g := &GithubReleaseRepository{
-			token:    c.Token,
-			owner:    c.Owner,
-			name:     c.Name,
-			artifact: c.Artifact,
-			cache:    d,
-		}
-		if c.Endpoint != "" {
-			if !strings.HasSuffix(c.Endpoint, "/") {
-				c.Endpoint += "/"
-			}
-			g.baseURL = c.Endpoint
-			g.uploadURL = c.Endpoint + "../uploads/"
-		}
-		return g
-	default:
-		panic("no repository provider")
+func NewGithubRelease(c Config, d kvs.KVS) *GithubRelease {
+	g := &GithubRelease{
+		token:    c.Token,
+		owner:    c.Owner,
+		name:     c.Name,
+		artifact: c.Artifact,
+		cache:    d,
 	}
+	if c.Endpoint != "" {
+		if !strings.HasSuffix(c.Endpoint, "/") {
+			c.Endpoint += "/"
+		}
+		g.baseURL = c.Endpoint
+		g.uploadURL = c.Endpoint + "../uploads/"
+	}
+	return g
 }
 
 // String to string
-func (g *GithubReleaseRepository) String() string {
+func (g *GithubRelease) String() string {
 	ctx := context.Background()
 	c, err := g.client(ctx)
 	if err != nil {
@@ -85,32 +70,32 @@ func (g *GithubReleaseRepository) String() string {
 }
 
 // OwnerURL returns owner URL
-func (g *GithubReleaseRepository) OwnerURL() string {
+func (g *GithubRelease) OwnerURL() string {
 	return fmt.Sprintf("https://%s/%s", g, g.owner)
 }
 
 // OwnerIconURL returns owner icon URL
-func (g *GithubReleaseRepository) OwnerIconURL() string {
+func (g *GithubRelease) OwnerIconURL() string {
 	return fmt.Sprintf("%s.png?size=200", g.OwnerURL())
 }
 
 // URL returns repository URL
-func (g *GithubReleaseRepository) URL() string {
+func (g *GithubRelease) URL() string {
 	return fmt.Sprintf("%s/%s", g.OwnerURL(), g.name)
 }
 
 // ReleaseTag returns tag
-func (g *GithubReleaseRepository) ReleaseTag() string {
+func (g *GithubRelease) ReleaseTag() string {
 	return g.releaseTag
 }
 
 // ReleaseURL returns release URL
-func (g *GithubReleaseRepository) ReleaseURL() string {
+func (g *GithubRelease) ReleaseURL() string {
 	return g.releaseURL
 }
 
 // Fetch to latest github release
-func (g *GithubReleaseRepository) Fetch() error {
+func (g *GithubRelease) Fetch() error {
 	ctx := context.Background()
 	c, err := g.client(ctx)
 	if err != nil {
@@ -141,7 +126,7 @@ func (g *GithubReleaseRepository) Fetch() error {
 	return nil
 }
 
-func (g *GithubReleaseRepository) setCacheKey() error {
+func (g *GithubRelease) setCacheKey() error {
 	u, err := url.Parse(g.downloadURL)
 	if err != nil {
 		return err
@@ -152,7 +137,7 @@ func (g *GithubReleaseRepository) setCacheKey() error {
 }
 
 // IsDownloadNecessary checks necessary for download
-func (g *GithubReleaseRepository) IsDownloadNecessary() bool {
+func (g *GithubRelease) IsDownloadNecessary() bool {
 	list, err := g.cache.List()
 	if err != nil {
 		return false
@@ -168,7 +153,7 @@ func (g *GithubReleaseRepository) IsDownloadNecessary() bool {
 }
 
 // Download artifact from github
-func (g *GithubReleaseRepository) Download() (string, error) {
+func (g *GithubRelease) Download() (string, error) {
 	ctx := context.Background()
 	c, err := g.client(ctx)
 	if err != nil {
@@ -202,7 +187,7 @@ func (g *GithubReleaseRepository) Download() (string, error) {
 	return g.cacheKey, nil
 }
 
-func (g *GithubReleaseRepository) client(ctx context.Context) (*github.Client, error) {
+func (g *GithubRelease) client(ctx context.Context) (*github.Client, error) {
 	if g.cl != nil {
 		return g.cl, nil
 	}
@@ -226,7 +211,7 @@ func (g *GithubReleaseRepository) client(ctx context.Context) (*github.Client, e
 }
 
 // RecordShipment save shipment to github
-func (g *GithubReleaseRepository) RecordShipment() error {
+func (g *GithubRelease) RecordShipment() error {
 	ctx := context.Background()
 	c, err := g.client(ctx)
 	if err != nil {

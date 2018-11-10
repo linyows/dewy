@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/logutils"
 	flags "github.com/jessevdk/go-flags"
 	"github.com/linyows/dewy"
+	"github.com/linyows/dewy/repo"
 )
 
 const (
@@ -159,10 +160,10 @@ func (c *CLI) run(a []string) {
 
 	conf := dewy.DefaultConfig()
 
-	repo := strings.Split(c.Repository, "/")
-	conf.Repository = dewy.RepositoryConfig{
-		Name:     repo[1],
-		Owner:    repo[0],
+	re := strings.Split(c.Repository, "/")
+	conf.Repository = repo.Config{
+		Name:     re[1],
+		Owner:    re[0],
 		Artifact: c.Artifact,
 	}
 

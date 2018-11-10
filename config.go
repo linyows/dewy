@@ -2,9 +2,9 @@ package dewy
 
 import (
 	"os"
-	"path"
 
 	starter "github.com/lestrrat-go/server-starter"
+	"github.com/linyows/dewy/repo"
 )
 
 // Command for CLI
@@ -57,61 +57,28 @@ type CacheConfig struct {
 	Expiration int
 }
 
-// RepositoryProvider for repository provider
-type RepositoryProvider int
-
-const (
-	// GITHUB repository provider
-	GITHUB RepositoryProvider = iota
-)
-
-// String to string for RepositoryProvider
-func (r RepositoryProvider) String() string {
-	switch r {
-	case GITHUB:
-		return "github.com"
-	default:
-		return "unknown"
-	}
-}
-
-// RepositoryConfig struct
-type RepositoryConfig struct {
-	Provider RepositoryProvider
-	Owner    string
-	Name     string
-	Token    string
-	Endpoint string
-	Artifact string
-}
-
-// String to string for RepositoryConfig
-func (r RepositoryConfig) String() string {
-	return path.Join(r.Provider.String(), r.Owner, r.Name)
-}
-
 // Config struct
 type Config struct {
 	Command    Command
-	Repository RepositoryConfig
+	Repository repo.Config
 	Cache      CacheConfig
 	Starter    starter.Config
 }
 
 // OverrideWithEnv overrides by environments
 func (c *Config) OverrideWithEnv() {
-	if c.Repository.Provider == GITHUB {
-		githubToken := os.Getenv("GITHUB_TOKEN")
-		if githubToken != "" {
-			c.Repository.Token = githubToken
+	if c.Repository.Provider == repo.GITHUB {
+		t := os.Getenv("GITHUB_TOKEN")
+		if t != "" {
+			c.Repository.Token = t
 		}
-		githubEndpoint := os.Getenv("GITHUB_ENDPOINT")
-		if githubEndpoint != "" {
-			c.Repository.Endpoint = githubEndpoint
+		e := os.Getenv("GITHUB_ENDPOINT")
+		if e != "" {
+			c.Repository.Endpoint = e
 		}
-		githubArtifact := os.Getenv("GITHUB_ARTIFACT")
-		if githubArtifact != "" {
-			c.Repository.Artifact = githubArtifact
+		a := os.Getenv("GITHUB_ARTIFACT")
+		if a != "" {
+			c.Repository.Artifact = a
 		}
 	}
 }
