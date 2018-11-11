@@ -62,12 +62,20 @@ func NewGithubRelease(c Config, d kvs.KVS) *GithubRelease {
 
 // String to string
 func (g *GithubRelease) String() string {
+	return g.host()
+}
+
+func (g *GithubRelease) host() string {
 	ctx := context.Background()
 	c, err := g.client(ctx)
 	if err != nil {
 		return err.Error()
 	}
-	return c.BaseURL.Host
+	h := c.BaseURL.Host
+	if h != "api.github.com" {
+		return h
+	}
+	return "github.com"
 }
 
 // OwnerURL returns owner URL

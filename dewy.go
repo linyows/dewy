@@ -3,11 +3,13 @@ package dewy
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
 	"os/user"
 	"path/filepath"
+	"sort"
 	"sync"
 	"syscall"
 	"time"
@@ -20,9 +22,10 @@ import (
 )
 
 const (
-	releaseDir  = repo.ISO8601
-	releasesDir = "releases"
-	symlinkDir  = "current"
+	releaseDir   = repo.ISO8601
+	releasesDir  = "releases"
+	symlinkDir   = "current"
+	keepReleases = 7
 )
 
 // Dewy struct
@@ -141,6 +144,12 @@ func (d *Dewy) Run() error {
 		log.Printf("[ERROR] Record shipment failure: %#v", err)
 	}
 
+	log.Printf("[INFO] Keep releases as %d", keepReleases)
+	err = d.keepReleases()
+	if err != nil {
+		log.Printf("[ERROR] Keep releases failure: %#v", err)
+	}
+
 	return nil
 }
 
@@ -212,6 +221,29 @@ func (d *Dewy) startServer() error {
 
 		ch <- s.Run()
 	}()
+
+	return nil
+}
+
+func (d *Dewy) keepReleases() error {
+	dir := filepath.Join(d.root, releasesDir)
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].ModTime().Unix() > files[j].ModTime().Unix()
+	})
+
+	for i, f := range files {
+		if i < keepReleases {
+			continue
+		}
+		if err := os.Remove(filepath.Join(dir, f.Name())); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
