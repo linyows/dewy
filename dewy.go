@@ -144,6 +144,12 @@ func (d *Dewy) Run() error {
 		log.Printf("[ERROR] Record shipment failure: %#v", err)
 	}
 
+	log.Printf("[INFO] Keep releases as %d", keepReleases)
+	err = d.keepReleases()
+	if err != nil {
+		log.Printf("[ERROR] Keep releases failure: %#v", err)
+	}
+
 	return nil
 }
 
