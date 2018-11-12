@@ -45,6 +45,27 @@ $ env GITHUB_TOKEN=xxx... SLACK_TOKEN=xxx... \
               --artifact yourapp_linux_amd64.tar.gz
 ```
 
+Todo
+----
+
+### Repository
+
+- [x] github release
+- [ ] git repo
+
+### KVS
+
+- [x] file
+- [ ] memory
+- [ ] redis
+- [ ] consul
+- [ ] etcd
+
+### Notification
+
+- [x] slack
+- [ ] email
+
 Contribution
 ------------
 
