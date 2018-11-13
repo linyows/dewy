@@ -45,6 +45,11 @@ $ env GITHUB_TOKEN=xxx... SLACK_TOKEN=xxx... \
               --artifact yourapp_linux_amd64.tar.gz
 ```
 
+Provisioning
+---
+
+- Chef cookbook - https://github.com/linyows/dewy-cookbook
+
 Todo
 ----
 
