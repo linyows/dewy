@@ -6,6 +6,7 @@ REVISION = $$(git describe --always)
 DATE = $$(LC_ALL=c date -u +%a,\ %d\ %b\ %Y\ %H:%M:%S\ GMT)
 GOVERSION = $(shell go version | awk '{ if (sub(/go version go/, "v")) print }' | awk '{print $$1 "-" $$2}')
 GOENV ?= GO111MODULE=on
+GODEVENV ?= GO111MODULE=off
 LOGLEVEL ?= info
 
 ifeq ("$(shell uname)","Darwin")
@@ -28,9 +29,9 @@ assets: build
 	$(GOENV) ./dewy assets -r linyows/dewy-testapp -a dewy-testapp_darwin_amd64.tar.gz -l $(LOGLEVEL)
 
 deps:
-	$(GOENV) go get github.com/golang/lint/golint
-	$(GOENV) go get github.com/pierrre/gotestcover
-	$(GOENV) go get github.com/goreleaser/goreleaser
+	$(GODEVENV) go get github.com/golang/lint/golint
+	$(GODEVENV) go get github.com/pierrre/gotestcover
+	$(GODEVENV) go get github.com/goreleaser/goreleaser
 
 test:
 	$(GOENV) go test -v $(TEST) $(TESTARGS) $(TEST_OPTIONS)
