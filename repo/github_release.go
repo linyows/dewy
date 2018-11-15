@@ -39,6 +39,7 @@ type GithubRelease struct {
 	releaseURL  string
 	releaseTag  string
 	cl          *github.Client
+	updatedAt   github.Timestamp
 }
 
 // NewGithubRelease returns GithubRelease
@@ -124,6 +125,7 @@ func (g *GithubRelease) Fetch() error {
 			g.downloadURL = *v.BrowserDownloadURL
 			g.releaseTag = *release.TagName
 			g.assetID = *v.ID
+			g.updatedAt = *v.UpdatedAt
 			break
 		}
 	}
@@ -140,7 +142,7 @@ func (g *GithubRelease) setCacheKey() error {
 	if err != nil {
 		return err
 	}
-	g.cacheKey = strings.Replace(fmt.Sprintf("%s%s", u.Host, u.RequestURI()), "/", "-", -1)
+	g.cacheKey = strings.Replace(fmt.Sprintf("%s--%d-%s", u.Host, g.updatedAt.Unix(), u.RequestURI()), "/", "-", -1)
 
 	return nil
 }
