@@ -1,12 +1,9 @@
 TEST ?= ./...
 FILES ?= $(shell go list ./... | grep -v vendor)
-NAME = "$(shell awk -F\" '/^const Name/ { print $$2; exit }' version.go)"
 VERSION = "$(shell awk -F\" '/^const Version/ { print $$2; exit }' version.go)"
 REVISION = $$(git describe --always)
 DATE = $$(LC_ALL=c date -u +%a,\ %d\ %b\ %Y\ %H:%M:%S\ GMT)
 GOVERSION = $(shell go version | awk '{ if (sub(/go version go/, "v")) print }' | awk '{print $$1 "-" $$2}')
-GOENV ?= GO111MODULE=on
-GODEVENV ?= GO111MODULE=off
 LOGLEVEL ?= info
 
 ifeq ("$(shell uname)","Darwin")
@@ -19,26 +16,27 @@ TEST_OPTIONS=-timeout 30s -parallel $(NCPU)
 default: test
 
 build:
-	$(GOENV) go build -o dewy github.com/linyows/dewy/cmd/dewy
+	go build -o dewy github.com/linyows/dewy/cmd/dewy
 
 server: build
-	$(GOENV) ./dewy server -r linyows/dewy-testapp -a dewy-testapp_darwin_amd64.tar.gz \
+	./dewy server -r linyows/dewy-testapp -a dewy-testapp_darwin_amd64.tar.gz \
 		-p 8000 -l $(LOGLEVEL) -- $(HOME)/.go/src/github.com/linyows/dewy/current/dewy-testapp
 
 assets: build
-	$(GOENV) ./dewy assets -r linyows/dewy-testapp -a dewy-testapp_darwin_amd64.tar.gz -l $(LOGLEVEL)
+	./dewy assets -r linyows/dewy-testapp -a dewy-testapp_darwin_amd64.tar.gz -l $(LOGLEVEL)
 
+deps: export GO111MODULE=off
 deps:
-	$(GODEVENV) go get github.com/golang/lint/golint
-	$(GODEVENV) go get github.com/pierrre/gotestcover
-	$(GODEVENV) go get github.com/goreleaser/goreleaser
+	go get github.com/golang/lint/golint
+	go get github.com/pierrre/gotestcover
+	go get github.com/goreleaser/goreleaser
 
 test:
-	$(GOENV) go test -v $(TEST) $(TESTARGS) $(TEST_OPTIONS)
-	$(GOENV) go test -race $(TEST) $(TESTARGS)
+	go test -v $(TEST) $(TESTARGS) $(TEST_OPTIONS)
+	go test -race $(TEST) $(TESTARGS)
 
 integration:
-	$(GOENV) go test -integration $(TEST) $(TESTARGS) $(TEST_OPTIONS)
+	go test -integration $(TEST) $(TESTARGS) $(TEST_OPTIONS)
 
 lint:
 	golint -set_exit_status $(FILES)
