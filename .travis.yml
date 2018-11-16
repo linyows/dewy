@@ -1,6 +1,9 @@
 language: go
 go:
   - 1.11.x
+  - master
+env:
+  - GO111MODULE=on
 script:
   - make ci
 notifications:
