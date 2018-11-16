@@ -240,7 +240,7 @@ func (d *Dewy) keepReleases() error {
 		if i < keepReleases {
 			continue
 		}
-		if err := os.Remove(filepath.Join(dir, f.Name())); err != nil {
+		if err := os.RemoveAll(filepath.Join(dir, f.Name())); err != nil {
 			return err
 		}
 	}
