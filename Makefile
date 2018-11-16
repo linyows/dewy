@@ -27,7 +27,7 @@ assets: build
 
 deps: export GO111MODULE=off
 deps:
-	go get github.com/golang/lint/golint
+	go get golang.org/x/lint/golint
 	go get github.com/pierrre/gotestcover
 	go get github.com/goreleaser/goreleaser
 
