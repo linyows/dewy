@@ -33,7 +33,7 @@ deps:
 
 test:
 	go test -v $(TEST) $(TESTARGS) $(TEST_OPTIONS)
-	go test -race $(TEST) $(TESTARGS)
+	go test -race $(TEST) $(TESTARGS) -coverprofile=coverage.txt -covermode=atomic
 
 integration:
 	go test -integration $(TEST) $(TESTARGS) $(TEST_OPTIONS)
