@@ -32,13 +32,14 @@ type CLI struct {
 	Port                 string `long:"port" short:"p" description:"TCP port to listen"`
 	Repository           string `long:"repository" short:"r" description:"Repository for application"`
 	Artifact             string `long:"artifact" short:"a" description:"Artifact for application"`
+	PreRelease           string `long:"pre" arg:"(included|only|none)" description:"Pre-Release handling"`
 	Help                 bool   `long:"help" short:"h" description:"show this help message and exit"`
 	Version              bool   `long:"version" short:"v" description:"prints the version number"`
 }
 
 // RunCLI runs as CLI
 func RunCLI(o, e io.Writer, a []string) int {
-	cli := &CLI{outStream: o, errStream: e, Interval: -1}
+	cli := &CLI{outStream: o, errStream: e, Interval: -1, PreRelease: "none"}
 	return cli.run(a)
 }
 
@@ -101,6 +102,7 @@ func (c *CLI) showHelp() {
 		"Repository",
 		"Artifact",
 		"Port",
+		"PreRelease",
 		"LogLevel",
 	}), "\n")
 
