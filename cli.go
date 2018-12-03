@@ -126,7 +126,7 @@ func (c *CLI) run(a []string) int {
 	}
 
 	if c.Version {
-		fmt.Fprintf(c.errStream, "%s version %s [%v, %v]\n", name, version, commit, date)
+		fmt.Fprintf(c.errStream, "dewy version %s [%v, %v]\n", version, commit, date)
 		return ExitOK
 	}
 
