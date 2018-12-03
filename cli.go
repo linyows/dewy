@@ -1,17 +1,15 @@
-package main
+package dewy
 
 import (
 	"bytes"
 	"fmt"
 	"io"
 	"log"
-	"os"
 	"reflect"
 	"strings"
 
 	"github.com/hashicorp/logutils"
 	flags "github.com/jessevdk/go-flags"
-	"github.com/linyows/dewy"
 	"github.com/linyows/dewy/repo"
 )
 
@@ -36,6 +34,12 @@ type CLI struct {
 	Artifact             string `long:"artifact" short:"a" description:"Artifact for application"`
 	Help                 bool   `long:"help" short:"h" description:"show this help message and exit"`
 	Version              bool   `long:"version" short:"v" description:"prints the version number"`
+}
+
+// RunCLI runs as CLI
+func RunCLI(o, e io.Writer, a []string) int {
+	cli := &CLI{outStream: o, errStream: e, Interval: -1}
+	return cli.run(a)
 }
 
 func (c *CLI) buildHelp(names []string) []string {
@@ -113,26 +117,23 @@ Options:
 	fmt.Fprintf(c.outStream, help, opts)
 }
 
-func (c *CLI) run(a []string) {
+func (c *CLI) run(a []string) int {
 	p := flags.NewParser(c, flags.PrintErrors|flags.PassDoubleDash)
 	args, err := p.ParseArgs(a)
 	if err != nil || c.Help {
 		c.showHelp()
-		os.Exit(ExitErr)
-		return
+		return ExitErr
 	}
 
 	if c.Version {
-		fmt.Fprintf(c.errStream, "%s version %s [%v, %v]\n", dewy.Name, dewy.Version, commit, date)
-		os.Exit(ExitOK)
-		return
+		fmt.Fprintf(c.errStream, "%s version %s [%v, %v]\n", name, version, commit, date)
+		return ExitOK
 	}
 
 	if len(args) == 0 || (args[0] != "server" && args[0] != "assets") {
 		fmt.Fprintf(c.errStream, "Error: command is not available\n")
 		c.showHelp()
-		os.Exit(ExitErr)
-		return
+		return ExitErr
 	}
 
 	if c.Interval < 0 {
@@ -158,7 +159,7 @@ func (c *CLI) run(a []string) {
 	}
 	log.SetOutput(filter)
 
-	conf := dewy.DefaultConfig()
+	conf := DefaultConfig()
 
 	re := strings.Split(c.Repository, "/")
 	conf.Repository = repo.Config{
@@ -168,19 +169,20 @@ func (c *CLI) run(a []string) {
 	}
 
 	if c.Command == "server" {
-		conf.Command = dewy.SERVER
+		conf.Command = SERVER
 		conf.Starter = &StarterConfig{
 			ports:   []string{c.Port},
 			command: c.Args[0],
 			args:    c.Args[1:],
 		}
 	} else {
-		conf.Command = dewy.ASSETS
+		conf.Command = ASSETS
 	}
 
 	conf.OverrideWithEnv()
-	d := dewy.New(conf)
+	d := New(conf)
 
 	d.Start(c.Interval)
-	os.Exit(ExitOK)
+
+	return ExitOK
 }

@@ -2,15 +2,10 @@ package main
 
 import (
 	"os"
-)
 
-var (
-	version = "dev"
-	commit  = "none"
-	date    = "unknown"
+	"github.com/linyows/dewy"
 )
 
 func main() {
-	cli := &CLI{outStream: os.Stdout, errStream: os.Stderr, Interval: -1}
-	cli.run(os.Args[1:])
+	os.Exit(dewy.RunCLI(os.Stdout, os.Stderr, os.Args[1:]))
 }
