@@ -1,11 +1,11 @@
 builds:
   - main: ./cmd/dewy
     env:
-      - CGO_ENABLED=0
       - GO111MODULE=on
     goos:
       - darwin
       - linux
+      - windows
     goarch:
       - amd64
 archive:
