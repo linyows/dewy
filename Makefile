@@ -44,6 +44,8 @@ goreleaser:
 	GOVERSION=$(GOVERSION) REVISION=$(REVISION) DATE=$(DATE) goreleaser --rm-dist
 
 clean:
+	git status
+	go mod tidy
 	rm -rf dewy releases current dist coverage.txt
 	git checkout go.*
 
