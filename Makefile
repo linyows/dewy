@@ -36,6 +36,9 @@ lint:
 	golint -set_exit_status $(TEST)
 
 ci: deps test
+	git status
+	git diff
+	go mod tidy
 
 dist:
 	@test -z $(GITHUB_TOKEN) || $(MAKE) goreleaser
@@ -44,8 +47,6 @@ goreleaser:
 	GOVERSION=$(GOVERSION) REVISION=$(REVISION) DATE=$(DATE) goreleaser --rm-dist
 
 clean:
-	git status
-	go mod tidy
 	rm -rf dewy releases current dist coverage.txt
 	git checkout go.*
 
