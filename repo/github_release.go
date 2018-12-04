@@ -38,6 +38,7 @@ type GithubRelease struct {
 	assetID     int64
 	releaseURL  string
 	releaseTag  string
+	prerelease  bool
 	cl          *github.Client
 	updatedAt   github.Timestamp
 }
@@ -45,11 +46,12 @@ type GithubRelease struct {
 // NewGithubRelease returns GithubRelease
 func NewGithubRelease(c Config, d kvs.KVS) *GithubRelease {
 	g := &GithubRelease{
-		token:    c.Token,
-		owner:    c.Owner,
-		name:     c.Name,
-		artifact: c.Artifact,
-		cache:    d,
+		token:      c.Token,
+		owner:      c.Owner,
+		name:       c.Name,
+		artifact:   c.Artifact,
+		cache:      d,
+		prerelease: c.PreRelease,
 	}
 	if c.Endpoint != "" {
 		if !strings.HasSuffix(c.Endpoint, "/") {

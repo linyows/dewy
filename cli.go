@@ -32,14 +32,14 @@ type CLI struct {
 	Port                 string `long:"port" short:"p" description:"TCP port to listen"`
 	Repository           string `long:"repository" short:"r" description:"Repository for application"`
 	Artifact             string `long:"artifact" short:"a" description:"Artifact for application"`
-	PreRelease           string `long:"pre" arg:"(included|only|none)" description:"Pre-Release handling"`
+	PreRelease           bool   `long:"pre" short:"P" description:"Pre-release handling (default: false)"`
 	Help                 bool   `long:"help" short:"h" description:"show this help message and exit"`
 	Version              bool   `long:"version" short:"v" description:"prints the version number"`
 }
 
 // RunCLI runs as CLI
 func RunCLI(o, e io.Writer, a []string) int {
-	cli := &CLI{outStream: o, errStream: e, Interval: -1, PreRelease: "none"}
+	cli := &CLI{outStream: o, errStream: e, Interval: -1, PreRelease: false}
 	return cli.run(a)
 }
 
@@ -165,9 +165,10 @@ func (c *CLI) run(a []string) int {
 
 	re := strings.Split(c.Repository, "/")
 	conf.Repository = repo.Config{
-		Name:     re[1],
-		Owner:    re[0],
-		Artifact: c.Artifact,
+		Name:       re[1],
+		Owner:      re[0],
+		Artifact:   c.Artifact,
+		PreRelease: c.PreRelease,
 	}
 
 	if c.Command == "server" {
