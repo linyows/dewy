@@ -23,24 +23,33 @@ const (
 
 // CLI struct
 type CLI struct {
-	outStream, errStream io.Writer
-	Command              string
-	Args                 []string
-	Config               string `long:"config" short:"c" description:"Path to configuration file"`
-	LogLevel             string `long:"log-level" short:"l" arg:"(debug|info|warn|error)" description:"Level displayed as log"`
-	Interval             int    `long:"interval" arg:"seconds" short:"i" description:"The polling interval to the repository (default: 10)"`
-	Port                 string `long:"port" short:"p" description:"TCP port to listen"`
-	Repository           string `long:"repository" short:"r" description:"Repository for application"`
-	Artifact             string `long:"artifact" short:"a" description:"Artifact for application"`
-	PreRelease           bool   `long:"pre" short:"P" description:"Pre-release handling (default: false)"`
-	Help                 bool   `long:"help" short:"h" description:"show this help message and exit"`
-	Version              bool   `long:"version" short:"v" description:"prints the version number"`
+	env        Env
+	Command    string
+	Args       []string
+	Config     string `long:"config" short:"c" description:"Path to configuration file"`
+	LogLevel   string `long:"log-level" short:"l" arg:"(debug|info|warn|error)" description:"Level displayed as log"`
+	Interval   int    `long:"interval" arg:"seconds" short:"i" description:"The polling interval to the repository (default: 10)"`
+	Port       string `long:"port" short:"p" description:"TCP port to listen"`
+	Repository string `long:"repository" short:"r" description:"Repository for application"`
+	Artifact   string `long:"artifact" short:"a" description:"Artifact for application"`
+	PreRelease bool   `long:"pre" short:"P" description:"Pre-release handling (default: false)"`
+	Help       bool   `long:"help" short:"h" description:"show this help message and exit"`
+	Version    bool   `long:"version" short:"v" description:"prints the version number"`
+}
+
+// Env struct
+type Env struct {
+	Out, Err io.Writer
+	Args     []string
+	Version  string
+	Commit   string
+	Date     string
 }
 
 // RunCLI runs as CLI
-func RunCLI(o, e io.Writer, a []string) int {
-	cli := &CLI{outStream: o, errStream: e, Interval: -1, PreRelease: false}
-	return cli.run(a)
+func RunCLI(env Env) int {
+	cli := &CLI{env: env, Interval: -1, PreRelease: false}
+	return cli.run(env.Args)
 }
 
 func (c *CLI) buildHelp(names []string) []string {
@@ -116,7 +125,7 @@ Commands:
 Options:
 %s
 `
-	fmt.Fprintf(c.outStream, help, opts)
+	fmt.Fprintf(c.env.Out, help, opts)
 }
 
 func (c *CLI) run(a []string) int {
@@ -128,12 +137,12 @@ func (c *CLI) run(a []string) int {
 	}
 
 	if c.Version {
-		fmt.Fprintf(c.errStream, "dewy version %s [%v, %v]\n", version, commit, date)
+		fmt.Fprintf(c.env.Err, "dewy version %s [%v, %v]\n", c.env.Version, c.env.Commit, c.env.Date)
 		return ExitOK
 	}
 
 	if len(args) == 0 || (args[0] != "server" && args[0] != "assets") {
-		fmt.Fprintf(c.errStream, "Error: command is not available\n")
+		fmt.Fprintf(c.env.Err, "Error: command is not available\n")
 		c.showHelp()
 		return ExitErr
 	}
@@ -157,7 +166,7 @@ func (c *CLI) run(a []string) int {
 	filter := &logutils.LevelFilter{
 		Levels:   []logutils.LogLevel{"DEBUG", "INFO", "WARN", "ERROR"},
 		MinLevel: logutils.LogLevel(c.LogLevel),
-		Writer:   c.errStream,
+		Writer:   c.env.Err,
 	}
 	log.SetOutput(filter)
 
