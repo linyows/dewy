@@ -21,11 +21,10 @@ const (
 	ExitErr int = 1
 )
 
-// CLI struct
-type CLI struct {
+type cli struct {
 	env        Env
-	Command    string
-	Args       []string
+	command    string
+	args       []string
 	Config     string `long:"config" short:"c" description:"Path to configuration file"`
 	LogLevel   string `long:"log-level" short:"l" arg:"(debug|info|warn|error)" description:"Level displayed as log"`
 	Interval   int    `long:"interval" arg:"seconds" short:"i" description:"The polling interval to the repository (default: 10)"`
@@ -46,15 +45,15 @@ type Env struct {
 	Date     string
 }
 
-// RunCLI runs as CLI
+// RunCLI runs as cli
 func RunCLI(env Env) int {
-	cli := &CLI{env: env, Interval: -1, PreRelease: false}
-	return cli.run(env.Args)
+	cli := &cli{env: env, Interval: -1, PreRelease: false}
+	return cli.run()
 }
 
-func (c *CLI) buildHelp(names []string) []string {
+func (c *cli) buildHelp(names []string) []string {
 	var help []string
-	t := reflect.TypeOf(CLI{})
+	t := reflect.TypeOf(cli{})
 
 	for _, name := range names {
 		f, ok := t.FieldByName(name)
@@ -104,7 +103,7 @@ func (c *CLI) buildHelp(names []string) []string {
 	return help
 }
 
-func (c *CLI) showHelp() {
+func (c *cli) showHelp() {
 	opts := strings.Join(c.buildHelp([]string{
 		"Config",
 		"Interval",
@@ -128,9 +127,9 @@ Options:
 	fmt.Fprintf(c.env.Out, help, opts)
 }
 
-func (c *CLI) run(a []string) int {
-	p := flags.NewParser(c, flags.PrintErrors|flags.PassDoubleDash)
-	args, err := p.ParseArgs(a)
+func (c *cli) run() int {
+	p := flags.NewParser(c, flags.PassDoubleDash)
+	args, err := p.ParseArgs(c.env.Args)
 	if err != nil || c.Help {
 		c.showHelp()
 		return ExitErr
@@ -151,10 +150,10 @@ func (c *CLI) run(a []string) int {
 		c.Interval = 10
 	}
 
-	c.Command = args[0]
+	c.command = args[0]
 
 	if len(args) > 1 {
-		c.Args = args[1:]
+		c.args = args[1:]
 	}
 
 	if c.LogLevel != "" {
@@ -180,12 +179,12 @@ func (c *CLI) run(a []string) int {
 		PreRelease: c.PreRelease,
 	}
 
-	if c.Command == "server" {
+	if c.command == "server" {
 		conf.Command = SERVER
 		conf.Starter = &StarterConfig{
 			ports:   []string{c.Port},
-			command: c.Args[0],
-			args:    c.Args[1:],
+			command: c.args[0],
+			args:    c.args[1:],
 		}
 	} else {
 		conf.Command = ASSETS
