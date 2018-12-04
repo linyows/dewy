@@ -22,8 +22,7 @@ assets: build
 	./dewy assets -r linyows/dewy-testapp -a dewy-testapp_darwin_amd64.tar.gz -l $(LOGLEVEL)
 
 deps:
-	go get golang.org/x/lint/golint
-	go get github.com/goreleaser/goreleaser
+	go get -u golang.org/x/lint/golint
 
 test:
 	go test -v $(TEST) $(TESTARGS) $(TEST_OPTIONS)
@@ -41,10 +40,8 @@ ci: deps test
 	go mod tidy
 
 dist:
-	@test -z $(GITHUB_TOKEN) || $(MAKE) goreleaser
-
-goreleaser:
-	GOVERSION=$(GOVERSION) REVISION=$(REVISION) DATE=$(DATE) goreleaser --rm-dist
+	go get -u github.com/goreleaser/goreleaser
+	@test -z $(GITHUB_TOKEN) || goreleaser
 
 clean:
 	rm -rf dewy releases current dist coverage.txt
