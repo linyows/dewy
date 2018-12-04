@@ -44,6 +44,7 @@ goreleaser:
 	GOVERSION=$(GOVERSION) REVISION=$(REVISION) DATE=$(DATE) goreleaser --rm-dist
 
 clean:
-	rm -rf dewy releases current dist
+	rm -rf dewy releases current dist coverage.txt
+	git checkout go.*
 
 .PHONY: default dist test deps
