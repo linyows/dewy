@@ -23,9 +23,10 @@ assets: build
 
 deps:
 	go get -u golang.org/x/lint/golint
+	go get -u github.com/goreleaser/goreleaser
 
 test:
-	go test -v $(TEST) $(TESTARGS) $(TEST_OPTIONS)
+	go test $(TEST) $(TESTARGS) $(TEST_OPTIONS)
 	go test -race $(TEST) $(TESTARGS) -coverprofile=coverage.txt -covermode=atomic
 
 integration:
@@ -38,7 +39,6 @@ ci: deps test lint
 	go mod tidy
 
 dist:
-	go get -u github.com/goreleaser/goreleaser
 	@test -z $(GITHUB_TOKEN) || goreleaser
 
 clean:
