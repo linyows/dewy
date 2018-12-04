@@ -34,9 +34,7 @@ integration:
 lint:
 	golint -set_exit_status $(TEST)
 
-ci: deps test
-	git status
-	git diff
+ci: deps test lint
 	go mod tidy
 
 dist:
@@ -44,7 +42,7 @@ dist:
 	@test -z $(GITHUB_TOKEN) || goreleaser
 
 clean:
-	rm -rf dewy releases current dist coverage.txt
 	git checkout go.*
+	git clean -f
 
 .PHONY: default dist test deps
