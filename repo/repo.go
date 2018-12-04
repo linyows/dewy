@@ -41,11 +41,12 @@ func (r Provider) String() string {
 // Config struct
 type Config struct {
 	Provider
-	Owner    string
-	Name     string
-	Token    string
-	Endpoint string
-	Artifact string
+	Owner      string
+	Name       string
+	Token      string
+	Endpoint   string
+	Artifact   string
+	PreRelease bool
 }
 
 // String to string for Config

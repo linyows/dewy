@@ -38,6 +38,7 @@ type GithubRelease struct {
 	assetID     int64
 	releaseURL  string
 	releaseTag  string
+	prerelease  bool
 	cl          *github.Client
 	updatedAt   github.Timestamp
 }
@@ -45,11 +46,12 @@ type GithubRelease struct {
 // NewGithubRelease returns GithubRelease
 func NewGithubRelease(c Config, d kvs.KVS) *GithubRelease {
 	g := &GithubRelease{
-		token:    c.Token,
-		owner:    c.Owner,
-		name:     c.Name,
-		artifact: c.Artifact,
-		cache:    d,
+		token:      c.Token,
+		owner:      c.Owner,
+		name:       c.Name,
+		artifact:   c.Artifact,
+		cache:      d,
+		prerelease: c.PreRelease,
 	}
 	if c.Endpoint != "" {
 		if !strings.HasSuffix(c.Endpoint, "/") {
@@ -106,16 +108,11 @@ func (g *GithubRelease) ReleaseURL() string {
 
 // Fetch to latest github release
 func (g *GithubRelease) Fetch() error {
-	ctx := context.Background()
-	c, err := g.client(ctx)
+	release, err := g.latest()
 	if err != nil {
 		return err
 	}
-	release, _, err := c.Repositories.GetLatestRelease(ctx, g.owner, g.name)
 
-	if err != nil {
-		return err
-	}
 	g.releaseID = *release.ID
 	g.releaseURL = *release.HTMLURL
 
@@ -135,6 +132,31 @@ func (g *GithubRelease) Fetch() error {
 	}
 
 	return nil
+}
+
+func (g *GithubRelease) latest() (*github.RepositoryRelease, error) {
+	ctx := context.Background()
+	c, err := g.client(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var r *github.RepositoryRelease
+	if g.prerelease {
+		opt := &github.ListOptions{Page: 1}
+		rr, _, err := c.Repositories.ListReleases(ctx, g.owner, g.name, opt)
+		if err != nil {
+			return nil, err
+		}
+		r = rr[0]
+	} else {
+		r, _, err = c.Repositories.GetLatestRelease(ctx, g.owner, g.name)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return r, nil
 }
 
 func (g *GithubRelease) setCacheKey() error {
