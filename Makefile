@@ -36,12 +36,13 @@ lint:
 	golint -set_exit_status $(TEST)
 
 ci: deps test lint
-	git diff
-	go mod tidy
-	git diff
+	git diff go.mod
+
+xbuild:
+	goreleaser --rm-dist --snapshot --skip-validate
 
 dist:
-	@test -z $(GITHUB_TOKEN) || goreleaser
+	@test -z $(GITHUB_TOKEN) || goreleaser --rm-dist --skip-validate
 
 clean:
 	git checkout go.*
