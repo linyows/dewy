@@ -36,7 +36,9 @@ lint:
 	golint -set_exit_status $(TEST)
 
 ci: deps test lint
+	git diff
 	go mod tidy
+	git diff
 
 dist:
 	@test -z $(GITHUB_TOKEN) || goreleaser
