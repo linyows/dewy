@@ -1,6 +1,3 @@
-before:
-  hooks:
-    - make clean
 builds:
   - main: ./cmd/dewy
     env:
