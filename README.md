@@ -50,6 +50,7 @@ Provisioning
 ---
 
 - Chef cookbook - https://github.com/linyows/dewy-cookbook
+- Puppet module - https://github.com/takumakume/puppet-dewy
 
 Todo
 ----
