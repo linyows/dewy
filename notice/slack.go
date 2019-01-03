@@ -66,7 +66,7 @@ func (s *Slack) Notify(ctx context.Context, message string) {
 }
 
 func (s *Slack) genColor() string {
-	return strings.ToUpper(fmt.Sprintf("#%x", md5.Sum([]byte(s.Meta.Host)))[0:7])
+	return strings.ToUpper(fmt.Sprintf("#%x", md5.Sum([]byte(hostname())))[0:7])
 }
 
 func (s *Slack) buildAttachment(message string, meta bool) objects.Attachment {
@@ -85,12 +85,12 @@ func (s *Slack) buildAttachment(message string, meta bool) objects.Attachment {
 		at.Timestamp = objects.Timestamp(time.Now().Unix())
 		at.Fields.
 			Append(&objects.AttachmentField{Title: "Command", Value: s.Meta.Command, Short: true}).
-			Append(&objects.AttachmentField{Title: "Host", Value: s.Meta.Host, Short: true}).
-			Append(&objects.AttachmentField{Title: "User", Value: s.Meta.User, Short: true}).
+			Append(&objects.AttachmentField{Title: "Host", Value: hostname(), Short: true}).
+			Append(&objects.AttachmentField{Title: "User", Value: username(), Short: true}).
 			Append(&objects.AttachmentField{Title: "Source", Value: s.Meta.Source, Short: true}).
-			Append(&objects.AttachmentField{Title: "Working directory", Value: s.Meta.WorkingDirectory, Short: false})
+			Append(&objects.AttachmentField{Title: "Working directory", Value: cwd(), Short: false})
 	} else {
-		at.Text = fmt.Sprintf("%s of <%s|%s> on %s", message, s.Meta.RepoLink, s.Meta.RepoName, s.Meta.Host)
+		at.Text = fmt.Sprintf("%s of <%s|%s> on %s", message, s.Meta.RepoLink, s.Meta.RepoName, hostname())
 	}
 
 	return at

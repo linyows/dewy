@@ -1,6 +1,11 @@
 package notice
 
-import "context"
+import (
+	"context"
+	"fmt"
+	"os"
+	"os/user"
+)
 
 // Notice interface
 type Notice interface {
@@ -17,16 +22,13 @@ type Field struct {
 
 // Config struct
 type Config struct {
-	Host             string
-	Command          string
-	User             string
-	Source           string
-	WorkingDirectory string
-	RepoOwner        string
-	RepoName         string
-	RepoLink         string
-	RepoOwnerIcon    string
-	RepoOwnerLink    string
+	Command       string
+	Source        string
+	RepoOwner     string
+	RepoName      string
+	RepoLink      string
+	RepoOwnerIcon string
+	RepoOwnerLink string
 }
 
 // New returns Notice
@@ -37,4 +39,28 @@ func New(n Notice) Notice {
 	default:
 		panic("no noticer")
 	}
+}
+
+func hostname() string {
+	n, err := os.Hostname()
+	if err != nil {
+		return fmt.Sprintf("%#v", err)
+	}
+	return n
+}
+
+func cwd() string {
+	c, err := os.Getwd()
+	if err != nil {
+		return fmt.Sprintf("%#v", err)
+	}
+	return c
+}
+
+func username() string {
+	u, err := user.Current()
+	if err != nil {
+		return fmt.Sprintf("%#v", err)
+	}
+	return u.Name
 }

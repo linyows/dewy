@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"os/user"
 	"path/filepath"
 	"sort"
 	"sync"
@@ -65,16 +64,13 @@ func (d *Dewy) Start(i int) {
 	defer cancel()
 
 	d.notice = notice.New(&notice.Slack{Meta: &notice.Config{
-		RepoOwnerLink:    d.repo.OwnerURL(),
-		RepoOwnerIcon:    d.repo.OwnerIconURL(),
-		RepoLink:         d.repo.URL(),
-		RepoOwner:        d.config.Repository.Owner,
-		RepoName:         d.config.Repository.Name,
-		Source:           d.config.Repository.Artifact,
-		Command:          d.config.Command.String(),
-		Host:             hostname(),
-		User:             username(),
-		WorkingDirectory: cwd(),
+		RepoOwnerLink: d.repo.OwnerURL(),
+		RepoOwnerIcon: d.repo.OwnerIconURL(),
+		RepoLink:      d.repo.URL(),
+		RepoOwner:     d.config.Repository.Owner,
+		RepoName:      d.config.Repository.Name,
+		Source:        d.config.Repository.Artifact,
+		Command:       d.config.Command.String(),
 	}})
 
 	d.notice.Notify(ctx, "Automatic shipping started by Dewy")
@@ -246,28 +242,4 @@ func (d *Dewy) keepReleases() error {
 	}
 
 	return nil
-}
-
-func hostname() string {
-	n, err := os.Hostname()
-	if err != nil {
-		return fmt.Sprintf("%#v", err)
-	}
-	return n
-}
-
-func cwd() string {
-	c, err := os.Getwd()
-	if err != nil {
-		return fmt.Sprintf("%#v", err)
-	}
-	return c
-}
-
-func username() string {
-	u, err := user.Current()
-	if err != nil {
-		return fmt.Sprintf("%#v", err)
-	}
-	return u.Name
 }
