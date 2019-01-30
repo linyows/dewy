@@ -46,6 +46,26 @@ $ env GITHUB_TOKEN=xxx... SLACK_TOKEN=xxx... \
               --artifact yourapp_linux_amd64.tar.gz
 ```
 
+Server mode
+---
+
+Process right after startup:
+
+```sh
+$ ps axf
+/usr/bin/dewy server ...(main process)
+ \_ /opt/your-app/current/your-app --args server (child process)
+ ```
+
+When deployment is started, a new child process is created and the old one is gracefully killed.
+
+```sh
+$ ps axf
+/usr/bin/dewy server ...(main process)
+ \_ /opt/your-app/current/your-app --args server (old child process) <-- kill
+ \_ /opt/your-app/current/your-app --args server (current child process)
+ ```
+
 Provisioning
 ---
 
