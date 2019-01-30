@@ -46,6 +46,19 @@ $ env GITHUB_TOKEN=xxx... SLACK_TOKEN=xxx... \
               --artifact yourapp_linux_amd64.tar.gz
 ```
 
+Architecture
+---
+
+Dewy has 3 abstract backends and can be used according to the user's environment.
+
+- Remote repository backend
+- Notification backend
+- Storage backend
+
+<img src="https://github.com/linyows/dewy/raw/master/misc/dewy-architecture.png" width="400">
+
+Dewy shares the polling history within the cluster so that it does not communicate excessively to remote repair acquisition.
+
 Server mode
 ---
 
