@@ -55,9 +55,9 @@ Dewy has 3 abstract backends and can be used according to the user's environment
 - Notification backend
 - Storage backend
 
-![dewy architecture](https://github.com/linyows/dewy/raw/master/misc/dewy-architecture.png)
-
 Dewy shares the polling history within the cluster in storage so that it does not communicate excessively to remote repair acquisition.
+
+![dewy architecture](https://github.com/linyows/dewy/raw/master/misc/dewy-architecture.png)
 
 Server mode
 ---
