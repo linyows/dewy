@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-<strong>DEWY</strong>: The application server for deployment with distributed polling.
+<strong>DEWY</strong>: The application server for automated deployment with polling a repository.
 </p>
 
 <p align="center">
