@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -84,6 +85,8 @@ func (f *File) Write(key string, data []byte) error {
 
 	defer file.Close()
 	file.Write(data)
+
+	log.Printf("[INFO] Write file to %s", p)
 
 	return nil
 }
