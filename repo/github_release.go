@@ -197,7 +197,9 @@ func (g *GithubRelease) GetDeploySourceKey() (string, error) {
 		}
 	}
 
-	g.cache.Write(currentKey, []byte(g.cacheKey))
+	if err := g.cache.Write(currentKey, []byte(g.cacheKey)); err != nil {
+		return "", err
+	}
 
 	return g.cacheKey, nil
 }
