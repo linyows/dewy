@@ -169,38 +169,56 @@ func (g *GithubRelease) setCacheKey() error {
 	return nil
 }
 
-// IsDownloadNecessary checks necessary for download
-func (g *GithubRelease) IsDownloadNecessary() bool {
+// GetDeploySourceKey returns cache key
+func (g *GithubRelease) GetDeploySourceKey() (string, error) {
+	currentKey := "current.txt"
+	currentSourceKey, _ := g.cache.Read(currentKey)
+	found := false
+
 	list, err := g.cache.List()
 	if err != nil {
-		return false
+		return "", err
 	}
 
 	for _, key := range list {
+		if string(currentSourceKey) == g.cacheKey && key == g.cacheKey {
+			return "", fmt.Errorf("No need to deploy")
+		}
+
 		if key == g.cacheKey {
-			return false
+			found = true
+			break
 		}
 	}
 
-	return true
+	if !found {
+		if err := g.download(); err != nil {
+			return "", err
+		}
+	}
+
+	if err := g.cache.Write(currentKey, []byte(g.cacheKey)); err != nil {
+		return "", err
+	}
+
+	return g.cacheKey, nil
 }
 
-// Download artifact from github
-func (g *GithubRelease) Download() (string, error) {
+func (g *GithubRelease) download() error {
 	ctx := context.Background()
 	c, err := g.client(ctx)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	reader, url, err := c.Repositories.DownloadReleaseAsset(ctx, g.owner, g.name, g.assetID)
 	if err != nil {
-		return "", err
+		return err
 	}
 	if url != "" {
 		res, err := http.Get(url)
 		if err != nil {
-			return "", err
+			return err
 		}
 		reader = res.Body
 	}
@@ -209,15 +227,15 @@ func (g *GithubRelease) Download() (string, error) {
 	buf := new(bytes.Buffer)
 	_, err = io.Copy(buf, reader)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	if err := g.cache.Write(g.cacheKey, buf.Bytes()); err != nil {
-		return "", err
+		return err
 	}
 	log.Printf("[INFO] Cached as %s", g.cacheKey)
 
-	return g.cacheKey, nil
+	return nil
 }
 
 func (g *GithubRelease) client(ctx context.Context) (*github.Client, error) {
@@ -243,8 +261,8 @@ func (g *GithubRelease) client(ctx context.Context) (*github.Client, error) {
 	return g.cl, nil
 }
 
-// RecordShipment save shipment to github
-func (g *GithubRelease) RecordShipment() error {
+// RecordShipping save shipping to github
+func (g *GithubRelease) RecordShipping() error {
 	ctx := context.Background()
 	c, err := g.client(ctx)
 	if err != nil {
