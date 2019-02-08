@@ -188,21 +188,21 @@ func (g *GithubRelease) GetDeploySourceKey() (string, error) {
 	return g.downloaded()
 }
 
-func (g *GithubRelease) download() (string, error) {
+func (g *GithubRelease) download() error {
 	ctx := context.Background()
 	c, err := g.client(ctx)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	reader, url, err := c.Repositories.DownloadReleaseAsset(ctx, g.owner, g.name, g.assetID)
 	if err != nil {
-		return "", err
+		return err
 	}
 	if url != "" {
 		res, err := http.Get(url)
 		if err != nil {
-			return "", err
+			return err
 		}
 		reader = res.Body
 	}
@@ -211,15 +211,15 @@ func (g *GithubRelease) download() (string, error) {
 	buf := new(bytes.Buffer)
 	_, err = io.Copy(buf, reader)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	if err := g.cache.Write(g.cacheKey, buf.Bytes()); err != nil {
-		return "", err
+		return err
 	}
 	log.Printf("[INFO] Cached as %s", g.cacheKey)
 
-	return g.cacheKey, nil
+	return nil
 }
 
 func (g *GithubRelease) client(ctx context.Context) (*github.Client, error) {
