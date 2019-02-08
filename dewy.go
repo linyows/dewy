@@ -106,18 +106,17 @@ func (d *Dewy) Run() error {
 		return err
 	}
 
-	if !d.repo.IsDownloadNecessary() {
-		log.Print("[DEBUG] Download skipped")
-		return nil
-	}
-
-	key, err := d.repo.Download()
+	key, err := d.repo.GetDeploySourceKey()
 	if err != nil {
-		log.Printf("[DEBUG] Download failure: %#v", err)
+		if err.Error() == "No need to deploy" {
+			log.Print("[DEBUG] Deploy skipped")
+		} else {
+			log.Printf("[DEBUG] Download failure: %#v", err)
+		}
 		return nil
 	}
 
-	d.notice.Notify(ctx, fmt.Sprintf("New release <%s|%s> was downloaded",
+	d.notice.Notify(ctx, fmt.Sprintf("New shipping <%s|%s> was detected",
 		d.repo.ReleaseURL(), d.repo.ReleaseTag()))
 
 	if err := d.deploy(key); err != nil {

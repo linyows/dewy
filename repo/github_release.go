@@ -169,24 +169,26 @@ func (g *GithubRelease) setCacheKey() error {
 	return nil
 }
 
-// IsDownloadNecessary checks necessary for download
-func (g *GithubRelease) IsDownloadNecessary() bool {
+// GetDeploySourceKey returns cache key
+func (g *GithubRelease) GetDeploySourceKey() (string, error) {
 	list, err := g.cache.List()
 	if err != nil {
 		return false
 	}
 
-	for _, key := range list {
+	for i, key := range list {
+		if i == 0 && key == g.cacheKey {
+			return nil, fmt.Errorf("No need to deploy")
+		}
 		if key == g.cacheKey {
-			return false
+			return g.cacheKey, nil
 		}
 	}
 
-	return true
+	return g.downloaded()
 }
 
-// Download artifact from github
-func (g *GithubRelease) Download() (string, error) {
+func (g *GithubRelease) download() (string, error) {
 	ctx := context.Background()
 	c, err := g.client(ctx)
 	if err != nil {
