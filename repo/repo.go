@@ -10,9 +10,8 @@ import (
 type Repo interface {
 	String() string
 	Fetch() error
-	Download() (string, error)
-	IsDownloadNecessary() bool
-	RecordShipment() error
+	GetDeploySourceKey() (string, error)
+	RecordShipping() error
 	ReleaseTag() string
 	ReleaseURL() string
 	OwnerURL() string
