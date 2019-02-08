@@ -74,10 +74,6 @@ func (f *File) Write(key string, data []byte) error {
 	}
 
 	p := filepath.Join(f.dir, key)
-	if IsFileExist(p) {
-		return fmt.Errorf("File already exists: %s", p)
-	}
-
 	file, err := os.OpenFile(p, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
