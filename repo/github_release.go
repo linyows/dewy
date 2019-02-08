@@ -245,8 +245,8 @@ func (g *GithubRelease) client(ctx context.Context) (*github.Client, error) {
 	return g.cl, nil
 }
 
-// RecordShipment save shipment to github
-func (g *GithubRelease) RecordShipment() error {
+// RecordShipping save shipping to github
+func (g *GithubRelease) RecordShipping() error {
 	ctx := context.Background()
 	c, err := g.client(ctx)
 	if err != nil {

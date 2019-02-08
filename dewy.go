@@ -133,10 +133,10 @@ func (d *Dewy) Run() error {
 		}
 	}
 
-	log.Print("[DEBUG] Record shipment")
-	err = d.repo.RecordShipment()
+	log.Print("[DEBUG] Record shipping")
+	err = d.repo.RecordShipping()
 	if err != nil {
-		log.Printf("[ERROR] Record shipment failure: %#v", err)
+		log.Printf("[ERROR] Record shipping failure: %#v", err)
 	}
 
 	log.Printf("[INFO] Keep releases as %d", keepReleases)
