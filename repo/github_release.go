@@ -171,21 +171,35 @@ func (g *GithubRelease) setCacheKey() error {
 
 // GetDeploySourceKey returns cache key
 func (g *GithubRelease) GetDeploySourceKey() (string, error) {
+	currentKey := "current.txt"
+	currentSourceKey, _ := g.cache.Read(currentKey)
+	found := false
+
 	list, err := g.cache.List()
 	if err != nil {
-		return false
+		return "", err
 	}
 
-	for i, key := range list {
-		if i == 0 && key == g.cacheKey {
-			return nil, fmt.Errorf("No need to deploy")
+	for _, key := range list {
+		if string(currentSourceKey) == g.cacheKey && key == g.cacheKey {
+			return "", fmt.Errorf("No need to deploy")
 		}
+
 		if key == g.cacheKey {
-			return g.cacheKey, nil
+			found = true
+			break
 		}
 	}
 
-	return g.downloaded()
+	if !found {
+		if err := g.download(); err != nil {
+			return "", err
+		}
+	}
+
+	g.cache.Write(currentKey, []byte(g.cacheKey))
+
+	return g.cacheKey, nil
 }
 
 func (g *GithubRelease) download() error {
