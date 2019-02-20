@@ -61,7 +61,7 @@ Dewy shares the polling history within the cluster in storage so that it does no
 
 👉 Dewy is not CIOps but GitOps. As in the article on weave works, you do not have to grant permissions externally, so it's simple and easy to solve if problems arise.
 
-Kubernetes anti-patterns: Let's do GitOps, not CIOps!
+Kubernetes anti-patterns: Let's do GitOps, not CIOps!  
 https://www.weave.works/blog/kubernetes-anti-patterns-let-s-do-gitops-not-ciops
 
 Server mode
