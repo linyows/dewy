@@ -22,8 +22,8 @@ assets: build
 	./dewy assets -r linyows/dewy-testapp -a dewy-testapp_darwin_amd64.tar.gz -l $(LOGLEVEL)
 
 deps:
-	go get -u golang.org/x/lint/golint
-	go get -u github.com/goreleaser/goreleaser
+	go get golang.org/x/lint/golint
+	go get github.com/goreleaser/goreleaser
 
 test:
 	go test $(TEST) $(TESTARGS) $(TEST_OPTIONS)
