@@ -181,22 +181,26 @@ func (g *GithubRelease) GetDeploySourceKey() (string, error) {
 	}
 
 	for _, key := range list {
+		// same current version and already cached
 		if string(currentSourceKey) == g.cacheKey && key == g.cacheKey {
 			return "", fmt.Errorf("No need to deploy")
 		}
 
+		// no current version but already cached
 		if key == g.cacheKey {
 			found = true
 			break
 		}
 	}
 
+	// download when no current version and no cached
 	if !found {
 		if err := g.download(); err != nil {
 			return "", err
 		}
 	}
 
+	// update current version
 	if err := g.cache.Write(currentKey, []byte(g.cacheKey)); err != nil {
 		return "", err
 	}
