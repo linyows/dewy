@@ -54,7 +54,7 @@ func TestFileWrite(t *testing.T) {
 	}
 	content, err := f.Read("test")
 	if !reflect.DeepEqual(content, data) {
-		t.Error("writing is not correct")
+		t.Errorf("writing is not correct: %s", err)
 	}
 
 	// Override
@@ -65,7 +65,7 @@ func TestFileWrite(t *testing.T) {
 	}
 	content2, err := f.Read("test")
 	if !reflect.DeepEqual(content2, data2) {
-		t.Errorf("writing is not correct when override: %s", content2)
+		t.Errorf("writing is not correct when override: %s, %s", content2, err)
 	}
 }
 
