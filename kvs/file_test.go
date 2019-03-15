@@ -52,6 +52,21 @@ func TestFileWrite(t *testing.T) {
 	if IsFileExist(filepath.Join(f.dir, "test")) != true {
 		t.Error("file not found for cache")
 	}
+	content, err := f.Read("test")
+	if !reflect.DeepEqual(content, data) {
+		t.Errorf("writing is not correct: %s", err)
+	}
+
+	// Override
+	data2 := []byte("hello gophers")
+	err = f.Write("test", data2)
+	if err != nil {
+		t.Error(err.Error())
+	}
+	content2, err := f.Read("test")
+	if !reflect.DeepEqual(content2, data2) {
+		t.Errorf("writing is not correct when override: %s, %s", content2, err)
+	}
 }
 
 func TestFileDelete(t *testing.T) {
