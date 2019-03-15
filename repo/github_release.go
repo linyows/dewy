@@ -148,7 +148,13 @@ func (g *GithubRelease) latest() (*github.RepositoryRelease, error) {
 		if err != nil {
 			return nil, err
 		}
-		r = rr[0]
+		for _, v := range rr {
+			if *v.Draft {
+				continue
+			}
+			r = v
+			break
+		}
 	} else {
 		r, _, err = c.Repositories.GetLatestRelease(ctx, g.owner, g.name)
 	}
