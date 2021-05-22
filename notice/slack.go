@@ -18,7 +18,7 @@ var (
 	// SlackUsername variable
 	SlackUsername = "Dewy"
 	// SlackIconURL variable
-	SlackIconURL = "https://raw.githubusercontent.com/linyows/dewy/master/misc/dewy-icon.512.png"
+	SlackIconURL = "https://raw.githubusercontent.com/linyows/dewy/main/misc/dewy-icon.512.png"
 	// SlackFooter variable
 	SlackFooter = "Dewy notice/slack"
 	// SlackFooterIcon variable
