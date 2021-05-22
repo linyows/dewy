@@ -1,5 +1,5 @@
-<p align="center"><br><br>
-  <img src="https://github.com/linyows/dewy/raw/main/misc/dewy-logo.png" width="150"><br><br><br><br>
+<p align="center">
+  <img alt="DEWY" src="https://github.com/linyows/dewy/blob/main/misc/dewy-logo.svg?raw=true" width="500">
 </p>
 
 <p align="center">
