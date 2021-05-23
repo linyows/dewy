@@ -1,0 +1,17 @@
+name: Lint
+on:
+  pull_request:
+  push:
+    tags:
+      - v*
+    branches:
+      - main
+jobs:
+  golangci:
+    name: GolongCI Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: golangci/golangci-lint-action@v2
+        with:
+          version: latest
