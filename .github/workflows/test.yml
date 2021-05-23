@@ -8,12 +8,14 @@ on:
         0 0 * * *
 jobs:
   test:
+    strategy:
+      matrix:
+        go-version: [1.13.x, 1.14.x, 1.15.x, 1.16.x]
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
     - uses: actions/setup-go@v2
       with:
-        go-version: 1.15
-    - name: Build
-      run: |
-        make ci
+        go-version: ${{ matrix.go-version }}
+    - name: Unit test
+      run: go test -v
