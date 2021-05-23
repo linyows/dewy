@@ -1,17 +1,26 @@
+before:
+  hooks:
+    - go mod tidy
 builds:
-  - main: ./cmd/dewy
+  - id: 'dewy'
+    main: ./cmd/dewy
     env:
       - GO111MODULE=on
+      - CGO_ENABLED=0
     goos:
-      - darwin
       - linux
       - windows
+      - darwin
     goarch:
       - amd64
-archive:
-  name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
-  files:
-    - none*
+      - arm64
+archives:
+  - replacements:
+      386: i386
+      amd64: x86_64
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - none*
 checksum:
   name_template: 'checksums.txt'
 snapshot:
@@ -20,5 +29,5 @@ changelog:
   sort: asc
   filters:
     exclude:
-    - '^docs:'
-    - '^test:'
+      - '^docs:'
+      - '^test:'
