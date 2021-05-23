@@ -1,7 +1,8 @@
 name: Release by GoReleaser
 on:
-  pull_request:
   push:
+    tags:
+      - '*'
 jobs:
   goreleaser:
     runs-on: ubuntu-latest
