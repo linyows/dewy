@@ -80,7 +80,10 @@ func (f *File) Write(key string, data []byte) error {
 	}
 
 	defer file.Close()
-	file.Write(data)
+	_, err = file.Write(data)
+	if err != nil {
+		return err
+	}
 
 	log.Printf("[INFO] Write file to %s", p)
 

@@ -25,8 +25,10 @@ var (
 	SlackFooterIcon = SlackIconURL
 )
 
+type key int
+
 // MetaContextKey for context key
-const MetaContextKey = "meta"
+const MetaContextKey key = iota
 
 // Slack struct
 type Slack struct {
