@@ -2,7 +2,7 @@ package kvs
 
 // Consul struct
 type Consul struct {
-	items    map[string]*item
+	items    map[string]*item //nolint
 	Host     string
 	Port     int
 	Password string

@@ -26,9 +26,9 @@ func createTempDir() string {
 
 // File struct
 type File struct {
-	items    map[string]*item
+	items    map[string]*item //nolint
 	dir      string
-	mutex    sync.Mutex
+	mutex    sync.Mutex //nolint
 	MaxItems int
 	MaxSize  int64
 }
