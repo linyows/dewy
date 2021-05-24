@@ -5,6 +5,11 @@ on:
   schedule:
     - cron: |
         0 0 * * *
+  push:
+    tags:
+      - v*
+    branches:
+      - main
 jobs:
   build:
     name: Build

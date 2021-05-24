@@ -36,6 +36,9 @@ func TestFileRead(t *testing.T) {
 		t.Error("file not created")
 	}
 	content, err := f.Read("testread")
+	if err != nil {
+		t.Error(err.Error())
+	}
 	if !reflect.DeepEqual(content, data) {
 		t.Error("return is not correct")
 	}

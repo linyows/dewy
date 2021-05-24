@@ -75,10 +75,14 @@ func (d *Dewy) Start(i int) {
 
 	d.notice.Notify(ctx, "Automatic shipping started by Dewy")
 	ctx, cancel = context.WithCancel(context.Background())
+	defer cancel()
 
 	var err error
 	d.job, err = scheduler.Every(i).Seconds().Run(func() {
-		d.Run()
+		e := d.Run()
+		if e != nil {
+			log.Printf("[ERROR] Dewy run failure: %#v", e)
+		}
 	})
 	if err != nil {
 		log.Printf("[ERROR] Scheduler failure: %#v", err)
@@ -130,6 +134,9 @@ func (d *Dewy) Run() error {
 		} else {
 			d.notice.Notify(ctx, "Server starting")
 			err = d.startServer()
+		}
+		if err != nil {
+			log.Printf("[ERROR] Server failure: %#v", err)
 		}
 	}
 

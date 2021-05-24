@@ -28,6 +28,7 @@ func New(t string, c Config) KVS {
 	}
 }
 
+//nolint
 type item struct {
 	content    []byte
 	lock       sync.Mutex

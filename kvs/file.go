@@ -26,9 +26,9 @@ func createTempDir() string {
 
 // File struct
 type File struct {
-	items    map[string]*item
+	items    map[string]*item //nolint
 	dir      string
-	mutex    sync.Mutex
+	mutex    sync.Mutex //nolint
 	MaxItems int
 	MaxSize  int64
 }
@@ -80,7 +80,10 @@ func (f *File) Write(key string, data []byte) error {
 	}
 
 	defer file.Close()
-	file.Write(data)
+	_, err = file.Write(data)
+	if err != nil {
+		return err
+	}
 
 	log.Printf("[INFO] Write file to %s", p)
 

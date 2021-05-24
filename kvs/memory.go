@@ -2,7 +2,7 @@ package kvs
 
 // Memory struct
 type Memory struct {
-	items map[string]*item
+	items map[string]*item //nolint
 }
 
 // Read data by key on memory
