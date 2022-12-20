@@ -7,8 +7,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/linyows/dewy/actions/workflows/test.yml"><img alt="GitHub Workflow Status" src="https://img.shields.io/github/workflow/status/linyows/dewy/Test?label=Test&style=for-the-badge"></a>
-  <a href="https://github.com/linyows/dewy/actions/workflows/build.yml"><img alt="GitHub Workflow Status" src="https://img.shields.io/github/workflow/status/linyows/dewy/Build%20by%20matrix?style=for-the-badge"></a>
+  <a href="https://github.com/linyows/dewy/actions/workflows/test.yml"><img alt="GitHub Workflow Status" src="https://img.shields.io/github/actions/workflow/status/linyows/dewy/test.yml?branch=main&label=Test&style=for-the-badge"></a>
+  <a href="https://github.com/linyows/dewy/actions/workflows/build.yml"><img alt="GitHub Workflow Status" src="https://img.shields.io/github/actions/workflow/status/linyows/dewy/build.yml?branch=main&style=for-the-badge"></a>
   <a href="https://github.com/linyows/dewy/releases"><img src="http://img.shields.io/github/release/linyows/dewy.svg?style=for-the-badge" alt="GitHub Release"></a>
   <a href="https://github.com/linyows/dewy/blob/main/LICENSE"><img src="http://img.shields.io/badge/license-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
   <a href="http://godoc.org/github.com/linyows/dewy"><img src="http://img.shields.io/badge/go-documentation-blue.svg?style=for-the-badge" alt="Go Documentation"></a>
