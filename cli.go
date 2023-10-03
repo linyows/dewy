@@ -25,7 +25,6 @@ type cli struct {
 	env        Env
 	command    string
 	args       []string
-	Config     string `long:"config" short:"c" description:"Path to configuration file"`
 	LogLevel   string `long:"log-level" short:"l" arg:"(debug|info|warn|error)" description:"Level displayed as log"`
 	Interval   int    `long:"interval" arg:"seconds" short:"i" description:"The polling interval to the repository (default: 10)"`
 	Port       string `long:"port" short:"p" description:"TCP port to listen"`
