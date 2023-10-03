@@ -8,7 +8,7 @@ require (
 	github.com/google/go-querystring v1.1.0
 	github.com/hashicorp/logutils v1.0.0
 	github.com/jessevdk/go-flags v1.5.0
-	github.com/lestrrat-go/server-starter v0.0.0-20150105222616-88699d57aeee
+	github.com/lestrrat-go/server-starter v0.0.0-20210101230921-50cd1900b5bc
 	github.com/lestrrat-go/slack v0.0.0-20180726073730-18d3cce844c0
 	github.com/mholt/archiver v0.0.0-20180417220235-e4ef56d48eb0
 	golang.org/x/oauth2 v0.0.0-20210427180440-81ed05c6b58c
