@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/mholt/archiver"
+	"github.com/mholt/archiver/v3"
 )
 
 var (
@@ -125,13 +125,7 @@ func ExtractArchive(src, dst string) error {
 		return fmt.Errorf("File not found: %s", src)
 	}
 
-	name := filepath.Base(src)
-	ff := archiver.MatchingFormat(name)
-	if ff == nil {
-		return fmt.Errorf("Unsupported file extension: %s", name)
-	}
-
-	return ff.Open(src, dst)
+	return archiver.DecompressFile(src, dst)
 }
 
 // IsFileExist checks file exists
