@@ -27,7 +27,7 @@ deps:
 
 test:
 	go test $(TEST) $(TESTARGS) $(TEST_OPTIONS)
-	go test -race $(TEST) $(TESTARGS) -coverprofile=coverage.txt -covermode=atomic
+	go test -race $(TEST) $(TESTARGS) -coverprofile=coverage.out -covermode=atomic
 
 integration:
 	go test -integration $(TEST) $(TESTARGS) $(TEST_OPTIONS)
