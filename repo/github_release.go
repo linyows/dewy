@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/go-github/github"
+	"github.com/google/go-github/v55/github"
 	"github.com/google/go-querystring/query"
 	"github.com/linyows/dewy/kvs"
 	"golang.org/x/oauth2"
@@ -22,6 +22,10 @@ const (
 	// ISO8601 for time format
 	ISO8601 = "20060102T150405Z0700"
 )
+
+var httpClient = &http.Client{
+	Timeout: 30 * time.Second,
+}
 
 // GithubRelease struct
 type GithubRelease struct {
@@ -221,7 +225,7 @@ func (g *GithubRelease) download() error {
 		return err
 	}
 
-	reader, url, err := c.Repositories.DownloadReleaseAsset(ctx, g.owner, g.name, g.assetID)
+	reader, url, err := c.Repositories.DownloadReleaseAsset(ctx, g.owner, g.name, g.assetID, httpClient)
 	if err != nil {
 		return err
 	}
