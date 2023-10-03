@@ -14,3 +14,5 @@ jobs:
         go-version-file: go.mod
     - name: Go test
       run: go test -v
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
