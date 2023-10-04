@@ -14,7 +14,6 @@ import (
 
 	"github.com/google/go-github/v55/github"
 	"github.com/google/go-querystring/query"
-	"github.com/linyows/dewy/kvs"
 	"golang.org/x/oauth2"
 )
 
@@ -37,7 +36,6 @@ type GithubRelease struct {
 	artifact              string
 	downloadURL           string
 	cacheKey              string
-	cache                 kvs.KVS
 	releaseID             int64
 	assetID               int64
 	releaseURL            string
@@ -49,13 +47,12 @@ type GithubRelease struct {
 }
 
 // NewGithubRelease returns GithubRelease
-func NewGithubRelease(c Config, d kvs.KVS) *GithubRelease {
+func NewGithubRelease(c Config) *GithubRelease {
 	g := &GithubRelease{
 		token:                 c.Token,
 		owner:                 c.Owner,
 		name:                  c.Name,
 		artifact:              c.Artifact,
-		cache:                 d,
 		prerelease:            c.PreRelease,
 		disableRecordShipping: c.DisableRecordShipping,
 	}
@@ -133,11 +130,11 @@ func (g *GithubRelease) Fetch() error {
 		}
 	}
 
-	if err := g.setCacheKey(); err != nil {
-		return err
-	}
-
 	return nil
+}
+
+func (g *GithubRelease) LatestKey() (string, time.Time) {
+	return g.downloadURL, g.updatedAt.Time
 }
 
 func (g *GithubRelease) latest() (*github.RepositoryRelease, error) {
@@ -171,56 +168,7 @@ func (g *GithubRelease) latest() (*github.RepositoryRelease, error) {
 	return r, nil
 }
 
-func (g *GithubRelease) setCacheKey() error {
-	u, err := url.Parse(g.downloadURL)
-	if err != nil {
-		return err
-	}
-	g.cacheKey = strings.Replace(fmt.Sprintf("%s--%d-%s", u.Host, g.updatedAt.Unix(), u.RequestURI()), "/", "-", -1)
-
-	return nil
-}
-
-// GetDeploySourceKey returns cache key
-func (g *GithubRelease) GetDeploySourceKey() (string, error) {
-	currentKey := "current.txt"
-	currentSourceKey, _ := g.cache.Read(currentKey)
-	found := false
-
-	list, err := g.cache.List()
-	if err != nil {
-		return "", err
-	}
-
-	for _, key := range list {
-		// same current version and already cached
-		if string(currentSourceKey) == g.cacheKey && key == g.cacheKey {
-			return "", fmt.Errorf("No need to deploy")
-		}
-
-		// no current version but already cached
-		if key == g.cacheKey {
-			found = true
-			break
-		}
-	}
-
-	// download when no current version and no cached
-	if !found {
-		if err := g.download(); err != nil {
-			return "", err
-		}
-	}
-
-	// update current version
-	if err := g.cache.Write(currentKey, []byte(g.cacheKey)); err != nil {
-		return "", err
-	}
-
-	return g.cacheKey, nil
-}
-
-func (g *GithubRelease) download() error {
+func (g *GithubRelease) Download(w io.Writer) error {
 	ctx := context.Background()
 	c, err := g.client(ctx)
 	if err != nil {
@@ -240,16 +188,10 @@ func (g *GithubRelease) download() error {
 	}
 
 	log.Printf("[INFO] Downloaded from %s", g.downloadURL)
-	buf := new(bytes.Buffer)
-	_, err = io.Copy(buf, reader)
+	_, err = io.Copy(w, reader)
 	if err != nil {
 		return err
 	}
-
-	if err := g.cache.Write(g.cacheKey, buf.Bytes()); err != nil {
-		return err
-	}
-	log.Printf("[INFO] Cached as %s", g.cacheKey)
 
 	return nil
 }

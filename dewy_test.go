@@ -24,7 +24,7 @@ func TestNew(t *testing.T) {
 		},
 		Starter: nil,
 	}
-	r, err := repo.New(c.Repository, dewy.cache)
+	r, err := repo.New(c.Repository)
 	if err != nil {
 		t.Fatal(err)
 	}
