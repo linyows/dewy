@@ -2,21 +2,22 @@ package repo
 
 import (
 	"errors"
+	"io"
 	"path"
-
-	"github.com/linyows/dewy/kvs"
+	"time"
 )
 
 // Repo interface for repository
 type Repo interface {
 	String() string
 	Fetch() error
-	GetDeploySourceKey() (string, error)
 	RecordShipping() error
 	ReleaseTag() string
 	ReleaseURL() string
 	OwnerURL() string
 	OwnerIconURL() string
+	LatestKey() (string, time.Time)
+	Download(w io.Writer) error
 	URL() string
 }
 
@@ -54,10 +55,10 @@ func (c Config) String() string {
 }
 
 // New returns repo
-func New(c Config, d kvs.KVS) (Repo, error) {
+func New(c Config) (Repo, error) {
 	switch c.Provider {
 	case GITHUB:
-		return NewGithubRelease(c, d)
+		return NewGithubRelease(c)
 	default:
 		return nil, errors.New("no repository provider")
 	}

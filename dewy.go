@@ -1,13 +1,16 @@
 package dewy
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -48,7 +51,7 @@ func New(c Config) (*Dewy, error) {
 		return nil, err
 	}
 
-	r, err := repo.New(c.Repository, kv)
+	r, err := repo.New(c.Repository)
 	if err != nil {
 		return nil, err
 	}
@@ -117,14 +120,46 @@ func (d *Dewy) Run() error {
 		return err
 	}
 
-	key, err := d.repo.GetDeploySourceKey()
+	// Create latest cache key
+	du, ut := d.repo.LatestKey()
+	u, err := url.Parse(du)
 	if err != nil {
-		if err.Error() == "No need to deploy" {
+		return err
+	}
+	cacheKey := strings.Replace(fmt.Sprintf("%s--%d-%s", u.Host, ut.Unix(), u.RequestURI()), "/", "-", -1)
+
+	// Check cache
+	currentKey := "current.txt"
+	currentSourceKey, _ := d.cache.Read(currentKey)
+	found := false
+	list, err := d.cache.List()
+	if err != nil {
+		return err
+	}
+	for _, key := range list {
+		// same current version and already cached
+		if string(currentSourceKey) == cacheKey && key == cacheKey {
 			log.Print("[DEBUG] Deploy skipped")
-		} else {
-			log.Printf("[DEBUG] Download failure: %#v", err)
+			break
 		}
-		return nil
+
+		// no current version but already cached
+		if key == cacheKey {
+			found = true
+			break
+		}
+	}
+
+	// Download artifact and cache
+	if !found {
+		buf := new(bytes.Buffer)
+		if err := d.repo.Download(buf); err != nil {
+			return err
+		}
+		if err := d.cache.Write(cacheKey, buf.Bytes()); err != nil {
+			return err
+		}
+		log.Printf("[INFO] Cached as %s", cacheKey)
 	}
 
 	if d.notice != nil {
@@ -132,7 +167,7 @@ func (d *Dewy) Run() error {
 			d.repo.ReleaseURL(), d.repo.ReleaseTag()))
 	}
 
-	if err := d.deploy(key); err != nil {
+	if err := d.deploy(cacheKey); err != nil {
 		return err
 	}
 
