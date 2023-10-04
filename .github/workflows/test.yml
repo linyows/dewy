@@ -14,5 +14,8 @@ jobs:
         go-version-file: go.mod
     - name: Go test
       run: go test -v ./... -coverprofile=coverage.out -covermode=count
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     - name: Run octocov
       uses: k1LoW/octocov-action@v0
+      

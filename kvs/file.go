@@ -125,7 +125,7 @@ func ExtractArchive(src, dst string) error {
 		return fmt.Errorf("File not found: %s", src)
 	}
 
-	return archiver.DecompressFile(src, dst)
+	return archiver.Unarchive(src, dst)
 }
 
 // IsFileExist checks file exists
