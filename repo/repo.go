@@ -40,12 +40,13 @@ func (r Provider) String() string {
 // Config struct
 type Config struct {
 	Provider
-	Owner      string
-	Name       string
-	Token      string
-	Endpoint   string
-	Artifact   string
-	PreRelease bool
+	Owner                 string
+	Name                  string
+	Token                 string
+	Endpoint              string
+	Artifact              string
+	PreRelease            bool
+	DisableRecordShipping bool // FIXME: For testing. Remove this.
 }
 
 // String to string for Config

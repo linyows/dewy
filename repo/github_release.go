@@ -29,33 +29,35 @@ var httpClient = &http.Client{
 
 // GithubRelease struct
 type GithubRelease struct {
-	token       string
-	baseURL     string
-	uploadURL   string
-	owner       string
-	name        string
-	artifact    string
-	downloadURL string
-	cacheKey    string
-	cache       kvs.KVS
-	releaseID   int64
-	assetID     int64
-	releaseURL  string
-	releaseTag  string
-	prerelease  bool
-	cl          *github.Client
-	updatedAt   github.Timestamp
+	token                 string
+	baseURL               string
+	uploadURL             string
+	owner                 string
+	name                  string
+	artifact              string
+	downloadURL           string
+	cacheKey              string
+	cache                 kvs.KVS
+	releaseID             int64
+	assetID               int64
+	releaseURL            string
+	releaseTag            string
+	prerelease            bool
+	disableRecordShipping bool // FIXME: For testing. Remove this.
+	cl                    *github.Client
+	updatedAt             github.Timestamp
 }
 
 // NewGithubRelease returns GithubRelease
 func NewGithubRelease(c Config, d kvs.KVS) *GithubRelease {
 	g := &GithubRelease{
-		token:      c.Token,
-		owner:      c.Owner,
-		name:       c.Name,
-		artifact:   c.Artifact,
-		cache:      d,
-		prerelease: c.PreRelease,
+		token:                 c.Token,
+		owner:                 c.Owner,
+		name:                  c.Name,
+		artifact:              c.Artifact,
+		cache:                 d,
+		prerelease:            c.PreRelease,
+		disableRecordShipping: c.DisableRecordShipping,
 	}
 	if c.Endpoint != "" {
 		if !strings.HasSuffix(c.Endpoint, "/") {
@@ -277,6 +279,9 @@ func (g *GithubRelease) client(ctx context.Context) (*github.Client, error) {
 
 // RecordShipping save shipping to github
 func (g *GithubRelease) RecordShipping() error {
+	if g.disableRecordShipping {
+		return nil
+	}
 	ctx := context.Background()
 	c, err := g.client(ctx)
 	if err != nil {

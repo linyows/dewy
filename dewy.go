@@ -120,8 +120,10 @@ func (d *Dewy) Run() error {
 		return nil
 	}
 
-	d.notice.Notify(ctx, fmt.Sprintf("New shipping <%s|%s> was detected",
-		d.repo.ReleaseURL(), d.repo.ReleaseTag()))
+	if d.notice != nil {
+		d.notice.Notify(ctx, fmt.Sprintf("New shipping <%s|%s> was detected",
+			d.repo.ReleaseURL(), d.repo.ReleaseTag()))
+	}
 
 	if err := d.deploy(key); err != nil {
 		return err
