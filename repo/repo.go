@@ -43,8 +43,6 @@ type Config struct {
 	Provider
 	Owner                 string
 	Name                  string
-	Token                 string
-	Endpoint              string
 	Artifact              string
 	PreRelease            bool
 	DisableRecordShipping bool // FIXME: For testing. Remove this.
@@ -59,7 +57,7 @@ func (c Config) String() string {
 func New(c Config, d kvs.KVS) (Repo, error) {
 	switch c.Provider {
 	case GITHUB:
-		return NewGithubRelease(c, d), nil
+		return NewGithubRelease(c, d)
 	default:
 		return nil, errors.New("no repository provider")
 	}
