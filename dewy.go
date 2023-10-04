@@ -3,7 +3,6 @@ package dewy
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
@@ -239,13 +238,21 @@ func (d *Dewy) startServer() error {
 
 func (d *Dewy) keepReleases() error {
 	dir := filepath.Join(d.root, releasesDir)
-	files, err := ioutil.ReadDir(dir)
+	files, err := os.ReadDir(dir)
 	if err != nil {
 		return err
 	}
 
 	sort.Slice(files, func(i, j int) bool {
-		return files[i].ModTime().Unix() > files[j].ModTime().Unix()
+		fi, err := files[i].Info()
+		if err != nil {
+			return false
+		}
+		fj, err := files[j].Info()
+		if err != nil {
+			return true
+		}
+		return fi.ModTime().Unix() > fj.ModTime().Unix()
 	})
 
 	for i, f := range files {
