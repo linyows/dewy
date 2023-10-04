@@ -3,7 +3,6 @@ package kvs
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -20,7 +19,7 @@ var (
 )
 
 func createTempDir() string {
-	dir, _ := ioutil.TempDir("", "dewy-")
+	dir, _ := os.MkdirTemp("", "dewy-")
 	return dir
 }
 
@@ -51,7 +50,7 @@ func (f *File) Read(key string) ([]byte, error) {
 		return nil, fmt.Errorf("File not found: %s", p)
 	}
 
-	content, err := ioutil.ReadFile(p)
+	content, err := os.ReadFile(p)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +105,7 @@ func (f *File) Delete(key string) error {
 
 // List returns keys from file
 func (f *File) List() ([]string, error) {
-	files, err := ioutil.ReadDir(f.dir)
+	files, err := os.ReadDir(f.dir)
 	if err != nil {
 		return nil, err
 	}
