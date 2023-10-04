@@ -68,13 +68,10 @@ type Config struct {
 // OverrideWithEnv overrides by environments
 func (c *Config) OverrideWithEnv() {
 	if c.Repository.Provider == repo.GITHUB {
-		t := os.Getenv("GITHUB_TOKEN")
-		if t != "" {
-			c.Repository.Token = t
-		}
+		// Support env GITHUB_ENDPOINT
 		e := os.Getenv("GITHUB_ENDPOINT")
 		if e != "" {
-			c.Repository.Endpoint = e
+			os.Setenv("GITHUB_API_URL", e)
 		}
 		a := os.Getenv("GITHUB_ARTIFACT")
 		if a != "" {
