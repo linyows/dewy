@@ -1,6 +1,7 @@
 package repo
 
 import (
+	"errors"
 	"path"
 
 	"github.com/linyows/dewy/kvs"
@@ -55,11 +56,11 @@ func (c Config) String() string {
 }
 
 // New returns repo
-func New(c Config, d kvs.KVS) Repo {
+func New(c Config, d kvs.KVS) (Repo, error) {
 	switch c.Provider {
 	case GITHUB:
-		return NewGithubRelease(c, d)
+		return NewGithubRelease(c, d), nil
 	default:
-		panic("no repository provider")
+		return nil, errors.New("no repository provider")
 	}
 }

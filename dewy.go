@@ -40,30 +40,36 @@ type Dewy struct {
 }
 
 // New returns Dewy
-func New(c Config) *Dewy {
+func New(c Config) (*Dewy, error) {
 	kv := &kvs.File{}
 	kv.Default()
 
 	wd, err := os.Getwd()
 	if err != nil {
-		panic(err)
+		return nil, err
+	}
+
+	r, err := repo.New(c.Repository, kv)
+	if err != nil {
+		return nil, err
 	}
 
 	return &Dewy{
 		config:          c,
 		cache:           kv,
-		repo:            repo.New(c.Repository, kv),
+		repo:            r,
 		isServerRunning: false,
 		root:            wd,
-	}
+	}, nil
 }
 
 // Start dewy
 func (d *Dewy) Start(i int) {
 	ctx, cancel := context.WithCancel(context.WithValue(context.Background(), notice.MetaContextKey, true))
 	defer cancel()
+	var err error
 
-	d.notice = notice.New(&notice.Slack{Meta: &notice.Config{
+	d.notice, err = notice.New(&notice.Slack{Meta: &notice.Config{
 		RepoOwnerLink: d.repo.OwnerURL(),
 		RepoOwnerIcon: d.repo.OwnerIconURL(),
 		RepoLink:      d.repo.URL(),
@@ -72,12 +78,14 @@ func (d *Dewy) Start(i int) {
 		Source:        d.config.Repository.Artifact,
 		Command:       d.config.Command.String(),
 	}})
-
+	if err != nil {
+		log.Printf("[ERROR] Notice failure: %#v", err)
+		return
+	}
 	d.notice.Notify(ctx, "Automatic shipping started by Dewy")
 	ctx, cancel = context.WithCancel(context.Background())
 	defer cancel()
 
-	var err error
 	d.job, err = scheduler.Every(i).Seconds().Run(func() {
 		e := d.Run()
 		if e != nil {

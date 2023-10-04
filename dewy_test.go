@@ -11,8 +11,11 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	dewy := New(DefaultConfig())
-	r, _ := os.Getwd()
+	dewy, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	wd, _ := os.Getwd()
 	c := Config{
 		Repository: repo.Config{},
 		Cache: CacheConfig{
@@ -21,14 +24,17 @@ func TestNew(t *testing.T) {
 		},
 		Starter: nil,
 	}
-
+	r, err := repo.New(c.Repository, dewy.cache)
+	if err != nil {
+		t.Fatal(err)
+	}
 	expect := &Dewy{
 		config:          c,
-		repo:            repo.New(c.Repository, dewy.cache),
+		repo:            r,
 		cache:           dewy.cache,
 		isServerRunning: false,
 		RWMutex:         sync.RWMutex{},
-		root:            r,
+		root:            wd,
 	}
 
 	if !reflect.DeepEqual(dewy, expect) {
@@ -55,7 +61,10 @@ func TestRun(t *testing.T) {
 		Type:       FILE,
 		Expiration: 10,
 	}
-	dewy := New(c)
+	dewy, err := New(c)
+	if err != nil {
+		t.Fatal(err)
+	}
 	dewy.root = root
 	if err := dewy.Run(); err != nil {
 		t.Error(err)

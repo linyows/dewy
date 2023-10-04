@@ -1,6 +1,7 @@
 package kvs
 
 import (
+	"errors"
 	"sync"
 	"time"
 )
@@ -19,12 +20,12 @@ type Config struct {
 }
 
 // New returns KVS
-func New(t string, c Config) KVS {
+func New(t string, c Config) (KVS, error) {
 	switch t {
 	case "file":
-		return &File{}
+		return &File{}, nil
 	default:
-		panic("no provider")
+		return nil, errors.New("no provider")
 	}
 }
 
