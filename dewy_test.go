@@ -3,10 +3,11 @@ package dewy
 import (
 	"os"
 	"path/filepath"
-	"reflect"
-	"sync"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/linyows/dewy/kvs"
 	"github.com/linyows/dewy/repo"
 )
 
@@ -33,12 +34,20 @@ func TestNew(t *testing.T) {
 		repo:            r,
 		cache:           dewy.cache,
 		isServerRunning: false,
-		RWMutex:         sync.RWMutex{},
 		root:            wd,
 	}
 
-	if !reflect.DeepEqual(dewy, expect) {
-		t.Errorf("new return is incorrect\nexpected: \n%#v\ngot: \n%#v\n", expect, dewy)
+	opts := []cmp.Option{
+		cmp.AllowUnexported(Dewy{}, repo.GithubRelease{}, kvs.File{}),
+		cmpopts.IgnoreFields(Dewy{}, "notice"),
+		cmpopts.IgnoreFields(Dewy{}, "RWMutex"),
+		cmpopts.IgnoreFields(repo.GithubRelease{}, "cl"),
+		cmpopts.IgnoreFields(repo.GithubRelease{}, "baseURL"),
+		cmpopts.IgnoreFields(repo.GithubRelease{}, "uploadURL"),
+		cmpopts.IgnoreFields(kvs.File{}, "mutex"),
+	}
+	if diff := cmp.Diff(dewy, expect, opts...); diff != "" {
+		t.Error(diff)
 	}
 }
 
@@ -53,7 +62,6 @@ func TestRun(t *testing.T) {
 		Provider:              repo.GITHUB,
 		Owner:                 "linyows",
 		Name:                  "dewy",
-		Token:                 os.Getenv("GITHUB_TOKEN"),
 		Artifact:              "dewy_darwin_x86_64.tar.gz",
 		DisableRecordShipping: true,
 	}

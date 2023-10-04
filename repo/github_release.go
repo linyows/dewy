@@ -14,7 +14,7 @@ import (
 
 	"github.com/google/go-github/v55/github"
 	"github.com/google/go-querystring/query"
-	"golang.org/x/oauth2"
+	"github.com/k1LoW/go-github-client/v55/factory"
 )
 
 const (
@@ -28,7 +28,6 @@ var httpClient = &http.Client{
 
 // GithubRelease struct
 type GithubRelease struct {
-	token                 string
 	baseURL               string
 	uploadURL             string
 	owner                 string
@@ -47,23 +46,23 @@ type GithubRelease struct {
 }
 
 // NewGithubRelease returns GithubRelease
-func NewGithubRelease(c Config) *GithubRelease {
+func NewGithubRelease(c Config) (*GithubRelease, error) {
+	cl, err := factory.NewGithubClient()
+	if err != nil {
+		return nil, err
+	}
 	g := &GithubRelease{
-		token:                 c.Token,
 		owner:                 c.Owner,
 		name:                  c.Name,
 		artifact:              c.Artifact,
 		prerelease:            c.PreRelease,
 		disableRecordShipping: c.DisableRecordShipping,
+		cl:                    cl,
 	}
-	if c.Endpoint != "" {
-		if !strings.HasSuffix(c.Endpoint, "/") {
-			c.Endpoint += "/"
-		}
-		g.baseURL = c.Endpoint
-		g.uploadURL = c.Endpoint + "../uploads/"
-	}
-	return g
+	_, v3ep, v3upload, _ := factory.GetTokenAndEndpoints()
+	g.baseURL = v3ep
+	g.uploadURL = v3upload
+	return g, nil
 }
 
 // String to string
@@ -72,12 +71,7 @@ func (g *GithubRelease) String() string {
 }
 
 func (g *GithubRelease) host() string {
-	ctx := context.Background()
-	c, err := g.client(ctx)
-	if err != nil {
-		return err.Error()
-	}
-	h := c.BaseURL.Host
+	h := g.cl.BaseURL.Host
 	if h != "api.github.com" {
 		return h
 	}
@@ -139,15 +133,10 @@ func (g *GithubRelease) LatestKey() (string, time.Time) {
 
 func (g *GithubRelease) latest() (*github.RepositoryRelease, error) {
 	ctx := context.Background()
-	c, err := g.client(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	var r *github.RepositoryRelease
 	if g.prerelease {
 		opt := &github.ListOptions{Page: 1}
-		rr, _, err := c.Repositories.ListReleases(ctx, g.owner, g.name, opt)
+		rr, _, err := g.cl.Repositories.ListReleases(ctx, g.owner, g.name, opt)
 		if err != nil {
 			return nil, err
 		}
@@ -155,27 +144,19 @@ func (g *GithubRelease) latest() (*github.RepositoryRelease, error) {
 			if *v.Draft {
 				continue
 			}
-			r = v
-			break
+			return r, nil
 		}
-	} else {
-		r, _, err = c.Repositories.GetLatestRelease(ctx, g.owner, g.name)
 	}
+	r, _, err := g.cl.Repositories.GetLatestRelease(ctx, g.owner, g.name)
 	if err != nil {
 		return nil, err
 	}
-
 	return r, nil
 }
 
 func (g *GithubRelease) Download(w io.Writer) error {
 	ctx := context.Background()
-	c, err := g.client(ctx)
-	if err != nil {
-		return err
-	}
-
-	reader, url, err := c.Repositories.DownloadReleaseAsset(ctx, g.owner, g.name, g.assetID, httpClient)
+	reader, url, err := g.cl.Repositories.DownloadReleaseAsset(ctx, g.owner, g.name, g.assetID, httpClient)
 	if err != nil {
 		return err
 	}
@@ -196,40 +177,12 @@ func (g *GithubRelease) Download(w io.Writer) error {
 	return nil
 }
 
-func (g *GithubRelease) client(ctx context.Context) (*github.Client, error) {
-	if g.cl != nil {
-		return g.cl, nil
-	}
-
-	ts := oauth2.StaticTokenSource(
-		&oauth2.Token{AccessToken: g.token},
-	)
-	tc := oauth2.NewClient(ctx, ts)
-
-	if g.baseURL == "" {
-		g.cl = github.NewClient(tc)
-	} else {
-		var err error
-		g.cl, err = github.NewEnterpriseClient(g.baseURL, g.uploadURL, tc)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return g.cl, nil
-}
-
 // RecordShipping save shipping to github
 func (g *GithubRelease) RecordShipping() error {
 	if g.disableRecordShipping {
 		return nil
 	}
 	ctx := context.Background()
-	c, err := g.client(ctx)
-	if err != nil {
-		return err
-	}
-
 	now := time.Now().UTC().Format(ISO8601)
 	hostname, _ := os.Hostname()
 	info := fmt.Sprintf("shipped to %s at %s", strings.ToLower(hostname), now)
@@ -249,13 +202,13 @@ func (g *GithubRelease) RecordShipping() error {
 
 	byteData := []byte(info)
 	r := bytes.NewReader(byteData)
-	req, err := c.NewUploadRequest(u.String(), r, int64(len(byteData)), "text/plain")
+	req, err := g.cl.NewUploadRequest(u.String(), r, int64(len(byteData)), "text/plain")
 	if err != nil {
 		return err
 	}
 
 	asset := new(github.ReleaseAsset)
-	_, err = c.Do(ctx, req, asset)
+	_, err = g.cl.Do(ctx, req, asset)
 
 	return err
 }
