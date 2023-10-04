@@ -190,7 +190,11 @@ func (c *cli) run() int {
 	}
 
 	conf.OverrideWithEnv()
-	d := New(conf)
+	d, err := New(conf)
+	if err != nil {
+		fmt.Fprintf(c.env.Err, "Error: %s\n", err)
+		return ExitErr
+	}
 
 	d.Start(c.Interval)
 

@@ -32,12 +32,12 @@ type Config struct {
 }
 
 // New returns Notice
-func New(n Notice) Notice {
+func New(n Notice) (Notice, error) {
 	switch n.String() {
 	case "slack":
-		return n
+		return n, nil
 	default:
-		panic("no noticer")
+		return nil, fmt.Errorf("no noticer")
 	}
 }
 
