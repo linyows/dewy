@@ -4,19 +4,33 @@ import (
 	"errors"
 	"io"
 	"path"
-	"time"
 )
+
+// CurrentRequest is the request to get the current artifact.
+type CurrentRequest struct {
+	// ArtifactName is the name of the artifact to fetch.
+	// FIXME: If possible, ArtifactName should be optional.
+	ArtifactName string
+}
+
+// CurrentResponse is the response to get the current artifact.
+type CurrentResponse struct {
+	// Tag uniquely identifies the artifact concerned.
+	Tag string
+	// ArtifactURL is the URL to download the artifact.
+	// The URL is not only "https://"
+	ArtifactURL string
+}
 
 // Repo interface for repository
 type Repo interface {
 	String() string
-	Fetch() error
 	RecordShipping() error
 	ReleaseTag() string
 	ReleaseURL() string
 	OwnerURL() string
 	OwnerIconURL() string
-	LatestKey() (string, time.Time)
+	Current(req *CurrentRequest) (*CurrentResponse, error)
 	Download(w io.Writer) error
 	URL() string
 }
