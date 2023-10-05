@@ -8,7 +8,7 @@ import (
 	"github.com/linyows/dewy/storage"
 )
 
-// Repo interface for repository
+// Repo interface for repository.
 type Repo interface {
 	registory.Registory
 	storage.Fetcher
@@ -18,15 +18,15 @@ type Repo interface {
 	URL() string
 }
 
-// Provider for repository
+// Provider for repository.
 type Provider int
 
 const (
-	// GITHUB repository provider
+	// GITHUB repository provider.
 	GITHUB Provider = iota
 )
 
-// String to string for Provider
+// String to string for Provider.
 func (r Provider) String() string {
 	switch r {
 	case GITHUB:
@@ -36,7 +36,7 @@ func (r Provider) String() string {
 	}
 }
 
-// Config struct
+// Config struct.
 type Config struct {
 	Provider
 	Owner                 string
@@ -46,12 +46,12 @@ type Config struct {
 	DisableRecordShipping bool // FIXME: For testing. Remove this.
 }
 
-// String to string for Config
+// String to string for Config.
 func (c Config) String() string {
 	return path.Join(c.Provider.String(), c.Owner, c.Name)
 }
 
-// New returns repo
+// New returns repo.
 func New(c Config) (Repo, error) {
 	switch c.Provider {
 	case GITHUB:

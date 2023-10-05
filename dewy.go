@@ -29,7 +29,7 @@ const (
 	keepReleases = 7
 )
 
-// Dewy struct
+// Dewy struct.
 type Dewy struct {
 	config          Config
 	registory       registory.Registory
@@ -42,7 +42,7 @@ type Dewy struct {
 	sync.RWMutex
 }
 
-// New returns Dewy
+// New returns Dewy.
 func New(c Config) (*Dewy, error) {
 	kv := &kvs.File{}
 	kv.Default()
@@ -67,7 +67,7 @@ func New(c Config) (*Dewy, error) {
 	}, nil
 }
 
-// Start dewy
+// Start dewy.
 func (d *Dewy) Start(i int) {
 	ctx, cancel := context.WithCancel(context.WithValue(context.Background(), notice.MetaContextKey, true))
 	defer cancel()
@@ -117,7 +117,7 @@ func (d *Dewy) waitSigs() os.Signal {
 	return sigReceived
 }
 
-// Run dewy
+// Run dewy.
 func (d *Dewy) Run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

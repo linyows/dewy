@@ -7,20 +7,20 @@ import (
 	"os/user"
 )
 
-// Notice interface
+// Notice interface.
 type Notice interface {
 	String() string
 	Notify(ctx context.Context, message string)
 }
 
-// Field struct
+// Field struct.
 type Field struct {
 	Title string
 	Value string
 	Short bool
 }
 
-// Config struct
+// Config struct.
 type Config struct {
 	Command       string
 	Source        string
@@ -31,7 +31,7 @@ type Config struct {
 	RepoOwnerLink string
 }
 
-// New returns Notice
+// New returns Notice.
 func New(n Notice) (Notice, error) {
 	switch n.String() {
 	case "slack":

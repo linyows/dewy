@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// KVS interface
+// KVS interface.
 type KVS interface {
 	Read(key string) ([]byte, error)
 	Write(key string, data []byte) error
@@ -15,11 +15,11 @@ type KVS interface {
 	GetDir() string
 }
 
-// Config struct
+// Config struct.
 type Config struct {
 }
 
-// New returns KVS
+// New returns KVS.
 func New(t string, c Config) (KVS, error) {
 	switch t {
 	case "file":

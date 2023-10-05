@@ -2,7 +2,7 @@ package notice
 
 import (
 	"context"
-	"crypto/md5"
+	"crypto/md5" //nolint:gosec
 	"fmt"
 	"log"
 	"os"
@@ -15,22 +15,22 @@ import (
 
 var (
 	defaultSlackChannel = "general"
-	// SlackUsername variable
+	// SlackUsername variable.
 	SlackUsername = "Dewy"
-	// SlackIconURL variable
+	// SlackIconURL variable.
 	SlackIconURL = "https://raw.githubusercontent.com/linyows/dewy/main/misc/dewy-icon.512.png"
-	// SlackFooter variable
+	// SlackFooter variable.
 	SlackFooter = "Dewy notice/slack"
-	// SlackFooterIcon variable
+	// SlackFooterIcon variable.
 	SlackFooterIcon = SlackIconURL
 )
 
 type key int
 
-// MetaContextKey for context key
+// MetaContextKey for context key.
 const MetaContextKey key = iota
 
-// Slack struct
+// Slack struct.
 type Slack struct {
 	Token   string
 	Channel string
@@ -41,7 +41,7 @@ func (s *Slack) String() string {
 	return "slack"
 }
 
-// Notify posts message to Slack channel
+// Notify posts message to Slack channel.
 func (s *Slack) Notify(ctx context.Context, message string) {
 	if t := os.Getenv("SLACK_TOKEN"); t != "" {
 		s.Token = t
@@ -68,7 +68,7 @@ func (s *Slack) Notify(ctx context.Context, message string) {
 }
 
 func (s *Slack) genColor() string {
-	return strings.ToUpper(fmt.Sprintf("#%x", md5.Sum([]byte(hostname())))[0:7])
+	return strings.ToUpper(fmt.Sprintf("#%x", md5.Sum([]byte(hostname())))[0:7]) //nolint:gosec
 }
 
 func (s *Slack) buildAttachment(message string, meta bool) objects.Attachment {

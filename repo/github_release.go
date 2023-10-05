@@ -20,7 +20,7 @@ import (
 
 const (
 	GitHubReleaseScheme = "github_release"
-	// ISO8601 for time format
+	// ISO8601 for time format.
 	ISO8601 = "20060102T150405Z0700"
 )
 
@@ -30,7 +30,7 @@ var httpClient = &http.Client{
 
 var _ Repo = (*GithubRelease)(nil)
 
-// GithubRelease struct
+// GithubRelease struct.
 type GithubRelease struct {
 	baseURL               string
 	uploadURL             string
@@ -43,7 +43,7 @@ type GithubRelease struct {
 	updatedAt             github.Timestamp
 }
 
-// NewGithubRelease returns GithubRelease
+// NewGithubRelease returns GithubRelease.
 func NewGithubRelease(c Config) (*GithubRelease, error) {
 	cl, err := factory.NewGithubClient()
 	if err != nil {
@@ -62,7 +62,7 @@ func NewGithubRelease(c Config) (*GithubRelease, error) {
 	return g, nil
 }
 
-// String to string
+// String to string.
 func (g *GithubRelease) String() string {
 	return g.host()
 }
@@ -75,22 +75,22 @@ func (g *GithubRelease) host() string {
 	return "github.com"
 }
 
-// OwnerURL returns owner URL
+// OwnerURL returns owner URL.
 func (g *GithubRelease) OwnerURL() string {
 	return fmt.Sprintf("https://%s/%s", g, g.owner)
 }
 
-// OwnerIconURL returns owner icon URL
+// OwnerIconURL returns owner icon URL.
 func (g *GithubRelease) OwnerIconURL() string {
 	return fmt.Sprintf("%s.png?size=200", g.OwnerURL())
 }
 
-// URL returns repository URL
+// URL returns repository URL.
 func (g *GithubRelease) URL() string {
 	return fmt.Sprintf("%s/%s", g.OwnerURL(), g.name)
 }
 
-// ReleaseURL returns release URL
+// Current returns current artifact.
 func (g *GithubRelease) Current(req *registory.CurrentRequest) (*registory.CurrentResponse, error) {
 	release, err := g.latest()
 	if err != nil {
@@ -143,6 +143,7 @@ func (g *GithubRelease) latest() (*github.RepositoryRelease, error) {
 	return r, nil
 }
 
+// Fetch fetch artifact.
 func (g *GithubRelease) Fetch(url string, w io.Writer) error {
 	ctx := context.Background()
 	// github_release://owner/repo/tag/v1.0.0/artifact.zip
@@ -194,7 +195,7 @@ L:
 		return err
 	}
 	if url != "" {
-		res, err := http.Get(url)
+		res, err := httpClient.Get(url)
 		if err != nil {
 			return err
 		}
@@ -210,6 +211,7 @@ L:
 	return nil
 }
 
+// Report report shipping.
 func (g *GithubRelease) Report(req *registory.ReportRequest) error {
 	if g.disableRecordShipping {
 		return nil

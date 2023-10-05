@@ -7,17 +7,17 @@ import (
 	"github.com/linyows/dewy/repo"
 )
 
-// Command for CLI
+// Command for CLI.
 type Command int
 
 const (
-	// SERVER command
+	// SERVER command.
 	SERVER Command = iota
-	// ASSETS command
+	// ASSETS command.
 	ASSETS
 )
 
-// String to string for Command
+// String to string for Command.
 func (c Command) String() string {
 	switch c {
 	case SERVER:
@@ -29,17 +29,17 @@ func (c Command) String() string {
 	}
 }
 
-// CacheType for cache type
+// CacheType for cache type.
 type CacheType int
 
 const (
-	// NONE cache type
+	// NONE cache type.
 	NONE CacheType = iota
-	// FILE cache type
+	// FILE cache type.
 	FILE
 )
 
-// String to string for CacheType
+// String to string for CacheType.
 func (c CacheType) String() string {
 	switch c {
 	case NONE:
@@ -51,13 +51,13 @@ func (c CacheType) String() string {
 	}
 }
 
-// CacheConfig struct
+// CacheConfig struct.
 type CacheConfig struct {
 	Type       CacheType
 	Expiration int
 }
 
-// Config struct
+// Config struct.
 type Config struct {
 	Command    Command
 	Repository repo.Config
@@ -65,10 +65,10 @@ type Config struct {
 	Starter    starter.Config
 }
 
-// OverrideWithEnv overrides by environments
+// OverrideWithEnv overrides by environments.
 func (c *Config) OverrideWithEnv() {
 	if c.Repository.Provider == repo.GITHUB {
-		// Support env GITHUB_ENDPOINT
+		// Support env GITHUB_ENDPOINT.
 		e := os.Getenv("GITHUB_ENDPOINT")
 		if e != "" {
 			os.Setenv("GITHUB_API_URL", e)
@@ -80,7 +80,7 @@ func (c *Config) OverrideWithEnv() {
 	}
 }
 
-// DefaultConfig returns default Config
+// DefaultConfig returns default Config.
 func DefaultConfig() Config {
 	return Config{
 		Cache: CacheConfig{

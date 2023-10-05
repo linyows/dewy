@@ -14,10 +14,10 @@ import (
 )
 
 const (
-	// ExitOK for exit code
+	// ExitOK for exit code.
 	ExitOK int = 0
 
-	// ExitErr for exit code
+	// ExitErr for exit code.
 	ExitErr int = 1
 )
 
@@ -35,7 +35,7 @@ type cli struct {
 	Version    bool   `long:"version" short:"v" description:"prints the version number"`
 }
 
-// Env struct
+// Env struct.
 type Env struct {
 	Out, Err io.Writer
 	Args     []string
@@ -44,7 +44,7 @@ type Env struct {
 	Date     string
 }
 
-// RunCLI runs as cli
+// RunCLI runs as cli.
 func RunCLI(env Env) int {
 	cli := &cli{env: env, Interval: -1, PreRelease: false}
 	return cli.run()
