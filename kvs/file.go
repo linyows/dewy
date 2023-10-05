@@ -12,9 +12,9 @@ import (
 )
 
 var (
-	// DefaultTempDir creates temp dir
+	// DefaultTempDir creates temp dir.
 	DefaultTempDir = createTempDir()
-	// DefaultMaxSize for data size
+	// DefaultMaxSize for data size.
 	DefaultMaxSize int64 = 64 * 1024 * 1024
 )
 
@@ -23,7 +23,7 @@ func createTempDir() string {
 	return dir
 }
 
-// File struct
+// File struct.
 type File struct {
 	items    map[string]*item //nolint
 	dir      string
@@ -32,18 +32,18 @@ type File struct {
 	MaxSize  int64
 }
 
-// GetDir returns dir
+// GetDir returns dir.
 func (f *File) GetDir() string {
 	return f.dir
 }
 
-// Default sets to struct
+// Default sets to struct.
 func (f *File) Default() {
 	f.dir = DefaultTempDir
 	f.MaxSize = DefaultMaxSize
 }
 
-// Read data by key from file
+// Read data by key from file.
 func (f *File) Read(key string) ([]byte, error) {
 	p := filepath.Join(f.dir, key)
 	if !IsFileExist(p) {
@@ -58,7 +58,7 @@ func (f *File) Read(key string) ([]byte, error) {
 	return content, nil
 }
 
-// Write data to file
+// Write data to file.
 func (f *File) Write(key string, data []byte) error {
 	dirstat, err := os.Stat(f.dir)
 	if err != nil {
@@ -89,7 +89,7 @@ func (f *File) Write(key string, data []byte) error {
 	return nil
 }
 
-// Delete data on file
+// Delete data on file.
 func (f *File) Delete(key string) error {
 	p := filepath.Join(f.dir, key)
 	if !IsFileExist(p) {
@@ -103,7 +103,7 @@ func (f *File) Delete(key string) error {
 	return nil
 }
 
-// List returns keys from file
+// List returns keys from file.
 func (f *File) List() ([]string, error) {
 	files, err := os.ReadDir(f.dir)
 	if err != nil {
@@ -118,7 +118,7 @@ func (f *File) List() ([]string, error) {
 	return list, nil
 }
 
-// ExtractArchive extracts by archive
+// ExtractArchive extracts by archive.
 func ExtractArchive(src, dst string) error {
 	if !IsFileExist(src) {
 		return fmt.Errorf("File not found: %s", src)
@@ -127,7 +127,7 @@ func ExtractArchive(src, dst string) error {
 	return archiver.Unarchive(src, dst)
 }
 
-// IsFileExist checks file exists
+// IsFileExist checks file exists.
 func IsFileExist(p string) bool {
 	_, err := os.Stat(p)
 

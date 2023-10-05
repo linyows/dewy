@@ -31,7 +31,8 @@ func TestNew(t *testing.T) {
 	}
 	expect := &Dewy{
 		config:          c,
-		repo:            r,
+		registory:       r,
+		fetcher:         r,
 		cache:           dewy.cache,
 		isServerRunning: false,
 		root:            wd,

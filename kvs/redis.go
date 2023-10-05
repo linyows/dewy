@@ -1,6 +1,6 @@
 package kvs
 
-// Redis struct
+// Redis struct.
 type Redis struct {
 	items    map[string]*item //nolint
 	Host     string
@@ -9,18 +9,18 @@ type Redis struct {
 	TTL      int
 }
 
-// Read data by key on redis
+// Read data by key on redis.
 func (r *Redis) Read(key string) {
 }
 
-// Write data to redis
+// Write data to redis.
 func (r *Redis) Write(data string) {
 }
 
-// Delete key on redis
+// Delete key on redis.
 func (r *Redis) Delete(key string) {
 }
 
-// List returns keys from redis
+// List returns keys from redis.
 func (r *Redis) List() {
 }

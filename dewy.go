@@ -17,7 +17,9 @@ import (
 	starter "github.com/lestrrat-go/server-starter"
 	"github.com/linyows/dewy/kvs"
 	"github.com/linyows/dewy/notice"
+	"github.com/linyows/dewy/registory"
 	"github.com/linyows/dewy/repo"
+	"github.com/linyows/dewy/storage"
 )
 
 const (
@@ -27,10 +29,11 @@ const (
 	keepReleases = 7
 )
 
-// Dewy struct
+// Dewy struct.
 type Dewy struct {
 	config          Config
-	repo            repo.Repo
+	registory       registory.Registory
+	fetcher         storage.Fetcher
 	cache           kvs.KVS
 	isServerRunning bool
 	root            string
@@ -39,7 +42,7 @@ type Dewy struct {
 	sync.RWMutex
 }
 
-// New returns Dewy
+// New returns Dewy.
 func New(c Config) (*Dewy, error) {
 	kv := &kvs.File{}
 	kv.Default()
@@ -57,27 +60,33 @@ func New(c Config) (*Dewy, error) {
 	return &Dewy{
 		config:          c,
 		cache:           kv,
-		repo:            r,
+		registory:       r,
+		fetcher:         r,
 		isServerRunning: false,
 		root:            wd,
 	}, nil
 }
 
-// Start dewy
+// Start dewy.
 func (d *Dewy) Start(i int) {
 	ctx, cancel := context.WithCancel(context.WithValue(context.Background(), notice.MetaContextKey, true))
 	defer cancel()
 	var err error
 
-	d.notice, err = notice.New(&notice.Slack{Meta: &notice.Config{
-		RepoOwnerLink: d.repo.OwnerURL(),
-		RepoOwnerIcon: d.repo.OwnerIconURL(),
-		RepoLink:      d.repo.URL(),
-		RepoOwner:     d.config.Repository.Owner,
-		RepoName:      d.config.Repository.Name,
-		Source:        d.config.Repository.Artifact,
-		Command:       d.config.Command.String(),
-	}})
+	nc := &notice.Config{
+		RepoOwner: d.config.Repository.Owner,
+		RepoName:  d.config.Repository.Name,
+		Source:    d.config.Repository.Artifact,
+		Command:   d.config.Command.String(),
+	}
+	repo, ok := d.registory.(repo.Repo)
+	if ok {
+		nc.RepoOwnerLink = repo.OwnerURL()
+		nc.RepoOwnerIcon = repo.OwnerIconURL()
+		nc.RepoLink = repo.URL()
+	}
+
+	d.notice, err = notice.New(&notice.Slack{Meta: nc})
 	if err != nil {
 		log.Printf("[ERROR] Notice failure: %#v", err)
 		return
@@ -108,13 +117,13 @@ func (d *Dewy) waitSigs() os.Signal {
 	return sigReceived
 }
 
-// Run dewy
+// Run dewy.
 func (d *Dewy) Run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	// Get current
-	res, err := d.repo.Current(&repo.CurrentRequest{
+	res, err := d.registory.Current(&registory.CurrentRequest{
 		ArtifactName: d.config.Repository.Artifact,
 	})
 	if err != nil {
@@ -148,7 +157,7 @@ func (d *Dewy) Run() error {
 	// Download artifact and cache
 	if !found {
 		buf := new(bytes.Buffer)
-		if err := d.repo.Download(buf); err != nil {
+		if err := d.fetcher.Fetch(res.ArtifactURL, buf); err != nil {
 			return err
 		}
 		if err := d.cache.Write(cacheKey, buf.Bytes()); err != nil {
@@ -159,7 +168,7 @@ func (d *Dewy) Run() error {
 
 	if d.notice != nil {
 		d.notice.Notify(ctx, fmt.Sprintf("New shipping <%s|%s> was detected",
-			d.repo.ReleaseURL(), d.repo.ReleaseTag()))
+			res.ArtifactURL, res.Tag))
 	}
 
 	if err := d.deploy(cacheKey); err != nil {
@@ -180,7 +189,10 @@ func (d *Dewy) Run() error {
 	}
 
 	log.Print("[DEBUG] Record shipping")
-	err = d.repo.RecordShipping()
+	err = d.registory.Report(&registory.ReportRequest{
+		ID:  res.ID,
+		Tag: res.Tag,
+	})
 	if err != nil {
 		log.Printf("[ERROR] Record shipping failure: %#v", err)
 	}
