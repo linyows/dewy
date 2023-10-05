@@ -35,7 +35,7 @@ type GithubRelease struct {
 	baseURL               string
 	uploadURL             string
 	owner                 string
-	name                  string
+	repo                  string
 	downloadURL           string
 	prerelease            bool
 	disableRecordShipping bool // FIXME: For testing. Remove this.
@@ -51,7 +51,7 @@ func NewGithubRelease(c Config) (*GithubRelease, error) {
 	}
 	g := &GithubRelease{
 		owner:                 c.Owner,
-		name:                  c.Name,
+		repo:                  c.Repo,
 		prerelease:            c.PreRelease,
 		disableRecordShipping: c.DisableRecordShipping,
 		cl:                    cl,
@@ -87,7 +87,7 @@ func (g *GithubRelease) OwnerIconURL() string {
 
 // URL returns repository URL.
 func (g *GithubRelease) URL() string {
-	return fmt.Sprintf("%s/%s", g.OwnerURL(), g.name)
+	return fmt.Sprintf("%s/%s", g.OwnerURL(), g.repo)
 }
 
 // Current returns current artifact.
@@ -111,7 +111,7 @@ func (g *GithubRelease) Current(req *registory.CurrentRequest) (*registory.Curre
 		return nil, fmt.Errorf("artifact not found: %s", req.ArtifactName)
 	}
 
-	au := fmt.Sprintf("github_release://%s/%s/tag/%s/%s", g.owner, g.name, release.GetTagName(), req.ArtifactName)
+	au := fmt.Sprintf("github_release://%s/%s/tag/%s/%s", g.owner, g.repo, release.GetTagName(), req.ArtifactName)
 
 	return &registory.CurrentResponse{
 		ID:          time.Now().Format(ISO8601),
@@ -125,7 +125,7 @@ func (g *GithubRelease) latest() (*github.RepositoryRelease, error) {
 	var r *github.RepositoryRelease
 	if g.prerelease {
 		opt := &github.ListOptions{Page: 1}
-		rr, _, err := g.cl.Repositories.ListReleases(ctx, g.owner, g.name, opt)
+		rr, _, err := g.cl.Repositories.ListReleases(ctx, g.owner, g.repo, opt)
 		if err != nil {
 			return nil, err
 		}
@@ -136,7 +136,7 @@ func (g *GithubRelease) latest() (*github.RepositoryRelease, error) {
 			return r, nil
 		}
 	}
-	r, _, err := g.cl.Repositories.GetLatestRelease(ctx, g.owner, g.name)
+	r, _, err := g.cl.Repositories.GetLatestRelease(ctx, g.owner, g.repo)
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +165,7 @@ func (g *GithubRelease) Fetch(url string, w io.Writer) error {
 	var assetID int64
 L:
 	for {
-		releases, res, err := g.cl.Repositories.ListReleases(ctx, g.owner, g.name, &github.ListOptions{
+		releases, res, err := g.cl.Repositories.ListReleases(ctx, g.owner, g.repo, &github.ListOptions{
 			Page:    page,
 			PerPage: 100,
 		})
@@ -226,7 +226,7 @@ func (g *GithubRelease) Report(req *registory.ReportRequest) error {
 
 	page := 1
 	for {
-		releases, res, err := g.cl.Repositories.ListReleases(ctx, g.owner, g.name, &github.ListOptions{
+		releases, res, err := g.cl.Repositories.ListReleases(ctx, g.owner, g.repo, &github.ListOptions{
 			Page:    page,
 			PerPage: 100,
 		})
@@ -235,7 +235,7 @@ func (g *GithubRelease) Report(req *registory.ReportRequest) error {
 		}
 		for _, r := range releases {
 			if r.GetTagName() == req.Tag {
-				s := fmt.Sprintf("repos/%s/%s/releases/%d/assets", g.owner, g.name, r.GetID())
+				s := fmt.Sprintf("repos/%s/%s/releases/%d/assets", g.owner, g.repo, r.GetID())
 				opt := &github.UploadOptions{Name: strings.Replace(info, " ", "_", -1) + ".txt"}
 
 				u, err := url.Parse(s)

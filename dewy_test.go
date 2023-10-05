@@ -62,7 +62,7 @@ func TestRun(t *testing.T) {
 	c.Repository = repo.Config{
 		Provider:              repo.GITHUB,
 		Owner:                 "linyows",
-		Name:                  "dewy",
+		Repo:                  "dewy",
 		Artifact:              "dewy_darwin_x86_64.tar.gz",
 		DisableRecordShipping: true,
 	}

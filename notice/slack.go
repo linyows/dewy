@@ -77,11 +77,11 @@ func (s *Slack) buildAttachment(message string, meta bool) objects.Attachment {
 
 	if meta {
 		at.Text = message
-		at.Title = s.Meta.RepoName
+		at.Title = s.Meta.Repo
 		at.TitleLink = s.Meta.RepoLink
-		at.AuthorName = s.Meta.RepoOwner
-		at.AuthorLink = s.Meta.RepoOwnerLink
-		at.AuthorIcon = s.Meta.RepoOwnerIcon
+		at.AuthorName = s.Meta.Owner
+		at.AuthorLink = s.Meta.OwnerLink
+		at.AuthorIcon = s.Meta.OwnerIcon
 		at.Footer = SlackFooter
 		at.FooterIcon = SlackFooterIcon
 		at.Timestamp = objects.Timestamp(time.Now().Unix())
@@ -92,7 +92,7 @@ func (s *Slack) buildAttachment(message string, meta bool) objects.Attachment {
 			Append(&objects.AttachmentField{Title: "Source", Value: s.Meta.Source, Short: true}).
 			Append(&objects.AttachmentField{Title: "Working directory", Value: cwd(), Short: false})
 	} else {
-		at.Text = fmt.Sprintf("%s of <%s|%s> on %s", message, s.Meta.RepoLink, s.Meta.RepoName, hostname())
+		at.Text = fmt.Sprintf("%s of <%s|%s> on %s", message, s.Meta.RepoLink, s.Meta.Repo, hostname())
 	}
 
 	return at

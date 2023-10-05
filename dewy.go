@@ -74,15 +74,15 @@ func (d *Dewy) Start(i int) {
 	var err error
 
 	nc := &notice.Config{
-		RepoOwner: d.config.Repository.Owner,
-		RepoName:  d.config.Repository.Name,
-		Source:    d.config.Repository.Artifact,
-		Command:   d.config.Command.String(),
+		Owner:   d.config.Repository.Owner,
+		Repo:    d.config.Repository.Repo,
+		Source:  d.config.Repository.Artifact,
+		Command: d.config.Command.String(),
 	}
 	repo, ok := d.registory.(repo.Repo)
 	if ok {
-		nc.RepoOwnerLink = repo.OwnerURL()
-		nc.RepoOwnerIcon = repo.OwnerIconURL()
+		nc.OwnerLink = repo.OwnerURL()
+		nc.OwnerIcon = repo.OwnerIconURL()
 		nc.RepoLink = repo.URL()
 	}
 
