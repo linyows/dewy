@@ -25,7 +25,7 @@ func TestNew(t *testing.T) {
 		},
 		Starter: nil,
 	}
-	r, err := repo.New(c.Repository)
+	r, err := repo.NewGithubRelease(c.Repository)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,6 @@ func TestRun(t *testing.T) {
 	c := DefaultConfig()
 	c.Command = ASSETS
 	c.Repository = repo.Config{
-		Provider:              repo.GITHUB,
 		Owner:                 "linyows",
 		Repo:                  "dewy",
 		Artifact:              "dewy_darwin_x86_64.tar.gz",
