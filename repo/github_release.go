@@ -34,7 +34,6 @@ type GithubRelease struct {
 	name                  string
 	artifact              string
 	downloadURL           string
-	cacheKey              string
 	releaseID             int64
 	assetID               int64
 	releaseURL            string
@@ -103,32 +102,37 @@ func (g *GithubRelease) ReleaseURL() string {
 	return g.releaseURL
 }
 
-// Fetch to latest github release
-func (g *GithubRelease) Fetch() error {
+func (g *GithubRelease) Current(req *CurrentRequest) (*CurrentResponse, error) {
 	release, err := g.latest()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	g.releaseID = *release.ID
 	g.releaseURL = *release.HTMLURL
 
+	found := false
 	for _, v := range release.Assets {
-		if *v.Name == g.artifact {
+		if v.GetName() == req.ArtifactName {
+			found = true
 			log.Printf("[DEBUG] Fetched: %+v", v)
-			g.downloadURL = *v.BrowserDownloadURL
-			g.releaseTag = *release.TagName
-			g.assetID = *v.ID
-			g.updatedAt = *v.UpdatedAt
+			g.downloadURL = v.GetBrowserDownloadURL()
+			g.releaseTag = release.GetTagName()
+			g.assetID = v.GetID()
+			g.updatedAt = v.GetUpdatedAt()
 			break
 		}
 	}
+	if !found {
+		return nil, fmt.Errorf("artifact not found: %s", req.ArtifactName)
+	}
 
-	return nil
-}
+	au := fmt.Sprintf("github_release://%s/%s/tag/%s/%s", g.owner, g.name, release.GetTagName(), req.ArtifactName)
 
-func (g *GithubRelease) LatestKey() (string, time.Time) {
-	return g.downloadURL, g.updatedAt.Time
+	return &CurrentResponse{
+		Tag:         release.GetTagName(),
+		ArtifactURL: au,
+	}, nil
 }
 
 func (g *GithubRelease) latest() (*github.RepositoryRelease, error) {

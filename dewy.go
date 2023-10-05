@@ -5,12 +5,10 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"sort"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -115,20 +113,17 @@ func (d *Dewy) Run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	if err := d.repo.Fetch(); err != nil {
-		log.Printf("[ERROR] Fetch failure: %#v", err)
-		return err
-	}
-
-	// Create latest cache key
-	du, ut := d.repo.LatestKey()
-	u, err := url.Parse(du)
+	// Get current
+	res, err := d.repo.Current(&repo.CurrentRequest{
+		ArtifactName: d.config.Repository.Artifact,
+	})
 	if err != nil {
+		log.Printf("[ERROR] Current failure: %#v", err)
 		return err
 	}
-	cacheKey := strings.Replace(fmt.Sprintf("%s--%d-%s", u.Host, ut.Unix(), u.RequestURI()), "/", "-", -1)
 
 	// Check cache
+	cacheKey := fmt.Sprintf("%s-%s", res.Tag, filepath.Base(res.ArtifactURL))
 	currentKey := "current.txt"
 	currentSourceKey, _ := d.cache.Read(currentKey)
 	found := false
