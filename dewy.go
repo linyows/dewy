@@ -52,7 +52,7 @@ func New(c Config) (*Dewy, error) {
 		return nil, err
 	}
 
-	r, err := repo.New(c.Repository)
+	r, err := repo.NewGithubRelease(c.Repository)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +79,7 @@ func (d *Dewy) Start(i int) {
 		Source:  d.config.Repository.Artifact,
 		Command: d.config.Command.String(),
 	}
-	repo, ok := d.registory.(repo.Repo)
+	repo, ok := d.registory.(*repo.GithubRelease)
 	if ok {
 		nc.OwnerLink = repo.OwnerURL()
 		nc.OwnerIcon = repo.OwnerIconURL()

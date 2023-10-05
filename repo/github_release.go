@@ -16,6 +16,7 @@ import (
 	"github.com/google/go-querystring/query"
 	"github.com/k1LoW/go-github-client/v55/factory"
 	"github.com/linyows/dewy/registory"
+	"github.com/linyows/dewy/storage"
 )
 
 const (
@@ -28,7 +29,10 @@ var httpClient = &http.Client{
 	Timeout: 30 * time.Second,
 }
 
-var _ Repo = (*GithubRelease)(nil)
+var (
+	_ registory.Registory = (*GithubRelease)(nil)
+	_ storage.Fetcher     = (*GithubRelease)(nil)
+)
 
 // GithubRelease struct.
 type GithubRelease struct {
