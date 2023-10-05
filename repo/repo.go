@@ -40,7 +40,7 @@ func (r Provider) String() string {
 type Config struct {
 	Provider
 	Owner                 string
-	Name                  string
+	Repo                  string
 	Artifact              string
 	PreRelease            bool
 	DisableRecordShipping bool // FIXME: For testing. Remove this.
@@ -48,7 +48,7 @@ type Config struct {
 
 // String to string for Config.
 func (c Config) String() string {
-	return path.Join(c.Provider.String(), c.Owner, c.Name)
+	return path.Join(c.Provider.String(), c.Owner, c.Repo)
 }
 
 // New returns repo.

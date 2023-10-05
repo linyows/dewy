@@ -22,13 +22,13 @@ type Field struct {
 
 // Config struct.
 type Config struct {
-	Command       string
-	Source        string
-	RepoOwner     string
-	RepoName      string
-	RepoLink      string
-	RepoOwnerIcon string
-	RepoOwnerLink string
+	Command   string
+	Source    string
+	Owner     string
+	Repo      string
+	RepoLink  string
+	OwnerIcon string
+	OwnerLink string
 }
 
 // New returns Notice.

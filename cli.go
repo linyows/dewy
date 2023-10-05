@@ -172,8 +172,8 @@ func (c *cli) run() int {
 
 	re := strings.Split(c.Repository, "/")
 	conf.Repository = repo.Config{
-		Name:       re[1],
 		Owner:      re[0],
+		Repo:       re[1],
 		Artifact:   c.Artifact,
 		PreRelease: c.PreRelease,
 	}
