@@ -15,9 +15,11 @@ import (
 	"github.com/google/go-github/v55/github"
 	"github.com/google/go-querystring/query"
 	"github.com/k1LoW/go-github-client/v55/factory"
+	"github.com/linyows/dewy/registory"
 )
 
 const (
+	GitHubReleaseScheme = "github_release"
 	// ISO8601 for time format
 	ISO8601 = "20060102T150405Z0700"
 )
@@ -26,18 +28,15 @@ var httpClient = &http.Client{
 	Timeout: 30 * time.Second,
 }
 
+var _ Repo = (*GithubRelease)(nil)
+
 // GithubRelease struct
 type GithubRelease struct {
 	baseURL               string
 	uploadURL             string
 	owner                 string
 	name                  string
-	artifact              string
 	downloadURL           string
-	releaseID             int64
-	assetID               int64
-	releaseURL            string
-	releaseTag            string
 	prerelease            bool
 	disableRecordShipping bool // FIXME: For testing. Remove this.
 	cl                    *github.Client
@@ -53,7 +52,6 @@ func NewGithubRelease(c Config) (*GithubRelease, error) {
 	g := &GithubRelease{
 		owner:                 c.Owner,
 		name:                  c.Name,
-		artifact:              c.Artifact,
 		prerelease:            c.PreRelease,
 		disableRecordShipping: c.DisableRecordShipping,
 		cl:                    cl,
@@ -92,24 +90,12 @@ func (g *GithubRelease) URL() string {
 	return fmt.Sprintf("%s/%s", g.OwnerURL(), g.name)
 }
 
-// ReleaseTag returns tag
-func (g *GithubRelease) ReleaseTag() string {
-	return g.releaseTag
-}
-
 // ReleaseURL returns release URL
-func (g *GithubRelease) ReleaseURL() string {
-	return g.releaseURL
-}
-
-func (g *GithubRelease) Current(req *CurrentRequest) (*CurrentResponse, error) {
+func (g *GithubRelease) Current(req *registory.CurrentRequest) (*registory.CurrentResponse, error) {
 	release, err := g.latest()
 	if err != nil {
 		return nil, err
 	}
-
-	g.releaseID = *release.ID
-	g.releaseURL = *release.HTMLURL
 
 	found := false
 	for _, v := range release.Assets {
@@ -117,8 +103,6 @@ func (g *GithubRelease) Current(req *CurrentRequest) (*CurrentResponse, error) {
 			found = true
 			log.Printf("[DEBUG] Fetched: %+v", v)
 			g.downloadURL = v.GetBrowserDownloadURL()
-			g.releaseTag = release.GetTagName()
-			g.assetID = v.GetID()
 			g.updatedAt = v.GetUpdatedAt()
 			break
 		}
@@ -129,7 +113,8 @@ func (g *GithubRelease) Current(req *CurrentRequest) (*CurrentResponse, error) {
 
 	au := fmt.Sprintf("github_release://%s/%s/tag/%s/%s", g.owner, g.name, release.GetTagName(), req.ArtifactName)
 
-	return &CurrentResponse{
+	return &registory.CurrentResponse{
+		ID:          time.Now().Format(ISO8601),
 		Tag:         release.GetTagName(),
 		ArtifactURL: au,
 	}, nil
@@ -158,9 +143,53 @@ func (g *GithubRelease) latest() (*github.RepositoryRelease, error) {
 	return r, nil
 }
 
-func (g *GithubRelease) Download(w io.Writer) error {
+func (g *GithubRelease) Fetch(url string, w io.Writer) error {
 	ctx := context.Background()
-	reader, url, err := g.cl.Repositories.DownloadReleaseAsset(ctx, g.owner, g.name, g.assetID, httpClient)
+	// github_release://owner/repo/tag/v1.0.0/artifact.zip
+	// github_release://owner/repo/latest/artifact.zip
+	splitted := strings.Split(strings.TrimPrefix(url, fmt.Sprintf("%s://", GitHubReleaseScheme)), "/")
+	if len(splitted) != 4 && len(splitted) != 5 {
+		return fmt.Errorf("invalid url: %s", url)
+	}
+	owner := splitted[0]
+	name := splitted[1]
+	if len(splitted) == 4 {
+		// latest
+		// FIXME: not implemented
+		return fmt.Errorf("not implemented")
+	}
+	tag := splitted[3]
+	artifactName := splitted[4]
+	page := 1
+	var assetID int64
+L:
+	for {
+		releases, res, err := g.cl.Repositories.ListReleases(ctx, g.owner, g.name, &github.ListOptions{
+			Page:    page,
+			PerPage: 100,
+		})
+		if err != nil {
+			return err
+		}
+		for _, r := range releases {
+			if r.GetTagName() != tag {
+				continue
+			}
+			for _, a := range r.Assets {
+				if a.GetName() != artifactName {
+					continue
+				}
+				assetID = a.GetID()
+				break L
+			}
+		}
+		if res.NextPage == 0 {
+			break
+		}
+		page = res.NextPage
+	}
+
+	reader, url, err := g.cl.Repositories.DownloadReleaseAsset(ctx, owner, name, assetID, httpClient)
 	if err != nil {
 		return err
 	}
@@ -181,38 +210,60 @@ func (g *GithubRelease) Download(w io.Writer) error {
 	return nil
 }
 
-// RecordShipping save shipping to github
-func (g *GithubRelease) RecordShipping() error {
+func (g *GithubRelease) Report(req *registory.ReportRequest) error {
 	if g.disableRecordShipping {
 		return nil
+	}
+	if req.Err != nil {
+		return req.Err
 	}
 	ctx := context.Background()
 	now := time.Now().UTC().Format(ISO8601)
 	hostname, _ := os.Hostname()
 	info := fmt.Sprintf("shipped to %s at %s", strings.ToLower(hostname), now)
 
-	s := fmt.Sprintf("repos/%s/%s/releases/%d/assets", g.owner, g.name, g.releaseID)
-	opt := &github.UploadOptions{Name: strings.Replace(info, " ", "_", -1) + ".txt"}
+	page := 1
+	for {
+		releases, res, err := g.cl.Repositories.ListReleases(ctx, g.owner, g.name, &github.ListOptions{
+			Page:    page,
+			PerPage: 100,
+		})
+		if err != nil {
+			return err
+		}
+		for _, r := range releases {
+			if r.GetTagName() == req.Tag {
+				s := fmt.Sprintf("repos/%s/%s/releases/%d/assets", g.owner, g.name, r.GetID())
+				opt := &github.UploadOptions{Name: strings.Replace(info, " ", "_", -1) + ".txt"}
 
-	u, err := url.Parse(s)
-	if err != nil {
-		return err
+				u, err := url.Parse(s)
+				if err != nil {
+					return err
+				}
+				qs, err := query.Values(opt)
+				if err != nil {
+					return err
+				}
+				u.RawQuery = qs.Encode()
+				b := []byte(info)
+				r := bytes.NewReader(b)
+				req, err := g.cl.NewUploadRequest(u.String(), r, int64(len(b)), "text/plain")
+				if err != nil {
+					return err
+				}
+
+				asset := new(github.ReleaseAsset)
+				if _, err := g.cl.Do(ctx, req, asset); err != nil {
+					return err
+				}
+				return nil
+			}
+		}
+		if res.NextPage == 0 {
+			break
+		}
+		page = res.NextPage
 	}
-	qs, err := query.Values(opt)
-	if err != nil {
-		return err
-	}
-	u.RawQuery = qs.Encode()
 
-	byteData := []byte(info)
-	r := bytes.NewReader(byteData)
-	req, err := g.cl.NewUploadRequest(u.String(), r, int64(len(byteData)), "text/plain")
-	if err != nil {
-		return err
-	}
-
-	asset := new(github.ReleaseAsset)
-	_, err = g.cl.Do(ctx, req, asset)
-
-	return err
+	return fmt.Errorf("release not found: %s", req.Tag)
 }
