@@ -15,6 +15,7 @@ import (
 	"github.com/google/go-querystring/query"
 	"github.com/k1LoW/go-github-client/v55/factory"
 	"github.com/linyows/dewy/registory"
+	ghrelease "github.com/linyows/dewy/storage/github_release"
 )
 
 const (
@@ -156,7 +157,7 @@ func (g *GithubRelease) Current(req *registory.CurrentRequest) (*registory.Curre
 		}
 	}
 
-	au := fmt.Sprintf("github_release://%s/%s/tag/%s/%s", g.owner, g.repo, release.GetTagName(), artifactName)
+	au := fmt.Sprintf("%s://%s/%s/tag/%s/%s", ghrelease.Scheme, g.owner, g.repo, release.GetTagName(), artifactName)
 
 	return &registory.CurrentResponse{
 		ID:          time.Now().Format(ISO8601),
