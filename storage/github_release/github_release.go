@@ -5,19 +5,13 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net/http"
 	"strings"
-	"time"
 
 	"github.com/google/go-github/v55/github"
 	"github.com/k1LoW/go-github-client/v55/factory"
 )
 
 const Scheme = "github_release"
-
-var httpClient = &http.Client{
-	Timeout: 30 * time.Second,
-}
 
 type GithubRelease struct {
 	cl *github.Client

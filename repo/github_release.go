@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -24,13 +23,7 @@ const (
 	ISO8601 = "20060102T150405Z0700"
 )
 
-var httpClient = &http.Client{
-	Timeout: 30 * time.Second,
-}
-
-var (
-	_ registory.Registory = (*GithubRelease)(nil)
-)
+var _ registory.Registory = (*GithubRelease)(nil)
 
 // GithubRelease struct.
 type GithubRelease struct {
