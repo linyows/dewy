@@ -27,15 +27,11 @@ var _ registory.Registory = (*GithubRelease)(nil)
 
 // GithubRelease struct.
 type GithubRelease struct {
-	baseURL               string
-	uploadURL             string
 	owner                 string
 	repo                  string
-	downloadURL           string
 	prerelease            bool
 	disableRecordShipping bool // FIXME: For testing. Remove this.
 	cl                    *github.Client
-	updatedAt             github.Timestamp
 }
 
 // NewGithubRelease returns GithubRelease.
@@ -51,9 +47,6 @@ func NewGithubRelease(c Config) (*GithubRelease, error) {
 		disableRecordShipping: c.DisableRecordShipping,
 		cl:                    cl,
 	}
-	_, v3ep, v3upload, _ := factory.GetTokenAndEndpoints()
-	g.baseURL = v3ep
-	g.uploadURL = v3upload
 	return g, nil
 }
 
@@ -100,8 +93,6 @@ func (g *GithubRelease) Current(req *registory.CurrentRequest) (*registory.Curre
 			if v.GetName() == artifactName {
 				found = true
 				log.Printf("[DEBUG] Fetched: %+v", v)
-				g.downloadURL = v.GetBrowserDownloadURL()
-				g.updatedAt = v.GetUpdatedAt()
 				break
 			}
 		}
@@ -141,8 +132,6 @@ func (g *GithubRelease) Current(req *registory.CurrentRequest) (*registory.Curre
 			}
 			artifactName = v.GetName()
 			log.Printf("[DEBUG] Fetched: %+v", v)
-			g.downloadURL = v.GetBrowserDownloadURL()
-			g.updatedAt = v.GetUpdatedAt()
 			break
 		}
 		if !found {

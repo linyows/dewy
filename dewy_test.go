@@ -42,8 +42,6 @@ func TestNew(t *testing.T) {
 		cmpopts.IgnoreFields(Dewy{}, "notice"),
 		cmpopts.IgnoreFields(Dewy{}, "RWMutex"),
 		cmpopts.IgnoreFields(repo.GithubRelease{}, "cl"),
-		cmpopts.IgnoreFields(repo.GithubRelease{}, "baseURL"),
-		cmpopts.IgnoreFields(repo.GithubRelease{}, "uploadURL"),
 		cmpopts.IgnoreFields(kvs.File{}, "mutex"),
 	}
 	if diff := cmp.Diff(dewy, expect, opts...); diff != "" {
