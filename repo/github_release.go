@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -16,7 +15,6 @@ import (
 	"github.com/google/go-querystring/query"
 	"github.com/k1LoW/go-github-client/v55/factory"
 	"github.com/linyows/dewy/registory"
-	"github.com/linyows/dewy/storage"
 )
 
 const (
@@ -31,7 +29,6 @@ var httpClient = &http.Client{
 
 var (
 	_ registory.Registory = (*GithubRelease)(nil)
-	_ storage.Fetcher     = (*GithubRelease)(nil)
 )
 
 // GithubRelease struct.
@@ -189,74 +186,6 @@ func (g *GithubRelease) latest() (*github.RepositoryRelease, error) {
 		return nil, err
 	}
 	return r, nil
-}
-
-// Fetch fetch artifact.
-func (g *GithubRelease) Fetch(url string, w io.Writer) error {
-	ctx := context.Background()
-	// github_release://owner/repo/tag/v1.0.0/artifact.zip
-	// github_release://owner/repo/latest/artifact.zip
-	splitted := strings.Split(strings.TrimPrefix(url, fmt.Sprintf("%s://", GitHubReleaseScheme)), "/")
-	if len(splitted) != 4 && len(splitted) != 5 {
-		return fmt.Errorf("invalid url: %s", url)
-	}
-	owner := splitted[0]
-	name := splitted[1]
-	if len(splitted) == 4 {
-		// latest
-		// FIXME: not implemented
-		return fmt.Errorf("not implemented")
-	}
-	tag := splitted[3]
-	artifactName := splitted[4]
-	page := 1
-	var assetID int64
-L:
-	for {
-		releases, res, err := g.cl.Repositories.ListReleases(ctx, g.owner, g.repo, &github.ListOptions{
-			Page:    page,
-			PerPage: 100,
-		})
-		if err != nil {
-			return err
-		}
-		for _, r := range releases {
-			if r.GetTagName() != tag {
-				continue
-			}
-			for _, a := range r.Assets {
-				if a.GetName() != artifactName {
-					continue
-				}
-				assetID = a.GetID()
-				break L
-			}
-		}
-		if res.NextPage == 0 {
-			break
-		}
-		page = res.NextPage
-	}
-
-	reader, url, err := g.cl.Repositories.DownloadReleaseAsset(ctx, owner, name, assetID, httpClient)
-	if err != nil {
-		return err
-	}
-	if url != "" {
-		res, err := httpClient.Get(url)
-		if err != nil {
-			return err
-		}
-		reader = res.Body
-	}
-
-	log.Printf("[INFO] Downloaded from %s", g.downloadURL)
-	_, err = io.Copy(w, reader)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // Report report shipping.

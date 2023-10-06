@@ -34,7 +34,6 @@ const (
 type Dewy struct {
 	config          Config
 	registory       registory.Registory
-	fetcher         storage.Fetcher
 	cache           kvs.KVS
 	isServerRunning bool
 	root            string
@@ -62,7 +61,6 @@ func New(c Config) (*Dewy, error) {
 		config:          c,
 		cache:           kv,
 		registory:       r,
-		fetcher:         r,
 		isServerRunning: false,
 		root:            wd,
 	}, nil
@@ -160,7 +158,7 @@ func (d *Dewy) Run() error {
 	// Download artifact and cache
 	if !found {
 		buf := new(bytes.Buffer)
-		if err := d.fetcher.Fetch(res.ArtifactURL, buf); err != nil {
+		if err := storage.Fetch(res.ArtifactURL, buf); err != nil {
 			return err
 		}
 		if err := d.cache.Write(cacheKey, buf.Bytes()); err != nil {
