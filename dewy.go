@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"sync"
 	"syscall"
@@ -124,6 +125,8 @@ func (d *Dewy) Run() error {
 
 	// Get current
 	res, err := d.registory.Current(&registory.CurrentRequest{
+		Arch:         runtime.GOARCH,
+		OS:           runtime.GOOS,
 		ArtifactName: d.config.Repository.Artifact,
 	})
 	if err != nil {
