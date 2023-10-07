@@ -13,7 +13,7 @@ import (
 	"github.com/google/go-github/v55/github"
 	"github.com/google/go-querystring/query"
 	"github.com/k1LoW/go-github-client/v55/factory"
-	"github.com/linyows/dewy/registory"
+	"github.com/linyows/dewy/registry"
 	ghrelease "github.com/linyows/dewy/storage/github_release"
 )
 
@@ -23,7 +23,7 @@ const (
 	ISO8601 = "20060102T150405Z0700"
 )
 
-var _ registory.Registory = (*GithubRelease)(nil)
+var _ registry.Registry = (*GithubRelease)(nil)
 
 // GithubRelease struct.
 type GithubRelease struct {
@@ -86,7 +86,7 @@ func (g *GithubRelease) URL() string {
 }
 
 // Current returns current artifact.
-func (g *GithubRelease) Current(req *registory.CurrentRequest) (*registory.CurrentResponse, error) {
+func (g *GithubRelease) Current(req *registry.CurrentRequest) (*registry.CurrentResponse, error) {
 	release, err := g.latest()
 	if err != nil {
 		return nil, err
@@ -152,7 +152,7 @@ func (g *GithubRelease) Current(req *registory.CurrentRequest) (*registory.Curre
 
 	au := fmt.Sprintf("%s://%s/%s/tag/%s/%s", ghrelease.Scheme, g.owner, g.repo, release.GetTagName(), artifactName)
 
-	return &registory.CurrentResponse{
+	return &registry.CurrentResponse{
 		ID:          time.Now().Format(ISO8601),
 		Tag:         release.GetTagName(),
 		ArtifactURL: au,
@@ -183,7 +183,7 @@ func (g *GithubRelease) latest() (*github.RepositoryRelease, error) {
 }
 
 // Report report shipping.
-func (g *GithubRelease) Report(req *registory.ReportRequest) error {
+func (g *GithubRelease) Report(req *registry.ReportRequest) error {
 	if g.disableRecordShipping {
 		return nil
 	}

@@ -18,7 +18,7 @@ import (
 	starter "github.com/lestrrat-go/server-starter"
 	"github.com/linyows/dewy/kvs"
 	"github.com/linyows/dewy/notice"
-	"github.com/linyows/dewy/registory"
+	"github.com/linyows/dewy/registry"
 	"github.com/linyows/dewy/repo"
 	"github.com/linyows/dewy/storage"
 )
@@ -33,7 +33,7 @@ const (
 // Dewy struct.
 type Dewy struct {
 	config          Config
-	registory       registory.Registory
+	registry        registry.Registry
 	cache           kvs.KVS
 	isServerRunning bool
 	root            string
@@ -60,7 +60,7 @@ func New(c Config) (*Dewy, error) {
 	return &Dewy{
 		config:          c,
 		cache:           kv,
-		registory:       r,
+		registry:        r,
 		isServerRunning: false,
 		root:            wd,
 	}, nil
@@ -78,7 +78,7 @@ func (d *Dewy) Start(i int) {
 		Source:  d.config.Repository.Artifact,
 		Command: d.config.Command.String(),
 	}
-	repo, ok := d.registory.(*repo.GithubRelease)
+	repo, ok := d.registry.(*repo.GithubRelease)
 	if ok {
 		nc.OwnerLink = repo.OwnerURL()
 		nc.OwnerIcon = repo.OwnerIconURL()
@@ -122,7 +122,7 @@ func (d *Dewy) Run() error {
 	defer cancel()
 
 	// Get current
-	res, err := d.registory.Current(&registory.CurrentRequest{
+	res, err := d.registry.Current(&registry.CurrentRequest{
 		Arch:         runtime.GOARCH,
 		OS:           runtime.GOOS,
 		ArtifactName: d.config.Repository.Artifact,
@@ -190,7 +190,7 @@ func (d *Dewy) Run() error {
 	}
 
 	log.Print("[DEBUG] Record shipping")
-	err = d.registory.Report(&registory.ReportRequest{
+	err = d.registry.Report(&registry.ReportRequest{
 		ID:  res.ID,
 		Tag: res.Tag,
 	})
