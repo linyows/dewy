@@ -100,22 +100,66 @@ func (g *GithubRelease) Current(req *registory.CurrentRequest) (*registory.Curre
 	if err != nil {
 		return nil, err
 	}
+	var artifactName string
 
-	found := false
-	for _, v := range release.Assets {
-		if v.GetName() == req.ArtifactName {
-			found = true
+	if req.ArtifactName != "" {
+		artifactName = req.ArtifactName
+		found := false
+		for _, v := range release.Assets {
+			if v.GetName() == artifactName {
+				found = true
+				log.Printf("[DEBUG] Fetched: %+v", v)
+				g.downloadURL = v.GetBrowserDownloadURL()
+				g.updatedAt = v.GetUpdatedAt()
+				break
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("artifact not found: %s", artifactName)
+		}
+	} else {
+		archMatchs := []string{req.Arch}
+		if req.Arch == "amd64" {
+			archMatchs = append(archMatchs, "x86_64")
+		}
+		osMatchs := []string{req.OS}
+		if req.OS == "darwin" {
+			osMatchs = append(osMatchs, "macos")
+		}
+		found := false
+		for _, v := range release.Assets {
+			n := strings.ToLower(v.GetName())
+			for _, arch := range archMatchs {
+				if strings.Contains(n, arch) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				continue
+			}
+			found = false
+			for _, os := range osMatchs {
+				if strings.Contains(n, os) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				continue
+			}
+			artifactName = v.GetName()
 			log.Printf("[DEBUG] Fetched: %+v", v)
 			g.downloadURL = v.GetBrowserDownloadURL()
 			g.updatedAt = v.GetUpdatedAt()
 			break
 		}
-	}
-	if !found {
-		return nil, fmt.Errorf("artifact not found: %s", req.ArtifactName)
+		if !found {
+			return nil, fmt.Errorf("artifact not found: %s", artifactName)
+		}
 	}
 
-	au := fmt.Sprintf("github_release://%s/%s/tag/%s/%s", g.owner, g.repo, release.GetTagName(), req.ArtifactName)
+	au := fmt.Sprintf("github_release://%s/%s/tag/%s/%s", g.owner, g.repo, release.GetTagName(), artifactName)
 
 	return &registory.CurrentResponse{
 		ID:          time.Now().Format(ISO8601),

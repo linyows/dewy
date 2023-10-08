@@ -9,6 +9,10 @@ type Registory interface {
 
 // CurrentRequest is the request to get the current artifact.
 type CurrentRequest struct {
+	// Arch is the CPU architecture of deployment environment.
+	Arch string
+	// OS is the operating system of deployment environment.
+	OS string
 	// ArtifactName is the name of the artifact to fetch.
 	// FIXME: If possible, ArtifactName should be optional.
 	ArtifactName string
