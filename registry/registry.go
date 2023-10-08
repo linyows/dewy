@@ -1,6 +1,6 @@
-package registory
+package registry
 
-type Registory interface {
+type Registry interface {
 	// Current returns the current artifact.
 	Current(*CurrentRequest) (*CurrentResponse, error)
 	// Report reports the result of deploying the artifact.

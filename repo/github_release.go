@@ -4,9 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -15,8 +13,8 @@ import (
 	"github.com/google/go-github/v55/github"
 	"github.com/google/go-querystring/query"
 	"github.com/k1LoW/go-github-client/v55/factory"
-	"github.com/linyows/dewy/registory"
-	"github.com/linyows/dewy/storage"
+	"github.com/linyows/dewy/registry"
+	ghrelease "github.com/linyows/dewy/storage/github_release"
 )
 
 const (
@@ -25,14 +23,7 @@ const (
 	ISO8601 = "20060102T150405Z0700"
 )
 
-var httpClient = &http.Client{
-	Timeout: 30 * time.Second,
-}
-
-var (
-	_ registory.Registory = (*GithubRelease)(nil)
-	_ storage.Fetcher     = (*GithubRelease)(nil)
-)
+var _ registry.Registry = (*GithubRelease)(nil)
 
 // GithubRelease struct.
 type GithubRelease struct {
@@ -95,7 +86,7 @@ func (g *GithubRelease) URL() string {
 }
 
 // Current returns current artifact.
-func (g *GithubRelease) Current(req *registory.CurrentRequest) (*registory.CurrentResponse, error) {
+func (g *GithubRelease) Current(req *registry.CurrentRequest) (*registry.CurrentResponse, error) {
 	release, err := g.latest()
 	if err != nil {
 		return nil, err
@@ -159,9 +150,9 @@ func (g *GithubRelease) Current(req *registory.CurrentRequest) (*registory.Curre
 		}
 	}
 
-	au := fmt.Sprintf("github_release://%s/%s/tag/%s/%s", g.owner, g.repo, release.GetTagName(), artifactName)
+	au := fmt.Sprintf("%s://%s/%s/tag/%s/%s", ghrelease.Scheme, g.owner, g.repo, release.GetTagName(), artifactName)
 
-	return &registory.CurrentResponse{
+	return &registry.CurrentResponse{
 		ID:          time.Now().Format(ISO8601),
 		Tag:         release.GetTagName(),
 		ArtifactURL: au,
@@ -191,76 +182,8 @@ func (g *GithubRelease) latest() (*github.RepositoryRelease, error) {
 	return r, nil
 }
 
-// Fetch fetch artifact.
-func (g *GithubRelease) Fetch(url string, w io.Writer) error {
-	ctx := context.Background()
-	// github_release://owner/repo/tag/v1.0.0/artifact.zip
-	// github_release://owner/repo/latest/artifact.zip
-	splitted := strings.Split(strings.TrimPrefix(url, fmt.Sprintf("%s://", GitHubReleaseScheme)), "/")
-	if len(splitted) != 4 && len(splitted) != 5 {
-		return fmt.Errorf("invalid url: %s", url)
-	}
-	owner := splitted[0]
-	name := splitted[1]
-	if len(splitted) == 4 {
-		// latest
-		// FIXME: not implemented
-		return fmt.Errorf("not implemented")
-	}
-	tag := splitted[3]
-	artifactName := splitted[4]
-	page := 1
-	var assetID int64
-L:
-	for {
-		releases, res, err := g.cl.Repositories.ListReleases(ctx, g.owner, g.repo, &github.ListOptions{
-			Page:    page,
-			PerPage: 100,
-		})
-		if err != nil {
-			return err
-		}
-		for _, r := range releases {
-			if r.GetTagName() != tag {
-				continue
-			}
-			for _, a := range r.Assets {
-				if a.GetName() != artifactName {
-					continue
-				}
-				assetID = a.GetID()
-				break L
-			}
-		}
-		if res.NextPage == 0 {
-			break
-		}
-		page = res.NextPage
-	}
-
-	reader, url, err := g.cl.Repositories.DownloadReleaseAsset(ctx, owner, name, assetID, httpClient)
-	if err != nil {
-		return err
-	}
-	if url != "" {
-		res, err := httpClient.Get(url)
-		if err != nil {
-			return err
-		}
-		reader = res.Body
-	}
-
-	log.Printf("[INFO] Downloaded from %s", g.downloadURL)
-	_, err = io.Copy(w, reader)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // Report report shipping.
-func (g *GithubRelease) Report(req *registory.ReportRequest) error {
+func (g *GithubRelease) Report(req *registry.ReportRequest) error {
 	if g.disableRecordShipping {
 		return nil
 	}
