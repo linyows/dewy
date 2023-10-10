@@ -61,12 +61,12 @@ func (g *GithubRelease) host() string {
 	return "github.com"
 }
 
-// Owner
+// Owner returns owner.
 func (g *GithubRelease) Owner() string {
 	return g.owner
 }
 
-// Repo
+// Repo returns repository.
 func (g *GithubRelease) Repo() string {
 	return g.repo
 }
