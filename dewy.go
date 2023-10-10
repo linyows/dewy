@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -19,12 +20,13 @@ import (
 	"github.com/linyows/dewy/kvs"
 	"github.com/linyows/dewy/notice"
 	"github.com/linyows/dewy/registry"
-	"github.com/linyows/dewy/repo"
+	ghrelease "github.com/linyows/dewy/registry/github_release"
 	"github.com/linyows/dewy/storage"
 )
 
 const (
-	releaseDir   = repo.ISO8601
+	ISO8601      = "20060102T150405Z0700"
+	releaseDir   = ISO8601
 	releasesDir  = "releases"
 	symlinkDir   = "current"
 	keepReleases = 7
@@ -36,6 +38,7 @@ type Dewy struct {
 	registry        registry.Registry
 	cache           kvs.KVS
 	isServerRunning bool
+	disableReport   bool
 	root            string
 	job             *scheduler.Job
 	notice          notice.Notice
@@ -52,7 +55,7 @@ func New(c Config) (*Dewy, error) {
 		return nil, err
 	}
 
-	r, err := repo.NewGithubRelease(c.Repository)
+	r, err := newRegistry(c.Registry, c.PreRelease, c.ArtifactName)
 	if err != nil {
 		return nil, err
 	}
@@ -73,13 +76,13 @@ func (d *Dewy) Start(i int) {
 	var err error
 
 	nc := &notice.Config{
-		Owner:   d.config.Repository.Owner,
-		Repo:    d.config.Repository.Repo,
-		Source:  d.config.Repository.Artifact,
+		Source:  d.config.ArtifactName,
 		Command: d.config.Command.String(),
 	}
-	repo, ok := d.registry.(*repo.GithubRelease)
+	repo, ok := d.registry.(*ghrelease.GithubRelease)
 	if ok {
+		nc.Owner = repo.Owner()
+		nc.Repo = repo.Repo()
 		nc.OwnerLink = repo.OwnerURL()
 		nc.OwnerIcon = repo.OwnerIconURL()
 		nc.RepoLink = repo.URL()
@@ -125,7 +128,7 @@ func (d *Dewy) Run() error {
 	res, err := d.registry.Current(&registry.CurrentRequest{
 		Arch:         runtime.GOARCH,
 		OS:           runtime.GOOS,
-		ArtifactName: d.config.Repository.Artifact,
+		ArtifactName: d.config.ArtifactName,
 	})
 	if err != nil {
 		log.Printf("[ERROR] Current failure: %#v", err)
@@ -189,13 +192,15 @@ func (d *Dewy) Run() error {
 		}
 	}
 
-	log.Print("[DEBUG] Record shipping")
-	err = d.registry.Report(&registry.ReportRequest{
-		ID:  res.ID,
-		Tag: res.Tag,
-	})
-	if err != nil {
-		log.Printf("[ERROR] Record shipping failure: %#v", err)
+	if !d.disableReport {
+		log.Print("[DEBUG] Report shipping")
+		err := d.registry.Report(&registry.ReportRequest{
+			ID:  res.ID,
+			Tag: res.Tag,
+		})
+		if err != nil {
+			log.Printf("[ERROR] Report shipping failure: %#v", err)
+		}
 	}
 
 	log.Printf("[INFO] Keep releases as %d", keepReleases)
@@ -308,4 +313,19 @@ func (d *Dewy) keepReleases() error {
 	}
 
 	return nil
+}
+
+func newRegistry(urlstr string, preRelease bool, artifactName string) (registry.Registry, error) {
+	su := strings.SplitN(urlstr, "://", 2)
+	switch su[0] {
+	case ghrelease.Scheme:
+		ownerrepo := strings.SplitN(su[1], "/", 2)
+		c := ghrelease.Config{
+			Owner:      ownerrepo[0],
+			Repo:       ownerrepo[1],
+			PreRelease: preRelease,
+		}
+		return ghrelease.New(c)
+	}
+	return nil, fmt.Errorf("unsupported registry: %s", urlstr)
 }
