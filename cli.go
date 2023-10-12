@@ -29,7 +29,8 @@ type cli struct {
 	Interval   int    `long:"interval" arg:"seconds" short:"i" description:"The polling interval to the repository (default: 10)"`
 	Port       string `long:"port" short:"p" description:"TCP port to listen"`
 	Repository string `long:"repository" short:"r" description:"Repository for application"`
-	Artifact   string `long:"artifact" short:"a" description:"Artifact for application"`
+	Registry   string `long:"registry" description:"Registry for application"`
+	Artifact   string `long:"artifact" short:"a" description:"Artifact name for application"`
 	PreRelease bool   `long:"pre" short:"P" description:"Pre-release handling (default: false)"`
 	Help       bool   `long:"help" short:"h" description:"show this help message and exit"`
 	Version    bool   `long:"version" short:"v" description:"prints the version number"`
@@ -106,6 +107,7 @@ func (c *cli) showHelp() {
 	opts := strings.Join(c.buildHelp([]string{
 		"Config",
 		"Interval",
+		"Registry",
 		"Repository",
 		"Artifact",
 		"Port",
@@ -170,13 +172,16 @@ func (c *cli) run() int {
 
 	conf := DefaultConfig()
 
-	if c.Repository == "" {
-		fmt.Fprintf(c.env.Err, "Error: --repository is not set\n")
+	if c.Registry == "" && c.Repository == "" {
+		fmt.Fprintf(c.env.Err, "Error: --registry is not set\n")
 		c.showHelp()
 		return ExitErr
 	}
-	// --repository is sintax sugar for --registry github_release://
-	conf.Registry = fmt.Sprintf("%s://%s", ghrelease.Scheme, c.Repository)
+	if c.Registry == "" && c.Repository != "" {
+		// --repository is sintax sugar for --registry github_release://
+		conf.Registry = fmt.Sprintf("%s://%s", ghrelease.Scheme, c.Repository)
+	}
+
 	conf.ArtifactName = c.Artifact
 	conf.PreRelease = c.PreRelease
 
