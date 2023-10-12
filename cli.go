@@ -10,7 +10,7 @@ import (
 
 	"github.com/hashicorp/logutils"
 	flags "github.com/jessevdk/go-flags"
-	"github.com/linyows/dewy/repo"
+	ghrelease "github.com/linyows/dewy/registry/github_release"
 )
 
 const (
@@ -170,13 +170,15 @@ func (c *cli) run() int {
 
 	conf := DefaultConfig()
 
-	re := strings.Split(c.Repository, "/")
-	conf.Repository = repo.Config{
-		Owner:      re[0],
-		Repo:       re[1],
-		Artifact:   c.Artifact,
-		PreRelease: c.PreRelease,
+	if c.Repository == "" {
+		fmt.Fprintf(c.env.Err, "Error: --repository is not set\n")
+		c.showHelp()
+		return ExitErr
 	}
+	// --repository is sintax sugar for --registry github_release://
+	conf.Registry = fmt.Sprintf("%s://%s", ghrelease.Scheme, c.Repository)
+	conf.ArtifactName = c.Artifact
+	conf.PreRelease = c.PreRelease
 
 	if c.command == "server" {
 		conf.Command = SERVER

@@ -8,29 +8,31 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/linyows/dewy/kvs"
-	"github.com/linyows/dewy/repo"
+	ghrelease "github.com/linyows/dewy/registry/github_release"
 )
 
 func TestNew(t *testing.T) {
-	dewy, err := New(DefaultConfig())
+	regiurl := "github_release://linyows/dewy"
+	c := DefaultConfig()
+	c.Registry = regiurl
+	dewy, err := New(c)
 	if err != nil {
 		t.Fatal(err)
 	}
 	wd, _ := os.Getwd()
-	c := Config{
-		Repository: repo.Config{},
-		Cache: CacheConfig{
-			Type:       FILE,
-			Expiration: 10,
-		},
-		Starter: nil,
-	}
-	r, err := repo.NewGithubRelease(c.Repository)
+	r, err := newRegistry(regiurl, false, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	expect := &Dewy{
-		config:          c,
+		config: Config{
+			Registry: regiurl,
+			Cache: CacheConfig{
+				Type:       FILE,
+				Expiration: 10,
+			},
+			Starter: nil,
+		},
 		registry:        r,
 		cache:           dewy.cache,
 		isServerRunning: false,
@@ -38,10 +40,10 @@ func TestNew(t *testing.T) {
 	}
 
 	opts := []cmp.Option{
-		cmp.AllowUnexported(Dewy{}, repo.GithubRelease{}, kvs.File{}),
+		cmp.AllowUnexported(Dewy{}, ghrelease.GithubRelease{}, kvs.File{}),
 		cmpopts.IgnoreFields(Dewy{}, "notice"),
 		cmpopts.IgnoreFields(Dewy{}, "RWMutex"),
-		cmpopts.IgnoreFields(repo.GithubRelease{}, "cl"),
+		cmpopts.IgnoreFields(ghrelease.GithubRelease{}, "cl"),
 		cmpopts.IgnoreFields(kvs.File{}, "mutex"),
 	}
 	if diff := cmp.Diff(dewy, expect, opts...); diff != "" {
@@ -56,11 +58,7 @@ func TestRun(t *testing.T) {
 	root := t.TempDir()
 	c := DefaultConfig()
 	c.Command = ASSETS
-	c.Repository = repo.Config{
-		Owner:                 "linyows",
-		Repo:                  "dewy",
-		DisableRecordShipping: true,
-	}
+	c.Registry = "github_release://linyows/dewy"
 	c.Cache = CacheConfig{
 		Type:       FILE,
 		Expiration: 10,
@@ -70,6 +68,7 @@ func TestRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	dewy.root = root
+	dewy.disableReport = true
 	if err := dewy.Run(); err != nil {
 		t.Error(err)
 	}

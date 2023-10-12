@@ -1,4 +1,4 @@
-package repo
+package ghrelease
 
 // Config struct.
 type Config struct {

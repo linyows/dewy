@@ -4,7 +4,6 @@ import (
 	"os"
 
 	starter "github.com/lestrrat-go/server-starter"
-	"github.com/linyows/dewy/repo"
 )
 
 // Command for CLI.
@@ -59,10 +58,12 @@ type CacheConfig struct {
 
 // Config struct.
 type Config struct {
-	Command    Command
-	Repository repo.Config
-	Cache      CacheConfig
-	Starter    starter.Config
+	Command      Command
+	Registry     string
+	ArtifactName string
+	PreRelease   bool
+	Cache        CacheConfig
+	Starter      starter.Config
 }
 
 // OverrideWithEnv overrides by environments.
@@ -73,7 +74,7 @@ func (c *Config) OverrideWithEnv() {
 	}
 
 	if a := os.Getenv("GITHUB_ARTIFACT"); a != "" {
-		c.Repository.Artifact = a
+		c.ArtifactName = a
 	}
 }
 

@@ -1,4 +1,4 @@
-package repo
+package ghrelease
 
 import (
 	"bytes"
@@ -18,34 +18,32 @@ import (
 )
 
 const (
-	GitHubReleaseScheme = "github_release"
 	// ISO8601 for time format.
 	ISO8601 = "20060102T150405Z0700"
+	Scheme  = "github_release"
 )
-
-var _ registry.Registry = (*GithubRelease)(nil)
 
 // GithubRelease struct.
 type GithubRelease struct {
-	owner                 string
-	repo                  string
-	prerelease            bool
-	disableRecordShipping bool // FIXME: For testing. Remove this.
-	cl                    *github.Client
+	owner      string
+	repo       string
+	prerelease bool
+	cl         *github.Client
 }
 
-// NewGithubRelease returns GithubRelease.
-func NewGithubRelease(c Config) (*GithubRelease, error) {
+var _ registry.Registry = (*GithubRelease)(nil)
+
+// New returns GithubRelease.
+func New(c Config) (*GithubRelease, error) {
 	cl, err := factory.NewGithubClient()
 	if err != nil {
 		return nil, err
 	}
 	g := &GithubRelease{
-		owner:                 c.Owner,
-		repo:                  c.Repo,
-		prerelease:            c.PreRelease,
-		disableRecordShipping: c.DisableRecordShipping,
-		cl:                    cl,
+		owner:      c.Owner,
+		repo:       c.Repo,
+		prerelease: c.PreRelease,
+		cl:         cl,
 	}
 	return g, nil
 }
@@ -61,6 +59,16 @@ func (g *GithubRelease) host() string {
 		return h
 	}
 	return "github.com"
+}
+
+// Owner returns owner.
+func (g *GithubRelease) Owner() string {
+	return g.owner
+}
+
+// Repo returns repository.
+func (g *GithubRelease) Repo() string {
+	return g.repo
 }
 
 // OwnerURL returns owner URL.
@@ -173,9 +181,6 @@ func (g *GithubRelease) latest() (*github.RepositoryRelease, error) {
 
 // Report report shipping.
 func (g *GithubRelease) Report(req *registry.ReportRequest) error {
-	if g.disableRecordShipping {
-		return nil
-	}
 	if req.Err != nil {
 		return req.Err
 	}
