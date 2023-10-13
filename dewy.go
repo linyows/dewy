@@ -21,7 +21,9 @@ import (
 	"github.com/linyows/dewy/notice"
 	"github.com/linyows/dewy/registry"
 	ghrelease "github.com/linyows/dewy/registry/github_release"
+	grpcr "github.com/linyows/dewy/registry/grpc"
 	"github.com/linyows/dewy/storage"
+	"google.golang.org/grpc"
 )
 
 const (
@@ -326,6 +328,14 @@ func newRegistry(urlstr string, preRelease bool, artifactName string) (registry.
 			PreRelease: preRelease,
 		}
 		return ghrelease.New(c)
+	case grpcr.Scheme:
+		// TODO: handle tls
+		target := su[1]
+		cc, err := grpc.Dial(target)
+		if err != nil {
+			return nil, err
+		}
+		return grpcr.New(cc)
 	}
 	return nil, fmt.Errorf("unsupported registry: %s", urlstr)
 }
