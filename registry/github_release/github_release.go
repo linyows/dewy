@@ -87,8 +87,8 @@ func (g *GithubRelease) URL() string {
 }
 
 // Current returns current artifact.
-func (g *GithubRelease) Current(req *registry.CurrentRequest) (*registry.CurrentResponse, error) {
-	release, err := g.latest()
+func (g *GithubRelease) Current(ctx context.Context, req *registry.CurrentRequest) (*registry.CurrentResponse, error) {
+	release, err := g.latest(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -156,8 +156,7 @@ func (g *GithubRelease) Current(req *registry.CurrentRequest) (*registry.Current
 	}, nil
 }
 
-func (g *GithubRelease) latest() (*github.RepositoryRelease, error) {
-	ctx := context.Background()
+func (g *GithubRelease) latest(ctx context.Context) (*github.RepositoryRelease, error) {
 	var r *github.RepositoryRelease
 	if g.prerelease {
 		opt := &github.ListOptions{Page: 1}
@@ -180,11 +179,10 @@ func (g *GithubRelease) latest() (*github.RepositoryRelease, error) {
 }
 
 // Report report shipping.
-func (g *GithubRelease) Report(req *registry.ReportRequest) error {
+func (g *GithubRelease) Report(ctx context.Context, req *registry.ReportRequest) error {
 	if req.Err != nil {
 		return req.Err
 	}
-	ctx := context.Background()
 	now := time.Now().UTC().Format(ISO8601)
 	hostname, _ := os.Hostname()
 	info := fmt.Sprintf("shipped to %s at %s", strings.ToLower(hostname), now)
