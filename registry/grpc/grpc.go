@@ -18,7 +18,7 @@ type Client struct {
 
 var _ registry.Registry = (*Client)(nil)
 
-// New returns Client
+// New returns Client.
 func New(cc grpc.ClientConnInterface) (*Client, error) {
 	cl := dewypb.NewRegistryServiceClient(cc)
 	return &Client{
