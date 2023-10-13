@@ -11,7 +11,7 @@ TEST_OPTIONS=-timeout 30s -parallel $(NCPU)
 
 default: build
 
-build:
+build: protobuf
 	go build ./cmd/dewy
 
 server: build
@@ -21,9 +21,12 @@ server: build
 assets: build
 	./dewy assets -r linyows/dewy-testapp -a dewy-testapp_darwin_amd64.tar.gz -l $(LOGLEVEL)
 
+protobuf: deps
+	cd registry/grpc/proto && buf generate
+
 deps:
-	go get golang.org/x/lint/golint
-	go get github.com/goreleaser/goreleaser
+	go install github.com/goreleaser/goreleaser@latest
+	go install github.com/bufbuild/buf/cmd/buf@latest
 
 test:
 	go test $(TEST) $(TESTARGS) $(TEST_OPTIONS)

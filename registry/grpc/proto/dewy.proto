@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+
+package dewy;
+
+service RegistryService {
+  // Current returns the current artifact.
+	rpc Current (CurrentRequest) returns (CurrentResponse);
+  // Report reports the result of deploying the artifact.
+  rpc Report (ReportRequest) returns (google.protobuf.Empty);
+}
+
+// CurrentRequest is the request to get the current artifact.
+message CurrentRequest {
+	string arch = 1;                  // arch is the CPU architecture of deployment environment.
+  string os = 2;                    // os is the operating system of deployment environment.
+  optional string arifact_name = 3; // artifact_name is the name of the artifact to fetch.
+}
+
+// CurrentResponse is the response to get the current artifact.
+message CurrentResponse {
+	string id = 1;           // id uniquely identifies the response.
+  string tag = 2;          // tag uniquely identifies the artifact concerned.
+  string artifact_url = 3; // artifact_url is the URL to download the artifact.
+}
+
+// ReportRequest is the request to report the result of deploying the artifact.
+message ReportRequest {
+	string id = 1;           // id is the ID of the response.
+  string tag = 2;          // tag is the current tag of deployed artifact.
+  optional string err = 3; // err is the error that occurred during deployment. If Err is nil, the deployment is considered successful.
+}

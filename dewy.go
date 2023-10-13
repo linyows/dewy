@@ -125,7 +125,7 @@ func (d *Dewy) Run() error {
 	defer cancel()
 
 	// Get current
-	res, err := d.registry.Current(&registry.CurrentRequest{
+	res, err := d.registry.Current(ctx, &registry.CurrentRequest{
 		Arch:         runtime.GOARCH,
 		OS:           runtime.GOOS,
 		ArtifactName: d.config.ArtifactName,
@@ -194,7 +194,7 @@ func (d *Dewy) Run() error {
 
 	if !d.disableReport {
 		log.Print("[DEBUG] Report shipping")
-		err := d.registry.Report(&registry.ReportRequest{
+		err := d.registry.Report(ctx, &registry.ReportRequest{
 			ID:  res.ID,
 			Tag: res.Tag,
 		})

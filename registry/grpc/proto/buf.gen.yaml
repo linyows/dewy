@@ -1,0 +1,12 @@
+version: v1
+managed:
+  enabled: true
+  go_package_prefix:
+    default: github.com/linyows/dewy/registry/grpc/gen/dewy
+plugins:
+  - plugin: buf.build/protocolbuffers/go
+    out: gen/dewy
+    opt: paths=source_relative
+  - plugin: buf.build/grpc/go
+    out: gen/dewy
+    opt: paths=source_relative
