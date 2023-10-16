@@ -1,10 +1,12 @@
 package registry
 
+import "context"
+
 type Registry interface {
 	// Current returns the current artifact.
-	Current(*CurrentRequest) (*CurrentResponse, error)
+	Current(context.Context, *CurrentRequest) (*CurrentResponse, error)
 	// Report reports the result of deploying the artifact.
-	Report(*ReportRequest) error
+	Report(context.Context, *ReportRequest) error
 }
 
 // CurrentRequest is the request to get the current artifact.
