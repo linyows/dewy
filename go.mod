@@ -7,6 +7,7 @@ require (
 	github.com/google/go-cmp v0.5.9
 	github.com/google/go-github/v55 v55.0.0
 	github.com/google/go-querystring v1.1.0
+	github.com/gorilla/schema v1.2.0
 	github.com/hashicorp/logutils v1.0.0
 	github.com/jessevdk/go-flags v1.5.0
 	github.com/k1LoW/go-github-client/v55 v55.0.11
