@@ -28,10 +28,10 @@ type cli struct {
 	LogLevel   string `long:"log-level" short:"l" arg:"(debug|info|warn|error)" description:"Level displayed as log"`
 	Interval   int    `long:"interval" arg:"seconds" short:"i" description:"The polling interval to the repository (default: 10)"`
 	Port       string `long:"port" short:"p" description:"TCP port to listen"`
-	Repository string `long:"repository" short:"r" description:"Repository for application"`
+	Repository string `long:"repository" short:"r" description:"[DEPRECATED] Repository for application"`
 	Registry   string `long:"registry" description:"Registry for application"`
-	Artifact   string `long:"artifact" short:"a" description:"Artifact name for application"`
-	PreRelease bool   `long:"pre" short:"P" description:"Pre-release handling (default: false)"`
+	Artifact   string `long:"artifact" short:"a" description:"[DEPRECATED] Artifact name for application"`
+	PreRelease bool   `long:"pre" short:"P" description:"[DEPRECATED] Pre-release handling (default: false)"`
 	Help       bool   `long:"help" short:"h" description:"show this help message and exit"`
 	Version    bool   `long:"version" short:"v" description:"prints the version number"`
 }
