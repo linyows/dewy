@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/url"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"runtime"
@@ -17,6 +18,7 @@ import (
 	"time"
 
 	"github.com/carlescere/scheduler"
+	"github.com/cli/safeexec"
 	"github.com/gorilla/schema"
 	starter "github.com/lestrrat-go/server-starter"
 	"github.com/linyows/dewy/kvs"
@@ -235,8 +237,20 @@ func (d *Dewy) Run() error {
 	return nil
 }
 
-func (d *Dewy) deploy(key string) error {
-
+func (d *Dewy) deploy(key string) (err error) {
+	if err := d.execHook(d.config.BeforeDeployHook); err != nil {
+		log.Printf("[ERROR] Before deploy hook failure: %#v", err)
+		return err
+	}
+	defer func() {
+		if err != nil {
+			return
+		}
+		// When deploy is success, run after deploy hook
+		if err := d.execHook(d.config.AfterDeployHook); err != nil {
+			log.Printf("[ERROR] After deploy hook failure: %#v", err)
+		}
+	}()
 	p := filepath.Join(d.cache.GetDir(), key)
 	linkFrom, err := d.preserve(p)
 	if err != nil {
@@ -335,6 +349,30 @@ func (d *Dewy) keepReleases() error {
 		}
 	}
 
+	return nil
+}
+
+func (d *Dewy) execHook(cmd string) error {
+	if cmd == "" {
+		return nil
+	}
+	sh, err := safeexec.LookPath("sh")
+	if err != nil {
+		return err
+	}
+	stdout := new(bytes.Buffer)
+	stderr := new(bytes.Buffer)
+	c := exec.Command(sh, "-c", cmd)
+	c.Dir = d.root
+	c.Env = os.Environ()
+	c.Stdout = stdout
+	c.Stderr = stderr
+	defer func() {
+		log.Printf("[INFO] execute hook: command=%q stdout=%q stderr=%q", cmd, stdout.String(), stderr.String())
+	}()
+	if err := c.Run(); err != nil {
+		return err
+	}
 	return nil
 }
 

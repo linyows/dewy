@@ -58,12 +58,14 @@ type CacheConfig struct {
 
 // Config struct.
 type Config struct {
-	Command      Command
-	Registry     string
-	ArtifactName string
-	PreRelease   bool
-	Cache        CacheConfig
-	Starter      starter.Config
+	Command          Command
+	Registry         string
+	ArtifactName     string
+	PreRelease       bool
+	Cache            CacheConfig
+	Starter          starter.Config
+	BeforeDeployHook string
+	AfterDeployHook  string
 }
 
 // OverrideWithEnv overrides by environments.
