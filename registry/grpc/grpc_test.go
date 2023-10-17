@@ -23,7 +23,11 @@ func TestCurrent(t *testing.T) {
 		Tag:         "v1.0.0",
 		ArtifactUrl: "github_release://linyows/dewy",
 	})
-	client, err := New(ts.ClientConn())
+	c := Config{
+		Target: ts.Addr(),
+		NoTLS:  true,
+	}
+	client, err := New(c)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +70,11 @@ func TestReport(t *testing.T) {
 		ts.Close()
 	})
 	ts.Method("Report").Response(&emptypb.Empty{})
-	client, err := New(ts.ClientConn())
+	c := Config{
+		Target: ts.Addr(),
+		NoTLS:  true,
+	}
+	client, err := New(c)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	"github.com/carlescere/scheduler"
+	"github.com/gorilla/schema"
 	starter "github.com/lestrrat-go/server-starter"
 	"github.com/linyows/dewy/kvs"
 	"github.com/linyows/dewy/notice"
@@ -23,7 +25,6 @@ import (
 	ghrelease "github.com/linyows/dewy/registry/github_release"
 	grpcr "github.com/linyows/dewy/registry/grpc"
 	"github.com/linyows/dewy/storage"
-	"google.golang.org/grpc"
 )
 
 const (
@@ -33,6 +34,8 @@ const (
 	symlinkDir   = "current"
 	keepReleases = 7
 )
+
+var decoder = schema.NewDecoder()
 
 // Dewy struct.
 type Dewy struct {
@@ -57,7 +60,21 @@ func New(c Config) (*Dewy, error) {
 		return nil, err
 	}
 
-	r, err := newRegistry(c.Registry, c.PreRelease, c.ArtifactName)
+	// Add deprecated flags to registry url.
+	su := strings.SplitN(c.Registry, "://", 2)
+	u, err := url.Parse(su[1])
+	if err != nil {
+		return nil, err
+	}
+	if c.PreRelease {
+		u.Query().Add("pre-release", "true")
+	}
+	if c.ArtifactName != "" {
+		u.Query().Add("artifact", c.ArtifactName)
+	}
+	c.Registry = fmt.Sprintf("%s://%s", su[0], u.String())
+
+	r, err := newRegistry(c.Registry)
 	if err != nil {
 		return nil, err
 	}
@@ -317,25 +334,33 @@ func (d *Dewy) keepReleases() error {
 	return nil
 }
 
-func newRegistry(urlstr string, preRelease bool, artifactName string) (registry.Registry, error) {
+func newRegistry(urlstr string) (registry.Registry, error) {
 	su := strings.SplitN(urlstr, "://", 2)
 	switch su[0] {
 	case ghrelease.Scheme:
-		ownerrepo := strings.SplitN(su[1], "/", 2)
-		c := ghrelease.Config{
-			Owner:      ownerrepo[0],
-			Repo:       ownerrepo[1],
-			PreRelease: preRelease,
-		}
-		return ghrelease.New(c)
-	case grpcr.Scheme:
-		// TODO: handle tls
-		target := su[1]
-		cc, err := grpc.Dial(target)
+		u, err := url.Parse(su[1])
 		if err != nil {
 			return nil, err
 		}
-		return grpcr.New(cc)
+		var c ghrelease.Config
+		if err := decoder.Decode(&c, u.Query()); err != nil {
+			return nil, err
+		}
+		ownerrepo := strings.SplitN(u.Path, "/", 2)
+		c.Owner = ownerrepo[0]
+		c.Repo = ownerrepo[1]
+		return ghrelease.New(c)
+	case grpcr.Scheme:
+		u, err := url.Parse(urlstr)
+		if err != nil {
+			return nil, err
+		}
+		var c grpcr.Config
+		if err := decoder.Decode(&c, u.Query()); err != nil {
+			return nil, err
+		}
+		c.Target = u.Host
+		return grpcr.New(c)
 	}
 	return nil, fmt.Errorf("unsupported registry: %s", urlstr)
 }

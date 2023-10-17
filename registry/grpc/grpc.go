@@ -6,6 +6,7 @@ import (
 	"github.com/linyows/dewy/registry"
 	dewypb "github.com/linyows/dewy/registry/grpc/proto/gen/dewy"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 const (
@@ -19,7 +20,16 @@ type Client struct {
 var _ registry.Registry = (*Client)(nil)
 
 // New returns Client.
-func New(cc grpc.ClientConnInterface) (*Client, error) {
+func New(c Config) (*Client, error) {
+	opts := []grpc.DialOption{}
+	if c.NoTLS {
+		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	}
+	cc, err := grpc.Dial(c.Target, opts...)
+	if err != nil {
+		return nil, err
+	}
+
 	cl := dewypb.NewRegistryServiceClient(cc)
 	return &Client{
 		cl: cl,
