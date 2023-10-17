@@ -67,10 +67,14 @@ func New(c Config) (*Dewy, error) {
 		return nil, err
 	}
 	if c.PreRelease {
-		u.Query().Add("pre-release", "true")
+		v := u.Query()
+		v.Add("pre-release", "true")
+		u.RawQuery = v.Encode()
 	}
 	if c.ArtifactName != "" {
-		u.Query().Add("artifact", c.ArtifactName)
+		v := u.Query()
+		v.Add("artifact", c.ArtifactName)
+		u.RawQuery = v.Encode()
 	}
 	c.Registry = fmt.Sprintf("%s://%s", su[0], u.String())
 

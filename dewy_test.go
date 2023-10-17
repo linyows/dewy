@@ -116,18 +116,20 @@ func TestNew(t *testing.T) {
 	regiurl := "github_release://linyows/dewy"
 	c := DefaultConfig()
 	c.Registry = regiurl
+	c.PreRelease = true
 	dewy, err := New(c)
 	if err != nil {
 		t.Fatal(err)
 	}
 	wd, _ := os.Getwd()
-	r, err := newRegistry(regiurl)
+	r, err := newRegistry(regiurl + "?pre-release=true")
 	if err != nil {
 		t.Fatal(err)
 	}
 	expect := &Dewy{
 		config: Config{
-			Registry: regiurl,
+			Registry:   regiurl + "?pre-release=true",
+			PreRelease: true,
 			Cache: CacheConfig{
 				Type:       FILE,
 				Expiration: 10,
