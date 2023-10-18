@@ -22,18 +22,20 @@ const (
 )
 
 type cli struct {
-	env        Env
-	command    string
-	args       []string
-	LogLevel   string `long:"log-level" short:"l" arg:"(debug|info|warn|error)" description:"Level displayed as log"`
-	Interval   int    `long:"interval" arg:"seconds" short:"i" description:"The polling interval to the repository (default: 10)"`
-	Port       string `long:"port" short:"p" description:"TCP port to listen"`
-	Repository string `long:"repository" short:"r" description:"[DEPRECATED] Repository for application"`
-	Registry   string `long:"registry" description:"Registry for application"`
-	Artifact   string `long:"artifact" short:"a" description:"[DEPRECATED] Artifact name for application"`
-	PreRelease bool   `long:"pre" short:"P" description:"[DEPRECATED] Pre-release handling (default: false)"`
-	Help       bool   `long:"help" short:"h" description:"show this help message and exit"`
-	Version    bool   `long:"version" short:"v" description:"prints the version number"`
+	env              Env
+	command          string
+	args             []string
+	LogLevel         string `long:"log-level" short:"l" arg:"(debug|info|warn|error)" description:"Level displayed as log"`
+	Interval         int    `long:"interval" arg:"seconds" short:"i" description:"The polling interval to the repository (default: 10)"`
+	Port             string `long:"port" short:"p" description:"TCP port to listen"`
+	Repository       string `long:"repository" short:"r" description:"[DEPRECATED] Repository for application"`
+	Registry         string `long:"registry" description:"Registry for application"`
+	Artifact         string `long:"artifact" short:"a" description:"[DEPRECATED] Artifact name for application"`
+	PreRelease       bool   `long:"pre" short:"P" description:"[DEPRECATED] Pre-release handling (default: false)"`
+	BeforeDeployHook string `long:"before-deploy-hook" description:"Command to execute before deploy"`
+	AfterDeployHook  string `long:"after-deploy-hook" description:"Command to execute after deploy"`
+	Help             bool   `long:"help" short:"h" description:"show this help message and exit"`
+	Version          bool   `long:"version" short:"v" description:"prints the version number"`
 }
 
 // Env struct.
@@ -113,6 +115,8 @@ func (c *cli) showHelp() {
 		"Port",
 		"PreRelease",
 		"LogLevel",
+		"BeforeDeployHook",
+		"AfterDeployHook",
 	}), "\n")
 
 	help := `
@@ -184,6 +188,8 @@ func (c *cli) run() int {
 
 	conf.ArtifactName = c.Artifact
 	conf.PreRelease = c.PreRelease
+	conf.BeforeDeployHook = c.BeforeDeployHook
+	conf.AfterDeployHook = c.AfterDeployHook
 
 	if c.command == "server" {
 		conf.Command = SERVER
