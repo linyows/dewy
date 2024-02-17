@@ -17,7 +17,7 @@ require (
 	github.com/lestrrat-go/server-starter v0.0.0-20210101230921-50cd1900b5bc
 	github.com/lestrrat-go/slack v0.0.0-20190827134815-1aaae719550a
 	github.com/mholt/archiver/v3 v3.5.1
-	google.golang.org/grpc v1.57.0
+	google.golang.org/grpc v1.57.1
 	google.golang.org/protobuf v1.31.0
 )
 
