@@ -1,10 +1,11 @@
 <p align="center">
   <a href="https://dewy.linyo.ws">
+    <br><br><br><br><br><br><br><br><br><br>
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="https://github.com/linyows/dewy/blob/main/misc/dewy-dark-bg.svg?raw=true">
-      <img alt="Dewy" src="https://github.com/linyows/dewy/blob/main/misc/dewy.svg?raw=true" width="500">
+      <img alt="Dewy" src="https://github.com/linyows/dewy/blob/main/misc/dewy.svg?raw=true" width="260">
     </picture>
-    <h1 align="center">Dewy<h1>
+    <br><br><br><br><br><br><br><br><br><br>
   </a>
 </p>
 
