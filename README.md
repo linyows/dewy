@@ -1,18 +1,27 @@
 <p align="center">
-  <img alt="DEWY" src="https://github.com/linyows/dewy/blob/main/misc/dewy-logo.svg?raw=true" width="500">
+  <a href="https://dewy.linyo.ws">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://github.com/linyows/dewy/blob/main/misc/dewy-dark-bg.svg?raw=true">
+      <img alt="Dewy" src="https://github.com/linyows/dewy/blob/main/misc/dewy.svg?raw=true" width="500">
+    </picture>
+    <h1 align="center">Dewy<h1>
+  </a>
 </p>
 
 <p align="center">
-  <strong>DEWY</strong>: The application server for automated deployment with polling a repository.
+  <strong>Dewy</strong> is a Linux service that enables declarative deployment of applications in non-Kubernetes environments.
 </p>
 
 <p align="center">
-  <a href="https://github.com/linyows/dewy/actions/workflows/test.yml"><img alt="GitHub Workflow Status" src="https://img.shields.io/github/actions/workflow/status/linyows/dewy/test.yml?branch=main&label=Test&style=for-the-badge"></a>
-  <a href="https://github.com/linyows/dewy/actions/workflows/build.yml"><img alt="GitHub Workflow Status" src="https://img.shields.io/github/actions/workflow/status/linyows/dewy/build.yml?branch=main&style=for-the-badge"></a>
-  <a href="https://github.com/linyows/dewy/releases"><img src="http://img.shields.io/github/release/linyows/dewy.svg?style=for-the-badge" alt="GitHub Release"></a>
-  <a href="https://github.com/linyows/dewy/blob/main/LICENSE"><img src="http://img.shields.io/badge/license-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
-  <a href="http://godoc.org/github.com/linyows/dewy"><img src="http://img.shields.io/badge/go-documentation-blue.svg?style=for-the-badge" alt="Go Documentation"></a>
-  <a href="https://codecov.io/gh/linyows/dewy"> <img src="https://img.shields.io/codecov/c/github/linyows/dewy.svg?style=for-the-badge" alt="codecov"></a>
+  <a href="https://github.com/linyows/dewy/actions/workflows/build.yml">
+    <img alt="GitHub Workflow Status" src="https://img.shields.io/github/actions/workflow/status/linyows/dewy/build.yml?branch=main&style=for-the-badge&labelColor=000000">
+  </a>
+  <a href="https://github.com/linyows/dewy/releases">
+    <img src="http://img.shields.io/github/release/linyows/dewy.svg?style=for-the-badge&labelColor=000000" alt="GitHub Release">
+  </a>
+  <a href="http://godoc.org/github.com/linyows/dewy">
+    <img src="http://img.shields.io/badge/go-documentation-blue.svg?style=for-the-badge&labelColor=000000" alt="Go Documentation">
+  </a>
 </p>
 
 Installation
@@ -112,18 +121,7 @@ Todo
 - [x] slack
 - [ ] email
 
-Contribution
-------------
-
-1. Fork ([https://github.com/linyows/dewy/fork](https://github.com/linyows/dewy/fork))
-1. Create a feature branch
-1. Commit your changes
-1. Rebase your local changes against the main branch
-1. Run test suite with the `go test ./...` command and confirm that it passes
-1. Run `gofmt -s`
-1. Create a new Pull Request
-
 Author
 ------
 
-[linyows](https://github.com/linyows)
+[@linyows](https://github.com/linyows)
