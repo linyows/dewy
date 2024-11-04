@@ -1,4 +1,4 @@
-package grpc
+package registry
 
 import (
 	"context"
@@ -7,8 +7,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/k1LoW/grpcstub"
-	"github.com/linyows/dewy/registry"
-	dewypb "github.com/linyows/dewy/registry/grpc/proto/gen/dewy"
+	pb "github.com/linyows/dewy/registry/gen/dewy"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -18,7 +17,7 @@ func TestCurrent(t *testing.T) {
 	t.Cleanup(func() {
 		ts.Close()
 	})
-	ts.Method("Current").Response(&dewypb.CurrentResponse{
+	ts.Method("Current").Response(&pb.CurrentResponse{
 		Id:          "1234567890",
 		Tag:         "v1.0.0",
 		ArtifactUrl: "github_release://linyows/dewy",
@@ -31,7 +30,7 @@ func TestCurrent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	req := &registry.CurrentRequest{
+	req := &CurrentRequest{
 		Arch: "amd64",
 		OS:   "linux",
 	}
@@ -40,7 +39,7 @@ func TestCurrent(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := &registry.CurrentResponse{
+		want := &CurrentResponse{
 			ID:          "1234567890",
 			Tag:         "v1.0.0",
 			ArtifactURL: "github_release://linyows/dewy",
@@ -78,7 +77,7 @@ func TestReport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	req := &registry.ReportRequest{
+	req := &ReportRequest{
 		ID:  "1234567890",
 		Tag: "v1.0.0",
 		Err: errors.New("something error"),

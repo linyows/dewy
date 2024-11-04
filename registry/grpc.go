@@ -1,48 +1,42 @@
-package grpc
+package registry
 
 import (
 	"context"
 
-	"github.com/linyows/dewy/registry"
-	dewypb "github.com/linyows/dewy/registry/grpc/proto/gen/dewy"
+	pb "github.com/linyows/dewy/registry/gen/dewy"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-const (
-	Scheme = "grpc"
-)
-
-type Client struct {
-	cl dewypb.RegistryServiceClient
+type GRPC struct {
+	Target string `schema:"-"`
+	NoTLS  bool   `schema:"no-tls"`
+	cl     pb.RegistryServiceClient
 }
 
-var _ registry.Registry = (*Client)(nil)
-
-// New returns Client.
-func New(c Config) (*Client, error) {
+// Dial returns GRPC.
+func (c *GRPC) Dial(target string) error {
+	c.Target = target
 	opts := []grpc.DialOption{}
 	if c.NoTLS {
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 	cc, err := grpc.Dial(c.Target, opts...)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	cl := dewypb.NewRegistryServiceClient(cc)
-	return &Client{
-		cl: cl,
-	}, nil
+	c.cl = pb.NewRegistryServiceClient(cc)
+	return nil
 }
 
 // Current returns current artifact.
-func (c *Client) Current(ctx context.Context, req *registry.CurrentRequest) (*registry.CurrentResponse, error) {
+func (c *GRPC) Current(ctx context.Context, req *CurrentRequest) (*CurrentResponse, error) {
 	var an *string
 	if req.ArtifactName != "" {
 		an = &req.ArtifactName
 	}
-	creq := &dewypb.CurrentRequest{
+	creq := &pb.CurrentRequest{
 		Arch:        req.Arch,
 		Os:          req.OS,
 		ArifactName: an,
@@ -51,7 +45,7 @@ func (c *Client) Current(ctx context.Context, req *registry.CurrentRequest) (*re
 	if err != nil {
 		return nil, err
 	}
-	res := &registry.CurrentResponse{
+	res := &CurrentResponse{
 		ID:          cres.Id,
 		Tag:         cres.Tag,
 		ArtifactURL: cres.ArtifactUrl,
@@ -60,13 +54,13 @@ func (c *Client) Current(ctx context.Context, req *registry.CurrentRequest) (*re
 }
 
 // Report report shipping.
-func (c *Client) Report(ctx context.Context, req *registry.ReportRequest) error {
+func (c *GRPC) Report(ctx context.Context, req *ReportRequest) error {
 	var perr *string
 	if req.Err != nil {
 		serr := req.Err.Error()
 		perr = &serr
 	}
-	creq := &dewypb.ReportRequest{
+	creq := &pb.ReportRequest{
 		Id:  req.ID,
 		Tag: req.Tag,
 		Err: perr,
