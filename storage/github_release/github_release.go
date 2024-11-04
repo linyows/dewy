@@ -11,7 +11,7 @@ import (
 	"github.com/k1LoW/go-github-client/v55/factory"
 )
 
-const Scheme = "github_release"
+const Scheme = "ghr"
 
 type GithubRelease struct {
 	cl *github.Client

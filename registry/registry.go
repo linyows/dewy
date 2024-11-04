@@ -1,6 +1,19 @@
 package registry
 
-import "context"
+import (
+	"context"
+	"fmt"
+	"net/url"
+	"strings"
+
+	"github.com/gorilla/schema"
+)
+
+var (
+	decoder             = schema.NewDecoder()
+	githubReleaseScheme = "ghr"
+	grpcScheme          = "grpc"
+)
 
 type Registry interface {
 	// Current returns the current artifact.
@@ -39,4 +52,45 @@ type ReportRequest struct {
 	Tag string
 	// Err is the error that occurred during deployment. If Err is nil, the deployment is considered successful.
 	Err error
+}
+
+func New(strUrl string) (Registry, error) {
+	splitted := strings.SplitN(strUrl, "://", 2)
+
+	switch splitted[0] {
+	case githubReleaseScheme:
+		u, err := url.Parse(splitted[1])
+		if err != nil {
+			return nil, err
+		}
+
+		ownerrepo := strings.SplitN(u.Path, "/", 2)
+		gr, err := NewGithubRelease(ownerrepo[0], ownerrepo[1])
+		if err != nil {
+			return nil, err
+		}
+		if err := decoder.Decode(gr, u.Query()); err != nil {
+			return nil, err
+		}
+
+		return gr, nil
+
+	case grpcScheme:
+		u, err := url.Parse(strUrl)
+		if err != nil {
+			return nil, err
+		}
+
+		var gr GRPC
+		if err := decoder.Decode(&gr, u.Query()); err != nil {
+			return nil, err
+		}
+		if err := gr.Dial(u.Host); err != nil {
+			return nil, err
+		}
+
+		return &gr, nil
+	}
+
+	return nil, fmt.Errorf("unsupported registry: %s", strUrl)
 }
