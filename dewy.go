@@ -32,6 +32,11 @@ const (
 	releasesDir  = "releases"
 	symlinkDir   = "current"
 	keepReleases = 7
+
+	// currentkeyName is a name whose value is the version of the currently running server application.
+	// For example, if you are using a file for the cache store, running `cat current` will show `v1.2.3--app_linux_amd64.tar.gz`, which is a combination of the tag and artifact.
+	// dewy uses this value as a key (**cachekeyName**) to manage the artifacts in the cache store.
+	currentkeyName = "current"
 )
 
 // Dewy struct.
@@ -134,10 +139,6 @@ func (d *Dewy) waitSigs() os.Signal {
 func (d *Dewy) cachekeyName(res *registry.CurrentResponse) string {
 	return fmt.Sprintf("%s--%s", res.Tag, filepath.Base(res.ArtifactURL))
 }
-
-// $ cat current
-// => cachekeyName
-var currentkeyName = "current"
 
 // Run dewy.
 func (d *Dewy) Run() error {
