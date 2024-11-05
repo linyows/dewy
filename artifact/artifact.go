@@ -19,7 +19,7 @@ type Fetcher interface {
 }
 
 func Fetch(url string, w io.Writer) error {
-	splitted := strings.SplitN(urlstr, "://", 2)
+	splitted := strings.SplitN(url, "://", 2)
 
 	switch splitted[0] {
 	case ghrScheme:
