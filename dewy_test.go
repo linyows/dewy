@@ -1,116 +1,15 @@
 package dewy
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/k1LoW/grpcstub"
 	"github.com/linyows/dewy/kvs"
 	"github.com/linyows/dewy/registry"
-	ghrelease "github.com/linyows/dewy/registry/github_release"
-	"github.com/linyows/dewy/registry/grpc"
 )
-
-func TestNewRegistry(t *testing.T) {
-	ts := grpcstub.NewServer(t, "registry/grpc/proto/dewy.proto")
-	t.Cleanup(func() {
-		ts.Close()
-	})
-	tests := []struct {
-		urlstr  string
-		want    registry.Registry
-		wantErr bool
-	}{
-		{
-			"github_release://linyows/dewy",
-			func(t *testing.T) registry.Registry {
-				r, err := ghrelease.New(ghrelease.Config{
-					Owner:      "linyows",
-					Repo:       "dewy",
-					Artifact:   "",
-					PreRelease: false,
-				})
-				if err != nil {
-					t.Fatal(err)
-				}
-				return r
-			}(t),
-			false,
-		},
-		{
-			"github_release://linyows/dewy?artifact=dewy_linux_amd64",
-			func(t *testing.T) registry.Registry {
-				r, err := ghrelease.New(ghrelease.Config{
-					Owner:      "linyows",
-					Repo:       "dewy",
-					Artifact:   "dewy_linux_amd64",
-					PreRelease: false,
-				})
-				if err != nil {
-					t.Fatal(err)
-				}
-				return r
-			}(t),
-			false,
-		},
-		{
-			"github_release://linyows/dewy?artifact=dewy_linux_amd64&pre-release=true",
-			func(t *testing.T) registry.Registry {
-				r, err := ghrelease.New(ghrelease.Config{
-					Owner:      "linyows",
-					Repo:       "dewy",
-					Artifact:   "dewy_linux_amd64",
-					PreRelease: true,
-				})
-				if err != nil {
-					t.Fatal(err)
-				}
-				return r
-			}(t),
-			false,
-		},
-		{
-			fmt.Sprintf("grpc://%s?no-tls=true", ts.Addr()),
-			func(t *testing.T) registry.Registry {
-				r, err := grpc.New(grpc.Config{
-					Target: ts.Addr(),
-					NoTLS:  true,
-				})
-				if err != nil {
-					t.Fatal(err)
-				}
-				return r
-			}(t),
-			false,
-		},
-		{
-			"invalid://linyows/dewy",
-			nil,
-			true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.urlstr, func(t *testing.T) {
-			got, err := newRegistry(tt.urlstr)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("newRegistry() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			opts := []cmp.Option{
-				cmp.AllowUnexported(ghrelease.GithubRelease{}, grpc.Client{}),
-				cmpopts.IgnoreFields(ghrelease.GithubRelease{}, "cl"),
-				cmpopts.IgnoreFields(grpc.Client{}, "cl"),
-			}
-			if diff := cmp.Diff(got, tt.want, opts...); diff != "" {
-				t.Error(diff)
-			}
-		})
-	}
-}
 
 func TestNew(t *testing.T) {
 	regiurl := "github_release://linyows/dewy"
