@@ -59,21 +59,6 @@ func (g *GithubRelease) host() string {
 	return "github.com"
 }
 
-// OwnerURL returns owner URL.
-func (g *GithubRelease) OwnerURL() string {
-	return fmt.Sprintf("https://%s/%s", g, g.Owner)
-}
-
-// OwnerIconURL returns owner icon URL.
-func (g *GithubRelease) OwnerIconURL() string {
-	return fmt.Sprintf("%s.png?size=200", g.OwnerURL())
-}
-
-// URL returns repository URL.
-func (g *GithubRelease) URL() string {
-	return fmt.Sprintf("%s/%s", g.OwnerURL(), g.Repo)
-}
-
 // Current returns current artifact.
 func (g *GithubRelease) Current(ctx context.Context, req *CurrentRequest) (*CurrentResponse, error) {
 	release, err := g.latest(ctx)
