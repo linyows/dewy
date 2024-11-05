@@ -18,7 +18,6 @@ import (
 const (
 	// ISO8601 for time format.
 	ISO8601 = "20060102T150405Z0700"
-	Scheme  = "github_release"
 )
 
 // GithubRelease struct.
