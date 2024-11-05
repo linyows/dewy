@@ -19,13 +19,10 @@ import (
 
 	"github.com/carlescere/scheduler"
 	"github.com/cli/safeexec"
-	"github.com/gorilla/schema"
 	starter "github.com/lestrrat-go/server-starter"
 	"github.com/linyows/dewy/kvs"
 	"github.com/linyows/dewy/notice"
 	"github.com/linyows/dewy/registry"
-	ghrelease "github.com/linyows/dewy/registry/github_release"
-	grpcr "github.com/linyows/dewy/registry/grpc"
 	"github.com/linyows/dewy/storage"
 )
 
@@ -35,9 +32,12 @@ const (
 	releasesDir  = "releases"
 	symlinkDir   = "current"
 	keepReleases = 7
-)
 
-var decoder = schema.NewDecoder()
+	// currentkeyName is a name whose value is the version of the currently running server application.
+	// For example, if you are using a file for the cache store, running `cat current` will show `v1.2.3--app_linux_amd64.tar.gz`, which is a combination of the tag and artifact.
+	// dewy uses this value as a key (**cachekeyName**) to manage the artifacts in the cache store.
+	currentkeyName = "current"
+)
 
 // Dewy struct.
 type Dewy struct {
@@ -68,19 +68,9 @@ func New(c Config) (*Dewy, error) {
 	if err != nil {
 		return nil, err
 	}
-	if c.PreRelease {
-		v := u.Query()
-		v.Add("pre-release", "true")
-		u.RawQuery = v.Encode()
-	}
-	if c.ArtifactName != "" {
-		v := u.Query()
-		v.Add("artifact", c.ArtifactName)
-		u.RawQuery = v.Encode()
-	}
 	c.Registry = fmt.Sprintf("%s://%s", su[0], u.String())
 
-	r, err := newRegistry(c.Registry)
+	r, err := registry.New(c.Registry)
 	if err != nil {
 		return nil, err
 	}
@@ -104,10 +94,10 @@ func (d *Dewy) Start(i int) {
 		Source:  d.config.ArtifactName,
 		Command: d.config.Command.String(),
 	}
-	repo, ok := d.registry.(*ghrelease.GithubRelease)
+	repo, ok := d.registry.(*registry.GithubRelease)
 	if ok {
-		nc.Owner = repo.Owner()
-		nc.Repo = repo.Repo()
+		nc.Owner = repo.Owner
+		nc.Repo = repo.Repo
 		nc.OwnerLink = repo.OwnerURL()
 		nc.OwnerIcon = repo.OwnerIconURL()
 		nc.RepoLink = repo.URL()
@@ -144,6 +134,12 @@ func (d *Dewy) waitSigs() os.Signal {
 	return sigReceived
 }
 
+// cachekeyName is "tag--artifact"
+// example: v1.2.3--testapp_linux_amd64.tar.gz
+func (d *Dewy) cachekeyName(res *registry.CurrentResponse) string {
+	return fmt.Sprintf("%s--%s", res.Tag, filepath.Base(res.ArtifactURL))
+}
+
 // Run dewy.
 func (d *Dewy) Run() error {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -161,23 +157,27 @@ func (d *Dewy) Run() error {
 	}
 
 	// Check cache
-	cacheKey := fmt.Sprintf("%s-%s", res.Tag, filepath.Base(res.ArtifactURL))
-	currentKey := "current.txt"
-	currentSourceKey, _ := d.cache.Read(currentKey)
+	cachekeyName := d.cachekeyName(res)
+	currentkeyValue, _ := d.cache.Read(currentkeyName)
 	found := false
 	list, err := d.cache.List()
 	if err != nil {
 		return err
 	}
+
 	for _, key := range list {
 		// same current version and already cached
-		if string(currentSourceKey) == cacheKey && key == cacheKey {
+		if string(currentkeyValue) == cachekeyName && key == cachekeyName {
 			log.Print("[DEBUG] Deploy skipped")
+			if d.isServerRunning {
+				return nil
+			}
+			// when the server fails to start
 			break
 		}
 
 		// no current version but already cached
-		if key == cacheKey {
+		if key == cachekeyName {
 			found = true
 			break
 		}
@@ -189,10 +189,13 @@ func (d *Dewy) Run() error {
 		if err := storage.Fetch(res.ArtifactURL, buf); err != nil {
 			return err
 		}
-		if err := d.cache.Write(cacheKey, buf.Bytes()); err != nil {
+		if err := d.cache.Write(cachekeyName, buf.Bytes()); err != nil {
 			return err
 		}
-		log.Printf("[INFO] Cached as %s", cacheKey)
+		if err := d.cache.Write(currentkeyName, []byte(cachekeyName)); err != nil {
+			return err
+		}
+		log.Printf("[INFO] Cached as %s", cachekeyName)
 	}
 
 	if d.notice != nil {
@@ -200,16 +203,16 @@ func (d *Dewy) Run() error {
 			res.ArtifactURL, res.Tag))
 	}
 
-	if err := d.deploy(cacheKey); err != nil {
+	if err := d.deploy(cachekeyName); err != nil {
 		return err
 	}
 
 	if d.config.Command == SERVER {
 		if d.isServerRunning {
-			d.notice.Notify(ctx, "Server restarting")
+			//d.notice.Notify(ctx, "Server restarting")
 			err = d.restartServer()
 		} else {
-			d.notice.Notify(ctx, "Server starting")
+			//d.notice.Notify(ctx, "Server starting")
 			err = d.startServer()
 		}
 		if err != nil {
@@ -374,35 +377,4 @@ func (d *Dewy) execHook(cmd string) error {
 		return err
 	}
 	return nil
-}
-
-func newRegistry(urlstr string) (registry.Registry, error) {
-	su := strings.SplitN(urlstr, "://", 2)
-	switch su[0] {
-	case ghrelease.Scheme:
-		u, err := url.Parse(su[1])
-		if err != nil {
-			return nil, err
-		}
-		var c ghrelease.Config
-		if err := decoder.Decode(&c, u.Query()); err != nil {
-			return nil, err
-		}
-		ownerrepo := strings.SplitN(u.Path, "/", 2)
-		c.Owner = ownerrepo[0]
-		c.Repo = ownerrepo[1]
-		return ghrelease.New(c)
-	case grpcr.Scheme:
-		u, err := url.Parse(urlstr)
-		if err != nil {
-			return nil, err
-		}
-		var c grpcr.Config
-		if err := decoder.Decode(&c, u.Query()); err != nil {
-			return nil, err
-		}
-		c.Target = u.Host
-		return grpcr.New(c)
-	}
-	return nil, fmt.Errorf("unsupported registry: %s", urlstr)
 }

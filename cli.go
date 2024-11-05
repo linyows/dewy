@@ -10,7 +10,6 @@ import (
 
 	"github.com/hashicorp/logutils"
 	flags "github.com/jessevdk/go-flags"
-	ghrelease "github.com/linyows/dewy/registry/github_release"
 )
 
 const (
@@ -28,10 +27,7 @@ type cli struct {
 	LogLevel         string `long:"log-level" short:"l" arg:"(debug|info|warn|error)" description:"Level displayed as log"`
 	Interval         int    `long:"interval" arg:"seconds" short:"i" description:"The polling interval to the repository (default: 10)"`
 	Port             string `long:"port" short:"p" description:"TCP port to listen"`
-	Repository       string `long:"repository" short:"r" description:"[DEPRECATED] Repository for application"`
 	Registry         string `long:"registry" description:"Registry for application"`
-	Artifact         string `long:"artifact" short:"a" description:"[DEPRECATED] Artifact name for application"`
-	PreRelease       bool   `long:"pre" short:"P" description:"[DEPRECATED] Pre-release handling (default: false)"`
 	BeforeDeployHook string `long:"before-deploy-hook" description:"Command to execute before deploy"`
 	AfterDeployHook  string `long:"after-deploy-hook" description:"Command to execute after deploy"`
 	Help             bool   `long:"help" short:"h" description:"show this help message and exit"`
@@ -49,7 +45,7 @@ type Env struct {
 
 // RunCLI runs as cli.
 func RunCLI(env Env) int {
-	cli := &cli{env: env, Interval: -1, PreRelease: false}
+	cli := &cli{env: env, Interval: -1}
 	return cli.run()
 }
 
@@ -110,10 +106,7 @@ func (c *cli) showHelp() {
 		"Config",
 		"Interval",
 		"Registry",
-		"Repository",
-		"Artifact",
 		"Port",
-		"PreRelease",
 		"LogLevel",
 		"BeforeDeployHook",
 		"AfterDeployHook",
@@ -176,18 +169,12 @@ func (c *cli) run() int {
 
 	conf := DefaultConfig()
 
-	if c.Registry == "" && c.Repository == "" {
+	if c.Registry == "" {
 		fmt.Fprintf(c.env.Err, "Error: --registry is not set\n")
 		c.showHelp()
 		return ExitErr
 	}
-	if c.Registry == "" && c.Repository != "" {
-		// --repository is sintax sugar for --registry github_release://
-		conf.Registry = fmt.Sprintf("%s://%s", ghrelease.Scheme, c.Repository)
-	}
-
-	conf.ArtifactName = c.Artifact
-	conf.PreRelease = c.PreRelease
+	conf.Registry = c.Registry
 	conf.BeforeDeployHook = c.BeforeDeployHook
 	conf.AfterDeployHook = c.AfterDeployHook
 
