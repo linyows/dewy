@@ -20,10 +20,10 @@ import (
 	"github.com/carlescere/scheduler"
 	"github.com/cli/safeexec"
 	starter "github.com/lestrrat-go/server-starter"
+	"github.com/linyows/dewy/artifact"
 	"github.com/linyows/dewy/kvs"
 	"github.com/linyows/dewy/notify"
 	"github.com/linyows/dewy/registry"
-	"github.com/linyows/dewy/storage"
 )
 
 const (
@@ -172,7 +172,7 @@ func (d *Dewy) Run() error {
 	// Download artifact and cache
 	if !found {
 		buf := new(bytes.Buffer)
-		if err := storage.Fetch(res.ArtifactURL, buf); err != nil {
+		if err := artifact.Fetch(res.ArtifactURL, buf); err != nil {
 			return err
 		}
 		if err := d.cache.Write(cachekeyName, buf.Bytes()); err != nil {

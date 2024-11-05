@@ -1,4 +1,4 @@
-package ghrelease
+package artifact
 
 import (
 	"context"
@@ -11,27 +11,25 @@ import (
 	"github.com/k1LoW/go-github-client/v55/factory"
 )
 
-const Scheme = "ghr"
-
-type GithubRelease struct {
+type GHR struct {
 	cl *github.Client
 }
 
-func New() (*GithubRelease, error) {
+func NewGHR() (*GHR, error) {
 	cl, err := factory.NewGithubClient()
 	if err != nil {
 		return nil, err
 	}
-	return &GithubRelease{
+	return &GHR{
 		cl: cl,
 	}, nil
 }
 
 // Fetch fetch artifact.
-func (r *GithubRelease) Fetch(urlstr string, w io.Writer) error {
+func (r *GHR) Fetch(urlstr string, w io.Writer) error {
 	ctx := context.Background()
-	// github_release://owner/repo/tag/v1.0.0/artifact.zip
-	// github_release://owner/repo/latest/artifact.zip
+	// ghr://owner/repo/tag/v1.0.0/artifact.zip
+	// ghr://owner/repo/latest/artifact.zip
 	splitted := strings.Split(strings.TrimPrefix(urlstr, fmt.Sprintf("%s://", Scheme)), "/")
 	if len(splitted) != 4 && len(splitted) != 5 {
 		return fmt.Errorf("invalid url: %s", urlstr)

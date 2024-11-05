@@ -1,4 +1,4 @@
-package s3
+package artifact
 
 import (
 	"io"
@@ -11,7 +11,7 @@ const Scheme = "s3"
 
 type S3 struct{}
 
-func New() (*S3, error) {
+func NewS3() (*S3, error) {
 	return &S3{}, nil
 }
 
