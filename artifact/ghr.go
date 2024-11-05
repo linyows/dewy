@@ -30,7 +30,7 @@ func (r *GHR) Fetch(url string, w io.Writer) error {
 	ctx := context.Background()
 	// ghr://owner/repo/tag/v1.0.0/artifact.zip
 	// ghr://owner/repo/latest/artifact.zip
-	splitted := strings.Split(strings.TrimPrefix(url, fmt.Sprintf("%s://", Scheme)), "/")
+	splitted := strings.Split(strings.TrimPrefix(url, fmt.Sprintf("%s://", ghrScheme)), "/")
 	if len(splitted) != 4 && len(splitted) != 5 {
 		return fmt.Errorf("invalid url: %s", url)
 	}
