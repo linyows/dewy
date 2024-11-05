@@ -13,41 +13,39 @@ import (
 
 func TestCurrent(t *testing.T) {
 	ctx := context.Background()
-	ts := grpcstub.NewServer(t, "proto/dewy.proto")
+	ts := grpcstub.NewServer(t, "dewy.proto")
 	t.Cleanup(func() {
 		ts.Close()
 	})
 	ts.Method("Current").Response(&pb.CurrentResponse{
 		Id:          "1234567890",
 		Tag:         "v1.0.0",
-		ArtifactUrl: "github_release://linyows/dewy",
+		ArtifactUrl: "ghr://linyows/dewy",
 	})
-	c := Config{
-		Target: ts.Addr(),
-		NoTLS:  true,
-	}
-	client, err := New(c)
-	if err != nil {
+	g := &GRPC{NoTLS: true}
+	if err := g.Dial(ts.Addr()); err != nil {
 		t.Fatal(err)
 	}
 	req := &CurrentRequest{
 		Arch: "amd64",
 		OS:   "linux",
 	}
+
 	t.Run("Response", func(t *testing.T) {
-		got, err := client.Current(ctx, req)
+		got, err := g.Current(ctx, req)
 		if err != nil {
 			t.Fatal(err)
 		}
 		want := &CurrentResponse{
 			ID:          "1234567890",
 			Tag:         "v1.0.0",
-			ArtifactURL: "github_release://linyows/dewy",
+			ArtifactURL: "ghr://linyows/dewy",
 		}
 		if diff := cmp.Diff(got, want); diff != "" {
 			t.Error(diff)
 		}
 	})
+
 	t.Run("Request", func(t *testing.T) {
 		if want := 1; len(ts.Requests()) != want {
 			t.Errorf("got %v, want %v", len(ts.Requests()), want)
@@ -64,17 +62,13 @@ func TestCurrent(t *testing.T) {
 
 func TestReport(t *testing.T) {
 	ctx := context.Background()
-	ts := grpcstub.NewServer(t, "proto/dewy.proto")
+	ts := grpcstub.NewServer(t, "dewy.proto")
 	t.Cleanup(func() {
 		ts.Close()
 	})
 	ts.Method("Report").Response(&emptypb.Empty{})
-	c := Config{
-		Target: ts.Addr(),
-		NoTLS:  true,
-	}
-	client, err := New(c)
-	if err != nil {
+	g := &GRPC{NoTLS: true}
+	if err := g.Dial(ts.Addr()); err != nil {
 		t.Fatal(err)
 	}
 	req := &ReportRequest{
@@ -82,9 +76,10 @@ func TestReport(t *testing.T) {
 		Tag: "v1.0.0",
 		Err: errors.New("something error"),
 	}
-	if err := client.Report(ctx, req); err != nil {
+	if err := g.Report(ctx, req); err != nil {
 		t.Fatal(err)
 	}
+
 	t.Run("Request", func(t *testing.T) {
 		if want := 1; len(ts.Requests()) != want {
 			t.Errorf("got %v, want %v", len(ts.Requests()), want)
