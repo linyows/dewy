@@ -26,13 +26,13 @@ func NewGHR() (*GHR, error) {
 }
 
 // Fetch fetch artifact.
-func (r *GHR) Fetch(urlstr string, w io.Writer) error {
+func (r *GHR) Fetch(url string, w io.Writer) error {
 	ctx := context.Background()
 	// ghr://owner/repo/tag/v1.0.0/artifact.zip
 	// ghr://owner/repo/latest/artifact.zip
-	splitted := strings.Split(strings.TrimPrefix(urlstr, fmt.Sprintf("%s://", Scheme)), "/")
+	splitted := strings.Split(strings.TrimPrefix(url, fmt.Sprintf("%s://", Scheme)), "/")
 	if len(splitted) != 4 && len(splitted) != 5 {
-		return fmt.Errorf("invalid url: %s", urlstr)
+		return fmt.Errorf("invalid url: %s", url)
 	}
 	owner := splitted[0]
 	repo := splitted[1]
@@ -85,7 +85,7 @@ L:
 		reader = res.Body
 	}
 
-	log.Printf("[INFO] Downloaded from %s", urlstr)
+	log.Printf("[INFO] Downloaded from %s", url)
 	if _, err := io.Copy(w, reader); err != nil {
 		return err
 	}
