@@ -28,6 +28,7 @@ type cli struct {
 	Interval         int    `long:"interval" arg:"seconds" short:"i" description:"The polling interval to the repository (default: 10)"`
 	Port             string `long:"port" short:"p" description:"TCP port to listen"`
 	Registry         string `long:"registry" description:"Registry for application"`
+	Notify           string `long:"notify" description:"Notify for application"`
 	BeforeDeployHook string `long:"before-deploy-hook" description:"Command to execute before deploy"`
 	AfterDeployHook  string `long:"after-deploy-hook" description:"Command to execute after deploy"`
 	Help             bool   `long:"help" short:"h" description:"show this help message and exit"`
@@ -106,6 +107,7 @@ func (c *cli) showHelp() {
 		"Config",
 		"Interval",
 		"Registry",
+		"Notify",
 		"Port",
 		"LogLevel",
 		"BeforeDeployHook",
@@ -175,6 +177,7 @@ func (c *cli) run() int {
 		return ExitErr
 	}
 	conf.Registry = c.Registry
+	conf.Notify = c.Notify
 	conf.BeforeDeployHook = c.BeforeDeployHook
 	conf.AfterDeployHook = c.AfterDeployHook
 
