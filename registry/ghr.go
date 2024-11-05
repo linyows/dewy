@@ -20,8 +20,8 @@ const (
 	ISO8601 = "20060102T150405Z0700"
 )
 
-// GithubRelease struct.
-type GithubRelease struct {
+// GHR struct.
+type GHR struct {
 	Owner                 string `schema:"-"`
 	Repo                  string `schema:"-"`
 	Artifact              string `schema:"artifact"`
@@ -31,27 +31,25 @@ type GithubRelease struct {
 }
 
 // New returns GithubRelease.
-func NewGithubRelease(owner, repo string) (*GithubRelease, error) {
+func NewGHR(owner, repo string) (*GHR, error) {
 	cl, err := factory.NewGithubClient()
 	if err != nil {
 		return nil, err
 	}
 
-	g := &GithubRelease{
+	return &GHR{
 		Owner: owner,
 		Repo:  repo,
 		cl:    cl,
-	}
-
-	return g, nil
+	}, nil
 }
 
 // String to string.
-func (g *GithubRelease) String() string {
+func (g *GHR) String() string {
 	return g.host()
 }
 
-func (g *GithubRelease) host() string {
+func (g *GHR) host() string {
 	h := g.cl.BaseURL.Host
 	if h != "api.github.com" {
 		return h
@@ -60,7 +58,7 @@ func (g *GithubRelease) host() string {
 }
 
 // Current returns current artifact.
-func (g *GithubRelease) Current(ctx context.Context, req *CurrentRequest) (*CurrentResponse, error) {
+func (g *GHR) Current(ctx context.Context, req *CurrentRequest) (*CurrentResponse, error) {
 	release, err := g.latest(ctx)
 	if err != nil {
 		return nil, err
@@ -120,7 +118,7 @@ func (g *GithubRelease) Current(ctx context.Context, req *CurrentRequest) (*Curr
 		}
 	}
 
-	au := fmt.Sprintf("%s://%s/%s/tag/%s/%s", githubReleaseScheme, g.Owner, g.Repo, release.GetTagName(), artifactName)
+	au := fmt.Sprintf("%s://%s/%s/tag/%s/%s", ghrScheme, g.Owner, g.Repo, release.GetTagName(), artifactName)
 
 	return &CurrentResponse{
 		ID:          time.Now().Format(ISO8601),
@@ -129,7 +127,7 @@ func (g *GithubRelease) Current(ctx context.Context, req *CurrentRequest) (*Curr
 	}, nil
 }
 
-func (g *GithubRelease) latest(ctx context.Context) (*github.RepositoryRelease, error) {
+func (g *GHR) latest(ctx context.Context) (*github.RepositoryRelease, error) {
 	var r *github.RepositoryRelease
 	if g.PreRelease {
 		opt := &github.ListOptions{Page: 1}
@@ -152,7 +150,7 @@ func (g *GithubRelease) latest(ctx context.Context) (*github.RepositoryRelease, 
 }
 
 // Report report shipping.
-func (g *GithubRelease) Report(ctx context.Context, req *ReportRequest) error {
+func (g *GHR) Report(ctx context.Context, req *ReportRequest) error {
 	if req.Err != nil {
 		return req.Err
 	}

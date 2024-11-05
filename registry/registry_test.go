@@ -27,7 +27,7 @@ func TestNew(t *testing.T) {
 		{
 			"ghr://linyows/dewy",
 			func(t *testing.T) Registry {
-				return &GithubRelease{
+				return &GHR{
 					Owner: "linyows",
 					Repo:  "dewy",
 				}
@@ -37,7 +37,7 @@ func TestNew(t *testing.T) {
 		{
 			"ghr://linyows/dewy?artifact=dewy_linux_amd64",
 			func(t *testing.T) Registry {
-				return &GithubRelease{
+				return &GHR{
 					Owner:    "linyows",
 					Repo:     "dewy",
 					Artifact: "dewy_linux_amd64",
@@ -48,7 +48,7 @@ func TestNew(t *testing.T) {
 		{
 			"ghr://linyows/dewy?artifact=dewy_linux_amd64&pre-release=true",
 			func(t *testing.T) Registry {
-				return &GithubRelease{
+				return &GHR{
 					Owner:      "linyows",
 					Repo:       "dewy",
 					Artifact:   "dewy_linux_amd64",
@@ -81,8 +81,8 @@ func TestNew(t *testing.T) {
 				return
 			}
 			opts := []cmp.Option{
-				cmp.AllowUnexported(GithubRelease{}, GRPC{}),
-				cmpopts.IgnoreFields(GithubRelease{}, "cl"),
+				cmp.AllowUnexported(GHR{}, GRPC{}),
+				cmpopts.IgnoreFields(GHR{}, "cl"),
 				cmpopts.IgnoreFields(GRPC{}, "cl"),
 			}
 			if diff := cmp.Diff(got, tt.want, opts...); diff != "" {

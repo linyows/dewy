@@ -47,10 +47,10 @@ func TestNew(t *testing.T) {
 	}
 
 	opts := []cmp.Option{
-		cmp.AllowUnexported(Dewy{}, registry.GithubRelease{}, kvs.File{}),
+		cmp.AllowUnexported(Dewy{}, registry.GHR{}, kvs.File{}),
 		cmpopts.IgnoreFields(Dewy{}, "notify"),
 		cmpopts.IgnoreFields(Dewy{}, "RWMutex"),
-		cmpopts.IgnoreFields(registry.GithubRelease{}, "cl"),
+		cmpopts.IgnoreFields(registry.GHR{}, "cl"),
 		cmpopts.IgnoreFields(kvs.File{}, "mutex"),
 	}
 	if diff := cmp.Diff(dewy, expect, opts...); diff != "" {
