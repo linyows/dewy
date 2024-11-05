@@ -10,9 +10,9 @@ import (
 )
 
 var (
-	decoder             = schema.NewDecoder()
-	githubReleaseScheme = "ghr"
-	grpcScheme          = "grpc"
+	decoder    = schema.NewDecoder()
+	ghrScheme  = "ghr"
+	grpcScheme = "grpc"
 )
 
 type Registry interface {
@@ -58,14 +58,14 @@ func New(strUrl string) (Registry, error) {
 	splitted := strings.SplitN(strUrl, "://", 2)
 
 	switch splitted[0] {
-	case githubReleaseScheme:
+	case ghrScheme:
 		u, err := url.Parse(splitted[1])
 		if err != nil {
 			return nil, err
 		}
 
 		ownerrepo := strings.SplitN(u.Path, "/", 2)
-		gr, err := NewGithubRelease(ownerrepo[0], ownerrepo[1])
+		gr, err := NewGHR(ownerrepo[0], ownerrepo[1])
 		if err != nil {
 			return nil, err
 		}
