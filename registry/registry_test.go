@@ -2,6 +2,7 @@ package registry
 
 import (
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -10,6 +11,10 @@ import (
 )
 
 func TestNew(t *testing.T) {
+	if os.Getenv("GITHUB_TOKEN") == "" {
+		t.Skip("GITHUB_TOKEN is not set")
+	}
+
 	ts := grpcstub.NewServer(t, "dewy.proto")
 	t.Cleanup(func() {
 		ts.Close()
