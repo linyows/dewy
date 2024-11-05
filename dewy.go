@@ -21,7 +21,7 @@ import (
 	"github.com/cli/safeexec"
 	starter "github.com/lestrrat-go/server-starter"
 	"github.com/linyows/dewy/kvs"
-	"github.com/linyows/dewy/notice"
+	"github.com/linyows/dewy/notify"
 	"github.com/linyows/dewy/registry"
 	"github.com/linyows/dewy/storage"
 )
@@ -48,7 +48,7 @@ type Dewy struct {
 	disableReport   bool
 	root            string
 	job             *scheduler.Job
-	notice          notice.Notice
+	notify          notify.Notify
 	sync.RWMutex
 }
 
@@ -75,10 +75,16 @@ func New(c Config) (*Dewy, error) {
 		return nil, err
 	}
 
+	n, err := notify.New(c.Notify)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Dewy{
 		config:          c,
 		cache:           kv,
 		registry:        r,
+		notify:          n,
 		isServerRunning: false,
 		root:            wd,
 	}, nil
@@ -86,32 +92,12 @@ func New(c Config) (*Dewy, error) {
 
 // Start dewy.
 func (d *Dewy) Start(i int) {
-	ctx, cancel := context.WithCancel(context.WithValue(context.Background(), notice.MetaContextKey, true))
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	d.notify.Send(ctx, "Automatic shipping started by Dewy")
+
 	var err error
-
-	nc := &notice.Config{
-		Source:  d.config.ArtifactName,
-		Command: d.config.Command.String(),
-	}
-	repo, ok := d.registry.(*registry.GithubRelease)
-	if ok {
-		nc.Owner = repo.Owner
-		nc.Repo = repo.Repo
-		nc.OwnerLink = repo.OwnerURL()
-		nc.OwnerIcon = repo.OwnerIconURL()
-		nc.RepoLink = repo.URL()
-	}
-
-	d.notice, err = notice.New(&notice.Slack{Meta: nc})
-	if err != nil {
-		log.Printf("[ERROR] Notice failure: %#v", err)
-		return
-	}
-	d.notice.Notify(ctx, "Automatic shipping started by Dewy")
-	ctx, cancel = context.WithCancel(context.Background())
-	defer cancel()
-
 	d.job, err = scheduler.Every(i).Seconds().Run(func() {
 		e := d.Run()
 		if e != nil {
@@ -122,7 +108,7 @@ func (d *Dewy) Start(i int) {
 		log.Printf("[ERROR] Scheduler failure: %#v", err)
 	}
 
-	d.notice.Notify(ctx, fmt.Sprintf("Stop receiving \"%s\" signal", d.waitSigs()))
+	d.notify.Send(ctx, fmt.Sprintf("Stop receiving \"%s\" signal", d.waitSigs()))
 }
 
 func (d *Dewy) waitSigs() os.Signal {
@@ -198,10 +184,7 @@ func (d *Dewy) Run() error {
 		log.Printf("[INFO] Cached as %s", cachekeyName)
 	}
 
-	if d.notice != nil {
-		d.notice.Notify(ctx, fmt.Sprintf("New shipping <%s|%s> was detected",
-			res.ArtifactURL, res.Tag))
-	}
+	d.notify.Send(ctx, fmt.Sprintf("New shipping <%s|%s> was detected", res.ArtifactURL, res.Tag))
 
 	if err := d.deploy(cachekeyName); err != nil {
 		return err
@@ -209,10 +192,10 @@ func (d *Dewy) Run() error {
 
 	if d.config.Command == SERVER {
 		if d.isServerRunning {
-			//d.notice.Notify(ctx, "Server restarting")
+			d.notify.Send(ctx, "Server restarting")
 			err = d.restartServer()
 		} else {
-			//d.notice.Notify(ctx, "Server starting")
+			d.notify.Send(ctx, "Server starting")
 			err = d.startServer()
 		}
 		if err != nil {

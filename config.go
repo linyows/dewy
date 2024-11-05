@@ -60,6 +60,7 @@ type CacheConfig struct {
 type Config struct {
 	Command          Command
 	Registry         string
+	Notify           string
 	ArtifactName     string
 	PreRelease       bool
 	Cache            CacheConfig
