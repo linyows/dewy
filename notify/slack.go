@@ -77,7 +77,7 @@ func (s *Slack) genColor() string {
 	return strings.ToUpper(fmt.Sprintf("#%x", md5.Sum([]byte(hostname())))[0:7]) //nolint:gosec
 }
 
-// Github
+// Github struct.
 type Github struct {
 	// linyows
 	Owner string
@@ -102,7 +102,7 @@ func (g *Github) RepoURL() string {
 	return fmt.Sprintf("%s/%s", g.OwnerURL(), g.Repo)
 }
 
-// BuildAttachmentByGithubArgs returns slack an attachment
+// BuildAttachmentByGithubArgs returns attachment for slack.
 func (s *Slack) BuildAttachment(message string) objects.Attachment {
 	var at objects.Attachment
 	at.Color = s.genColor()
