@@ -11,6 +11,7 @@ import (
 
 var (
 	decoder    = schema.NewDecoder()
+	s3Scheme   = "s3"
 	ghrScheme  = "ghr"
 	grpcScheme = "grpc"
 )
@@ -75,6 +76,13 @@ func New(strUrl string) (Registry, error) {
 
 		return gr, nil
 
+	case s3Scheme:
+		s3, err := NewS3(splitted[1])
+		if err != nil {
+			return nil, err
+		}
+		return s3, nil
+
 	case grpcScheme:
 		u, err := url.Parse(strUrl)
 		if err != nil {
@@ -93,4 +101,15 @@ func New(strUrl string) (Registry, error) {
 	}
 
 	return nil, fmt.Errorf("unsupported registry: %s", strUrl)
+}
+
+func addTrailingSlash(path string) string {
+	if strings.HasSuffix(path, "/") {
+		return path
+	}
+	return path + "/"
+}
+
+func removeTrailingSlash(path string) string {
+	return strings.TrimSuffix(path, "/")
 }
