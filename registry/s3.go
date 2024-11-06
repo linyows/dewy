@@ -42,28 +42,29 @@ func NewS3(path string) (*S3, error) {
 	}
 
 	splitted := strings.SplitN(u.Path, "/", 2)
+	bucket := ""
+	prefix := ""
+
+	if len(splitted) > 1 {
+		prefix = addTrailingSlash(splitted[1])
+	}
+	if len(splitted) > 0 {
+		bucket = splitted[0]
+	}
 
 	s := &S3{
-		Bucket: splitted[0],
-		Prefix: addTrailingSlash(splitted[1]),
+		Bucket: bucket,
+		Prefix: prefix,
 	}
 	if err = decoder.Decode(s, u.Query()); err != nil {
 		return nil, err
 	}
 
-	ex := "s3://<bucket>/<prefix>?artifact=appname_linux_amd64.tar.gz"
-
 	if s.Region == "" {
 		s.Region = "ap-northeast-1"
 	}
 	if s.Bucket == "" {
-		return nil, fmt.Errorf("s3 bucket is required: %s", ex)
-	}
-	if s.Prefix == "" {
-		return nil, fmt.Errorf("s3 prefix is required: %s", ex)
-	}
-	if s.Artifact == "" {
-		return nil, fmt.Errorf("s3 artifact is required: %s", ex)
+		return nil, fmt.Errorf("s3 bucket is required: %s", "s3://<bucket>/<prefix>")
 	}
 
 	ctx := context.Background()
@@ -154,8 +155,25 @@ func (s *S3) Current(ctx context.Context, req *CurrentRequest) (*CurrentResponse
 	return &CurrentResponse{
 		ID:          time.Now().Format(ISO8601),
 		Tag:         version.String(),
-		ArtifactURL: fmt.Sprintf("%s://%s/%s%s", s3Scheme, s.Bucket, prefix, artifactName),
+		ArtifactURL: s.buildArtifactURL(prefix + artifactName),
 	}, nil
+}
+
+func (s *S3) buildArtifactURL(key string) string {
+	var q []string
+	var qstr string
+
+	if s.Region != "" {
+		q = append(q, "region="+s.Region)
+	}
+	if s.Endpoint != "" {
+		q = append(q, "endpoint="+s.Endpoint)
+	}
+	if len(q) > 0 {
+		qstr = "?" + strings.Join(q, "&")
+	}
+
+	return fmt.Sprintf("%s://%s/%s%s", s3Scheme, s.Bucket, key, qstr)
 }
 
 // Report report shipping.
@@ -176,6 +194,7 @@ func (s *S3) Report(ctx context.Context, req *ReportRequest) error {
 
 type S3Client interface {
 	PutObject(ctx context.Context, input *s3.PutObjectInput, opts ...func(*s3.Options)) (*s3.PutObjectOutput, error)
+	ListObjectsV2(context.Context, *s3.ListObjectsV2Input, ...func(*s3.Options)) (*s3.ListObjectsV2Output, error)
 }
 
 func (s *S3) PutTextObject(ctx context.Context, key, content string) error {
@@ -227,12 +246,13 @@ func (s *S3) LatestVersion(ctx context.Context) (string, *SemVer, error) {
 	pager := s.pager
 	if pager == nil {
 		pager = s3.NewListObjectsV2Paginator(s.cl, &s3.ListObjectsV2Input{
-			Bucket: aws.String(s.Bucket),
-			Prefix: aws.String(s.Prefix),
+			Bucket:    aws.String(s.Bucket),
+			Prefix:    aws.String(s.Prefix),
+			Delimiter: aws.String("/"),
 		})
 	}
 
-	var latestObject *types.Object
+	var latestObject *types.CommonPrefix
 	var latestVersion *SemVer
 
 	matched := func(str string, pre bool) bool {
@@ -248,8 +268,9 @@ func (s *S3) LatestVersion(ctx context.Context) (string, *SemVer, error) {
 		if err != nil {
 			return "", nil, fmt.Errorf("failed to list objects: %w", err)
 		}
-		for _, obj := range output.Contents {
-			name := s.extractFilenameFromObjectKey(*obj.Key, s.Prefix)
+		// Use output.CommonPrefixes instead of output.Contents to process only directories under prefix.
+		for _, obj := range output.CommonPrefixes {
+			name := s.extractFilenameFromObjectKey(*obj.Prefix, s.Prefix)
 			if matched(name, s.PreRelease) {
 				ver := parseSemVer(name)
 				if ver != nil {
@@ -266,7 +287,7 @@ func (s *S3) LatestVersion(ctx context.Context) (string, *SemVer, error) {
 		return "", nil, fmt.Errorf("no valid versioned object found")
 	}
 
-	return *latestObject.Key, latestVersion, nil
+	return *latestObject.Prefix, latestVersion, nil
 }
 
 type SemVer struct {
