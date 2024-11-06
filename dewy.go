@@ -95,7 +95,7 @@ func (d *Dewy) Start(i int) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	d.notify.Send(ctx, "Automatic shipping started by Dewy")
+	d.notify.Send(ctx, "Automatic shipping started by *Dewy*")
 
 	var err error
 	d.job, err = scheduler.Every(i).Seconds().Run(func() {
@@ -123,7 +123,8 @@ func (d *Dewy) waitSigs() os.Signal {
 // cachekeyName is "tag--artifact"
 // example: v1.2.3--testapp_linux_amd64.tar.gz
 func (d *Dewy) cachekeyName(res *registry.CurrentResponse) string {
-	return fmt.Sprintf("%s--%s", res.Tag, filepath.Base(res.ArtifactURL))
+	u := strings.SplitN(res.ArtifactURL, "?", 2)
+	return fmt.Sprintf("%s--%s", res.Tag, filepath.Base(u[0]))
 }
 
 // Run dewy.
@@ -184,7 +185,7 @@ func (d *Dewy) Run() error {
 		log.Printf("[INFO] Cached as %s", cachekeyName)
 	}
 
-	d.notify.Send(ctx, fmt.Sprintf("New shipping <%s|%s> was detected", res.ArtifactURL, res.Tag))
+	d.notify.Send(ctx, fmt.Sprintf("Ready for `%s`", res.Tag))
 
 	if err := d.deploy(cachekeyName); err != nil {
 		return err
@@ -192,11 +193,15 @@ func (d *Dewy) Run() error {
 
 	if d.config.Command == SERVER {
 		if d.isServerRunning {
-			d.notify.Send(ctx, "Server restarting")
 			err = d.restartServer()
+			if err == nil {
+				d.notify.Send(ctx, fmt.Sprintf("Server restarted for `%s`", res.Tag))
+			}
 		} else {
-			d.notify.Send(ctx, "Server starting")
 			err = d.startServer()
+			if err == nil {
+				d.notify.Send(ctx, fmt.Sprintf("Server started for `%s`", res.Tag))
+			}
 		}
 		if err != nil {
 			log.Printf("[ERROR] Server failure: %#v", err)
