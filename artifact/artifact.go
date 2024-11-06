@@ -13,7 +13,7 @@ const (
 )
 
 // Fetcher is the interface that wraps the Fetch method.
-type Fetcher interface {
+type Artifact interface {
 	// Fetch fetches the artifact from the storage.
 	Fetch(url string, w io.Writer) error
 }
@@ -30,7 +30,7 @@ func Fetch(url string, w io.Writer) error {
 		return g.Fetch(url, w)
 
 	case s3Scheme:
-		s, err := NewS3()
+		s, err := NewS3(splitted[1])
 		if err != nil {
 			return err
 		}
