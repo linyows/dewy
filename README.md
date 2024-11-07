@@ -1,11 +1,11 @@
 <p align="center">
   <a href="https://dewy.linyo.ws">
-    <br><br><br><br><br><br><br><br>
+    <br><br><br><br><br><br>
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="https://github.com/linyows/dewy/blob/main/misc/dewy-dark-bg.svg?raw=true">
       <img alt="Dewy" src="https://github.com/linyows/dewy/blob/main/misc/dewy.svg?raw=true" width="240">
     </picture>
-    <br><br><br><br><br><br><br><br>
+    <br><br><br><br><br><br>
   </a>
 </p>
 
@@ -38,7 +38,7 @@ Features
 - Deployment status notifications
 - Audit logging
 
-Command
+Commands
 --
 
 Dewy provides two main commands: `Server` and `Assets`. The `Server` command is designed for server applications, managing the application’s processes and ensuring the application version stays up to date. The `Assets` command focuses on static files such as HTML, CSS, and JavaScript, keeping these assets updated to the latest version.
