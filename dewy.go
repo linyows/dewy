@@ -164,6 +164,9 @@ func (d *Dewy) Run() error {
 		// no current version but already cached
 		if key == cachekeyName {
 			found = true
+			if err := d.cache.Write(currentkeyName, []byte(cachekeyName)); err != nil {
+				return err
+			}
 			break
 		}
 	}
