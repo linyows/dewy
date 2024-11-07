@@ -59,6 +59,30 @@ func TestNew(t *testing.T) {
 			false,
 		},
 		{
+			"s3://dewy/foo/bar/baz?region=ap-northeast-3&pre-release=true",
+			func(t *testing.T) Registry {
+				return &S3{
+					Bucket:     "dewy",
+					Prefix:     "foo/bar/baz/",
+					Region:     "ap-northeast-3",
+					PreRelease: true,
+				}
+			}(t),
+			false,
+		},
+		{
+			"s3://dewy",
+			func(t *testing.T) Registry {
+				return &S3{
+					Bucket:     "dewy",
+					Prefix:     "",
+					Region:     "ap-northeast-1",
+					PreRelease: false,
+				}
+			}(t),
+			false,
+		},
+		{
 			fmt.Sprintf("grpc://%s?no-tls=true", ts.Addr()),
 			func(t *testing.T) Registry {
 				return &GRPC{
@@ -83,8 +107,9 @@ func TestNew(t *testing.T) {
 				return
 			}
 			opts := []cmp.Option{
-				cmp.AllowUnexported(GHR{}, GRPC{}),
+				cmp.AllowUnexported(GHR{}, GRPC{}, S3{}),
 				cmpopts.IgnoreFields(GHR{}, "cl"),
+				cmpopts.IgnoreFields(S3{}, "cl"),
 				cmpopts.IgnoreFields(GRPC{}, "cl"),
 			}
 			if diff := cmp.Diff(got, tt.want, opts...); diff != "" {
