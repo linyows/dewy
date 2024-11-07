@@ -54,21 +54,21 @@ type ReportRequest struct {
 	Err error
 }
 
-func New(ctx context.Context, strUrl string) (Registry, error) {
-	splitted := strings.SplitN(strUrl, "://", 2)
+func New(ctx context.Context, url string) (Registry, error) {
+	splitted := strings.SplitN(url, "://", 2)
 
 	switch splitted[0] {
 	case ghrScheme:
-		return NewGHR(ctx, splitted[1])
+		return NewGHR(ctx, url)
 
 	case s3Scheme:
-		return NewS3(ctx, splitted[1])
+		return NewS3(ctx, url)
 
 	case grpcScheme:
-		return NewGRPC(ctx, splitted[1])
+		return NewGRPC(ctx, url)
 	}
 
-	return nil, fmt.Errorf("unsupported registry: %s", strUrl)
+	return nil, fmt.Errorf("unsupported registry: %s", url)
 }
 
 func addTrailingSlash(path string) string {

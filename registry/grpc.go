@@ -15,18 +15,18 @@ type GRPC struct {
 	cl     pb.RegistryServiceClient
 }
 
-func NewGRPC(ctx context.Context, path string) (*GRPC, error) {
-	u, err := url.Parse(path)
+func NewGRPC(ctx context.Context, u string) (*GRPC, error) {
+	ur, err := url.Parse(u)
 	if err != nil {
 		return nil, err
 	}
 
 	var gr GRPC
-	if err := decoder.Decode(&gr, u.Query()); err != nil {
+	if err := decoder.Decode(&gr, ur.Query()); err != nil {
 		return nil, err
 	}
 
-	if err := gr.Dial(ctx, u.Host); err != nil {
+	if err := gr.Dial(ctx, ur.Host); err != nil {
 		return nil, err
 	}
 

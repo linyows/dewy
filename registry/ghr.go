@@ -31,23 +31,18 @@ type GHR struct {
 }
 
 // New returns GHR.
-func NewGHR(ctx context.Context, path string) (*GHR, error) {
-	u, err := url.Parse(path)
+func NewGHR(ctx context.Context, u string) (*GHR, error) {
+	ur, err := url.Parse(u)
 	if err != nil {
 		return nil, err
 	}
 
-	arr := strings.SplitN(u.Path, "/", 2)
-	if len(arr) < 2 {
-		return nil, fmt.Errorf("owner and repository is required")
-	}
-
 	ghr := &GHR{
-		Owner: arr[0],
-		Repo:  arr[1],
+		Owner: ur.Host,
+		Repo:  strings.TrimPrefix(removeTrailingSlash(ur.Path), "/"),
 	}
 
-	if err := decoder.Decode(ghr, u.Query()); err != nil {
+	if err := decoder.Decode(ghr, ur.Query()); err != nil {
 		return nil, err
 	}
 

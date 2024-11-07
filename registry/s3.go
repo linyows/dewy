@@ -35,28 +35,17 @@ type S3 struct {
 }
 
 // NewS3 returns S3.
-func NewS3(ctx context.Context, path string) (*S3, error) {
-	u, err := url.Parse(path)
+func NewS3(ctx context.Context, u string) (*S3, error) {
+	ur, err := url.Parse(u)
 	if err != nil {
 		return nil, err
 	}
 
-	splitted := strings.SplitN(u.Path, "/", 2)
-	bucket := ""
-	prefix := ""
-
-	if len(splitted) > 1 {
-		prefix = addTrailingSlash(splitted[1])
-	}
-	if len(splitted) > 0 {
-		bucket = splitted[0]
-	}
-
 	s := &S3{
-		Bucket: bucket,
-		Prefix: prefix,
+		Bucket: ur.Host,
+		Prefix: strings.TrimPrefix(addTrailingSlash(ur.Path), "/"),
 	}
-	if err = decoder.Decode(s, u.Query()); err != nil {
+	if err = decoder.Decode(s, ur.Query()); err != nil {
 		return nil, err
 	}
 
