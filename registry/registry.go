@@ -3,7 +3,6 @@ package registry
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"strings"
 
 	"github.com/gorilla/schema"
@@ -11,6 +10,7 @@ import (
 
 var (
 	decoder    = schema.NewDecoder()
+	s3Scheme   = "s3"
 	ghrScheme  = "ghr"
 	grpcScheme = "grpc"
 )
@@ -54,43 +54,30 @@ type ReportRequest struct {
 	Err error
 }
 
-func New(strUrl string) (Registry, error) {
-	splitted := strings.SplitN(strUrl, "://", 2)
+func New(ctx context.Context, url string) (Registry, error) {
+	splitted := strings.SplitN(url, "://", 2)
 
 	switch splitted[0] {
 	case ghrScheme:
-		u, err := url.Parse(splitted[1])
-		if err != nil {
-			return nil, err
-		}
+		return NewGHR(ctx, url)
 
-		ownerrepo := strings.SplitN(u.Path, "/", 2)
-		gr, err := NewGHR(ownerrepo[0], ownerrepo[1])
-		if err != nil {
-			return nil, err
-		}
-		if err := decoder.Decode(gr, u.Query()); err != nil {
-			return nil, err
-		}
-
-		return gr, nil
+	case s3Scheme:
+		return NewS3(ctx, url)
 
 	case grpcScheme:
-		u, err := url.Parse(strUrl)
-		if err != nil {
-			return nil, err
-		}
-
-		var gr GRPC
-		if err := decoder.Decode(&gr, u.Query()); err != nil {
-			return nil, err
-		}
-		if err := gr.Dial(u.Host); err != nil {
-			return nil, err
-		}
-
-		return &gr, nil
+		return NewGRPC(ctx, url)
 	}
 
-	return nil, fmt.Errorf("unsupported registry: %s", strUrl)
+	return nil, fmt.Errorf("unsupported registry: %s", url)
+}
+
+func addTrailingSlash(path string) string {
+	if strings.HasSuffix(path, "/") {
+		return path
+	}
+	return path + "/"
+}
+
+func removeTrailingSlash(path string) string {
+	return strings.TrimSuffix(path, "/")
 }

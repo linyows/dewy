@@ -15,7 +15,7 @@ type Notify interface {
 }
 
 // New returns Notice.
-func New(url string) (Notify, error) {
+func New(ctx context.Context, url string) (Notify, error) {
 	splitted := strings.SplitN(url, "://", 2)
 
 	switch splitted[0] {

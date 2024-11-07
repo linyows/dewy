@@ -30,18 +30,28 @@ type GHR struct {
 	cl                    *github.Client
 }
 
-// New returns GithubRelease.
-func NewGHR(owner, repo string) (*GHR, error) {
-	cl, err := factory.NewGithubClient()
+// New returns GHR.
+func NewGHR(ctx context.Context, u string) (*GHR, error) {
+	ur, err := url.Parse(u)
 	if err != nil {
 		return nil, err
 	}
 
-	return &GHR{
-		Owner: owner,
-		Repo:  repo,
-		cl:    cl,
-	}, nil
+	ghr := &GHR{
+		Owner: ur.Host,
+		Repo:  strings.TrimPrefix(removeTrailingSlash(ur.Path), "/"),
+	}
+
+	if err := decoder.Decode(ghr, ur.Query()); err != nil {
+		return nil, err
+	}
+
+	ghr.cl, err = factory.NewGithubClient()
+	if err != nil {
+		return nil, err
+	}
+
+	return ghr, nil
 }
 
 // String to string.

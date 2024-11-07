@@ -23,7 +23,7 @@ func TestCurrent(t *testing.T) {
 		ArtifactUrl: "ghr://linyows/dewy",
 	})
 	g := &GRPC{NoTLS: true}
-	if err := g.Dial(ts.Addr()); err != nil {
+	if err := g.Dial(ctx, ts.Addr()); err != nil {
 		t.Fatal(err)
 	}
 	req := &CurrentRequest{
@@ -68,7 +68,7 @@ func TestReport(t *testing.T) {
 	})
 	ts.Method("Report").Response(&emptypb.Empty{})
 	g := &GRPC{NoTLS: true}
-	if err := g.Dial(ts.Addr()); err != nil {
+	if err := g.Dial(ctx, ts.Addr()); err != nil {
 		t.Fatal(err)
 	}
 	req := &ReportRequest{
