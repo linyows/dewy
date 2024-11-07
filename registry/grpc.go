@@ -14,14 +14,33 @@ type GRPC struct {
 	cl     pb.RegistryServiceClient
 }
 
+func NewGRPC(ctx context.Context, path string) (*GRPC, error) {
+	u, err := url.Parse(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var gr GRPC
+	if err := decoder.Decode(&gr, u.Query()); err != nil {
+		return nil, err
+	}
+
+	if err := gr.Dial(ctx, u.Host); err != nil {
+		return nil, err
+	}
+
+	return &gr, nil
+}
+
 // Dial returns GRPC.
-func (c *GRPC) Dial(target string) error {
+func (c *GRPC) Dial(ctx context.Context, target string) error {
 	c.Target = target
 	opts := []grpc.DialOption{}
 	if c.NoTLS {
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
-	cc, err := grpc.Dial(c.Target, opts...)
+	// cc, err := grpc.NewClient("passthrough://"+c.Target, opts...)
+	cc, err := grpc.NewClient(c.Target, opts...)
 	if err != nil {
 		return err
 	}

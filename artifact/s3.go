@@ -49,7 +49,12 @@ func NewS3(path string) (*S3, error) {
 
 	if s.Endpoint != "" {
 		s.cl = s3.NewFromConfig(cfg, func(o *s3.Options) {
-			o.EndpointResolver = s3.EndpointResolverFromURL(s.Endpoint)
+			o.UsePathStyle = true
+			o.BaseEndpoint = aws.String(s.Endpoint)
+		})
+	} else if e := os.Getenv("AWS_ENDPOINT_URL"); e != "" {
+		s.cl = s3.NewFromConfig(cfg, func(o *s3.Options) {
+			o.UsePathStyle = true
 		})
 	} else {
 		s.cl = s3.NewFromConfig(cfg)

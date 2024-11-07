@@ -269,14 +269,14 @@ func (s *S3) LatestVersion(ctx context.Context) (string, *SemVer, error) {
 			return "", nil, fmt.Errorf("failed to list objects: %w", err)
 		}
 		// Use output.CommonPrefixes instead of output.Contents to process only directories under prefix.
-		for _, obj := range output.CommonPrefixes {
+		for i, obj := range output.CommonPrefixes {
 			name := s.extractFilenameFromObjectKey(*obj.Prefix, s.Prefix)
 			if matched(name, s.PreRelease) {
 				ver := parseSemVer(name)
 				if ver != nil {
 					if latestVersion == nil || ver.Compare(latestVersion) > 0 {
 						latestVersion = ver
-						latestObject = &obj
+						latestObject = &output.CommonPrefixes[i]
 					}
 				}
 			}
