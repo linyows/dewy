@@ -40,6 +40,27 @@ Features
 - Deployment status notifications
 - Audit logging
 
+Usage
+--
+
+The following Server command is an example that uses GitHub Releases as the registry, starts the server on port 8000, sets the log level to info, and sends notifications to Slack.
+
+```sh
+$ export GITHUB_TOKEN=****.....
+$ export SLACK_TOKEN=****.....
+$ dewy server --registry ghr://linyows/dewy-testapp -p 8000 -l info -- /opt/dewy/current/testapp
+```
+
+Since Dewy utilizes the GitHub API and Slack API, the relevant environment variables must be set. The registry and notification configurations are formatted similarly to URLs, where the part corresponding to the URL scheme represents the registry or notification type.
+
+```sh
+# For a GitHub Releases registry:
+--registry ghr://<owner-name>/<repo-name>
+
+# For an AWS S3 registry:
+--registry s3://<bucket-name>/<object-prefix>
+```
+
 Commands
 --
 
@@ -68,27 +89,6 @@ Staging
 --
 
 Semantic versioning includes a concept called pre-release. A pre-release version is created by appending a suffix with a hyphen to the version number. In a staging environment, adding the option `pre-release=true` to the registry settings enables deployment of pre-release versions.
-
-Usage
---
-
-The following Server command is an example that uses GitHub Releases as the registry, starts the server on port 8000, sets the log level to info, and sends notifications to Slack.
-
-```sh
-$ export GITHUB_TOKEN=****.....
-$ export SLACK_TOKEN=****.....
-$ dewy server --registry ghr://linyows/dewy-testapp -p 8000 -l info -- /opt/dewy/current/testapp
-```
-
-Since Dewy utilizes the GitHub API and Slack API, the relevant environment variables must be set. The registry and notification configurations are formatted similarly to URLs, where the part corresponding to the URL scheme represents the registry or notification type.
-
-```sh
-# For a GitHub Releases registry:
---registry ghr://<owner-name>/<repo-name>
-
-# For an AWS S3 registry:
---registry s3://<bucket-name>/<object-prefix>
-```
 
 Background
 --
