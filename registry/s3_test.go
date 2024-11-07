@@ -10,7 +10,9 @@ import (
 )
 
 type MockListObjectsV2Pager struct {
-	Pages     [][]types.Object
+	// Pages   [][]types.Object
+	// Pages   []*s3.ListObjectsV2Output
+	Pages     [][]types.CommonPrefix
 	PageIndex int
 }
 
@@ -25,24 +27,25 @@ func (m *MockListObjectsV2Pager) NextPage(ctx context.Context, opts ...func(*s3.
 	page := m.Pages[m.PageIndex]
 	m.PageIndex++
 	return &s3.ListObjectsV2Output{
-		Contents: page,
+		// Contents: page,
+		CommonPrefixes: page,
 	}, nil
 }
 
 func TestS3LatestVersion(t *testing.T) {
-	data := [][]types.Object{
+	data := [][]types.CommonPrefix{
 		{
-			{Key: aws.String("your/path/v1.0.0/")},
-			{Key: aws.String("your/path/v1.2.0/")},
-			{Key: aws.String("your/path/v3.2.1-rc.1/")},
-			{Key: aws.String("your/path/v3.2.2-beta.10/")},
-			{Key: aws.String("your/path/v0.0.1/")},
+			{Prefix: aws.String("your/path/v1.0.0/")},
+			{Prefix: aws.String("your/path/v1.2.0/")},
+			{Prefix: aws.String("your/path/v3.2.1-rc.1/")},
+			{Prefix: aws.String("your/path/v3.2.2-beta.10/")},
+			{Prefix: aws.String("your/path/v0.0.1/")},
 		},
 		{
-			{Key: aws.String("your/path/v1.2.3/")},
-			{Key: aws.String("your/path/v1.1.0/")},
-			{Key: aws.String("your/path/3.2.1/")},
-			{Key: aws.String("your/path/foobar.tar.gz")},
+			{Prefix: aws.String("your/path/v1.2.3/")},
+			{Prefix: aws.String("your/path/v1.1.0/")},
+			{Prefix: aws.String("your/path/3.2.1/")},
+			{Prefix: aws.String("your/path/foobar.tar.gz")},
 		},
 	}
 
