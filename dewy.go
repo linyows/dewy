@@ -62,7 +62,6 @@ func New(c Config) (*Dewy, error) {
 		return nil, err
 	}
 
-	// Add deprecated flags to registry url.
 	su := strings.SplitN(c.Registry, "://", 2)
 	u, err := url.Parse(su[1])
 	if err != nil {
