@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -75,7 +76,8 @@ func TestNew(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.urlstr, func(t *testing.T) {
-			got, err := New(tt.urlstr)
+			ctx := context.Background()
+			got, err := New(ctx, tt.urlstr)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("New() error = %v, wantErr %v", err, tt.wantErr)
 				return

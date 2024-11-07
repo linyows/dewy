@@ -69,21 +69,9 @@ func New(c Config) (*Dewy, error) {
 	}
 	c.Registry = fmt.Sprintf("%s://%s", su[0], u.String())
 
-	r, err := registry.New(c.Registry)
-	if err != nil {
-		return nil, err
-	}
-
-	n, err := notify.New(c.Notify)
-	if err != nil {
-		return nil, err
-	}
-
 	return &Dewy{
 		config:          c,
 		cache:           kv,
-		registry:        r,
-		notify:          n,
 		isServerRunning: false,
 		root:            wd,
 	}, nil
@@ -94,9 +82,20 @@ func (d *Dewy) Start(i int) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	var err error
+
+	d.registry, err = registry.New(ctx, d.config.Registry)
+	if err != nil {
+		log.Printf("[ERROR] Registry failure: %#v", err)
+	}
+
+	d.notify, err = notify.New(ctx, d.config.Notify)
+	if err != nil {
+		log.Printf("[ERROR] Notify failure: %#v", err)
+	}
+
 	d.notify.Send(ctx, "Automatic shipping started by *Dewy*")
 
-	var err error
 	d.job, err = scheduler.Every(i).Seconds().Run(func() {
 		e := d.Run()
 		if e != nil {

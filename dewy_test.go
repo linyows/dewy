@@ -1,6 +1,7 @@
 package dewy
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -25,7 +26,8 @@ func TestNew(t *testing.T) {
 		t.Fatal(err)
 	}
 	wd, _ := os.Getwd()
-	r, err := registry.New(reg)
+	ctx := context.Background()
+	r, err := registry.New(ctx, reg)
 	if err != nil {
 		t.Fatal(err)
 	}

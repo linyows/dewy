@@ -30,18 +30,33 @@ type GHR struct {
 	cl                    *github.Client
 }
 
-// New returns GithubRelease.
-func NewGHR(owner, repo string) (*GHR, error) {
-	cl, err := factory.NewGithubClient()
+// New returns GHR.
+func NewGHR(ctx context.Context, path string) (*GHR, error) {
+	u, err := url.Parse(path)
 	if err != nil {
 		return nil, err
 	}
 
-	return &GHR{
-		Owner: owner,
-		Repo:  repo,
-		cl:    cl,
-	}, nil
+	arr := strings.SplitN(u.Path, "/", 2)
+	if len(arr) < 2 {
+		return nil, fmt.Errorf("owner and repository is required")
+	}
+
+	ghr := &GHR{
+		Owner: arr[0],
+		Repo:  arr[1],
+	}
+
+	if err := decoder.Decode(ghr, u.Query()); err != nil {
+		return nil, err
+	}
+
+	ghr.cl, err = factory.NewGithubClient()
+	if err != nil {
+		return nil, err
+	}
+
+	return ghr, nil
 }
 
 // String to string.

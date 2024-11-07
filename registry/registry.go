@@ -3,7 +3,6 @@ package registry
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"strings"
 
 	"github.com/gorilla/schema"
@@ -55,49 +54,18 @@ type ReportRequest struct {
 	Err error
 }
 
-func New(strUrl string) (Registry, error) {
+func New(ctx context.Context, strUrl string) (Registry, error) {
 	splitted := strings.SplitN(strUrl, "://", 2)
 
 	switch splitted[0] {
 	case ghrScheme:
-		u, err := url.Parse(splitted[1])
-		if err != nil {
-			return nil, err
-		}
-
-		ownerrepo := strings.SplitN(u.Path, "/", 2)
-		gr, err := NewGHR(ownerrepo[0], ownerrepo[1])
-		if err != nil {
-			return nil, err
-		}
-		if err := decoder.Decode(gr, u.Query()); err != nil {
-			return nil, err
-		}
-
-		return gr, nil
+		return NewGHR(ctx, splitted[1])
 
 	case s3Scheme:
-		s3, err := NewS3(splitted[1])
-		if err != nil {
-			return nil, err
-		}
-		return s3, nil
+		return NewS3(ctx, splitted[1])
 
 	case grpcScheme:
-		u, err := url.Parse(strUrl)
-		if err != nil {
-			return nil, err
-		}
-
-		var gr GRPC
-		if err := decoder.Decode(&gr, u.Query()); err != nil {
-			return nil, err
-		}
-		if err := gr.Dial(u.Host); err != nil {
-			return nil, err
-		}
-
-		return &gr, nil
+		return NewGRPC(ctx, splitted[1])
 	}
 
 	return nil, fmt.Errorf("unsupported registry: %s", strUrl)

@@ -35,7 +35,7 @@ type S3 struct {
 }
 
 // NewS3 returns S3.
-func NewS3(path string) (*S3, error) {
+func NewS3(ctx context.Context, path string) (*S3, error) {
 	u, err := url.Parse(path)
 	if err != nil {
 		return nil, err
@@ -67,7 +67,6 @@ func NewS3(path string) (*S3, error) {
 		return nil, fmt.Errorf("s3 bucket is required: %s", "s3://<bucket>/<prefix>")
 	}
 
-	ctx := context.Background()
 	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(s.Region))
 	if err != nil {
 		return nil, err
@@ -75,7 +74,13 @@ func NewS3(path string) (*S3, error) {
 
 	if s.Endpoint != "" {
 		s.cl = s3.NewFromConfig(cfg, func(o *s3.Options) {
-			o.EndpointResolver = s3.EndpointResolverFromURL(s.Endpoint)
+			// path-style: https://s3.region.amazonaws.com/<bucket>/<key>
+			o.UsePathStyle = true
+			o.BaseEndpoint = aws.String(s.Endpoint)
+		})
+	} else if e := os.Getenv("AWS_ENDPOINT_URL"); e != "" {
+		s.cl = s3.NewFromConfig(cfg, func(o *s3.Options) {
+			o.UsePathStyle = true
 		})
 	} else {
 		s.cl = s3.NewFromConfig(cfg)

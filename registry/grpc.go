@@ -2,6 +2,7 @@ package registry
 
 import (
 	"context"
+	"net/url"
 
 	pb "github.com/linyows/dewy/registry/gen/dewy"
 	"google.golang.org/grpc"
