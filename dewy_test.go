@@ -9,6 +9,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/linyows/dewy/kvs"
+	"github.com/linyows/dewy/notify"
 	"github.com/linyows/dewy/registry"
 )
 
@@ -26,11 +27,6 @@ func TestNew(t *testing.T) {
 		t.Fatal(err)
 	}
 	wd, _ := os.Getwd()
-	ctx := context.Background()
-	r, err := registry.New(ctx, reg)
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	expect := &Dewy{
 		config: Config{
@@ -42,17 +38,14 @@ func TestNew(t *testing.T) {
 			},
 			Starter: nil,
 		},
-		registry:        r,
 		cache:           dewy.cache,
 		isServerRunning: false,
 		root:            wd,
 	}
 
 	opts := []cmp.Option{
-		cmp.AllowUnexported(Dewy{}, registry.GHR{}, kvs.File{}),
-		cmpopts.IgnoreFields(Dewy{}, "notify"),
+		cmp.AllowUnexported(Dewy{}, kvs.File{}),
 		cmpopts.IgnoreFields(Dewy{}, "RWMutex"),
-		cmpopts.IgnoreFields(registry.GHR{}, "cl"),
 		cmpopts.IgnoreFields(kvs.File{}, "mutex"),
 	}
 	if diff := cmp.Diff(dewy, expect, opts...); diff != "" {
@@ -79,6 +72,15 @@ func TestRun(t *testing.T) {
 	}
 	dewy.root = root
 	dewy.disableReport = true
+	ctx := context.Background()
+	dewy.registry, err = registry.New(ctx, c.Registry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dewy.notify, err = notify.New(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := dewy.Run(); err != nil {
 		t.Error(err)
 	}
@@ -100,6 +102,7 @@ func TestDeployHook(t *testing.T) {
 	if os.Getenv("GITHUB_TOKEN") == "" {
 		t.Skip("GITHUB_TOKEN is not set")
 	}
+
 	tests := []struct {
 		registry           string
 		beforeHook         string
@@ -110,6 +113,7 @@ func TestDeployHook(t *testing.T) {
 		{"ghr://linyows/invalid", "touch before", false, false},
 		{"ghr://linyows/dewy", "touch before && invalid command", true, false},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.registry, func(t *testing.T) {
 			root := t.TempDir()
@@ -123,6 +127,15 @@ func TestDeployHook(t *testing.T) {
 				Expiration: 10,
 			}
 			dewy, err := New(c)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx := context.Background()
+			dewy.registry, err = registry.New(ctx, c.Registry)
+			if err != nil {
+				t.Fatal(err)
+			}
+			dewy.notify, err = notify.New(ctx, "")
 			if err != nil {
 				t.Fatal(err)
 			}
