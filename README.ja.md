@@ -52,24 +52,11 @@ Dewyは、いわゆるプル型のデプロイを実現します。Dewyは、レ
 次のServerコマンドは、registryにgithub releasesを使い、8000番ポートでサーバ起動し、ログレベルをinfoに設定し、slackに通知する例です。
 
 ```sh
-$ export GITHUB_TOKEN=****.....
-$ export SLACK_TOKEN=****.....
-$ dewy server \
-  --registry ghr://linyows/myapp \
-  --notify slack://general?title=myapp \
-  -p 8000 -l info -- /opt/myapp/current/myapp
+$ dewy server --registry ghr://linyows/myapp \
+  --notify slack://general?title=myapp -p 8000 -l info -- /opt/myapp/current/myapp
 ```
 
-Github APIとSlack APIを使うので、それぞれ環境変数をセットしています。
-レジストリと通知の指定はurlを模擬した構成になっています。urlのschemeにあたる箇所はレジストリや通知の名前です。
-
-```sh
-# github releasesレジストリの場合：
---registry ghr://<owner-name>/<repo-name>
-
-# slack通知の場合：
---notify slack://<channel-name>
-```
+レジストリと通知の指定はurlを模擬した構成になっています。urlのschemeにあたる箇所はレジストリや通知の名前です。レジストリの項目で詳しく解説します。
 
 コマンド
 --
@@ -78,25 +65,121 @@ Dewyには、ServerとAssetsコマンドがあります。
 ServerはServer Application用でApplicationのプロセス管理を行い、Applicationのバージョンを最新に維持します。
 Assetsはhtmlやcssやjsなど、静的ファイルのバージョンを最新に維持します。
 
+- server
+- assets
+
 インターフェース
 --
 
-Dewyにはいくつかのインターフェースがあり、それぞれ選択可能な実装を持っています。各インターフェースの説明をします。
+Dewyにはいくつかのインターフェースがあり、それぞれ選択可能な実装を持っています。以下、各インターフェースの説明をします。（もしインターフェースで欲しい実装があればissueを作ってください）
 
-Interface | Description
----       | ---
-Registry  | レジストリは、アプリケーションやファイルのバージョンを管理するインターフェースです。レジストリの実装には、Github ReleasesとAWS S3とGRPCがあります。GRPCは、インターフェースを満たすサーバを自作することができ、既存APIをレジストリにすることができます。
-Artifact  | アーティファクトは、アプリケーションやファイルそのものを管理するインターフェースです。アーティファクトの実装には、Github ReleaseとAWS S3とGoogle Cloud Storageがあります。
-Cache     | キャッシュは、現在のバージョンやアーティファクトをDewyが保持するためのインターフェースです。キャッシュの実装には、ファイルシステムとメモリとhashicorp consulとredisがあります。
-Notify    | 通知は、デプロイの状態を通知するインターフェースです。通知の実装は、Slackがあります。
+- Registry
+- Artifact
+- Cache
+- Notify
 
-各インターフェースで必要な実装があればissueを作ってください。
+Registry
+--
+
+レジストリは、アプリケーションやファイルのバージョンを管理するインターフェースです。
+レジストリは、Github Releases、AWS S3、GRPCから選択できます。
+
+#### 共通オプション
+
+共通オプションは以下の2つです。
+
+Option　　　　　　　　　　 | Type   | Description
+---         | ---    | ---
+pre-release | bool   | セマンティックバージョニングにおけるプレリリースバージョンを含める場合は `true` を設定します
+artifact    | string | アーティファクトのファイル名が `name_os_arch.ext` のようなフォーマットであれば Dewy パターンマッチすることができますが、そうでない場合は明示的に指定してください
+
+### Github Releases
+
+Github Releasesをレジストリに使う場合は以下の設定をします。また、Github APIを利用するために必要な環境変数の設定が必要です。
+
+```sh
+# 構造
+ghr://<owner-name>/<repo-name>?<options: pre-release, artifact>
+
+# 例
+$ export GITHUB_TOKEN=****.....
+$ dewy --registry ghr://linyows/myapp?pre-release=true&artifact=dewy.tar ...
+```
+
+### AWS S3
+
+AWS S3をレジストリに使う場合は以下の設定をします。
+オプションとしては、regionの指定とendpointの指定があります。endpointは、S3互換サービスの場合に指定してください。
+また、AWS APIを利用するために必要な環境変数の設定が必要です。
+
+```sh
+# 構造
+s3://<bucket-name>/<path-prefix>?<options: region, endpoint, pre-release, artifact>
+
+# 例
+$ export AWS_ACCESS_KEY_ID=****.....
+$ export AWS_SECRET_ACCESS_KEY=****.....
+$ dewy --registry s3://dewy/foo/bar/myapp?region=jp-north-1&endpoint=https://s3.isk01.sakurastorage.jp ...
+```
+
+Dewyは、 `aws-sdk-go-v2` を使っているので regionやendpointも環境変数で指定することもできます。
+
+```sh
+$ export AWS_REGION="us-west-2"
+$ export AWS_ENDPOINT_URL="http://localhost:9000"
+```
+
+### GRPC
+
+GRPCをレギストリに使う場合は以下の設定をします。GRPCを使う場合、アーティファクトのURLをユーザが用意するGRPCサーバ側が決めるので、pre-releaseやartifactを指定できません。
+GRPCは、インターフェースを満たすサーバを自作することができ、動的にアーティファクトのURLやレポートをコントロールしたい場合にこのレジストリを使います。
+
+```sh
+# 構造
+grpc://<server-host>?<options: no-tls>
+
+# 例
+$ dewy grpc://localhost:9000?no-tls=true
+```
+
+Artifact
+--
+
+アーティファクトは、アプリケーションやファイルそのものを管理するインターフェースです。
+アーティファクトの実装には、Github ReleaseとAWS S3とGoogle Cloud Storageがありますが、レジストリをGRPCに選択しなければ、自動的にレジストリと同じになります。
+
+Cache
+--
+
+キャッシュは、現在のバージョンやアーティファクトをDewyが保持するためのインターフェースです。キャッシュの実装には、ファイルシステムとメモリとHashicorp ConsulとRedisがあります。
+
+Notify
+--
+
+通知は、デプロイの状態を通知するインターフェースです。通知は、Slack、SMTPから選択できます。
+
+### Slack
+
+Slackを通知に使う場合は以下の設定をします。オプションには、通知に付加する `title` と そのリンクである `url` が設定できます。リポジトリ名やそのURLを設定すると良いでしょう。
+また、Slack APIを利用するために必要な環境変数の設定が必要です。
+[Slack Appを作成](https://api.slack.com/apps)し、 OAuth Tokenを発行して設定してください。OAuthのScopeは `channels:join` と `chat:write` が必要です。
+
+```sh
+# 構造
+slack://<channel-name>?<options: title, url>
+
+# 例
+$ export SLACK_TOKEN=****.....
+$ dewy --notify slack://dewy?title=myapp&https://dewy.liny.ws ...
+```
 
 セマンティックバージョニング
 --
 
 Dewyは、セマンティックバージョニングに基づいてバージョンのアーティファクトの新しい古いを判別しています。
 そのため、ソフトウェアのバージョンをセマンティックバージョニングで管理しなければなりません。
+
+詳しくは https://semver.org/lang/ja/
 
 ```txt
 # Pre release versions：
@@ -109,6 +192,14 @@ v1.2.3-beta.2
 
 セマンティックバージョニングには、プレリリースという考え方があります。バージョンに対してハイフンをつけてsuffixを付加したものが
 プレリリースバージョンになります。ステージング環境では、registryのオプションに `pre-release=true`を追加することで、プレリリースバージョンがデプロイされるようになります。
+
+プロビジョニング
+--
+
+Dewy用のプロビジョニングは、ChefとPuppetがあります。Ansibleがないので誰か作ってくれると嬉しいです。
+
+- Chef: https://github.com/linyows/dewy-cookbook
+- Puppet: https://github.com/takumakume/puppet-dewy
 
 背景
 --
