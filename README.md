@@ -45,45 +45,120 @@ Features
 Usage
 --
 
-The following Server command is an example that uses GitHub Releases as the registry, starts the server on port 8000, sets the log level to info, and sends notifications to Slack.
+The following Server command demonstrates how to use GitHub Releases as a registry, start a server on port 8000, set the log level to `info` and enable notifications via Slack.
 
 ```sh
-$ export GITHUB_TOKEN=****.....
-$ export SLACK_TOKEN=****.....
-$ dewy server \
-  --registry ghr://linyows/myapp \
-  --notify slack://general?title=myapp \
-  -p 8000 -l info -- /opt/myapp/current/myapp
+$ dewy server --registry ghr://linyows/myapp \
+  --notify slack://general?title=myapp -p 8000 -l info -- /opt/myapp/current/myapp
 ```
 
-Since Dewy utilizes the GitHub API and Slack API, the relevant environment variables must be set. The registry and notification configurations are formatted similarly to URLs, where the part corresponding to the URL scheme represents the registry or notification type.
-
-```sh
-# For a GitHub Releases registry:
---registry ghr://<owner-name>/<repo-name>
-
-# For a Slack notify:
---notify slack://<channel-name>
-```
+The registry and notification configurations are URL-like structures, where the scheme component represents the registry or notification type. More details are provided in the Registry section.
 
 Commands
 --
 
 Dewy provides two main commands: `Server` and `Assets`. The `Server` command is designed for server applications, managing the application’s processes and ensuring the application version stays up to date. The `Assets` command focuses on static files such as HTML, CSS, and JavaScript, keeping these assets updated to the latest version.
 
+-	server
+-	assets
+
 Interfaces
 --
 
-Dewy provides several interfaces, each with selectable implementations. Here’s an overview of each interface.
+Dewy provides several interfaces, each with multiple implementations to choose from. Below are brief descriptions of each. (Feel free to create an issue if there’s an implementation you’d like added.)
 
-Interface | Description
----       | ---
-Registry  | The registry interface manages versions of applications and files. Current implementations of the registry interface include GitHub Releases, AWS S3, and gRPC. With gRPC, you can build a custom server that satisfies the interface, allowing you to use an existing API as a registry.
-Artifact  | The artifact interface manages the actual applications or files. Implementations for artifacts include GitHub Releases, AWS S3, and Google Cloud Storage.
-Cache     | The cache interface is used by Dewy to store current versions and artifacts. Available cache implementations include the file system, memory, HashiCorp Consul, and Redis.
-Notify    | The Notify are handled through the notification interface, which communicates the deployment status. The available implementation for notifications is Slack.
+- Registry
+- Artifact
+- Cache
+- Notify
 
-If additional implementations are needed for any interface, please create an issue.
+Registry
+--
+
+The Registry interface manages versions of applications and files. It currently supports GitHub Releases, AWS S3, and GRPC as sources.
+
+### Common Options
+
+There are two common options for the registry.
+
+Option | Type | Description
+---    | ---  | ---  
+pre-release | bool | Set to true to include pre-release versions, following semantic versioning.
+artifact | string | Specify the artifact filename if it does not follow the name_os_arch.ext pattern that Dewy matches by default.
+
+### Github Releases
+
+To use GitHub Releases as a registry, configure it as follows and set up the required environment variables for accessing the GitHub API.
+
+```sh
+# Format
+# ghr://<owner-name>/<repo-name>?<options: pre-release, artifact>
+
+# Example
+$ export GITHUB_TOKEN=****.....
+$ dewy --registry ghr://linyows/myapp?pre-release=true&artifact=dewy.tar ...
+```
+
+### AWS S3
+
+To use AWS S3 as a registry, configure it as follows. Options include specifying the region and endpoint (for S3-compatible services). Required AWS API credentials must also be set as environment variables.
+
+```sh
+# Format
+# s3://<bucket-name>/<path-prefix>?<options: region, endpoint, pre-release, artifact>
+
+# Example
+$ export AWS_ACCESS_KEY_ID=****.....
+$ export AWS_SECRET_ACCESS_KEY=****.....
+$ dewy --registry s3://dewy/foo/bar/myapp?region=jp-north-1&endpoint=https://s3.isk01.sakurastorage.jp ...
+```
+
+Dewy leverages aws-sdk-go-v2, so you can also specify region and endpoint through environment variables.
+
+```sh
+$ export AWS_REGION="us-west-2"
+$ export AWS_ENDPOINT_URL="http://localhost:9000"
+```
+
+### GRPC
+
+For using GRPC as a registry, configure as follows. Since the GRPC server defines artifact URLs, options like pre-release and artifact are not available. This registry is suitable if you wish to control artifact URLs or reporting dynamically.
+
+```
+# Format
+# grpc://<server-host>?<options: no-tls>
+
+# Example
+$ dewy --registry grpc://localhost:9000?no-tls=true ...
+```
+
+Artifact
+--
+
+The Artifact interface manages application or file content itself. If the registry is not GRPC, artifacts will automatically align with the registry type. Supported types include GitHub Releases, AWS S3, and Google Cloud Storage.
+
+Cache
+--
+
+The Cache interface stores the current versions and artifacts. Supported implementations include the file system, memory, HashiCorp Consul, and Redis.
+
+Notify
+--
+
+The Notify interface sends deployment status updates. Slack and SMTP are available as notification methods.
+
+### Slack
+
+To use Slack for notifications, configure as follows. Options include a title and url that can link to the repository name or URL. You’ll need to [create a Slack App](https://api.slack.com/apps), generate an OAuth Token, and set the required environment variables. The app should have `channels:join` and `chat:write` permissions.
+
+```sh
+# Format
+# slack://<channel-name>?<options: title, url>
+
+# Example
+$ export SLACK_TOKEN=****.....
+$ dewy --notify slack://dewy?title=myapp&url=https://dewy.liny.ws ...
+```
 
 Semantic Versioning
 --
@@ -96,10 +171,20 @@ v1.2.3-rc
 v1.2.3-beta.2
 ```
 
+For details, visit https://semver.org/
+
 Staging
 --
 
 Semantic versioning includes a concept called pre-release. A pre-release version is created by appending a suffix with a hyphen to the version number. In a staging environment, adding the option `pre-release=true` to the registry settings enables deployment of pre-release versions.
+
+Provisioning
+--
+
+Provisioning for Dewy is available via Chef and Puppet. Ansible support is not currently available—feel free to contribute if you’re interested.
+
+- Chef: https://github.com/linyows/dewy-cookbook
+- Puppet: https://github.com/takumakume/puppet-dewy
 
 Background
 --
