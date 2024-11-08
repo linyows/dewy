@@ -87,6 +87,12 @@ Semantic Versioning
 
 Dewy uses semantic versioning to determine the recency of artifact versions. Therefore, it’s essential to manage software versions using semantic versioning.
 
+```text
+# Pre release versions：
+v1.2.3-rc
+v1.2.3-beta.2
+```
+
 Staging
 --
 
@@ -96,6 +102,25 @@ Background
 --
 
 Go can compile code into a single binary tailored for each environment. In distributed systems with orchestrators like Kubernetes, deploying Go applications is typically straightforward. However, for single physical hosts or virtual machine environments without containers, there's no clear answer on how best to deploy a Go binary. Options range from writing shell scripts to use `scp` or `rsync` manually, to using server configuration tools like Ansible or even Ruby-based tools like Capistrano. However, when it comes to managing deployments across teams with audit and visibility into who deployed what, there seems to be a gap in tools that meet these specific needs.
+
+Frequently Asked Questions
+--
+
+Here are some questions you may be asked:
+
+- What happens if I delete the latest version from the registry?
+    
+    Dewy will adjust to the new latest version after deletion. While it’s generally not recommended to delete or overwrite released versions, there may be cases, such as security concerns, where deletion is unavoidable.
+    
+- Where can I find the audit logs?
+    
+    Audit logs are saved as text files at the location where the artifacts are hosted. Currently, there is no search functionality for these logs.
+    If we identify a better solution, we may make adjustments. Additionally, it may be necessary to send notifications to observability tools like OTEL for enhanced monitoring, separate from the audit logs.
+    
+- How can I prevent registry rate limits caused by polling from multiple Dewy instances?
+    
+    By using a cache component like HashiCorp Consul or Redis, you can share the cache among multiple Dewy instances, which reduces the total number of requests to the registry. In this case, it's best to set an appropriate registry TTL.
+    You can also extend the polling interval by specifying it in the command options.
 
 Author
 --
