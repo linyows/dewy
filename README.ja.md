@@ -54,7 +54,10 @@ Dewyは、いわゆるプル型のデプロイを実現します。Dewyは、レ
 ```sh
 $ export GITHUB_TOKEN=****.....
 $ export SLACK_TOKEN=****.....
-$ dewy server --registry ghr://linyows/dewy-testapp -p 8000 -l info -- /opt/dewy/current/testapp
+$ dewy server \
+  --registry ghr://linyows/myapp \
+  --notify slack://general?title=myapp \
+  -p 8000 -l info -- /opt/myapp/current/myapp
 ```
 
 Github APIとSlack APIを使うので、それぞれ環境変数をセットしています。
@@ -64,8 +67,8 @@ Github APIとSlack APIを使うので、それぞれ環境変数をセットし�
 # github releasesレジストリの場合：
 --registry ghr://<owner-name>/<repo-name>
 
-# aws s3レジストリの場合：
---registry s3://<bucket-name>/<object-prefix>
+# slack通知の場合：
+--notify slack://<channel-name>
 ```
 
 コマンド
