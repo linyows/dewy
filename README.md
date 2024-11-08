@@ -50,7 +50,10 @@ The following Server command is an example that uses GitHub Releases as the regi
 ```sh
 $ export GITHUB_TOKEN=****.....
 $ export SLACK_TOKEN=****.....
-$ dewy server --registry ghr://linyows/dewy-testapp -p 8000 -l info -- /opt/dewy/current/testapp
+$ dewy server \
+  --registry ghr://linyows/myapp \
+  --notify slack://general?title=myapp \
+  -p 8000 -l info -- /opt/myapp/current/myapp
 ```
 
 Since Dewy utilizes the GitHub API and Slack API, the relevant environment variables must be set. The registry and notification configurations are formatted similarly to URLs, where the part corresponding to the URL scheme represents the registry or notification type.
@@ -59,8 +62,8 @@ Since Dewy utilizes the GitHub API and Slack API, the relevant environment varia
 # For a GitHub Releases registry:
 --registry ghr://<owner-name>/<repo-name>
 
-# For an AWS S3 registry:
---registry s3://<bucket-name>/<object-prefix>
+# For a Slack notify:
+--notify slack://<channel-name>
 ```
 
 Commands
