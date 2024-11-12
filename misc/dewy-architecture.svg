@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="100%" height="100%" viewBox="0 0 1080 870" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:1.5;">
+    <g transform="matrix(0.997416,0,0,1.00105,1.86117,0.128645)">
+        <rect x="-1.866" y="-0.129" width="1082.8" height="869.085" style="fill:white;"/>
+    </g>
+    <g transform="matrix(1,0,0,1,-9.22245,-78.3116)">
+        <g>
+            <g transform="matrix(1,0,0,1,691.874,-235.741)">
+                <circle cx="264.523" cy="619.785" r="101.813" style="fill:none;stroke:rgb(35,31,32);stroke-width:5px;stroke-dasharray:5,15,0,0,0,0;"/>
+            </g>
+            <g transform="matrix(1,0,0,1,817.469,291.23)">
+                <text x="61.432px" y="70.506px" style="font-family:'AvenirNext-Medium', 'Avenir Next', sans-serif;font-weight:500;font-size:29.167px;fill:rgb(35,31,32);">Application</text>
+                <text x="90.686px" y="103.839px" style="font-family:'AvenirNext-Medium', 'Avenir Next', sans-serif;font-weight:500;font-size:29.167px;fill:rgb(35,31,32);">or F<tspan x="142.37px 149.924px " y="103.839px 103.839px ">il</tspan>es</text>
+                <g transform="matrix(29.1667,0,0,29.1667,184.209,137.173)">
+                </g>
+                <text x="93.647px" y="137.173px" style="font-family:'AvenirNext-Bold', 'Avenir Next', sans-serif;font-weight:700;font-size:29.167px;fill:rgb(35,31,32);">v1.2.2</text>
+            </g>
+        </g>
+        <g transform="matrix(1,0,0,1,-3.20481,0)">
+            <g transform="matrix(1,0,0,1,695.079,30.8613)">
+                <circle cx="264.523" cy="619.785" r="101.813" style="fill:none;stroke:rgb(35,31,32);stroke-width:5px;"/>
+            </g>
+            <g transform="matrix(1,0,0,1,820.674,557.832)">
+                <text x="61.432px" y="70.506px" style="font-family:'AvenirNext-Medium', 'Avenir Next', sans-serif;font-weight:500;font-size:29.167px;fill:rgb(35,31,32);">Application</text>
+                <text x="90.686px" y="103.839px" style="font-family:'AvenirNext-Medium', 'Avenir Next', sans-serif;font-weight:500;font-size:29.167px;fill:rgb(35,31,32);">or F<tspan x="142.37px 149.924px " y="103.839px 103.839px ">il</tspan>es</text>
+                <g transform="matrix(29.1667,0,0,29.1667,184.209,137.173)">
+                </g>
+                <text x="93.647px" y="137.173px" style="font-family:'AvenirNext-Bold', 'Avenir Next', sans-serif;font-weight:700;font-size:29.167px;fill:rgb(35,31,32);">v1.2.3</text>
+            </g>
+        </g>
+    </g>
+    <g transform="matrix(1,0,0,1,364.632,311.462)">
+        <g transform="matrix(37.5,0,0,37.5,229.53,71.4449)">
+        </g>
+        <text x="96.555px" y="71.445px" style="font-family:'AvenirNext-Medium', 'Avenir Next', sans-serif;font-weight:500;font-size:37.5px;fill:rgb(35,31,32);">A<tspan x="124.342px 139.042px 152.505px 163.342px 176.092px 197.542px 217.192px " y="71.445px 71.445px 71.445px 71.445px 71.445px 71.445px 71.445px ">rtifact</tspan></text>
+    </g>
+    <g transform="matrix(1,0,0,1,200.745,-46.6365)">
+        <path d="M457.345,396.125L457.345,442.657C457.345,455.498 446.92,465.923 434.079,465.923L219.78,465.923C206.939,465.923 196.513,455.498 196.513,442.657L196.513,396.125C196.513,383.284 206.939,372.859 219.78,372.859L434.079,372.859C446.92,372.859 457.345,383.284 457.345,396.125Z" style="fill:none;stroke:rgb(35,31,32);stroke-width:4.17px;"/>
+    </g>
+    <g transform="matrix(1,0,0,1,26.7175,311.462)">
+        <g transform="matrix(37.5,0,0,37.5,247.796,71.4449)">
+        </g>
+        <text x="100.984px" y="71.445px" style="font-family:'AvenirNext-Medium', 'Avenir Next', sans-serif;font-weight:500;font-size:37.5px;fill:rgb(35,31,32);">R<tspan x="124.684px 147.296px 172.121px 182.959px 200.734px 214.196px 228.896px " y="71.445px 71.445px 71.445px 71.445px 71.445px 71.445px 71.445px ">egistry</tspan></text>
+    </g>
+    <g transform="matrix(1,0,0,1,-125.822,-46.6365)">
+        <path d="M457.345,396.125L457.345,442.657C457.345,455.498 446.92,465.923 434.079,465.923L219.78,465.923C206.939,465.923 196.513,455.498 196.513,442.657L196.513,396.125C196.513,383.284 206.939,372.859 219.78,372.859L434.079,372.859C446.92,372.859 457.345,383.284 457.345,396.125Z" style="fill:none;stroke:rgb(35,31,32);stroke-width:4.17px;"/>
+    </g>
+    <g transform="matrix(1,0,0,1,-125.822,-46.6365)">
+        <path d="M457.345,396.125L457.345,442.657C457.345,455.498 446.92,465.923 434.079,465.923L219.78,465.923C206.939,465.923 196.513,455.498 196.513,442.657L196.513,396.125C196.513,383.284 206.939,372.859 219.78,372.859L434.079,372.859C446.92,372.859 457.345,383.284 457.345,396.125Z" style="fill:none;stroke:rgb(35,31,32);stroke-width:4.17px;"/>
+    </g>
+    <g transform="matrix(1,0,0,1,58.3592,448.317)">
+        <g transform="matrix(37.5,0,0,37.5,197.761,71.4449)">
+        </g>
+        <text x="87.736px" y="71.445px" style="font-family:'AvenirNext-Medium', 'Avenir Next', sans-serif;font-weight:500;font-size:37.5px;fill:rgb(35,31,32);">N<tspan x="117.811px 141.811px 155.273px 166.111px 178.861px " y="71.445px 71.445px 71.445px 71.445px 71.445px ">otify</tspan></text>
+    </g>
+    <g transform="matrix(1,0,0,1,200.745,87.1496)">
+        <path d="M457.345,396.125L457.345,442.657C457.345,455.498 446.92,465.923 434.079,465.923L219.78,465.923C206.939,465.923 196.513,455.498 196.513,442.657L196.513,396.125C196.513,383.284 206.939,372.859 219.78,372.859L434.079,372.859C446.92,372.859 457.345,383.284 457.345,396.125Z" style="fill:none;stroke:rgb(35,31,32);stroke-width:4.17px;"/>
+    </g>
+    <g transform="matrix(1,0,0,1,381.175,448.317)">
+        <g transform="matrix(37.5,0,0,37.5,202.805,71.4449)">
+        </g>
+        <text x="90.192px" y="71.445px" style="font-family:'AvenirNext-Medium', 'Avenir Next', sans-serif;font-weight:500;font-size:37.5px;fill:rgb(35,31,32);">C<tspan x="117.192px 138.642px 158.292px 181.317px " y="71.445px 71.445px 71.445px 71.445px ">ache</tspan></text>
+    </g>
+    <g transform="matrix(1,0,0,1,-125.822,87.1496)">
+        <path d="M457.345,396.125L457.345,442.657C457.345,455.498 446.92,465.923 434.079,465.923L219.78,465.923C206.939,465.923 196.513,455.498 196.513,442.657L196.513,396.125C196.513,383.284 206.939,372.859 219.78,372.859L434.079,372.859C446.92,372.859 457.345,383.284 457.345,396.125Z" style="fill:none;stroke:rgb(35,31,32);stroke-width:4.17px;"/>
+    </g>
+    <g transform="matrix(1,0,0,1,10.6051,4.67337)">
+        <text x="59.129px" y="65.757px" style="font-family:'HiraginoSans-W5', 'Hiragino Sans', sans-serif;font-weight:500;font-size:29.167px;fill:rgb(35,31,32);">・</text>
+        <text x="87.567px" y="65.757px" style="font-family:'AvenirNext-Medium', 'Avenir Next', sans-serif;font-weight:500;font-size:29.167px;fill:rgb(35,31,32);">G<tspan x="109.529px 116.354px 125.221px 141.525px 157.771px 175.592px 182.154px 198.983px 214.967px 221.821px 237.804px 252.883px 265.104px 281.088px " y="65.757px 65.757px 65.757px 65.757px 65.757px 65.757px 65.757px 65.757px 65.757px 65.757px 65.757px 65.757px 65.757px 65.757px ">ithub Releases</tspan></text>
+        <text x="59.129px" y="107.424px" style="font-family:'HiraginoSans-W5', 'Hiragino Sans', sans-serif;font-weight:500;font-size:29.167px;fill:rgb(35,31,32);">・</text>
+        <text x="87.567px" y="107.424px" style="font-family:'AvenirNext-Medium', 'Avenir Next', sans-serif;font-weight:500;font-size:29.167px;fill:rgb(35,31,32);">A<tspan x="107.575px 135.663px 151.529px 158.092px 173.958px " y="107.424px 107.424px 107.424px 107.424px 107.424px ">WS S3</tspan></text>
+        <text x="59.129px" y="149.091px" style="font-family:'HiraginoSans-W5', 'Hiragino Sans', sans-serif;font-weight:500;font-size:29.167px;fill:rgb(35,31,32);">・</text>
+        <text x="87.567px" y="149.091px" style="font-family:'AvenirNext-Medium', 'Avenir Next', sans-serif;font-weight:500;font-size:29.167px;fill:rgb(35,31,32);">G<tspan x="109.529px 126.592px 143.654px 161.358px 168.213px 184.196px 190.758px 210.679px 217.533px 234.596px 250.842px 268.633px 275.196px 291.063px 299.929px 316.992px 326.442px 341.521px 359.225px " y="149.091px 149.091px 149.091px 149.091px 149.091px 149.091px 149.091px 149.091px 149.091px 149.091px 149.091px 149.091px 149.091px 149.091px 149.091px 149.091px 149.091px 149.091px 149.091px ">oogle Cloud Storage</tspan></text>
+        <text x="59.129px" y="190.757px" style="font-family:'HiraginoSans-W5', 'Hiragino Sans', sans-serif;font-weight:500;font-size:29.167px;fill:rgb(35,31,32);">・</text>
+        <g transform="matrix(29.1667,0,0,29.1667,252.008,190.757)">
+        </g>
+        <text x="87.567px" y="190.757px" style="font-family:'AvenirNext-Medium', 'Avenir Next', sans-serif;font-weight:500;font-size:29.167px;fill:rgb(35,31,32);">G<tspan x="109.529px 126.708px 143.333px 163.254px 169.817px 185.683px 201.667px 211.496px 225.467px 241.45px " y="190.757px 190.757px 190.757px 190.757px 190.757px 190.757px 190.757px 190.757px 190.757px 190.757px ">RPC Server</tspan></text>
+    </g>
+    <g transform="matrix(1,0,0,1,87.1108,258.065)">
+        <text x="59.129px" y="58.845px" style="font-family:'AvenirNext-Bold', 'Avenir Next', sans-serif;font-weight:700;font-size:20.833px;fill:rgb(35,31,32);">1<tspan x="72.067px " y="58.845px ">.</tspan></text>
+        <g transform="matrix(20.8333,0,0,20.8333,144.004,58.8449)">
+        </g>
+        <text x="81.858px" y="58.845px" style="font-family:'AvenirNext-Medium', 'Avenir Next', sans-serif;font-weight:500;font-size:20.833px;fill:rgb(35,31,32);">P<tspan x="92.379px 104.567px 109.463px 114.358px 119.233px 130.838px " y="58.845px 58.845px 58.845px 58.845px 58.845px 58.845px ">olling</tspan></text>
+    </g>
+    <g transform="matrix(1,0,0,1,196.111,258.065)">
+        <text x="59.129px" y="58.845px" style="font-family:'AvenirNext-Bold', 'Avenir Next', sans-serif;font-weight:700;font-size:20.833px;fill:rgb(35,31,32);">5<tspan x="72.067px " y="58.845px ">.</tspan></text>
+        <g transform="matrix(20.8333,0,0,20.8333,173.171,58.8449)">
+        </g>
+        <text x="81.858px" y="58.845px" style="font-family:'AvenirNext-Medium', 'Avenir Next', sans-serif;font-weight:500;font-size:20.833px;fill:rgb(35,31,32);">R<tspan x="93.879px 105.296px 117.983px 130.171px 137.192px 143.525px 148.4px 160.004px " y="58.845px 58.845px 58.845px 58.845px 58.845px 58.845px 58.845px 58.845px ">eporting</tspan></text>
+    </g>
+    <g transform="matrix(1,0,0,1,87.3626,515.754)">
+        <text x="59.129px" y="58.845px" style="font-family:'AvenirNext-Bold', 'Avenir Next', sans-serif;font-weight:700;font-size:20.833px;fill:rgb(35,31,32);">6<tspan x="72.067px " y="58.845px ">.</tspan></text>
+        <g transform="matrix(20.8333,0,0,20.8333,129.442,58.8449)">
+        </g>
+        <text x="81.858px" y="58.845px" style="font-family:'AvenirNext-Medium', 'Avenir Next', sans-serif;font-weight:500;font-size:20.833px;fill:rgb(35,31,32);">S<tspan x="93.192px 104.608px 116.213px " y="58.845px 58.845px 58.845px ">end</tspan></text>
+    </g>
+    <g transform="matrix(1,0,0,1,417.417,258.065)">
+        <text x="59.129px" y="58.845px" style="font-family:'AvenirNext-Bold', 'Avenir Next', sans-serif;font-weight:700;font-size:20.833px;fill:rgb(35,31,32);">2<tspan x="72.067px " y="58.845px ">.</tspan></text>
+        <g transform="matrix(20.8333,0,0,20.8333,177.65,58.8449)">
+        </g>
+        <text x="81.858px" y="58.845px" style="font-family:'AvenirNext-Medium', 'Avenir Next', sans-serif;font-weight:500;font-size:20.833px;fill:rgb(35,31,32);">D<tspan x="97.192px 109.379px 124.963px 136.567px 141.463px 153.65px 164.421px " y="58.845px 58.845px 58.845px 58.845px 58.845px 58.845px 58.845px ">ownload</tspan></text>
+    </g>
+    <g transform="matrix(1,0,0,1,417.417,515.754)">
+        <text x="59.129px" y="58.845px" style="font-family:'AvenirNext-Bold', 'Avenir Next', sans-serif;font-weight:700;font-size:20.833px;fill:rgb(35,31,32);">3<tspan x="72.067px " y="58.845px ">.</tspan></text>
+        <g transform="matrix(20.8333,0,0,20.8333,153.817,58.8449)">
+        </g>
+        <text x="81.858px" y="58.845px" style="font-family:'AvenirNext-Medium', 'Avenir Next', sans-serif;font-weight:500;font-size:20.833px;fill:rgb(35,31,32);">S<tspan x="93.192px 99.525px 111.713px 118.463px 129.233px 141.879px " y="58.845px 58.845px 58.845px 58.845px 58.845px 58.845px ">torage</tspan></text>
+    </g>
+    <g transform="matrix(1,0,0,1,679.912,388.11)">
+        <text x="59.129px" y="58.845px" style="font-family:'AvenirNext-Bold', 'Avenir Next', sans-serif;font-weight:700;font-size:20.833px;fill:rgb(35,31,32);">4<tspan x="72.067px " y="58.845px ">.</tspan></text>
+        <g transform="matrix(20.8333,0,0,20.8333,196.192,58.8449)">
+        </g>
+        <text x="81.858px" y="58.845px" style="font-family:'AvenirNext-Medium', 'Avenir Next', sans-serif;font-weight:500;font-size:20.833px;fill:rgb(35,31,32);">D<tspan x="97.192px 108.608px 121.296px 126.192px 138.379px 148.358px 166.317px 177.733px 189.338px " y="58.845px 58.845px 58.845px 58.845px 58.845px 58.845px 58.845px 58.845px 58.845px ">eployment</tspan></text>
+    </g>
+    <g transform="matrix(1,0,0,1,340.605,638.49)">
+        <text x="59.129px" y="65.757px" style="font-family:'HiraginoSans-W5', 'Hiragino Sans', sans-serif;font-weight:500;font-size:29.167px;fill:rgb(35,31,32);">・</text>
+        <text x="87.567px" y="65.757px" style="font-family:'AvenirNext-Medium', 'Avenir Next', sans-serif;font-weight:500;font-size:29.167px;fill:rgb(35,31,32);">F<tspan x="102.879px 109.704px 116.558px 132.542px 139.104px 151.325px 165.296px 177.517px 186.383px 202.367px " y="65.757px 65.757px 65.757px 65.757px 65.757px 65.757px 65.757px 65.757px 65.757px 65.757px ">ile system</tspan></text>
+        <text x="59.129px" y="107.424px" style="font-family:'HiraginoSans-W5', 'Hiragino Sans', sans-serif;font-weight:500;font-size:29.167px;fill:rgb(35,31,32);">・</text>
+        <text x="87.567px" y="107.424px" style="font-family:'AvenirNext-Medium', 'Avenir Next', sans-serif;font-weight:500;font-size:29.167px;fill:rgb(35,31,32);">M<tspan x="113.175px 129.158px 154.3px 171.363px 181.192px " y="107.424px 107.424px 107.424px 107.424px 107.424px ">emory</tspan></text>
+        <text x="59.129px" y="149.091px" style="font-family:'HiraginoSans-W5', 'Hiragino Sans', sans-serif;font-weight:500;font-size:29.167px;fill:rgb(35,31,32);">・</text>
+        <text x="87.567px" y="149.091px" style="font-family:'AvenirNext-Medium', 'Avenir Next', sans-serif;font-weight:500;font-size:29.167px;fill:rgb(35,31,32);">H<tspan x="108.1px 123.179px 135.4px 151.704px 158.529px 172.208px 189.271px 199.1px 216.863px 223.425px 243.346px 260.408px 276.654px 288.875px 305.121px " y="149.091px 149.091px 149.091px 149.091px 149.091px 149.091px 149.091px 149.091px 149.091px 149.091px 149.091px 149.091px 149.091px 149.091px 149.091px ">ashicorp Consul</tspan></text>
+        <text x="59.129px" y="190.757px" style="font-family:'HiraginoSans-W5', 'Hiragino Sans', sans-serif;font-weight:500;font-size:29.167px;fill:rgb(35,31,32);">・</text>
+        <g transform="matrix(29.1667,0,0,29.1667,157.946,190.757)">
+        </g>
+        <text x="87.567px" y="190.757px" style="font-family:'AvenirNext-Medium', 'Avenir Next', sans-serif;font-weight:500;font-size:29.167px;fill:rgb(35,31,32);">R<tspan x="104.396px 120.379px 138.171px 144.996px " y="190.757px 190.757px 190.757px 190.757px ">edis</tspan></text>
+    </g>
+    <g transform="matrix(1,0,0,1,-288.235,-15.6118)">
+        <g transform="matrix(133.333,0,0,133.333,702.411,159.507)">
+        </g>
+        <text x="662.411px" y="159.507px" style="font-family:'AvenirNext-UltraLight', 'Avenir Next', sans-serif;font-weight:275;font-size:133.333px;fill:rgb(35,31,32);">]</text>
+    </g>
+    <g transform="matrix(1,0,0,1,10.6051,638.49)">
+        <text x="59.129px" y="65.757px" style="font-family:'HiraginoSans-W5', 'Hiragino Sans', sans-serif;font-weight:500;font-size:29.167px;fill:rgb(35,31,32);">・</text>
+        <text x="87.567px" y="65.757px" style="font-family:'AvenirNext-Medium', 'Avenir Next', sans-serif;font-weight:500;font-size:29.167px;fill:rgb(35,31,32);">S<tspan x="103.433px 110.288px 125.367px 139.046px " y="65.757px 65.757px 65.757px 65.757px ">lack</tspan></text>
+        <text x="59.129px" y="107.424px" style="font-family:'HiraginoSans-W5', 'Hiragino Sans', sans-serif;font-weight:500;font-size:29.167px;fill:rgb(35,31,32);">・</text>
+        <g transform="matrix(29.1667,0,0,29.1667,162.263,107.424)">
+        </g>
+        <text x="87.567px" y="107.424px" style="font-family:'AvenirNext-Medium', 'Avenir Next', sans-serif;font-weight:500;font-size:29.167px;fill:rgb(35,31,32);">S<tspan x="103.433px 129.042px 144.908px " y="107.424px 107.424px 107.424px ">MTP</tspan></text>
+    </g>
+    <g transform="matrix(0.948006,0,0,0.921137,-103.513,-27.8298)">
+        <path d="M843.689,365.313L843.689,655.541C843.689,674.987 828.349,690.774 809.454,690.774L177.679,690.774C158.784,690.774 143.444,674.987 143.444,655.541L143.444,365.313C143.444,345.867 158.784,330.079 177.679,330.079L809.454,330.079C828.349,330.079 843.689,345.867 843.689,365.313Z" style="fill:none;stroke:rgb(35,31,32);stroke-width:4.46px;"/>
+    </g>
+    <g transform="matrix(1,0,0,1,0,-8)">
+        <g transform="matrix(0.471595,0,0,1,134.414,-59.2254)">
+            <g>
+                <rect x="352.918" y="652.587" width="269.48" height="46.127" style="fill:white;"/>
+            </g>
+        </g>
+        <g transform="matrix(1,0,0,1,252.838,561.931)">
+            <g transform="matrix(29.1667,0,0,29.1667,152.459,65.1449)">
+            </g>
+            <text x="70.647px" y="65.145px" style="font-family:'AvenirNext-DemiBold', 'Avenir Next', sans-serif;font-weight:600;font-size:29.167px;fill:rgb(35,31,32);">D<tspan x="94.388px 112.588px 137.497px " y="65.145px 65.145px 65.145px ">ewy</tspan></text>
+        </g>
+    </g>
+    <g transform="matrix(0.99948,-0.0322396,0.0322396,0.99948,-76.9099,-65.5036)">
+        <g transform="matrix(0.99948,0.0322396,-0.0322396,0.99948,74.7581,67.9491)">
+            <path d="M134.297,237.204L140.547,227.829L146.797,237.204" style="fill:none;stroke:rgb(35,31,32);stroke-width:4.17px;stroke-linejoin:miter;stroke-miterlimit:10;"/>
+            <path d="M140.547,324.526L140.547,227.829" style="fill:none;stroke:rgb(35,31,32);stroke-width:4.17px;"/>
+        </g>
+    </g>
+    <g transform="matrix(0.99948,-0.0322396,0.0322396,0.99948,30.0901,-65.5036)">
+        <g transform="matrix(0.99948,0.0322396,-0.0322396,0.99948,-32.1863,64.4994)">
+            <path d="M241.297,237.204L247.547,227.829L253.797,237.204" style="fill:none;stroke:rgb(35,31,32);stroke-width:4.17px;stroke-linejoin:miter;stroke-miterlimit:10;"/>
+            <path d="M247.547,324.526L247.547,227.829" style="fill:none;stroke:rgb(35,31,32);stroke-width:4.17px;"/>
+        </g>
+    </g>
+    <g transform="matrix(0.99948,-0.0322396,0.0322396,0.99948,-76.9099,265.496)">
+        <g transform="matrix(0.99948,0.0322396,-0.0322396,0.99948,85.4294,-262.879)">
+            <path d="M134.297,642.395L140.547,651.77L146.797,642.395" style="fill:none;stroke:rgb(35,31,32);stroke-width:4.17px;stroke-linejoin:miter;stroke-miterlimit:10;"/>
+            <path d="M140.547,651.77L140.547,555.073" style="fill:none;stroke:rgb(35,31,32);stroke-width:4.17px;"/>
+        </g>
+    </g>
+    <g transform="matrix(0.99948,-0.0322396,0.0322396,0.99948,250.083,265.496)">
+        <g transform="matrix(0.99948,0.0322396,-0.0322396,0.99948,-241.393,-273.421)">
+            <path d="M461.29,642.395L467.54,651.77L473.79,642.395" style="fill:none;stroke:rgb(35,31,32);stroke-width:4.17px;stroke-linejoin:miter;stroke-miterlimit:10;"/>
+            <path d="M467.54,651.77L467.54,555.073" style="fill:none;stroke:rgb(35,31,32);stroke-width:4.17px;"/>
+        </g>
+    </g>
+    <g transform="matrix(1,0,0,1,-9.22245,-67.528)">
+        <g transform="matrix(-0.453464,0.892293,-1.45077,-0.800374,1374.75,642.465)">
+            <g transform="matrix(-0.482895,-0.538353,0.875301,-0.273591,156.164,892.435)">
+                <path d="M832.898,511.303L837.892,521.404L826.648,522.129" style="fill:none;stroke:rgb(35,31,32);stroke-width:4.17px;stroke-linejoin:miter;stroke-miterlimit:10;"/>
+                <path d="M696.955,440.033C696.955,440.033 816.511,509.059 837.892,521.404" style="fill:none;stroke:rgb(35,31,32);stroke-width:4.17px;"/>
+            </g>
+        </g>
+        <g transform="matrix(0.546017,0.838857,-1.41853,0.856214,1157.29,-3.98927)">
+            <g transform="matrix(0.516585,-0.506113,0.85585,0.329432,-531.869,604.615)">
+                <path d="M826.648,357.938L837.892,358.663L832.898,368.763" style="fill:none;stroke:rgb(35,31,32);stroke-width:4.17px;stroke-linejoin:miter;stroke-miterlimit:10;"/>
+                <path d="M696.955,440.033C696.955,440.033 816.511,371.008 837.892,358.663" style="fill:none;stroke:rgb(35,31,32);stroke-width:4.17px;stroke-dasharray:4.17,8.33,0,0,0,0;"/>
+            </g>
+        </g>
+    </g>
+    <g transform="matrix(1,0,0,1,-88.4305,-73.4353)">
+        <path d="M533.962,175.942C533.962,175.942 557.673,175.586 557.78,200.775" style="fill:none;stroke:rgb(35,31,32);stroke-width:4.17px;"/>
+    </g>
+    <g transform="matrix(1,-0.000174962,-0.000174962,1.01787,-88.4446,-77.3178)">
+        <path d="M557.969,200.22L556.053,395.994" style="fill:none;stroke:rgb(35,31,32);stroke-width:4.13px;"/>
+    </g>
+    <g transform="matrix(0.322827,-0.0103982,0.00335699,0.999946,271.982,-67.7497)">
+        <g transform="matrix(3.0973,0.0322079,-0.0103982,0.999946,-843.115,58.9861)">
+            <path d="M420.04,108.756L410.665,102.506L420.04,96.256" style="fill:none;stroke:rgb(35,31,32);stroke-width:4.17px;stroke-linejoin:miter;stroke-miterlimit:10;"/>
+            <path d="M444.954,102.506L410.665,102.506" style="fill:none;stroke:rgb(35,31,32);stroke-width:4.17px;"/>
+        </g>
+    </g>
+</svg>

@@ -1,4 +1,4 @@
-package ghrelease
+package registry
 
 import (
 	"bytes"
@@ -13,47 +13,53 @@ import (
 	"github.com/google/go-github/v55/github"
 	"github.com/google/go-querystring/query"
 	"github.com/k1LoW/go-github-client/v55/factory"
-	"github.com/linyows/dewy/registry"
-	ghrelease "github.com/linyows/dewy/storage/github_release"
 )
 
 const (
 	// ISO8601 for time format.
 	ISO8601 = "20060102T150405Z0700"
-	Scheme  = "github_release"
 )
 
-// GithubRelease struct.
-type GithubRelease struct {
-	owner      string
-	repo       string
-	prerelease bool
-	cl         *github.Client
+// GHR struct.
+type GHR struct {
+	Owner                 string `schema:"-"`
+	Repo                  string `schema:"-"`
+	Artifact              string `schema:"artifact"`
+	PreRelease            bool   `schema:"pre-release"`
+	DisableRecordShipping bool   // FIXME: For testing. Remove this.
+	cl                    *github.Client
 }
 
-var _ registry.Registry = (*GithubRelease)(nil)
-
-// New returns GithubRelease.
-func New(c Config) (*GithubRelease, error) {
-	cl, err := factory.NewGithubClient()
+// New returns GHR.
+func NewGHR(ctx context.Context, u string) (*GHR, error) {
+	ur, err := url.Parse(u)
 	if err != nil {
 		return nil, err
 	}
-	g := &GithubRelease{
-		owner:      c.Owner,
-		repo:       c.Repo,
-		prerelease: c.PreRelease,
-		cl:         cl,
+
+	ghr := &GHR{
+		Owner: ur.Host,
+		Repo:  strings.TrimPrefix(removeTrailingSlash(ur.Path), "/"),
 	}
-	return g, nil
+
+	if err := decoder.Decode(ghr, ur.Query()); err != nil {
+		return nil, err
+	}
+
+	ghr.cl, err = factory.NewGithubClient()
+	if err != nil {
+		return nil, err
+	}
+
+	return ghr, nil
 }
 
 // String to string.
-func (g *GithubRelease) String() string {
+func (g *GHR) String() string {
 	return g.host()
 }
 
-func (g *GithubRelease) host() string {
+func (g *GHR) host() string {
 	h := g.cl.BaseURL.Host
 	if h != "api.github.com" {
 		return h
@@ -61,33 +67,8 @@ func (g *GithubRelease) host() string {
 	return "github.com"
 }
 
-// Owner returns owner.
-func (g *GithubRelease) Owner() string {
-	return g.owner
-}
-
-// Repo returns repository.
-func (g *GithubRelease) Repo() string {
-	return g.repo
-}
-
-// OwnerURL returns owner URL.
-func (g *GithubRelease) OwnerURL() string {
-	return fmt.Sprintf("https://%s/%s", g, g.owner)
-}
-
-// OwnerIconURL returns owner icon URL.
-func (g *GithubRelease) OwnerIconURL() string {
-	return fmt.Sprintf("%s.png?size=200", g.OwnerURL())
-}
-
-// URL returns repository URL.
-func (g *GithubRelease) URL() string {
-	return fmt.Sprintf("%s/%s", g.OwnerURL(), g.repo)
-}
-
 // Current returns current artifact.
-func (g *GithubRelease) Current(ctx context.Context, req *registry.CurrentRequest) (*registry.CurrentResponse, error) {
+func (g *GHR) Current(ctx context.Context, req *CurrentRequest) (*CurrentResponse, error) {
 	release, err := g.latest(ctx)
 	if err != nil {
 		return nil, err
@@ -147,20 +128,20 @@ func (g *GithubRelease) Current(ctx context.Context, req *registry.CurrentReques
 		}
 	}
 
-	au := fmt.Sprintf("%s://%s/%s/tag/%s/%s", ghrelease.Scheme, g.owner, g.repo, release.GetTagName(), artifactName)
+	au := fmt.Sprintf("%s://%s/%s/tag/%s/%s", ghrScheme, g.Owner, g.Repo, release.GetTagName(), artifactName)
 
-	return &registry.CurrentResponse{
+	return &CurrentResponse{
 		ID:          time.Now().Format(ISO8601),
 		Tag:         release.GetTagName(),
 		ArtifactURL: au,
 	}, nil
 }
 
-func (g *GithubRelease) latest(ctx context.Context) (*github.RepositoryRelease, error) {
+func (g *GHR) latest(ctx context.Context) (*github.RepositoryRelease, error) {
 	var r *github.RepositoryRelease
-	if g.prerelease {
+	if g.PreRelease {
 		opt := &github.ListOptions{Page: 1}
-		rr, _, err := g.cl.Repositories.ListReleases(ctx, g.owner, g.repo, opt)
+		rr, _, err := g.cl.Repositories.ListReleases(ctx, g.Owner, g.Repo, opt)
 		if err != nil {
 			return nil, err
 		}
@@ -171,7 +152,7 @@ func (g *GithubRelease) latest(ctx context.Context) (*github.RepositoryRelease, 
 			return r, nil
 		}
 	}
-	r, _, err := g.cl.Repositories.GetLatestRelease(ctx, g.owner, g.repo)
+	r, _, err := g.cl.Repositories.GetLatestRelease(ctx, g.Owner, g.Repo)
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +160,7 @@ func (g *GithubRelease) latest(ctx context.Context) (*github.RepositoryRelease, 
 }
 
 // Report report shipping.
-func (g *GithubRelease) Report(ctx context.Context, req *registry.ReportRequest) error {
+func (g *GHR) Report(ctx context.Context, req *ReportRequest) error {
 	if req.Err != nil {
 		return req.Err
 	}
@@ -189,7 +170,7 @@ func (g *GithubRelease) Report(ctx context.Context, req *registry.ReportRequest)
 
 	page := 1
 	for {
-		releases, res, err := g.cl.Repositories.ListReleases(ctx, g.owner, g.repo, &github.ListOptions{
+		releases, res, err := g.cl.Repositories.ListReleases(ctx, g.Owner, g.Repo, &github.ListOptions{
 			Page:    page,
 			PerPage: 100,
 		})
@@ -198,7 +179,7 @@ func (g *GithubRelease) Report(ctx context.Context, req *registry.ReportRequest)
 		}
 		for _, r := range releases {
 			if r.GetTagName() == req.Tag {
-				s := fmt.Sprintf("repos/%s/%s/releases/%d/assets", g.owner, g.repo, r.GetID())
+				s := fmt.Sprintf("repos/%s/%s/releases/%d/assets", g.Owner, g.Repo, r.GetID())
 				opt := &github.UploadOptions{Name: strings.Replace(info, " ", "_", -1) + ".txt"}
 
 				u, err := url.Parse(s)
