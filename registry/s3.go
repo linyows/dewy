@@ -41,19 +41,31 @@ func NewS3(ctx context.Context, u string) (*S3, error) {
 		return nil, err
 	}
 
+	after, _ := strings.CutPrefix(ur.Path, "/")
+	splitted := strings.SplitN(after, "/", 2)
+	bucket := ""
+	prefix := ""
+	if len(splitted) > 0 {
+		bucket = splitted[0]
+	}
+	if len(splitted) > 1 {
+		prefix = strings.TrimPrefix(addTrailingSlash(splitted[1]), "/")
+	}
+
 	s := &S3{
-		Bucket: ur.Host,
-		Prefix: strings.TrimPrefix(addTrailingSlash(ur.Path), "/"),
+		Region: ur.Host,
+		Bucket: bucket,
+		Prefix: prefix,
 	}
 	if err = decoder.Decode(s, ur.Query()); err != nil {
 		return nil, err
 	}
 
 	if s.Region == "" {
-		s.Region = "ap-northeast-1"
+		return nil, fmt.Errorf("region is required: %s", "s3://<region>/<bucket>/<prefix>")
 	}
 	if s.Bucket == "" {
-		return nil, fmt.Errorf("s3 bucket is required: %s", "s3://<bucket>/<prefix>")
+		return nil, fmt.Errorf("bucket is required: %s", "s3://<region>/<bucket>/<prefix>")
 	}
 
 	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(s.Region))
