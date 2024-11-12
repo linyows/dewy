@@ -114,18 +114,32 @@ AWS S3をレジストリに使う場合は以下の設定をします。
 
 ```sh
 # 構造
-s3://<bucket-name>/<path-prefix>?<options: region, endpoint, pre-release, artifact>
+s3://<region-name>/<bucket-name>/<path-prefix>?<options: endpoint, pre-release, artifact>
 
 # 例
 $ export AWS_ACCESS_KEY_ID=****.....
 $ export AWS_SECRET_ACCESS_KEY=****.....
-$ dewy --registry s3://dewy/foo/bar/myapp?region=jp-north-1&endpoint=https://s3.isk01.sakurastorage.jp ...
+$ dewy --registry s3://jp-north-1/dewy/foo/bar/myapp?endpoint=https://s3.isk01.sakurastorage.jp ...
+```
+
+S3でのオブジェクトのパスは、`<prefix>/<semver>/<artifact>` の順になるようにしてください。例えば次の通り。
+
+```sh
+# <path...>/<semver>/<artifact>
+foo/bar/baz/v1.2.4-rc/dewy-testapp_linux_x86_64.tar.gz
+                   /dewy-testapp_linux_arm64.tar.gz
+                   /dewy-testapp_darwin_arm64.tar.gz
+foo/bar/baz/v1.2.3/dewy-testapp_linux_x86_64.tar.gz
+                  /dewy-testapp_linux_arm64.tar.gz
+                  /dewy-testapp_darwin_arm64.tar.gz
+foo/bar/baz/v1.2.2/dewy-testapp_linux_x86_64.tar.gz
+                  /dewy-testapp_linux_arm64.tar.gz
+                  /dewy-testapp_darwin_arm64.tar.gz
 ```
 
 Dewyは、 `aws-sdk-go-v2` を使っているので regionやendpointも環境変数で指定することもできます。
 
 ```sh
-$ export AWS_REGION="us-west-2"
 $ export AWS_ENDPOINT_URL="http://localhost:9000"
 ```
 
