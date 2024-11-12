@@ -116,7 +116,7 @@ $ dewy --registry s3://jp-north-1/dewy/foo/bar/myapp?endpoint=https://s3.isk01.s
 Please ensure that the object path in S3 follows the order: `<prefix>/<semver>/<artifact>`. For example:
 
 ```sh
-# <path...>/<semver>/<artifact>
+# <prefix>/<semver>/<artifact>
 foo/bar/baz/v1.2.4-rc/dewy-testapp_linux_x86_64.tar.gz
                    /dewy-testapp_linux_arm64.tar.gz
                    /dewy-testapp_darwin_arm64.tar.gz

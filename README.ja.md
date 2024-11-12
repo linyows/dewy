@@ -125,7 +125,7 @@ $ dewy --registry s3://jp-north-1/dewy/foo/bar/myapp?endpoint=https://s3.isk01.s
 S3でのオブジェクトのパスは、`<prefix>/<semver>/<artifact>` の順になるようにしてください。例えば次の通り。
 
 ```sh
-# <path...>/<semver>/<artifact>
+# <prefix>/<semver>/<artifact>
 foo/bar/baz/v1.2.4-rc/dewy-testapp_linux_x86_64.tar.gz
                    /dewy-testapp_linux_arm64.tar.gz
                    /dewy-testapp_darwin_arm64.tar.gz
