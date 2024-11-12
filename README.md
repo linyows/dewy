@@ -105,18 +105,32 @@ To use AWS S3 as a registry, configure it as follows. Options include specifying
 
 ```sh
 # Format
-# s3://<bucket-name>/<path-prefix>?<options: region, endpoint, pre-release, artifact>
+# s3://<region-name>/<bucket-name>/<path-prefix>?<options: endpoint, pre-release, artifact>
 
 # Example
 $ export AWS_ACCESS_KEY_ID=****.....
 $ export AWS_SECRET_ACCESS_KEY=****.....
-$ dewy --registry s3://dewy/foo/bar/myapp?region=jp-north-1&endpoint=https://s3.isk01.sakurastorage.jp ...
+$ dewy --registry s3://jp-north-1/dewy/foo/bar/myapp?endpoint=https://s3.isk01.sakurastorage.jp ...
+```
+
+Please ensure that the object path in S3 follows the order: `<prefix>/<semver>/<artifact>`. For example:
+
+```sh
+# <prefix>/<semver>/<artifact>
+foo/bar/baz/v1.2.4-rc/dewy-testapp_linux_x86_64.tar.gz
+                   /dewy-testapp_linux_arm64.tar.gz
+                   /dewy-testapp_darwin_arm64.tar.gz
+foo/bar/baz/v1.2.3/dewy-testapp_linux_x86_64.tar.gz
+                  /dewy-testapp_linux_arm64.tar.gz
+                  /dewy-testapp_darwin_arm64.tar.gz
+foo/bar/baz/v1.2.2/dewy-testapp_linux_x86_64.tar.gz
+                  /dewy-testapp_linux_arm64.tar.gz
+                  /dewy-testapp_darwin_arm64.tar.gz
 ```
 
 Dewy leverages aws-sdk-go-v2, so you can also specify region and endpoint through environment variables.
 
 ```sh
-$ export AWS_REGION="us-west-2"
 $ export AWS_ENDPOINT_URL="http://localhost:9000"
 ```
 
