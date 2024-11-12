@@ -59,7 +59,7 @@ func TestNew(t *testing.T) {
 			false,
 		},
 		{
-			"s3://dewy/foo/bar/baz?region=ap-northeast-3&pre-release=true",
+			"s3://ap-northeast-3/dewy/foo/bar/baz?pre-release=true",
 			func(t *testing.T) Registry {
 				return &S3{
 					Bucket:     "dewy",
@@ -71,7 +71,7 @@ func TestNew(t *testing.T) {
 			false,
 		},
 		{
-			"s3://dewy",
+			"s3://ap-northeast-1/dewy/",
 			func(t *testing.T) Registry {
 				return &S3{
 					Bucket:     "dewy",
