@@ -15,6 +15,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
+const (
+	s3Format string = "s3://<region>/<bucket>/<prefix>"
+)
 
 // S3 struct.
 type S3 struct {
@@ -56,10 +59,10 @@ func NewS3(ctx context.Context, u string) (*S3, error) {
 	}
 
 	if s.Region == "" {
-		return nil, fmt.Errorf("region is required: %s", "s3://<region>/<bucket>/<prefix>")
+		return nil, fmt.Errorf("region is required: %s", s3Format)
 	}
 	if s.Bucket == "" {
-		return nil, fmt.Errorf("bucket is required: %s", "s3://<region>/<bucket>/<prefix>")
+		return nil, fmt.Errorf("bucket is required: %s", s3Format)
 	}
 
 	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(s.Region))
