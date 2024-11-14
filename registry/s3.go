@@ -6,8 +6,6 @@ import (
 	"log"
 	"net/url"
 	"os"
-	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -17,10 +15,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
-var (
-	verRegex        = regexp.MustCompile(`^v?(\d+)\.(\d+)\.(\d+)$`)
-	verWithPreRegex = regexp.MustCompile(`^(v)?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$`)
-)
 
 // S3 struct.
 type S3 struct {
@@ -263,9 +257,9 @@ func (s *S3) LatestVersion(ctx context.Context) (string, *SemVer, error) {
 
 	matched := func(str string, pre bool) bool {
 		if pre {
-			return verWithPreRegex.MatchString(str)
+			return SemVerRegex.MatchString(str)
 		} else {
-			return verRegex.MatchString(str)
+			return SemVerRegexWithoutPreRelease.MatchString(str)
 		}
 	}
 
@@ -278,7 +272,7 @@ func (s *S3) LatestVersion(ctx context.Context) (string, *SemVer, error) {
 		for i, obj := range output.CommonPrefixes {
 			name := s.extractFilenameFromObjectKey(*obj.Prefix, s.Prefix)
 			if matched(name, s.PreRelease) {
-				ver := parseSemVer(name)
+				ver := ParseSemVer(name)
 				if ver != nil {
 					if latestVersion == nil || ver.Compare(latestVersion) > 0 {
 						latestVersion = ver
@@ -294,60 +288,4 @@ func (s *S3) LatestVersion(ctx context.Context) (string, *SemVer, error) {
 	}
 
 	return *latestObject.Prefix, latestVersion, nil
-}
-
-type SemVer struct {
-	V          string
-	Major      int
-	Minor      int
-	Patch      int
-	PreRelease string
-}
-
-func parseSemVer(version string) *SemVer {
-	match := verWithPreRegex.FindStringSubmatch(version)
-	if match == nil {
-		return nil
-	}
-
-	v := match[1]
-	major, _ := strconv.Atoi(match[2])
-	minor, _ := strconv.Atoi(match[3])
-	patch, _ := strconv.Atoi(match[4])
-	preRelease := match[5]
-
-	return &SemVer{
-		V:          v,
-		Major:      major,
-		Minor:      minor,
-		Patch:      patch,
-		PreRelease: preRelease,
-	}
-}
-
-func (v *SemVer) Compare(other *SemVer) int {
-	if v.Major != other.Major {
-		return v.Major - other.Major
-	}
-	if v.Minor != other.Minor {
-		return v.Minor - other.Minor
-	}
-	if v.Patch != other.Patch {
-		return v.Patch - other.Patch
-	}
-	if v.PreRelease == "" && other.PreRelease != "" {
-		return 1
-	}
-	if v.PreRelease != "" && other.PreRelease == "" {
-		return -1
-	}
-	return strings.Compare(v.PreRelease, other.PreRelease)
-}
-
-func (v *SemVer) String() string {
-	var pre string
-	if v.PreRelease != "" {
-		pre = fmt.Sprintf("-%s", v.PreRelease)
-	}
-	return fmt.Sprintf("%s%d.%d.%d%s", v.V, v.Major, v.Minor, v.Patch, pre)
 }
