@@ -33,7 +33,7 @@ func NewS3(ctx context.Context, strUrl string) (*S3, error) {
 		return nil, err
 	}
 
-	splitted := strings.SplitN(u.Path, "/", 2)
+	splitted := strings.SplitN(strings.TrimPrefix(u.Path, "/"), "/", 2)
 
 	s := &S3{
 		Region: u.Host,
