@@ -18,16 +18,17 @@ import (
 var decoder = schema.NewDecoder()
 
 type S3 struct {
+	Region   string `schema:"-"`
 	Bucket   string `schema:"-"`
 	Key      string `schema:"-"`
-	Region   string `schema:"region"`
 	Endpoint string `schema:"endpoint"`
+	url      string
 	cl       S3Client
 }
 
-// s3://<bucket>/<key>?region=aaa&endpoint=bbb"
-func NewS3(path string) (*S3, error) {
-	u, err := url.Parse(path)
+// s3://<region>/<bucket>/<key>?endpoint=bbb"
+func NewS3(ctx context.Context, strUrl string) (*S3, error) {
+	u, err := url.Parse(strUrl)
 	if err != nil {
 		return nil, err
 	}
@@ -35,14 +36,15 @@ func NewS3(path string) (*S3, error) {
 	splitted := strings.SplitN(u.Path, "/", 2)
 
 	s := &S3{
+		Region: u.Host,
 		Bucket: splitted[0],
 		Key:    splitted[1],
+		url:    strUrl,
 	}
 	if err = decoder.Decode(s, u.Query()); err != nil {
 		return nil, err
 	}
 
-	ctx := context.Background()
 	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(s.Region))
 	if err != nil {
 		return nil, err
@@ -64,8 +66,8 @@ func NewS3(path string) (*S3, error) {
 	return s, nil
 }
 
-func (s *S3) Fetch(url string, w io.Writer) error {
-	res, err := s.cl.GetObject(context.Background(), &s3.GetObjectInput{
+func (s *S3) Download(ctx context.Context, w io.Writer) error {
+	res, err := s.cl.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(s.Bucket),
 		Key:    aws.String(s.Key),
 	})
@@ -74,7 +76,7 @@ func (s *S3) Fetch(url string, w io.Writer) error {
 	}
 	defer res.Body.Close()
 
-	log.Printf("[INFO] Downloaded from %s", url)
+	log.Printf("[INFO] Downloaded from %s", s.url)
 	_, err = io.Copy(w, res.Body)
 	if err != nil {
 		return fmt.Errorf("failed to write artifact to writer: %w", err)

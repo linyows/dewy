@@ -1,6 +1,7 @@
 package artifact
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"strings"
@@ -15,34 +16,22 @@ const (
 // Fetcher is the interface that wraps the Fetch method.
 type Artifact interface {
 	// Fetch fetches the artifact from the storage.
-	Fetch(url string, w io.Writer) error
+	Download(ctx context.Context, w io.Writer) error
 }
 
-func Fetch(url string, w io.Writer) error {
+func New(ctx context.Context, url string) (Artifact, error) {
 	splitted := strings.SplitN(url, "://", 2)
 
 	switch splitted[0] {
 	case ghrScheme:
-		g, err := NewGHR()
-		if err != nil {
-			return err
-		}
-		return g.Fetch(url, w)
+		return NewGHR(ctx, url)
 
 	case s3Scheme:
-		s, err := NewS3(splitted[1])
-		if err != nil {
-			return err
-		}
-		return s.Fetch(url, w)
+		return NewS3(ctx, url)
 
 	case gcsScheme:
-		r, err := NewGCS()
-		if err != nil {
-			return err
-		}
-		return r.Fetch(url, w)
+		return NewGCS(ctx, url)
 	}
 
-	return fmt.Errorf("unsupported scheme: %s", url)
+	return nil, fmt.Errorf("unsupported scheme: %s", url)
 }

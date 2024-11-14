@@ -166,9 +166,6 @@ func (s *S3) buildArtifactURL(key string) string {
 	var q []string
 	var qstr string
 
-	if s.Region != "" {
-		q = append(q, "region="+s.Region)
-	}
 	if s.Endpoint != "" {
 		q = append(q, "endpoint="+s.Endpoint)
 	}
@@ -176,7 +173,7 @@ func (s *S3) buildArtifactURL(key string) string {
 		qstr = "?" + strings.Join(q, "&")
 	}
 
-	return fmt.Sprintf("%s://%s/%s%s", s3Scheme, s.Bucket, key, qstr)
+	return fmt.Sprintf("%s://%s/%s/%s%s", s3Scheme, s.Region, s.Bucket, key, qstr)
 }
 
 // Report report shipping.
