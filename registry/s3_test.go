@@ -2,12 +2,72 @@ package registry
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
+
+func TestNewS3(t *testing.T) {
+	tests := []struct {
+		desc     string
+		url      string
+		expected *S3
+		err      error
+	}{
+		{
+			"valid small structure is returned",
+			"s3://ap-northeast-1/mybucket",
+			&S3{
+				Region:   "ap-northeast-1",
+				Bucket:   "mybucket",
+				Prefix:   "",
+				Endpoint: "",
+				Artifact: "",
+			},
+			nil,
+		},
+		{
+			"valid large structure is returned",
+			"s3://ap-northeast-1/mybucket/myteam/myapp?endpoint=http://localhost:9999/foobar&artifact=myapp-linux-x86_64.zip",
+			&S3{
+				Region:   "ap-northeast-1",
+				Bucket:   "mybucket",
+				Prefix:   "myteam/myapp/",
+				Endpoint: "http://localhost:9999/foobar",
+				Artifact: "myapp-linux-x86_64.zip",
+			},
+			nil,
+		},
+		{
+			"error is returned",
+			"s3://ap",
+			nil,
+			fmt.Errorf("bucket is required: %s", s3Format),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			s3, err := NewS3(context.Background(), tt.url)
+			if err != tt.err && err.Error() != tt.err.Error() {
+				t.Errorf("expected error %s, got %s", tt.err, err)
+			} else {
+				opts := []cmp.Option{
+					cmp.AllowUnexported(S3{}),
+					cmpopts.IgnoreFields(S3{}, "cl"),
+				}
+				if diff := cmp.Diff(s3, tt.expected, opts...); diff != "" {
+					t.Error(diff)
+				}
+			}
+		})
+	}
+}
 
 type MockListObjectsV2Pager struct {
 	// Pages   [][]types.Object
