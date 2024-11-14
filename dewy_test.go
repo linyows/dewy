@@ -1,7 +1,11 @@
 package dewy
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -14,10 +18,6 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	if os.Getenv("GITHUB_TOKEN") == "" {
-		t.Skip("GITHUB_TOKEN is not set")
-	}
-
 	reg := "ghr://linyows/dewy?pre-release=true"
 	c := DefaultConfig()
 	c.Registry = reg
@@ -53,10 +53,47 @@ func TestNew(t *testing.T) {
 	}
 }
 
-func TestRun(t *testing.T) {
-	if os.Getenv("GITHUB_TOKEN") == "" {
-		t.Skip("GITHUB_TOKEN is not set")
+type mockRegistry struct {
+	url string
+}
+
+func (r *mockRegistry) Current(ctx context.Context, req *registry.CurrentRequest) (*registry.CurrentResponse, error) {
+	return &registry.CurrentResponse{
+		ID:          "id",
+		Tag:         "tag",
+		ArtifactURL: r.url,
+	}, nil
+}
+
+func (r *mockRegistry) Report(ctx context.Context, req *registry.ReportRequest) error {
+	return nil
+}
+
+type mockArtifact struct {
+	binary string
+	url    string
+}
+
+func (a *mockArtifact) Download(ctx context.Context, w io.Writer) error {
+	zw := zip.NewWriter(w)
+	defer zw.Close()
+
+	fInZip, err := zw.Create(a.binary)
+	if err != nil {
+		return fmt.Errorf("failed to create file in zip: %w", err)
 	}
+
+	_, err = io.Copy(fInZip, bytes.NewBufferString(a.url))
+	if err != nil {
+		return fmt.Errorf("failed to write content to file in zip: %w", err)
+	}
+
+	return nil
+}
+
+func TestRun(t *testing.T) {
+	binary := "dewy"
+	artifact := "ghr://linyows/dewy/tag/v1.2.3/artifact.zip"
 
 	root := t.TempDir()
 	c := DefaultConfig()
@@ -71,16 +108,19 @@ func TestRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	dewy.root = root
-	dewy.disableReport = true
-	ctx := context.Background()
-	dewy.registry, err = registry.New(ctx, c.Registry)
+
+	dewy.registry = &mockRegistry{
+		url: artifact,
+	}
+	dewy.artifact = &mockArtifact{
+		binary: binary,
+		url:    artifact,
+	}
+	dewy.notify, err = notify.New(context.Background(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	dewy.notify, err = notify.New(ctx, "")
-	if err != nil {
-		t.Fatal(err)
-	}
+
 	if err := dewy.Run(); err != nil {
 		t.Error(err)
 	}
@@ -89,7 +129,7 @@ func TestRun(t *testing.T) {
 		t.Errorf("current directory is not found: %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(root, "current", "dewy")); err != nil {
+	if _, err := os.Stat(filepath.Join(root, "current", binary)); err != nil {
 		t.Errorf("current dewy binary is not found: %v", err)
 	}
 
@@ -99,29 +139,33 @@ func TestRun(t *testing.T) {
 }
 
 func TestDeployHook(t *testing.T) {
-	if os.Getenv("GITHUB_TOKEN") == "" {
-		t.Skip("GITHUB_TOKEN is not set")
-	}
+	artifact := "ghr://linyows/dewy/tag/v1.2.3/artifact.zip"
+	registry := "ghr://linyows/dewy"
 
 	tests := []struct {
-		registry           string
+		name               string
 		beforeHook         string
+		afterHook          string
 		executedBeforeHook bool
 		executedAfterHook  bool
 	}{
-		{"ghr://linyows/dewy", "touch before", true, true},
-		{"ghr://linyows/invalid", "touch before", false, false},
-		{"ghr://linyows/dewy", "touch before && invalid command", true, false},
+		{"execute a hook before run", "touch before", "", true, false},
+		{"execute a hook after run", "", "touch after", false, true},
+		{"execute both the before hook and after hook", "touch before", "touch after", true, true},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.registry, func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			root := t.TempDir()
 			c := DefaultConfig()
 			c.Command = ASSETS
-			c.BeforeDeployHook = tt.beforeHook
-			c.AfterDeployHook = "touch after"
-			c.Registry = tt.registry
+			if tt.beforeHook != "" {
+				c.BeforeDeployHook = tt.beforeHook
+			}
+			if tt.afterHook != "" {
+				c.AfterDeployHook = tt.afterHook
+			}
+			c.Registry = registry
 			c.Cache = CacheConfig{
 				Type:       FILE,
 				Expiration: 10,
@@ -130,17 +174,18 @@ func TestDeployHook(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			ctx := context.Background()
-			dewy.registry, err = registry.New(ctx, c.Registry)
-			if err != nil {
-				t.Fatal(err)
+			dewy.registry = &mockRegistry{
+				url: artifact,
 			}
-			dewy.notify, err = notify.New(ctx, "")
+			dewy.artifact = &mockArtifact{
+				binary: "dewy",
+				url:    artifact,
+			}
+			dewy.notify, err = notify.New(context.Background(), "")
 			if err != nil {
 				t.Fatal(err)
 			}
 			dewy.root = root
-			dewy.disableReport = true
 			_ = dewy.Run()
 			if _, err := os.Stat(filepath.Join(root, "before")); err != nil {
 				if tt.executedBeforeHook {
