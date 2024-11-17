@@ -14,10 +14,11 @@ import (
 
 func TestNewS3(t *testing.T) {
 	tests := []struct {
-		desc     string
-		url      string
-		expected *S3
-		err      error
+		desc      string
+		url       string
+		expected  *S3
+		expectErr bool
+		err       error
 	}{
 		{
 			"valid small structure is returned",
@@ -29,6 +30,7 @@ func TestNewS3(t *testing.T) {
 				Endpoint: "",
 				Artifact: "",
 			},
+			false,
 			nil,
 		},
 		{
@@ -41,12 +43,14 @@ func TestNewS3(t *testing.T) {
 				Endpoint: "http://localhost:9999/foobar",
 				Artifact: "myapp-linux-x86_64.zip",
 			},
+			false,
 			nil,
 		},
 		{
 			"error is returned",
 			"s3://ap",
 			nil,
+			true,
 			fmt.Errorf("bucket is required: %s", s3Format),
 		},
 	}
@@ -54,8 +58,10 @@ func TestNewS3(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			s3, err := NewS3(context.Background(), tt.url)
-			if err != tt.err && err.Error() != tt.err.Error() {
-				t.Errorf("expected error %s, got %s", tt.err, err)
+			if tt.expectErr {
+				if err == nil || err.Error() != tt.err.Error() {
+					t.Errorf("expected error %s, got %s", tt.err, err)
+				}
 			} else {
 				opts := []cmp.Option{
 					cmp.AllowUnexported(S3{}),

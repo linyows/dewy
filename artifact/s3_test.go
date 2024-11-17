@@ -15,10 +15,11 @@ import (
 
 func TestNewS3(t *testing.T) {
 	tests := []struct {
-		desc     string
-		url      string
-		expected *S3
-		err      error
+		desc      string
+		url       string
+		expected  *S3
+		expectErr bool
+		err       error
 	}{
 		{
 			"valid small structure is returned",
@@ -30,6 +31,7 @@ func TestNewS3(t *testing.T) {
 				Endpoint: "",
 				url:      "s3://ap-northeast-1/mybucket/v1.2.3/myapp-linux-x86_64.zip",
 			},
+			false,
 			nil,
 		},
 		{
@@ -42,12 +44,14 @@ func TestNewS3(t *testing.T) {
 				Endpoint: "http://localhost:9999/foobar",
 				url:      "s3://ap-northeast-1/mybucket/myteam/myapp/v1.2.3/myapp-linux-x86_64.zip?endpoint=http://localhost:9999/foobar",
 			},
+			false,
 			nil,
 		},
 		{
 			"error is returned",
 			"s3://ap",
 			nil,
+			true,
 			fmt.Errorf("url parse error: s3://ap"),
 		},
 	}
@@ -55,8 +59,10 @@ func TestNewS3(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			s3, err := NewS3(context.Background(), tt.url)
-			if err != tt.err && err.Error() != tt.err.Error() {
-				t.Errorf("expected error %s, got %s", tt.err, err)
+			if tt.expectErr {
+				if err == nil || err.Error() != tt.err.Error() {
+					t.Errorf("expected error %s, got %s", tt.err, err)
+				}
 			} else {
 				opts := []cmp.Option{
 					cmp.AllowUnexported(S3{}),
@@ -78,7 +84,7 @@ func (m *MockS3Client) GetObject(ctx context.Context, input *s3.GetObjectInput, 
 	return m.GetObjectFunc(ctx, input, opts...)
 }
 
-// Helper to simulate an error during io.Copy
+// Helper to simulate an error during io.Copy.
 type errorReader struct{}
 
 func (r *errorReader) Read(p []byte) (int, error) {
