@@ -18,7 +18,6 @@ func TestNew(t *testing.T) {
 		desc string
 		url  string
 		want Artifact
-		err  error
 	}{
 		{
 			"use Github Releases",
@@ -30,7 +29,6 @@ func TestNew(t *testing.T) {
 				artifact: "dewy-linux-x86_64.tar.gz",
 				url:      "ghr://linyows/dewy/tag/v1.2.3/dewy-linux-x86_64.tar.gz",
 			},
-			nil,
 		},
 		{
 			"use AWS S3",
@@ -42,15 +40,14 @@ func TestNew(t *testing.T) {
 				Endpoint: "http://localhost:9000/api",
 				url:      "s3://ap-northeast-1/mybucket/myapp/v1.2.3/dewy-linux-x86_64.tar.gz?endpoint=http://localhost:9000/api",
 			},
-			nil,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			got, err := New(context.Background(), tt.url)
-			if err != tt.err {
-				t.Errorf("expected error %s, got %s", err, tt.err)
+			if err != nil {
+				t.Fatal(err)
 			} else {
 				opts := []cmp.Option{
 					cmp.AllowUnexported(GHR{}, S3{}),
