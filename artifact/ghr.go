@@ -22,9 +22,8 @@ type GHR struct {
 
 func NewGHR(ctx context.Context, url string) (*GHR, error) {
 	// ghr://owner/repo/tag/v1.0.0/artifact.zip
-	// ghr://owner/repo/tag/latest/artifact.zip
 	splitted := strings.Split(strings.TrimPrefix(url, fmt.Sprintf("%s://", ghrScheme)), "/")
-	if len(splitted) != 4 && len(splitted) != 5 {
+	if len(splitted) != 5 {
 		return nil, fmt.Errorf("invalid artifact url: %s, %#v", url, splitted)
 	}
 
