@@ -2,12 +2,78 @@ package registry
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
+
+func TestNewS3(t *testing.T) {
+	tests := []struct {
+		desc      string
+		url       string
+		expected  *S3
+		expectErr bool
+		err       error
+	}{
+		{
+			"valid small structure is returned",
+			"s3://ap-northeast-1/mybucket",
+			&S3{
+				Region:   "ap-northeast-1",
+				Bucket:   "mybucket",
+				Prefix:   "",
+				Endpoint: "",
+				Artifact: "",
+			},
+			false,
+			nil,
+		},
+		{
+			"valid large structure is returned",
+			"s3://ap-northeast-1/mybucket/myteam/myapp?endpoint=http://localhost:9999/foobar&artifact=myapp-linux-x86_64.zip",
+			&S3{
+				Region:   "ap-northeast-1",
+				Bucket:   "mybucket",
+				Prefix:   "myteam/myapp/",
+				Endpoint: "http://localhost:9999/foobar",
+				Artifact: "myapp-linux-x86_64.zip",
+			},
+			false,
+			nil,
+		},
+		{
+			"error is returned",
+			"s3://ap",
+			nil,
+			true,
+			fmt.Errorf("bucket is required: %s", s3Format),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			s3, err := NewS3(context.Background(), tt.url)
+			if tt.expectErr {
+				if err == nil || err.Error() != tt.err.Error() {
+					t.Errorf("expected error %s, got %s", tt.err, err)
+				}
+			} else {
+				opts := []cmp.Option{
+					cmp.AllowUnexported(S3{}),
+					cmpopts.IgnoreFields(S3{}, "cl"),
+				}
+				if diff := cmp.Diff(s3, tt.expected, opts...); diff != "" {
+					t.Error(diff)
+				}
+			}
+		})
+	}
+}
 
 type MockListObjectsV2Pager struct {
 	// Pages   [][]types.Object
@@ -80,56 +146,6 @@ func TestS3LatestVersion(t *testing.T) {
 			}
 			if gotVer.String() != tt.expectedVer {
 				t.Errorf("expected latest version key %s, got %s", tt.expectedVer, gotVer)
-			}
-		})
-	}
-}
-
-func TestVersionRegex(t *testing.T) {
-	tests := []struct {
-		ver      string
-		expected bool
-	}{
-		{"1.2.3", true},
-		{"v1.2.3", true},
-		{"v1.2.300", true},
-		{"v1.2.3-rc", false},
-		{"v1.2.3-beta.1", false},
-		{"v8", false},
-		{"12.3", false},
-		{"abcdefg-10", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.ver, func(t *testing.T) {
-			got := verRegex.MatchString(tt.ver)
-			if got != tt.expected {
-				t.Errorf("expected %t, got %t", tt.expected, got)
-			}
-		})
-	}
-}
-
-func TestVersionWithPreRegex(t *testing.T) {
-	tests := []struct {
-		ver      string
-		expected bool
-	}{
-		{"1.2.3", true},
-		{"v1.2.3", true},
-		{"v1.2.300", true},
-		{"v1.2.3-rc", true},
-		{"v1.2.3-beta.1", true},
-		{"v8", false},
-		{"12.3", false},
-		{"abcdefg-10", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.ver, func(t *testing.T) {
-			got := verWithPreRegex.MatchString(tt.ver)
-			if got != tt.expected {
-				t.Errorf("expected %t, got %t", tt.expected, got)
 			}
 		})
 	}

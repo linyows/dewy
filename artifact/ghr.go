@@ -12,54 +12,55 @@ import (
 )
 
 type GHR struct {
-	cl *github.Client
+	owner    string
+	repo     string
+	tag      string
+	artifact string
+	url      string
+	cl       *github.Client
 }
 
-func NewGHR() (*GHR, error) {
+func NewGHR(ctx context.Context, url string) (*GHR, error) {
+	// ghr://owner/repo/tag/v1.0.0/artifact.zip
+	splitted := strings.Split(strings.TrimPrefix(url, fmt.Sprintf("%s://", ghrScheme)), "/")
+	if len(splitted) != 5 {
+		return nil, fmt.Errorf("invalid artifact url: %s, %#v", url, splitted)
+	}
+
 	cl, err := factory.NewGithubClient()
 	if err != nil {
 		return nil, err
 	}
+
 	return &GHR{
-		cl: cl,
+		owner:    splitted[0],
+		repo:     splitted[1],
+		tag:      splitted[3],
+		artifact: splitted[4],
+		url:      url,
+		cl:       cl,
 	}, nil
 }
 
-// Fetch fetch artifact.
-func (r *GHR) Fetch(url string, w io.Writer) error {
-	ctx := context.Background()
-	// ghr://owner/repo/tag/v1.0.0/artifact.zip
-	// ghr://owner/repo/latest/artifact.zip
-	splitted := strings.Split(strings.TrimPrefix(url, fmt.Sprintf("%s://", ghrScheme)), "/")
-	if len(splitted) != 4 && len(splitted) != 5 {
-		return fmt.Errorf("invalid url: %s", url)
-	}
-	owner := splitted[0]
-	repo := splitted[1]
-	if len(splitted) == 4 {
-		// latest
-		// FIXME: not implemented
-		return fmt.Errorf("not implemented")
-	}
-	tag := splitted[3]
-	artifactName := splitted[4]
+// Download download artifact.
+func (r *GHR) Download(ctx context.Context, w io.Writer) error {
 	page := 1
 	var assetID int64
 L:
 	for {
-		releases, res, err := r.cl.Repositories.ListReleases(ctx, owner, repo, &github.ListOptions{
+		releases, res, err := r.cl.Repositories.ListReleases(ctx, r.owner, r.repo, &github.ListOptions{
 			Page:    page,
 			PerPage: 100,
 		})
 		if err != nil {
 			return err
 		}
-		for _, r := range releases {
-			if r.GetTagName() != tag {
+		for _, v := range releases {
+			if v.GetTagName() != r.tag {
 				continue
 			}
-			for _, a := range r.Assets {
-				if a.GetName() != artifactName {
+			for _, a := range v.Assets {
+				if a.GetName() != r.artifact {
 					continue
 				}
 				assetID = a.GetID()
@@ -72,7 +73,7 @@ L:
 		page = res.NextPage
 	}
 
-	reader, url, err := r.cl.Repositories.DownloadReleaseAsset(ctx, owner, repo, assetID, r.cl.Client())
+	reader, url, err := r.cl.Repositories.DownloadReleaseAsset(ctx, r.owner, r.repo, assetID, r.cl.Client())
 	if err != nil {
 		return err
 	}

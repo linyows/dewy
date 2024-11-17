@@ -43,6 +43,7 @@ const (
 type Dewy struct {
 	config          Config
 	registry        registry.Registry
+	artifact        artifact.Artifact
 	cache           kvs.KVS
 	isServerRunning bool
 	disableReport   bool
@@ -174,9 +175,19 @@ func (d *Dewy) Run() error {
 	// Download artifact and cache
 	if !found {
 		buf := new(bytes.Buffer)
-		if err := artifact.Fetch(res.ArtifactURL, buf); err != nil {
+
+		if d.artifact == nil {
+			d.artifact, err = artifact.New(ctx, res.ArtifactURL)
+			if err != nil {
+				return err
+			}
+		}
+		err := d.artifact.Download(ctx, buf)
+		d.artifact = nil
+		if err != nil {
 			return err
 		}
+
 		if err := d.cache.Write(cachekeyName, buf.Bytes()); err != nil {
 			return err
 		}
