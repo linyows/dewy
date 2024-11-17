@@ -35,6 +35,10 @@ func NewS3(ctx context.Context, strUrl string) (*S3, error) {
 
 	splitted := strings.SplitN(strings.TrimPrefix(u.Path, "/"), "/", 2)
 
+	if len(splitted) < 2 {
+		return nil, fmt.Errorf("url parse error: %s", strUrl)
+	}
+
 	s := &S3{
 		Region: u.Host,
 		Bucket: splitted[0],
