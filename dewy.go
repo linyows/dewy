@@ -107,16 +107,37 @@ func (d *Dewy) Start(i int) {
 		log.Printf("[ERROR] Scheduler failure: %#v", err)
 	}
 
-	d.notify.Send(ctx, fmt.Sprintf("Stop receiving \"%s\" signal", d.waitSigs()))
+	d.waitSigs(ctx)
 }
 
-func (d *Dewy) waitSigs() os.Signal {
+func (d *Dewy) waitSigs(ctx context.Context) {
 	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
-	sigReceived := <-sigCh
-	log.Printf("[DEBUG] PID %d received signal as %s", os.Getpid(), sigReceived)
-	d.job.Quit <- true
-	return sigReceived
+	signal.Notify(sigCh, syscall.SIGHUP, syscall.SIGUSR1, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+
+	for sig := range sigCh {
+		log.Printf("[DEBUG] PID %d received signal as %s", os.Getpid(), sig)
+		switch sig {
+		case syscall.SIGHUP:
+			continue
+
+		case syscall.SIGUSR1:
+			if err := d.restartServer(); err != nil {
+				log.Printf("[ERROR] Restart failure: %#v", err)
+			} else {
+				msg := fmt.Sprintf("Restarted receiving by \"%s\" signal", "SIGUSR1")
+				log.Printf("[INFO] %s", msg)
+				d.notify.Send(ctx, msg)
+			}
+			continue
+
+		case syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:
+			d.job.Quit <- true
+			msg := fmt.Sprintf("Stop receiving by \"%s\" signal", sig)
+			log.Printf("[INFO] %s", msg)
+			d.notify.Send(ctx, msg)
+			return
+		}
+	}
 }
 
 // cachekeyName is "tag--artifact"
@@ -292,12 +313,13 @@ func (d *Dewy) restartServer() error {
 	d.Lock()
 	defer d.Unlock()
 
-	p, _ := os.FindProcess(os.Getpid())
+	pid := os.Getpid()
+	p, _ := os.FindProcess(pid)
 	err := p.Signal(syscall.SIGHUP)
 	if err != nil {
 		return err
 	}
-	log.Print("[INFO] Send SIGHUP for server restart")
+	log.Printf("[INFO] Send SIGHUP to PID:%d for server restart", pid)
 
 	return nil
 }
