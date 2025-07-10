@@ -17,7 +17,7 @@ require (
 	github.com/hashicorp/logutils v1.0.0
 	github.com/jessevdk/go-flags v1.5.0
 	github.com/k1LoW/go-github-client/v55 v55.0.17
-	github.com/k1LoW/grpcstub v0.15.1
+	github.com/k1LoW/grpcstub v0.25.11
 	github.com/k1LoW/remote v0.1.0
 	github.com/lestrrat-go/server-starter v0.0.0-20210101230921-50cd1900b5bc
 	github.com/lestrrat-go/slack v0.0.0-20190827134815-1aaae719550a
@@ -139,7 +139,7 @@ require (
 	github.com/blakesmith/ar v0.0.0-20190502131153-809d4375e1fb // indirect
 	github.com/blizzy78/varnamelen v0.8.0 // indirect
 	github.com/bluesky-social/indigo v0.0.0-20240411170459-440932307e0d // indirect
-	github.com/bmatcuk/doublestar/v4 v4.6.0 // indirect
+	github.com/bmatcuk/doublestar/v4 v4.8.1 // indirect
 	github.com/bombsimon/wsl/v4 v4.5.0 // indirect
 	github.com/bradleyfalzon/ghinstallation/v2 v2.15.0 // indirect
 	github.com/breml/bidichk v0.3.2 // indirect
@@ -312,7 +312,7 @@ require (
 	github.com/ipfs/go-log v1.0.5 // indirect
 	github.com/ipfs/go-log/v2 v2.5.1 // indirect
 	github.com/ipfs/go-metrics-interface v0.0.1 // indirect
-	github.com/jaswdr/faker v1.16.0 // indirect
+	github.com/jaswdr/faker v1.19.1 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
 	github.com/jbenet/goprocess v0.1.4 // indirect
 	github.com/jdx/go-netrc v1.0.0 // indirect
@@ -323,8 +323,10 @@ require (
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/jszwec/s3fs v0.4.0 // indirect
 	github.com/julz/importas v0.2.0 // indirect
+	github.com/k1LoW/bufresolv v0.7.8 // indirect
 	github.com/k1LoW/ghfs v1.1.0 // indirect
 	github.com/k1LoW/go-github-client/v53 v53.2.11 // indirect
+	github.com/k1LoW/protoresolv v0.1.7 // indirect
 	github.com/karamaru-alpha/copyloopvar v1.2.1 // indirect
 	github.com/kevinburke/ssh_config v1.2.0 // indirect
 	github.com/kisielk/errcheck v1.9.0 // indirect
