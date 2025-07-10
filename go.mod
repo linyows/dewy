@@ -13,7 +13,7 @@ require (
 	github.com/google/go-querystring v1.1.0
 	github.com/gorilla/schema v1.4.1
 	github.com/hashicorp/logutils v1.0.0
-	github.com/jessevdk/go-flags v1.5.0
+	github.com/jessevdk/go-flags v1.6.1
 	github.com/k1LoW/go-github-client/v55 v55.0.17
 	github.com/k1LoW/grpcstub v0.25.11
 	github.com/k1LoW/remote v0.1.0
