@@ -13,11 +13,7 @@ assets:
 	go run cmd/dewy/main.go assets --registry ghr://linyows/dewy-testapp -l $(LOGLEVEL)
 
 protobuf:
-	cd registry && buf generate
-
-deps:
-	go install github.com/goreleaser/goreleaser@latest
-	go install github.com/bufbuild/buf/cmd/buf@latest
+	cd registry && go tool buf generate
 
 test:
 	go test $(TEST) $(TESTARGS)
@@ -27,16 +23,16 @@ integration:
 	go test -integration $(TEST) $(TESTARGS)
 
 lint:
-	golangci-lint run ./...
+	go tool golangci-lint run ./...
 
 ci: deps test lint
 	git diff go.mod
 
 xbuild:
-	goreleaser --rm-dist --snapshot --skip-validate
+	go tool goreleaser --rm-dist --snapshot --skip-validate
 
 dist:
-	@test -z $(GITHUB_TOKEN) || goreleaser --rm-dist --skip-validate
+	@test -z $(GITHUB_TOKEN) || go tool goreleaser --rm-dist --skip-validate
 
 clean:
 	git checkout go.*
