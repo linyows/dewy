@@ -16,7 +16,7 @@ require (
 	github.com/jessevdk/go-flags v1.6.1
 	github.com/k1LoW/go-github-client/v55 v55.0.17
 	github.com/k1LoW/grpcstub v0.25.11
-	github.com/k1LoW/remote v0.1.0
+	github.com/k1LoW/remote v0.3.2
 	github.com/lestrrat-go/server-starter v0.0.0-20210101230921-50cd1900b5bc
 	github.com/lestrrat-go/slack v0.0.0-20190827134815-1aaae719550a
 	github.com/mholt/archiver/v3 v3.5.1
@@ -171,7 +171,7 @@ require (
 	github.com/chavacava/garif v0.1.0 // indirect
 	github.com/chrismellard/docker-credential-acr-env v0.0.0-20230304212654-82a0ddb27589 // indirect
 	github.com/ckaznocha/intrange v0.3.0 // indirect
-	github.com/cli/go-gh/v2 v2.12.0 // indirect
+	github.com/cli/go-gh/v2 v2.12.1 // indirect
 	github.com/cloudflare/circl v1.6.1 // indirect
 	github.com/cncf/xds/go v0.0.0-20250326154945-ae57f3c0d45f // indirect
 	github.com/containerd/console v1.0.4 // indirect
@@ -261,7 +261,7 @@ require (
 	github.com/golangci/unconvert v0.0.0-20240309020433-c5143eacb3ed // indirect
 	github.com/google/cel-go v0.25.0 // indirect
 	github.com/google/go-containerregistry v0.20.6 // indirect
-	github.com/google/go-github/v53 v53.2.0 // indirect
+	github.com/google/go-github/v58 v58.0.0 // indirect
 	github.com/google/go-github/v62 v62.0.0 // indirect
 	github.com/google/go-github/v71 v71.0.0 // indirect
 	github.com/google/go-github/v73 v73.0.0 // indirect
@@ -322,8 +322,8 @@ require (
 	github.com/jszwec/s3fs v0.4.0 // indirect
 	github.com/julz/importas v0.2.0 // indirect
 	github.com/k1LoW/bufresolv v0.7.8 // indirect
-	github.com/k1LoW/ghfs v1.1.0 // indirect
-	github.com/k1LoW/go-github-client/v53 v53.2.11 // indirect
+	github.com/k1LoW/ghfs v1.2.0 // indirect
+	github.com/k1LoW/go-github-client/v58 v58.0.11 // indirect
 	github.com/k1LoW/protoresolv v0.1.7 // indirect
 	github.com/karamaru-alpha/copyloopvar v1.2.1 // indirect
 	github.com/kevinburke/ssh_config v1.2.0 // indirect
