@@ -1,14 +1,16 @@
 package kvs
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
-	"github.com/mholt/archiver/v3"
+	"github.com/mholt/archives"
 )
 
 var (
@@ -124,7 +126,71 @@ func ExtractArchive(src, dst string) error {
 		return fmt.Errorf("File not found: %s", src)
 	}
 
-	return archiver.Unarchive(src, dst)
+	// Open the source file
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer srcFile.Close()
+
+	// Determine the format based on file extension
+	var format archives.Extractor
+	switch {
+	case strings.HasSuffix(strings.ToLower(src), ".tar.gz") || strings.HasSuffix(strings.ToLower(src), ".tgz"):
+		format = archives.CompressedArchive{
+			Compression: archives.Gz{},
+			Extraction:  archives.Tar{},
+		}
+	case strings.HasSuffix(strings.ToLower(src), ".tar.bz2") || strings.HasSuffix(strings.ToLower(src), ".tbz2"):
+		format = archives.CompressedArchive{
+			Compression: archives.Bz2{},
+			Extraction:  archives.Tar{},
+		}
+	case strings.HasSuffix(strings.ToLower(src), ".tar.xz") || strings.HasSuffix(strings.ToLower(src), ".txz"):
+		format = archives.CompressedArchive{
+			Compression: archives.Xz{},
+			Extraction:  archives.Tar{},
+		}
+	case strings.HasSuffix(strings.ToLower(src), ".tar"):
+		format = archives.Tar{}
+	case strings.HasSuffix(strings.ToLower(src), ".zip"):
+		format = archives.Zip{}
+	default:
+		return fmt.Errorf("unsupported archive format: %s", src)
+	}
+
+	// Extract the archive
+	return format.Extract(context.Background(), srcFile, func(ctx context.Context, f archives.FileInfo) error {
+		// Construct the destination path
+		destPath := filepath.Join(dst, f.NameInArchive)
+
+		// Handle directories
+		if f.IsDir() {
+			return os.MkdirAll(destPath, 0755)
+		}
+
+		// Create parent directories if needed
+		if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+			return err
+		}
+
+		// Create and write the file
+		outFile, err := os.Create(destPath)
+		if err != nil {
+			return err
+		}
+		defer outFile.Close()
+
+		// Copy the file content
+		reader, err := f.Open()
+		if err != nil {
+			return err
+		}
+		defer reader.Close()
+
+		_, err = outFile.ReadFrom(reader)
+		return err
+	})
 }
 
 // IsFileExist checks file exists.
