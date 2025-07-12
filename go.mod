@@ -9,12 +9,12 @@ require (
 	github.com/carlescere/scheduler v0.0.0-20170109141437-ee74d2f83d82
 	github.com/cli/safeexec v1.0.1
 	github.com/google/go-cmp v0.7.0
-	github.com/google/go-github/v55 v55.0.0
+	github.com/google/go-github/v71 v71.0.0
 	github.com/google/go-querystring v1.1.0
 	github.com/gorilla/schema v1.4.1
 	github.com/hashicorp/logutils v1.0.0
 	github.com/jessevdk/go-flags v1.6.1
-	github.com/k1LoW/go-github-client/v55 v55.0.17
+	github.com/k1LoW/go-github-client/v71 v71.0.17
 	github.com/k1LoW/grpcstub v0.25.11
 	github.com/k1LoW/remote v0.3.2
 	github.com/lestrrat-go/server-starter v0.0.0-20210101230921-50cd1900b5bc
@@ -266,7 +266,6 @@ require (
 	github.com/google/go-containerregistry v0.20.6 // indirect
 	github.com/google/go-github/v58 v58.0.0 // indirect
 	github.com/google/go-github/v62 v62.0.0 // indirect
-	github.com/google/go-github/v71 v71.0.0 // indirect
 	github.com/google/go-github/v73 v73.0.0 // indirect
 	github.com/google/ko v0.15.4 // indirect
 	github.com/google/pprof v0.0.0-20250607225305-033d6d78b36a // indirect

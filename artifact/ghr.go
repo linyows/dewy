@@ -7,8 +7,8 @@ import (
 	"log"
 	"strings"
 
-	"github.com/google/go-github/v55/github"
-	"github.com/k1LoW/go-github-client/v55/factory"
+	"github.com/google/go-github/v71/github"
+	"github.com/k1LoW/go-github-client/v71/factory"
 )
 
 type GHR struct {
@@ -73,23 +73,28 @@ L:
 		page = res.NextPage
 	}
 
-	reader, url, err := r.cl.Repositories.DownloadReleaseAsset(ctx, r.owner, r.repo, assetID, r.cl.Client())
+	// Note:
+	// This method downloads assets with application/octet-stream of accept header.
+	// Do download by browser_download_url when returns json.
+	reader, redirectURL, err := r.cl.Repositories.DownloadReleaseAsset(ctx, r.owner, r.repo, assetID, r.cl.Client())
 	if err != nil {
-		return err
+		return fmt.Errorf("failed github.Repositories.DownloadReleaseAsset: %w", err)
 	}
-	if url != "" {
-		res, err := r.cl.Client().Get(url)
+	if redirectURL != "" {
+		log.Printf("[INFO] Following redirect to: %s", redirectURL)
+		res, err := r.cl.Client().Get(redirectURL)
 		if err != nil {
 			return err
 		}
-		defer res.Body.Close()
 		reader = res.Body
 	}
 
-	log.Printf("[INFO] Downloaded from %s", url)
+	defer reader.Close()
 	if _, err := io.Copy(w, reader); err != nil {
-		return err
+		return fmt.Errorf("failed io.Copy: %w", err)
 	}
+
+	log.Printf("[INFO] Artifact downloaded")
 
 	return nil
 }

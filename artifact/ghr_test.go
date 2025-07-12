@@ -10,8 +10,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/google/go-github/v55/github"
-	"github.com/k1LoW/go-github-client/v55/factory"
+	"github.com/google/go-github/v71/github"
+	"github.com/k1LoW/go-github-client/v71/factory"
 	"github.com/migueleliasweb/go-github-mock/src/mock"
 )
 

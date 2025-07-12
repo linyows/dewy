@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/go-github/v55/github"
+	"github.com/google/go-github/v71/github"
 	"github.com/google/go-querystring/query"
-	"github.com/k1LoW/go-github-client/v55/factory"
+	"github.com/k1LoW/go-github-client/v71/factory"
 )
 
 const (
