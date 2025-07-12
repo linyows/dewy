@@ -121,9 +121,15 @@ func (m *Mail) Send(ctx context.Context, message string) {
 	} else {
 		d := mail.NewDialer(m.Host, m.Port, m.Username, m.Password)
 		if m.TLS {
-			d.TLSConfig = &tls.Config{InsecureSkipVerify: false}
+			d.TLSConfig = &tls.Config{
+				ServerName:         m.Host,
+				InsecureSkipVerify: false,
+			}
 		} else {
-			d.TLSConfig = &tls.Config{InsecureSkipVerify: true}
+			d.TLSConfig = &tls.Config{
+				ServerName:         m.Host,
+				InsecureSkipVerify: true,
+			}
 		}
 		dialer = d
 	}
