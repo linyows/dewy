@@ -6,9 +6,15 @@ import (
 	"io"
 	"log"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/google/go-github/v71/github"
 	"github.com/k1LoW/go-github-client/v71/factory"
+)
+
+var (
+	firstDownloadOnce sync.Once
 )
 
 type GHR struct {
@@ -44,6 +50,12 @@ func NewGHR(ctx context.Context, url string) (*GHR, error) {
 
 // Download download artifact.
 func (r *GHR) Download(ctx context.Context, w io.Writer) error {
+	// Wait 1 second on first download to allow CDN authentication to stabilize
+	firstDownloadOnce.Do(func() {
+		log.Printf("[INFO] First download attempt, waiting 1 second for CDN auth stabilization...")
+		time.Sleep(1 * time.Second)
+	})
+
 	page := 1
 	var assetID int64
 L:
