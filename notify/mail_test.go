@@ -299,10 +299,10 @@ func TestMail_formatMessage(t *testing.T) {
 	if !strings.Contains(formatted, "User:") {
 		t.Error("formatMessage() doesn't contain User information")
 	}
-	if !strings.Contains(formatted, "Working directory:") {
-		t.Error("formatMessage() doesn't contain Working directory information")
+	if !strings.Contains(formatted, "Working dir:") {
+		t.Error("formatMessage() doesn't contain Working dir information")
 	}
-	if !strings.Contains(formatted, "Sent by Dewy notify/mail") {
+	if !strings.Contains(formatted, "Dewy: https://github.com/linyows/dewy") {
 		t.Error("formatMessage() doesn't contain signature")
 	}
 }
