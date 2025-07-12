@@ -114,8 +114,7 @@ func (c *cli) showHelp() {
 		"AfterDeployHook",
 	}), "\n")
 
-	help := `
-Usage: dewy [--version] [--help] command <options>
+	help := `Usage: dewy [--version] [--help] command <options>
 
 Commands:
   server   Keep the app server up to date
@@ -124,6 +123,7 @@ Commands:
 Options:
 %s
 `
+	Banner(c.env.Out)
 	fmt.Fprintf(c.env.Out, help, opts)
 }
 
@@ -169,6 +169,7 @@ func (c *cli) run() int {
 	}
 	log.SetOutput(filter)
 
+	Banner(c.env.Out)
 	conf := DefaultConfig()
 
 	if c.Registry == "" {
@@ -192,7 +193,6 @@ func (c *cli) run() int {
 		conf.Command = ASSETS
 	}
 
-	conf.OverrideWithEnv()
 	d, err := New(conf)
 	if err != nil {
 		fmt.Fprintf(c.env.Err, "Error: %s\n", err)

@@ -10,9 +10,10 @@ import (
 )
 
 type GRPC struct {
-	Target string `schema:"-"`
-	NoTLS  bool   `schema:"no-tls"`
-	cl     pb.RegistryServiceClient
+	Target   string `schema:"-"`
+	NoTLS    bool   `schema:"no-tls"`
+	Artifact string `schema:"artifact"`
+	cl       pb.RegistryServiceClient
 }
 
 func NewGRPC(ctx context.Context, u string) (*GRPC, error) {
@@ -51,14 +52,14 @@ func (c *GRPC) Dial(ctx context.Context, target string) error {
 }
 
 // Current returns current artifact.
-func (c *GRPC) Current(ctx context.Context, req *CurrentRequest) (*CurrentResponse, error) {
+func (c *GRPC) Current(ctx context.Context) (*CurrentResponse, error) {
 	var an *string
-	if req.ArtifactName != "" {
-		an = &req.ArtifactName
+	if c.Artifact != "" {
+		an = &c.Artifact
 	}
 	creq := &pb.CurrentRequest{
-		Arch:        req.Arch,
-		Os:          req.OS,
+		Arch:        getArch(),
+		Os:          getOS(),
 		ArifactName: an,
 	}
 	cres, err := c.cl.Current(ctx, creq)

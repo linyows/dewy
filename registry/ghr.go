@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/go-github/v71/github"
+	"github.com/google/go-github/v73/github"
 	"github.com/google/go-querystring/query"
-	"github.com/k1LoW/go-github-client/v71/factory"
+	"github.com/linyows/dewy/client"
 )
 
 const (
@@ -46,7 +46,14 @@ func NewGHR(ctx context.Context, u string) (*GHR, error) {
 		return nil, err
 	}
 
-	ghr.cl, err = factory.NewGithubClient()
+	// Support GITHUB_ARTIFACT environment variable for backward compatibility
+	if ghr.Artifact == "" {
+		if artifact := os.Getenv("GITHUB_ARTIFACT"); artifact != "" {
+			ghr.Artifact = artifact
+		}
+	}
+
+	ghr.cl, err = client.NewGitHub()
 	if err != nil {
 		return nil, err
 	}
@@ -68,15 +75,15 @@ func (g *GHR) host() string {
 }
 
 // Current returns current artifact.
-func (g *GHR) Current(ctx context.Context, req *CurrentRequest) (*CurrentResponse, error) {
+func (g *GHR) Current(ctx context.Context) (*CurrentResponse, error) {
 	release, err := g.latest(ctx)
 	if err != nil {
 		return nil, err
 	}
 	var artifactName string
 
-	if req.ArtifactName != "" {
-		artifactName = req.ArtifactName
+	if g.Artifact != "" {
+		artifactName = g.Artifact
 		found := false
 		for _, v := range release.Assets {
 			if v.GetName() == artifactName {
@@ -89,12 +96,14 @@ func (g *GHR) Current(ctx context.Context, req *CurrentRequest) (*CurrentRespons
 			return nil, fmt.Errorf("artifact not found: %s", artifactName)
 		}
 	} else {
-		archMatchs := []string{req.Arch}
-		if req.Arch == "amd64" {
+		arch := getArch()
+		os := getOS()
+		archMatchs := []string{arch}
+		if arch == "amd64" {
 			archMatchs = append(archMatchs, "x86_64")
 		}
-		osMatchs := []string{req.OS}
-		if req.OS == "darwin" {
+		osMatchs := []string{os}
+		if os == "darwin" {
 			osMatchs = append(osMatchs, "macos")
 		}
 		found := false

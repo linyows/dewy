@@ -21,7 +21,6 @@ func TestNew(t *testing.T) {
 	reg := "ghr://linyows/dewy?pre-release=true"
 	c := DefaultConfig()
 	c.Registry = reg
-	c.PreRelease = true
 	dewy, err := New(c)
 	if err != nil {
 		t.Fatal(err)
@@ -30,8 +29,7 @@ func TestNew(t *testing.T) {
 
 	expect := &Dewy{
 		config: Config{
-			Registry:   reg,
-			PreRelease: true,
+			Registry: reg,
 			Cache: CacheConfig{
 				Type:       FILE,
 				Expiration: 10,
@@ -57,7 +55,7 @@ type mockRegistry struct {
 	url string
 }
 
-func (r *mockRegistry) Current(ctx context.Context, req *registry.CurrentRequest) (*registry.CurrentResponse, error) {
+func (r *mockRegistry) Current(ctx context.Context) (*registry.CurrentResponse, error) {
 	return &registry.CurrentResponse{
 		ID:          "id",
 		Tag:         "tag",

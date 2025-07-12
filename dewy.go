@@ -10,7 +10,6 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -153,11 +152,7 @@ func (d *Dewy) Run() error {
 	defer cancel()
 
 	// Get current
-	res, err := d.registry.Current(ctx, &registry.CurrentRequest{
-		Arch:         runtime.GOARCH,
-		OS:           runtime.GOOS,
-		ArtifactName: d.config.ArtifactName,
-	})
+	res, err := d.registry.Current(ctx)
 	if err != nil {
 		log.Printf("[ERROR] Current failure: %#v", err)
 		return err
