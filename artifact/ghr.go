@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/google/go-github/v71/github"
-	"github.com/k1LoW/go-github-client/v71/factory"
+	"github.com/linyows/dewy/client"
 )
 
 var (
@@ -33,7 +33,7 @@ func NewGHR(ctx context.Context, url string) (*GHR, error) {
 		return nil, fmt.Errorf("invalid artifact url: %s, %#v", url, splitted)
 	}
 
-	cl, err := factory.NewGithubClient()
+	cl, err := client.NewGitHub()
 	if err != nil {
 		return nil, err
 	}

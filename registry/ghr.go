@@ -12,7 +12,7 @@ import (
 
 	"github.com/google/go-github/v71/github"
 	"github.com/google/go-querystring/query"
-	"github.com/k1LoW/go-github-client/v71/factory"
+	"github.com/linyows/dewy/client"
 )
 
 const (
@@ -46,7 +46,7 @@ func NewGHR(ctx context.Context, u string) (*GHR, error) {
 		return nil, err
 	}
 
-	ghr.cl, err = factory.NewGithubClient()
+	ghr.cl, err = client.NewGitHub()
 	if err != nil {
 		return nil, err
 	}

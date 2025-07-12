@@ -14,15 +14,16 @@ require (
 	github.com/gorilla/schema v1.4.1
 	github.com/hashicorp/logutils v1.0.0
 	github.com/jessevdk/go-flags v1.6.1
-	github.com/k1LoW/go-github-client/v71 v71.0.17
 	github.com/k1LoW/grpcstub v0.25.11
 	github.com/k1LoW/remote v0.3.2
 	github.com/lestrrat-go/server-starter v0.0.0-20210101230921-50cd1900b5bc
 	github.com/lestrrat-go/slack v0.0.0-20190827134815-1aaae719550a
 	github.com/mholt/archives v0.1.3
 	github.com/migueleliasweb/go-github-mock v1.4.0
+	golang.org/x/oauth2 v0.30.0
 	google.golang.org/grpc v1.73.0
 	google.golang.org/protobuf v1.36.6
+	gopkg.in/mail.v2 v2.3.1
 )
 
 require (
@@ -521,7 +522,6 @@ require (
 	golang.org/x/exp/typeparams v0.0.0-20250210185358-939b2ce775ac // indirect
 	golang.org/x/mod v0.25.0 // indirect
 	golang.org/x/net v0.41.0 // indirect
-	golang.org/x/oauth2 v0.30.0 // indirect
 	golang.org/x/sync v0.15.0 // indirect
 	golang.org/x/sys v0.33.0 // indirect
 	golang.org/x/term v0.32.0 // indirect
@@ -536,7 +536,6 @@ require (
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
 	gopkg.in/go-jose/go-jose.v2 v2.6.3 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
-	gopkg.in/mail.v2 v2.3.1 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

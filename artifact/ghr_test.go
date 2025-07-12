@@ -11,7 +11,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/go-github/v71/github"
-	"github.com/k1LoW/go-github-client/v71/factory"
+	"github.com/linyows/dewy/client"
 	"github.com/migueleliasweb/go-github-mock/src/mock"
 )
 
@@ -126,10 +126,7 @@ func TestGHRDownload(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cl, err := factory.NewGithubClient(factory.HTTPClient(tt.mockClient))
-			if err != nil {
-				t.Fatal(err)
-			}
+			cl := client.NewMockGitHub(tt.mockClient)
 
 			ghr := &GHR{
 				owner:    "test-owner",
@@ -140,7 +137,7 @@ func TestGHRDownload(t *testing.T) {
 			}
 
 			var buf bytes.Buffer
-			err = ghr.Download(context.Background(), &buf)
+			err := ghr.Download(context.Background(), &buf)
 
 			if tt.expectErr {
 				if err == nil {
