@@ -159,7 +159,7 @@ The Cache interface stores the current versions and artifacts. Supported impleme
 Notify
 --
 
-The Notify interface sends deployment status updates. Slack and SMTP are available as notification methods.
+The Notify interface sends deployment status updates. Slack and Mail (SMTP) are available as notification methods.
 
 ### Slack
 
@@ -173,6 +173,38 @@ To use Slack for notifications, configure as follows. Options include a title an
 $ export SLACK_TOKEN=****.....
 $ dewy --notify slack://dewy?title=myapp&url=https://dewy.liny.ws ...
 ```
+
+### Mail
+
+To use mail for notifications, configure as follows. You can specify SMTP settings through URL parameters or environment variables. For Gmail, you'll need to use app-specific passwords (2FA required) instead of your regular password.
+
+```sh
+# Format
+# mail://<smtp-host>:<port>/<recipient-mail>?<options: username, password, from, subject, tls>
+# smtp://<smtp-host>:<port>/<recipient-mail>?<options: username, password, from, subject, tls>
+
+# Example with URL parameters
+$ dewy --notify mail://smtp.gmail.com:587/recipient@example.com?username=sender@gmail.com&password=app-password&from=sender@gmail.com&subject=Dewy+Deployment ...
+
+# Example with environment variables
+$ export MAIL_USERNAME=sender@gmail.com
+$ export MAIL_PASSWORD=app-password
+$ export MAIL_FROM=sender@gmail.com
+$ dewy --notify mail://smtp.gmail.com:587/recipient@example.com ...
+```
+
+#### Mail Configuration Options
+
+Option   | Type   | Description                  | Default
+---      | ---    | ---                          | ---
+username | string | SMTP authentication username | (from MAIL_USERNAME env var)
+password | string | SMTP authentication password | (from MAIL_PASSWORD env var)
+from     | string | Sender mail address          | (from MAIL_FROM env var)
+to       | string | Recipient mail address       | (extracted from URL path)
+subject  | string | Mail subject line            | "Dewy Notification"
+tls      | bool   | Use TLS encryption           | true
+host     | string | SMTP server hostname         | (extracted from URL)
+port     | int    | SMTP server port             | 587
 
 Semantic Versioning
 --

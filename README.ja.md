@@ -170,7 +170,7 @@ Cache
 Notify
 --
 
-通知は、デプロイの状態を通知するインターフェースです。通知は、Slack、SMTPから選択できます。
+通知は、デプロイの状態を通知するインターフェースです。通知は、Slack、メール（SMTP）から選択できます。
 
 ### Slack
 
@@ -186,6 +186,38 @@ slack://<channel-name>?<options: title, url>
 $ export SLACK_TOKEN=****.....
 $ dewy --notify slack://dewy?title=myapp&url=https://dewy.liny.ws ...
 ```
+
+### Mail
+
+Mailを通知に使う場合は以下の設定をします。SMTP設定はURLパラメータまたは環境変数で指定できます。Gmailを使用する場合は、アプリパスワードを使用する必要があります。
+
+```sh
+# 構造
+mail://<smtp-host>:<port>/<recipient-mail>?<options: username, password, from, subject, tls>
+smtp://<smtp-host>:<port>/<recipient-mail>?<options: username, password, from, subject, tls>
+
+# URLパラメータを使用する例
+$ dewy --notify mail://smtp.gmail.com:587/recipient@example.com?username=sender@gmail.com&password=app-password&from=sender@gmail.com&subject=Dewy+Deployment ...
+
+# 環境変数を使用する例
+$ export MAIL_USERNAME=sender@gmail.com
+$ export MAIL_PASSWORD=app-password
+$ export MAIL_FROM=sender@gmail.com
+$ dewy --notify mail://smtp.gmail.com:587/recipient@example.com ...
+```
+
+#### メール設定オプション
+
+オプション | タイプ | 説明                   | デフォルト値
+---        | ---    | ---                    | ---
+username   | string | SMTP認証ユーザー名     | (MAIL_USERNAME環境変数から取得)
+password   | string | SMTP認証パスワード     | (MAIL_PASSWORD環境変数から取得)
+from       | string | 送信者メールアドレス   | (MAIL_FROM環境変数から取得)
+to         | string | 受信者メールアドレス   | (URLパスから抽出)
+subject    | string | メール件名             | "Dewy Notification"
+tls        | bool   | TLS暗号化を使用        | true
+host       | string | SMTPサーバーホスト名   | (URLから抽出)
+port       | int    | SMTPサーバーポート番号 | 587
 
 セマンティックバージョニング
 --
