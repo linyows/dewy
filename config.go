@@ -1,8 +1,6 @@
 package dewy
 
 import (
-	"os"
-
 	starter "github.com/lestrrat-go/server-starter"
 )
 
@@ -61,25 +59,12 @@ type Config struct {
 	Command          Command
 	Registry         string
 	Notify           string
-	ArtifactName     string
-	PreRelease       bool
 	Cache            CacheConfig
 	Starter          starter.Config
 	BeforeDeployHook string
 	AfterDeployHook  string
 }
 
-// OverrideWithEnv overrides by environments.
-func (c *Config) OverrideWithEnv() {
-	// Support env GITHUB_ENDPOINT.
-	if e := os.Getenv("GITHUB_ENDPOINT"); e != "" {
-		os.Setenv("GITHUB_API_URL", e)
-	}
-
-	if a := os.Getenv("GITHUB_ARTIFACT"); a != "" {
-		c.ArtifactName = a
-	}
-}
 
 // DefaultConfig returns default Config.
 func DefaultConfig() Config {

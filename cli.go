@@ -192,7 +192,6 @@ func (c *cli) run() int {
 		conf.Command = ASSETS
 	}
 
-	conf.OverrideWithEnv()
 	d, err := New(conf)
 	if err != nil {
 		fmt.Fprintf(c.env.Err, "Error: %s\n", err)
