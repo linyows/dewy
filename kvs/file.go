@@ -174,8 +174,8 @@ func ExtractArchive(src, dst string) error {
 			return err
 		}
 
-		// Create and write the file
-		outFile, err := os.Create(destPath)
+		// Create and write the file with original permissions
+		outFile, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, f.Mode())
 		if err != nil {
 			return err
 		}
