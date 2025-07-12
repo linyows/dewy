@@ -144,8 +144,8 @@ func (m *Mail) formatMessage(message string) string {
 
 Host: %s
 User: %s
-Working directory: %s
+Working dir: %s
 
 --
-Sent by Dewy notify/mail`, message, hostname(), username(), cwd())
+Dewy: https://github.com/linyows/dewy`, message, hostname(), username(), cwd())
 }
