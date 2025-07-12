@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/go-github/v71/github"
+	"github.com/google/go-github/v73/github"
 	"github.com/linyows/dewy/client"
 )
 

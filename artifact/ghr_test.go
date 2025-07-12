@@ -10,7 +10,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/google/go-github/v71/github"
+	"github.com/google/go-github/v73/github"
 	"github.com/linyows/dewy/client"
 	"github.com/migueleliasweb/go-github-mock/src/mock"
 )
