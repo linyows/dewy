@@ -200,20 +200,20 @@ func (d *Dewy) Run() error {
 		if d.artifact == nil {
 			d.artifact, err = artifact.New(ctx, res.ArtifactURL)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed artifact.New: %w", err)
 			}
 		}
 		err := d.artifact.Download(ctx, buf)
 		d.artifact = nil
 		if err != nil {
-			return err
+			return fmt.Errorf("failed artifact.Download: %w", err)
 		}
 
 		if err := d.cache.Write(cachekeyName, buf.Bytes()); err != nil {
-			return err
+			return fmt.Errorf("failed cache.Write cachekeyName: %w", err)
 		}
 		if err := d.cache.Write(currentkeyName, []byte(cachekeyName)); err != nil {
-			return err
+			return fmt.Errorf("failed cache.Write currentkeyName: %w", err)
 		}
 		log.Printf("[INFO] Cached as %s", cachekeyName)
 	}

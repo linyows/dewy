@@ -53,7 +53,7 @@ L:
 			PerPage: 100,
 		})
 		if err != nil {
-			return err
+			return fmt.Errorf("failed github.Repositories.ListReleases: %w", err)
 		}
 		for _, v := range releases {
 			if v.GetTagName() != r.tag {
