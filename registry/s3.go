@@ -88,7 +88,7 @@ func NewS3(ctx context.Context, u string) (*S3, error) {
 }
 
 // Current returns current artifact.
-func (s *S3) Current(ctx context.Context, req *CurrentRequest) (*CurrentResponse, error) {
+func (s *S3) Current(ctx context.Context) (*CurrentResponse, error) {
 	prefix, version, err := s.LatestVersion(ctx)
 	if err != nil {
 		return nil, err
@@ -114,12 +114,14 @@ func (s *S3) Current(ctx context.Context, req *CurrentRequest) (*CurrentResponse
 		}
 
 	} else {
-		archMatchs := []string{req.Arch}
-		if req.Arch == "amd64" {
+		arch := getArch()
+		os := getOS()
+		archMatchs := []string{arch}
+		if arch == "amd64" {
 			archMatchs = append(archMatchs, "x86_64")
 		}
-		osMatchs := []string{req.OS}
-		if req.OS == "darwin" {
+		osMatchs := []string{os}
+		if os == "darwin" {
 			osMatchs = append(osMatchs, "macos")
 		}
 

@@ -12,6 +12,14 @@ import (
 )
 
 func TestCurrent(t *testing.T) {
+	// Set test platform values
+	TestArch = "amd64"
+	TestOS = "linux"
+	defer func() {
+		TestArch = ""
+		TestOS = ""
+	}()
+
 	ctx := context.Background()
 	ts := grpcstub.NewServer(t, "dewy.proto")
 	t.Cleanup(func() {
@@ -26,13 +34,9 @@ func TestCurrent(t *testing.T) {
 	if err := g.Dial(ctx, ts.Addr()); err != nil {
 		t.Fatal(err)
 	}
-	req := &CurrentRequest{
-		Arch: "amd64",
-		OS:   "linux",
-	}
 
 	t.Run("Response", func(t *testing.T) {
-		got, err := g.Current(ctx, req)
+		got, err := g.Current(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}

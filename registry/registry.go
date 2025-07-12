@@ -17,18 +17,11 @@ var (
 
 type Registry interface {
 	// Current returns the current artifact.
-	Current(context.Context, *CurrentRequest) (*CurrentResponse, error)
+	Current(context.Context) (*CurrentResponse, error)
 	// Report reports the result of deploying the artifact.
 	Report(context.Context, *ReportRequest) error
 }
 
-// CurrentRequest is the request to get the current artifact.
-type CurrentRequest struct {
-	// Arch is the CPU architecture of deployment environment.
-	Arch string
-	// OS is the operating system of deployment environment.
-	OS string
-}
 
 // CurrentResponse is the response to get the current artifact.
 type CurrentResponse struct {

@@ -75,7 +75,7 @@ func (g *GHR) host() string {
 }
 
 // Current returns current artifact.
-func (g *GHR) Current(ctx context.Context, req *CurrentRequest) (*CurrentResponse, error) {
+func (g *GHR) Current(ctx context.Context) (*CurrentResponse, error) {
 	release, err := g.latest(ctx)
 	if err != nil {
 		return nil, err
@@ -96,12 +96,14 @@ func (g *GHR) Current(ctx context.Context, req *CurrentRequest) (*CurrentRespons
 			return nil, fmt.Errorf("artifact not found: %s", artifactName)
 		}
 	} else {
-		archMatchs := []string{req.Arch}
-		if req.Arch == "amd64" {
+		arch := getArch()
+		os := getOS()
+		archMatchs := []string{arch}
+		if arch == "amd64" {
 			archMatchs = append(archMatchs, "x86_64")
 		}
-		osMatchs := []string{req.OS}
-		if req.OS == "darwin" {
+		osMatchs := []string{os}
+		if os == "darwin" {
 			osMatchs = append(osMatchs, "macos")
 		}
 		found := false

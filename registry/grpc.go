@@ -52,14 +52,14 @@ func (c *GRPC) Dial(ctx context.Context, target string) error {
 }
 
 // Current returns current artifact.
-func (c *GRPC) Current(ctx context.Context, req *CurrentRequest) (*CurrentResponse, error) {
+func (c *GRPC) Current(ctx context.Context) (*CurrentResponse, error) {
 	var an *string
 	if c.Artifact != "" {
 		an = &c.Artifact
 	}
 	creq := &pb.CurrentRequest{
-		Arch:        req.Arch,
-		Os:          req.OS,
+		Arch:        getArch(),
+		Os:          getOS(),
 		ArifactName: an,
 	}
 	cres, err := c.cl.Current(ctx, creq)
