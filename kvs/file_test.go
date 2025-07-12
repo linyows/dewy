@@ -1,6 +1,9 @@
 package kvs
 
 import (
+	"archive/tar"
+	"compress/gzip"
+	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -115,4 +118,110 @@ func TestFileList(t *testing.T) {
 	if !found {
 		t.Error("file not found in list")
 	}
+}
+
+func TestExtractArchivePreservesPermissions(t *testing.T) {
+	// Create a temporary directory for test
+	tempDir, err := os.MkdirTemp("", "extract-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create a test tar.gz archive with files having different permissions
+	archivePath := filepath.Join(tempDir, "test.tar.gz")
+	if err := createTestArchive(archivePath); err != nil {
+		t.Fatal(err)
+	}
+
+	// Extract the archive
+	extractDir := filepath.Join(tempDir, "extracted")
+	if err := ExtractArchive(archivePath, extractDir); err != nil {
+		t.Fatal(err)
+	}
+
+	// Test regular file permissions (0644)
+	regularFile := filepath.Join(extractDir, "regular.txt")
+	if info, err := os.Stat(regularFile); err != nil {
+		t.Fatal(err)
+	} else if info.Mode().Perm() != 0644 {
+		t.Errorf("Regular file has incorrect permissions: got %o, want %o", info.Mode().Perm(), 0644)
+	}
+
+	// Test executable file permissions (0755)
+	execFile := filepath.Join(extractDir, "executable")
+	if info, err := os.Stat(execFile); err != nil {
+		t.Fatal(err)
+	} else if info.Mode().Perm() != 0755 {
+		t.Errorf("Executable file has incorrect permissions: got %o, want %o", info.Mode().Perm(), 0755)
+	}
+
+	// Test directory permissions (0755)
+	dir := filepath.Join(extractDir, "subdir")
+	if info, err := os.Stat(dir); err != nil {
+		t.Fatal(err)
+	} else if info.Mode().Perm() != 0755 {
+		t.Errorf("Directory has incorrect permissions: got %o, want %o", info.Mode().Perm(), 0755)
+	}
+}
+
+// createTestArchive creates a tar.gz archive with files having different permissions
+func createTestArchive(archivePath string) error {
+	file, err := os.Create(archivePath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	gw := gzip.NewWriter(file)
+	defer gw.Close()
+
+	tw := tar.NewWriter(gw)
+	defer tw.Close()
+
+	// Add a regular file with 0644 permissions
+	if err := addFileToArchive(tw, "regular.txt", "This is a regular file", 0644); err != nil {
+		return err
+	}
+
+	// Add an executable file with 0755 permissions
+	if err := addFileToArchive(tw, "executable", "#!/bin/bash\necho 'Hello, World!'", 0755); err != nil {
+		return err
+	}
+
+	// Add a directory with 0755 permissions
+	if err := addDirToArchive(tw, "subdir/", 0755); err != nil {
+		return err
+	}
+
+	// Add a file in subdirectory
+	if err := addFileToArchive(tw, "subdir/nested.txt", "Nested file content", 0644); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// addFileToArchive adds a file to tar archive with specified permissions
+func addFileToArchive(tw *tar.Writer, name, content string, mode os.FileMode) error {
+	header := &tar.Header{
+		Name: name,
+		Mode: int64(mode),
+		Size: int64(len(content)),
+	}
+	if err := tw.WriteHeader(header); err != nil {
+		return err
+	}
+	_, err := tw.Write([]byte(content))
+	return err
+}
+
+// addDirToArchive adds a directory to tar archive with specified permissions
+func addDirToArchive(tw *tar.Writer, name string, mode os.FileMode) error {
+	header := &tar.Header{
+		Name:     name,
+		Mode:     int64(mode),
+		Typeflag: tar.TypeDir,
+	}
+	return tw.WriteHeader(header)
 }
