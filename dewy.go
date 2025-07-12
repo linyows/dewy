@@ -154,9 +154,8 @@ func (d *Dewy) Run() error {
 
 	// Get current
 	res, err := d.registry.Current(ctx, &registry.CurrentRequest{
-		Arch:         runtime.GOARCH,
-		OS:           runtime.GOOS,
-		ArtifactName: d.config.ArtifactName,
+		Arch: runtime.GOARCH,
+		OS:   runtime.GOOS,
 	})
 	if err != nil {
 		log.Printf("[ERROR] Current failure: %#v", err)

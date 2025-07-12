@@ -28,9 +28,6 @@ type CurrentRequest struct {
 	Arch string
 	// OS is the operating system of deployment environment.
 	OS string
-	// ArtifactName is the name of the artifact to fetch.
-	// FIXME: If possible, ArtifactName should be optional.
-	ArtifactName string
 }
 
 // CurrentResponse is the response to get the current artifact.

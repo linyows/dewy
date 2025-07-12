@@ -46,6 +46,13 @@ func NewGHR(ctx context.Context, u string) (*GHR, error) {
 		return nil, err
 	}
 
+	// Support GITHUB_ARTIFACT environment variable for backward compatibility
+	if ghr.Artifact == "" {
+		if artifact := os.Getenv("GITHUB_ARTIFACT"); artifact != "" {
+			ghr.Artifact = artifact
+		}
+	}
+
 	ghr.cl, err = client.NewGitHub()
 	if err != nil {
 		return nil, err
@@ -75,8 +82,8 @@ func (g *GHR) Current(ctx context.Context, req *CurrentRequest) (*CurrentRespons
 	}
 	var artifactName string
 
-	if req.ArtifactName != "" {
-		artifactName = req.ArtifactName
+	if g.Artifact != "" {
+		artifactName = g.Artifact
 		found := false
 		for _, v := range release.Assets {
 			if v.GetName() == artifactName {

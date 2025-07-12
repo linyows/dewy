@@ -102,8 +102,8 @@ func (s *S3) Current(ctx context.Context, req *CurrentRequest) (*CurrentResponse
 	var artifactName string
 	found := false
 
-	if req.ArtifactName != "" {
-		artifactName = req.ArtifactName
+	if s.Artifact != "" {
+		artifactName = s.Artifact
 		for _, v := range objects {
 			name := s.extractFilenameFromObjectKey(*v.Key, prefix)
 			if name == artifactName {
