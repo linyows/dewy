@@ -28,6 +28,13 @@ func New(ctx context.Context, url string) (Notify, error) {
 			return &Null{}, nil
 		}
 		return sl, nil
+	case "mail", "smtp":
+		ml, err := NewMail(splitted[1])
+		if err != nil {
+			log.Printf("[ERROR] %s", err)
+			return &Null{}, nil
+		}
+		return ml, nil
 	default:
 		return nil, fmt.Errorf("unsupported notify: %s", url)
 	}
