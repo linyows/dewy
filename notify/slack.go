@@ -29,6 +29,11 @@ var (
 	decoder = schema.NewDecoder()
 )
 
+// SlackSender interface for dependency injection and testing.
+type SlackSender interface {
+	SendMessage(ctx context.Context, channel, username, iconURL, text string, attachment *objects.Attachment) error
+}
+
 // Slack struct.
 type Slack struct {
 	Channel  string `schema:"-"`
@@ -36,6 +41,7 @@ type Slack struct {
 	TitleURL string `schema:"url"`
 	token    string
 	github   *Github
+	sender   SlackSender // for testing
 }
 
 func NewSlack(schema string) (*Slack, error) {
@@ -62,12 +68,24 @@ func NewSlack(schema string) (*Slack, error) {
 	return s, nil
 }
 
+// SetSender sets the slack sender for testing purposes.
+func (s *Slack) SetSender(sender SlackSender) {
+	s.sender = sender
+}
+
 // Send posts message to Slack channel.
 func (s *Slack) Send(ctx context.Context, message string) {
-	cl := slack.New(s.token)
 	at := s.BuildAttachment(message)
-	_, err := cl.Chat().PostMessage(s.Channel).Username(SlackUsername).
-		IconURL(SlackIconURL).Attachment(&at).Text("").Do(ctx)
+
+	var err error
+	if s.sender != nil {
+		err = s.sender.SendMessage(ctx, s.Channel, SlackUsername, SlackIconURL, "", &at)
+	} else {
+		cl := slack.New(s.token)
+		_, err = cl.Chat().PostMessage(s.Channel).Username(SlackUsername).
+			IconURL(SlackIconURL).Attachment(&at).Text("").Do(ctx)
+	}
+
 	if err != nil {
 		log.Printf("[ERROR] Slack postMessage failure: %#v", err)
 	}
