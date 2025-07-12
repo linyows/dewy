@@ -143,7 +143,7 @@ func (g *GHR) latest(ctx context.Context) (*github.RepositoryRelease, error) {
 		opt := &github.ListOptions{Page: 1}
 		rr, _, err := g.cl.Repositories.ListReleases(ctx, g.Owner, g.Repo, opt)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed github.Repositories.ListReleases: %w", err)
 		}
 		for _, v := range rr {
 			if *v.Draft {
@@ -154,7 +154,7 @@ func (g *GHR) latest(ctx context.Context) (*github.RepositoryRelease, error) {
 	}
 	r, _, err := g.cl.Repositories.GetLatestRelease(ctx, g.Owner, g.Repo)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed github.Repositories.GetLatestRelease: %w", err)
 	}
 	return r, nil
 }
