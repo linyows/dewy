@@ -212,7 +212,7 @@ $ dewy --notify mail://smtp.gmail.com:587/recipient@example.com ...
 ---        | ---    | ---                    | ---
 username   | string | SMTP認証ユーザー名     | (MAIL_USERNAME環境変数から取得)
 password   | string | SMTP認証パスワード     | (MAIL_PASSWORD環境変数から取得)
-from       | string | 送信者メールアドレス   | (MAIL_FROM環境変数から取得)
+from       | string | 送信者メールアドレス   | (MAIL_FROM環境変数から取得、または'username'と同じ値を使用)
 to         | string | 受信者メールアドレス   | (URLパスから抽出)
 subject    | string | メール件名             | "Dewy Notification"
 tls        | bool   | TLS暗号化を使用        | true

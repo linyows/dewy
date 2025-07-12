@@ -199,7 +199,7 @@ Option   | Type   | Description                  | Default
 ---      | ---    | ---                          | ---
 username | string | SMTP authentication username | (from MAIL_USERNAME env var)
 password | string | SMTP authentication password | (from MAIL_PASSWORD env var)
-from     | string | Sender mail address          | (from MAIL_FROM env var)
+from     | string | Sender mail address          | (from MAIL_FROM env var, or same as 'username' if not specified)
 to       | string | Recipient mail address       | (extracted from URL path)
 subject  | string | Mail subject line            | "Dewy Notification"
 tls      | bool   | Use TLS encryption           | true

@@ -83,13 +83,28 @@ func TestNewMail(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:   "from defaults to username",
+			schema: "smtp.example.com:587/recipient@example.com?password=secret&username=sender@example.com",
+			want: &Mail{
+				Host:     "smtp.example.com",
+				Port:     587,
+				Username: "sender@example.com",
+				Password: "secret",
+				From:     "sender@example.com", // should default to username
+				To:       "recipient@example.com",
+				Subject:  "Dewy Notification",
+				TLS:      true,
+			},
+			wantErr: false,
+		},
+		{
 			name:    "missing host",
 			schema:  ":587/recipient@example.com?username=user&password=pass&from=from@example.com",
 			wantErr: true,
 		},
 		{
-			name:    "missing username",
-			schema:  "smtp.example.com:587/recipient@example.com?password=pass&from=from@example.com",
+			name:    "missing username and from",
+			schema:  "smtp.example.com:587/recipient@example.com?password=pass",
 			wantErr: true,
 		},
 		{
@@ -98,9 +113,19 @@ func TestNewMail(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "missing from",
-			schema:  "smtp.example.com:587/recipient@example.com?username=user&password=pass",
-			wantErr: true,
+			name:   "missing from but has username (should use username as from)",
+			schema: "smtp.example.com:587/recipient@example.com?username=user@example.com&password=pass",
+			want: &Mail{
+				Host:     "smtp.example.com",
+				Port:     587,
+				Username: "user@example.com",
+				Password: "pass",
+				From:     "user@example.com", // should default to username
+				To:       "recipient@example.com",
+				Subject:  "Dewy Notification",
+				TLS:      true,
+			},
+			wantErr: false,
 		},
 		{
 			name:    "missing to",
@@ -274,10 +299,10 @@ func TestMail_formatMessage(t *testing.T) {
 	if !strings.Contains(formatted, "User:") {
 		t.Error("formatMessage() doesn't contain User information")
 	}
-	if !strings.Contains(formatted, "Working directory:") {
-		t.Error("formatMessage() doesn't contain Working directory information")
+	if !strings.Contains(formatted, "Working dir:") {
+		t.Error("formatMessage() doesn't contain Working dir information")
 	}
-	if !strings.Contains(formatted, "Sent by Dewy notify/mail") {
+	if !strings.Contains(formatted, "Dewy: https://github.com/linyows/dewy") {
 		t.Error("formatMessage() doesn't contain signature")
 	}
 }

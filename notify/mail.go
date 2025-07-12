@@ -20,14 +20,14 @@ type MailDialer interface {
 
 // Mail struct.
 type Mail struct {
-	Host     string `schema:"host"`
-	Port     int    `schema:"port"`
-	Username string `schema:"username"`
-	Password string `schema:"password"`
-	From     string `schema:"from"`
-	To       string `schema:"to"`
-	Subject  string `schema:"subject"`
-	TLS      bool   `schema:"tls"`
+	Host     string     `schema:"host"`
+	Port     int        `schema:"port"`
+	Username string     `schema:"username"`
+	Password string     `schema:"password"`
+	From     string     `schema:"from"`
+	To       string     `schema:"to"`
+	Subject  string     `schema:"subject"`
+	TLS      bool       `schema:"tls"`
 	dialer   MailDialer // for testing
 }
 
@@ -75,6 +75,11 @@ func NewMail(schema string) (*Mail, error) {
 		m.To = strings.TrimPrefix(u.Path, "/")
 	}
 
+	// Set from to username if not specified
+	if m.From == "" && m.Username != "" {
+		m.From = m.Username
+	}
+
 	// Validate required fields
 	if m.Host == "" {
 		return nil, fmt.Errorf("mail host is required")
@@ -116,9 +121,15 @@ func (m *Mail) Send(ctx context.Context, message string) {
 	} else {
 		d := mail.NewDialer(m.Host, m.Port, m.Username, m.Password)
 		if m.TLS {
-			d.TLSConfig = &tls.Config{InsecureSkipVerify: false}
+			d.TLSConfig = &tls.Config{
+				ServerName:         m.Host,
+				InsecureSkipVerify: false,
+			}
 		} else {
-			d.TLSConfig = &tls.Config{InsecureSkipVerify: true}
+			d.TLSConfig = &tls.Config{
+				ServerName:         m.Host,
+				InsecureSkipVerify: true,
+			}
 		}
 		dialer = d
 	}
@@ -133,8 +144,8 @@ func (m *Mail) formatMessage(message string) string {
 
 Host: %s
 User: %s
-Working directory: %s
+Working dir: %s
 
 --
-Sent by Dewy notify/mail`, message, hostname(), username(), cwd())
+Dewy: https://github.com/linyows/dewy`, message, hostname(), username(), cwd())
 }
