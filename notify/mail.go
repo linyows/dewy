@@ -20,14 +20,14 @@ type MailDialer interface {
 
 // Mail struct.
 type Mail struct {
-	Host     string `schema:"host"`
-	Port     int    `schema:"port"`
-	Username string `schema:"username"`
-	Password string `schema:"password"`
-	From     string `schema:"from"`
-	To       string `schema:"to"`
-	Subject  string `schema:"subject"`
-	TLS      bool   `schema:"tls"`
+	Host     string     `schema:"host"`
+	Port     int        `schema:"port"`
+	Username string     `schema:"username"`
+	Password string     `schema:"password"`
+	From     string     `schema:"from"`
+	To       string     `schema:"to"`
+	Subject  string     `schema:"subject"`
+	TLS      bool       `schema:"tls"`
 	dialer   MailDialer // for testing
 }
 
@@ -73,6 +73,11 @@ func NewMail(schema string) (*Mail, error) {
 	// Extract To address from URL path if provided
 	if u.Path != "" && u.Path != "/" {
 		m.To = strings.TrimPrefix(u.Path, "/")
+	}
+
+	// Set from to username if not specified
+	if m.From == "" && m.Username != "" {
+		m.From = m.Username
 	}
 
 	// Validate required fields
