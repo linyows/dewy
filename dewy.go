@@ -31,6 +31,7 @@ const (
 	releasesDir  = "releases"
 	symlinkDir   = "current"
 	keepReleases = 7
+	maxNotifyErrors = 3
 
 	// currentkeyName is a name whose value is the version of the currently running server application.
 	// For example, if you are using a file for the cache store, running `cat current` will show `v1.2.3--app_linux_amd64.tar.gz`, which is a combination of the tag and artifact.
@@ -49,6 +50,7 @@ type Dewy struct {
 	root            string
 	job             *scheduler.Job
 	notify          notify.Notify
+	errorCount      int
 	sync.RWMutex
 }
 
@@ -74,6 +76,7 @@ func New(c Config) (*Dewy, error) {
 		cache:           kv,
 		isServerRunning: false,
 		root:            wd,
+		errorCount:      0,
 	}, nil
 }
 
@@ -100,6 +103,9 @@ func (d *Dewy) Start(i int) {
 		e := d.Run()
 		if e != nil {
 			log.Printf("[ERROR] Dewy run failure: %#v", e)
+			d.handleError(context.Background(), e)
+		} else {
+			d.resetErrorCount()
 		}
 	})
 	if err != nil {
@@ -253,6 +259,9 @@ func (d *Dewy) Run() error {
 		log.Printf("[ERROR] Keep releases failure: %#v", err)
 	}
 
+	// Reset error count on successful completion
+	d.resetErrorCount()
+
 	return nil
 }
 
@@ -394,4 +403,32 @@ func (d *Dewy) execHook(cmd string) error {
 		return err
 	}
 	return nil
+}
+
+// handleError handles error notifications with count limiting
+func (d *Dewy) handleError(ctx context.Context, err error) {
+	d.Lock()
+	defer d.Unlock()
+	
+	d.errorCount++
+	
+	// Only send notification if error count is within the limit
+	if d.errorCount <= maxNotifyErrors {
+		msg := fmt.Sprintf("Error occurred (count: %d): %v", d.errorCount, err)
+		d.notify.Send(ctx, msg)
+	}
+	
+	// Log all errors regardless of notification count
+	log.Printf("[ERROR] Error count: %d, %v", d.errorCount, err)
+}
+
+// resetErrorCount resets error count when operation succeeds
+func (d *Dewy) resetErrorCount() {
+	d.Lock()
+	defer d.Unlock()
+	
+	if d.errorCount > 0 {
+		log.Printf("[INFO] Error count reset from %d to 0", d.errorCount)
+		d.errorCount = 0
+	}
 }
