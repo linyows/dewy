@@ -48,7 +48,7 @@ type Dewy struct {
 	disableReport   bool
 	root            string
 	job             *scheduler.Job
-	notify          notify.Notify
+	notify          notify.Notifier
 	sync.RWMutex
 }
 
@@ -100,6 +100,9 @@ func (d *Dewy) Start(i int) {
 		e := d.Run()
 		if e != nil {
 			log.Printf("[ERROR] Dewy run failure: %#v", e)
+			d.notify.SendError(context.Background(), e)
+		} else {
+			d.notify.ResetErrorCount()
 		}
 	})
 	if err != nil {
@@ -233,6 +236,7 @@ func (d *Dewy) Run() error {
 		}
 		if err != nil {
 			log.Printf("[ERROR] Server failure: %#v", err)
+			return err
 		}
 	}
 
@@ -323,21 +327,27 @@ func (d *Dewy) startServer() error {
 	d.Lock()
 	defer d.Unlock()
 
-	d.isServerRunning = true
-
 	log.Print("[INFO] Start server")
-	ch := make(chan error)
+	
+	// Try to create starter first (synchronous validation)
+	s, err := starter.NewStarter(d.config.Starter)
+	if err != nil {
+		log.Printf("[ERROR] Starter failure: %#v", err)
+		return err
+	}
 
+	// Start server in background
 	go func() {
-		s, err := starter.NewStarter(d.config.Starter)
+		err := s.Run()
 		if err != nil {
-			log.Printf("[ERROR] Starter failure: %#v", err)
-			return
+			log.Printf("[ERROR] Server run failure: %#v", err)
+			d.Lock()
+			d.isServerRunning = false
+			d.Unlock()
 		}
-
-		ch <- s.Run()
 	}()
 
+	d.isServerRunning = true
 	return nil
 }
 
@@ -395,3 +405,4 @@ func (d *Dewy) execHook(cmd string) error {
 	}
 	return nil
 }
+
