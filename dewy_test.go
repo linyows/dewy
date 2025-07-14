@@ -93,14 +93,42 @@ func (a *mockArtifact) Download(ctx context.Context, w io.Writer) error {
 
 // mockNotify is a mock notify for testing error notification limiting
 type mockNotify struct {
-	messages []string
-	mu       sync.Mutex
+	messages   []string
+	errorCount int
+	mu         sync.Mutex
 }
 
 func (n *mockNotify) Send(ctx context.Context, msg string) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	n.messages = append(n.messages, msg)
+	if n.errorCount == 0 {
+		n.messages = append(n.messages, msg)
+	}
+}
+
+func (n *mockNotify) SendError(ctx context.Context, err error) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	
+	// Prevent integer overflow by capping the error count
+	if n.errorCount < 1000 {
+		n.errorCount++
+	}
+	
+	// Send notification if error count is within the limit
+	if n.errorCount < 3 {
+		msg := fmt.Sprintf("Error occurred (count: %d): %v", n.errorCount, err)
+		n.messages = append(n.messages, msg)
+	} else if n.errorCount == 3 {
+		msg := fmt.Sprintf("⚠️ No more error notifications will be sent until errors are resolved.\n\nError occurred (count: %d): %v", n.errorCount, err)
+		n.messages = append(n.messages, msg)
+	}
+}
+
+func (n *mockNotify) ResetErrorCount() {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.errorCount = 0
 }
 
 func (n *mockNotify) GetMessages() []string {
@@ -134,10 +162,11 @@ func TestRun(t *testing.T) {
 		binary: binary,
 		url:    artifact,
 	}
-	dewy.notify, err = notify.New(context.Background(), "")
+	notifier, err := notify.New(context.Background(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
+	dewy.notify = notifier
 
 	if err := dewy.Run(); err != nil {
 		t.Error(err)
@@ -243,44 +272,44 @@ func TestHandleError(t *testing.T) {
 	// Test error notification limiting
 	testErr := fmt.Errorf("test error")
 
-	// First (maxNotifyErrors-1) errors should send normal notifications
-	for i := 1; i < maxNotifyErrors; i++ {
-		dewy.handleError(ctx, testErr)
+	// First 2 errors should send normal notifications
+	for i := 1; i < 3; i++ {
+		dewy.notify.SendError(ctx, testErr)
 		messages := mockNotify.GetMessages()
 		if len(messages) != i {
 			t.Errorf("Expected %d messages, got %d", i, len(messages))
 		}
-		if dewy.errorCount != i {
-			t.Errorf("Expected error count %d, got %d", i, dewy.errorCount)
+		if mockNotify.errorCount != i {
+			t.Errorf("Expected error count %d, got %d", i, mockNotify.errorCount)
 		}
 	}
 
-	// The maxNotifyErrors-th error should send final notification with warning
-	dewy.handleError(ctx, testErr)
+	// The 3rd error should send final notification with warning
+	dewy.notify.SendError(ctx, testErr)
 	messages := mockNotify.GetMessages()
-	if len(messages) != maxNotifyErrors {
-		t.Errorf("Expected %d messages (including final notification), got %d", maxNotifyErrors, len(messages))
+	if len(messages) != 3 {
+		t.Errorf("Expected %d messages (including final notification), got %d", 3, len(messages))
 	}
-	if dewy.errorCount != maxNotifyErrors {
-		t.Errorf("Expected error count %d, got %d", maxNotifyErrors, dewy.errorCount)
+	if mockNotify.errorCount != 3 {
+		t.Errorf("Expected error count %d, got %d", 3, mockNotify.errorCount)
 	}
 
 	// Check that final notification contains the warning message
 	finalMessage := messages[len(messages)-1]
-	expectedWarning := "This is the last notification. No more error notifications will be sent until errors are resolved."
+	expectedWarning := "⚠️ No more error notifications will be sent until errors are resolved."
 	if !strings.Contains(finalMessage, expectedWarning) {
 		t.Errorf("Final notification should contain warning message, got: %s", finalMessage)
 	}
 
 	// Further errors should not send more notifications
-	for i := maxNotifyErrors + 1; i <= maxNotifyErrors+3; i++ {
-		dewy.handleError(ctx, testErr)
+	for i := 4; i <= 6; i++ {
+		dewy.notify.SendError(ctx, testErr)
 		messages := mockNotify.GetMessages()
-		if len(messages) != maxNotifyErrors {
-			t.Errorf("Expected %d messages (no new notifications), got %d", maxNotifyErrors, len(messages))
+		if len(messages) != 3 {
+			t.Errorf("Expected %d messages (no new notifications), got %d", 3, len(messages))
 		}
-		if dewy.errorCount != i {
-			t.Errorf("Expected error count %d, got %d", i, dewy.errorCount)
+		if mockNotify.errorCount != i {
+			t.Errorf("Expected error count %d, got %d", i, mockNotify.errorCount)
 		}
 	}
 }
@@ -301,25 +330,56 @@ func TestResetErrorCount(t *testing.T) {
 	// Set error count to 5
 	testErr := fmt.Errorf("test error")
 	for i := 0; i < 5; i++ {
-		dewy.handleError(ctx, testErr)
+		dewy.notify.SendError(ctx, testErr)
 	}
 
-	if dewy.errorCount != 5 {
-		t.Errorf("Expected error count 5, got %d", dewy.errorCount)
+	if mockNotify.errorCount != 5 {
+		t.Errorf("Expected error count 5, got %d", mockNotify.errorCount)
 	}
 
 	// Reset error count
-	dewy.resetErrorCount()
+	dewy.notify.ResetErrorCount()
 
-	if dewy.errorCount != 0 {
-		t.Errorf("Expected error count 0 after reset, got %d", dewy.errorCount)
+	if mockNotify.errorCount != 0 {
+		t.Errorf("Expected error count 0 after reset, got %d", mockNotify.errorCount)
 	}
 
 	// Test that after reset, notifications work again
-	dewy.handleError(ctx, testErr)
+	dewy.notify.SendError(ctx, testErr)
 	messages := mockNotify.GetMessages()
-	expectedMessages := maxNotifyErrors + 1 // maxNotifyErrors from before + 1 new notification after reset
+	expectedMessages := 3 + 1 // 3 from before + 1 new notification after reset
 	if len(messages) != expectedMessages {
 		t.Errorf("Expected %d messages after reset, got %d", expectedMessages, len(messages))
+	}
+}
+
+func TestErrorCountOverflow(t *testing.T) {
+	ctx := context.Background()
+	c := DefaultConfig()
+	c.Registry = "ghr://linyows/dewy"
+
+	dewy, err := New(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mockNotify := &mockNotify{messages: []string{}}
+	dewy.notify = mockNotify
+
+	// Manually set error count to near the limit
+	mockNotify.errorCount = 999
+	
+	testErr := fmt.Errorf("test error")
+	
+	// This should increment to 1000 (max limit)
+	dewy.notify.SendError(ctx, testErr)
+	if mockNotify.errorCount != 1000 {
+		t.Errorf("Expected error count 1000, got %d", mockNotify.errorCount)
+	}
+	
+	// This should NOT increment beyond 1000
+	dewy.notify.SendError(ctx, testErr)
+	if mockNotify.errorCount != 1000 {
+		t.Errorf("Expected error count to remain at 1000, got %d", mockNotify.errorCount)
 	}
 }

@@ -31,7 +31,6 @@ const (
 	releasesDir  = "releases"
 	symlinkDir   = "current"
 	keepReleases = 7
-	maxNotifyErrors = 3
 
 	// currentkeyName is a name whose value is the version of the currently running server application.
 	// For example, if you are using a file for the cache store, running `cat current` will show `v1.2.3--app_linux_amd64.tar.gz`, which is a combination of the tag and artifact.
@@ -49,8 +48,7 @@ type Dewy struct {
 	disableReport   bool
 	root            string
 	job             *scheduler.Job
-	notify          notify.Notify
-	errorCount      int
+	notify          notify.Notifier
 	sync.RWMutex
 }
 
@@ -76,7 +74,6 @@ func New(c Config) (*Dewy, error) {
 		cache:           kv,
 		isServerRunning: false,
 		root:            wd,
-		errorCount:      0,
 	}, nil
 }
 
@@ -103,9 +100,9 @@ func (d *Dewy) Start(i int) {
 		e := d.Run()
 		if e != nil {
 			log.Printf("[ERROR] Dewy run failure: %#v", e)
-			d.handleError(context.Background(), e)
+			d.notify.SendError(context.Background(), e)
 		} else {
-			d.resetErrorCount()
+			d.notify.ResetErrorCount()
 		}
 	})
 	if err != nil {
@@ -239,6 +236,7 @@ func (d *Dewy) Run() error {
 		}
 		if err != nil {
 			log.Printf("[ERROR] Server failure: %#v", err)
+			return err
 		}
 	}
 
@@ -258,9 +256,6 @@ func (d *Dewy) Run() error {
 	if err != nil {
 		log.Printf("[ERROR] Keep releases failure: %#v", err)
 	}
-
-	// Reset error count on successful completion
-	d.resetErrorCount()
 
 	return nil
 }
@@ -332,21 +327,27 @@ func (d *Dewy) startServer() error {
 	d.Lock()
 	defer d.Unlock()
 
-	d.isServerRunning = true
-
 	log.Print("[INFO] Start server")
-	ch := make(chan error)
+	
+	// Try to create starter first (synchronous validation)
+	s, err := starter.NewStarter(d.config.Starter)
+	if err != nil {
+		log.Printf("[ERROR] Starter failure: %#v", err)
+		return err
+	}
 
+	// Start server in background
 	go func() {
-		s, err := starter.NewStarter(d.config.Starter)
+		err := s.Run()
 		if err != nil {
-			log.Printf("[ERROR] Starter failure: %#v", err)
-			return
+			log.Printf("[ERROR] Server run failure: %#v", err)
+			d.Lock()
+			d.isServerRunning = false
+			d.Unlock()
 		}
-
-		ch <- s.Run()
 	}()
 
+	d.isServerRunning = true
 	return nil
 }
 
@@ -405,33 +406,3 @@ func (d *Dewy) execHook(cmd string) error {
 	return nil
 }
 
-// handleError handles error notifications with count limiting
-func (d *Dewy) handleError(ctx context.Context, err error) {
-	d.Lock()
-	defer d.Unlock()
-	
-	d.errorCount++
-	
-	// Send notification if error count is within the limit
-	if d.errorCount < maxNotifyErrors {
-		msg := fmt.Sprintf("Error occurred (count: %d): %v", d.errorCount, err)
-		d.notify.Send(ctx, msg)
-	} else if d.errorCount == maxNotifyErrors {
-		msg := fmt.Sprintf("Error occurred (count: %d): %v\nThis is the last notification. No more error notifications will be sent until errors are resolved.", d.errorCount, err)
-		d.notify.Send(ctx, msg)
-	}
-	
-	// Log all errors regardless of notification count
-	log.Printf("[ERROR] Error count: %d, %v", d.errorCount, err)
-}
-
-// resetErrorCount resets error count when operation succeeds
-func (d *Dewy) resetErrorCount() {
-	d.Lock()
-	defer d.Unlock()
-	
-	if d.errorCount > 0 {
-		log.Printf("[INFO] Error count reset from %d to 0", d.errorCount)
-		d.errorCount = 0
-	}
-}
