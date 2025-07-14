@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -87,6 +88,24 @@ func (a *mockArtifact) Download(ctx context.Context, w io.Writer) error {
 	}
 
 	return nil
+}
+
+// mockNotify is a mock notify for testing error notification limiting
+type mockNotify struct {
+	messages []string
+	mu       sync.Mutex
+}
+
+func (n *mockNotify) Send(ctx context.Context, msg string) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.messages = append(n.messages, msg)
+}
+
+func (n *mockNotify) GetMessages() []string {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return append([]string(nil), n.messages...)
 }
 
 func TestRun(t *testing.T) {
@@ -204,5 +223,85 @@ func TestDeployHook(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestHandleError(t *testing.T) {
+	ctx := context.Background()
+	c := DefaultConfig()
+	c.Registry = "ghr://linyows/dewy"
+
+	dewy, err := New(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mockNotify := &mockNotify{messages: []string{}}
+	dewy.notify = mockNotify
+
+	// Test error notification limiting
+	testErr := fmt.Errorf("test error")
+
+	// First maxNotifyErrors errors should send notifications
+	for i := 1; i <= maxNotifyErrors; i++ {
+		dewy.handleError(ctx, testErr)
+		messages := mockNotify.GetMessages()
+		if len(messages) != i {
+			t.Errorf("Expected %d messages, got %d", i, len(messages))
+		}
+		if dewy.errorCount != i {
+			t.Errorf("Expected error count %d, got %d", i, dewy.errorCount)
+		}
+	}
+
+	// Beyond maxNotifyErrors errors should not send notifications
+	for i := maxNotifyErrors + 1; i <= maxNotifyErrors+3; i++ {
+		dewy.handleError(ctx, testErr)
+		messages := mockNotify.GetMessages()
+		if len(messages) != maxNotifyErrors {
+			t.Errorf("Expected %d messages (no new notifications), got %d", maxNotifyErrors, len(messages))
+		}
+		if dewy.errorCount != i {
+			t.Errorf("Expected error count %d, got %d", i, dewy.errorCount)
+		}
+	}
+}
+
+func TestResetErrorCount(t *testing.T) {
+	ctx := context.Background()
+	c := DefaultConfig()
+	c.Registry = "ghr://linyows/dewy"
+
+	dewy, err := New(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mockNotify := &mockNotify{messages: []string{}}
+	dewy.notify = mockNotify
+
+	// Set error count to 5
+	testErr := fmt.Errorf("test error")
+	for i := 0; i < 5; i++ {
+		dewy.handleError(ctx, testErr)
+	}
+
+	if dewy.errorCount != 5 {
+		t.Errorf("Expected error count 5, got %d", dewy.errorCount)
+	}
+
+	// Reset error count
+	dewy.resetErrorCount()
+
+	if dewy.errorCount != 0 {
+		t.Errorf("Expected error count 0 after reset, got %d", dewy.errorCount)
+	}
+
+	// Test that after reset, notifications work again
+	dewy.handleError(ctx, testErr)
+	messages := mockNotify.GetMessages()
+	expectedMessages := maxNotifyErrors + 1 // maxNotifyErrors from before + 1 new notification
+	if len(messages) != expectedMessages {
+		t.Errorf("Expected %d messages after reset, got %d", expectedMessages, len(messages))
 	}
 }
