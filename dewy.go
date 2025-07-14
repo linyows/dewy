@@ -412,9 +412,12 @@ func (d *Dewy) handleError(ctx context.Context, err error) {
 	
 	d.errorCount++
 	
-	// Only send notification if error count is within the limit
-	if d.errorCount <= maxNotifyErrors {
+	// Send notification if error count is within the limit
+	if d.errorCount < maxNotifyErrors {
 		msg := fmt.Sprintf("Error occurred (count: %d): %v", d.errorCount, err)
+		d.notify.Send(ctx, msg)
+	} else if d.errorCount == maxNotifyErrors {
+		msg := fmt.Sprintf("Error occurred (count: %d): %v\nThis is the last notification. No more error notifications will be sent until errors are resolved.", d.errorCount, err)
 		d.notify.Send(ctx, msg)
 	}
 	

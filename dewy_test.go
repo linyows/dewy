@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -242,8 +243,8 @@ func TestHandleError(t *testing.T) {
 	// Test error notification limiting
 	testErr := fmt.Errorf("test error")
 
-	// First maxNotifyErrors errors should send notifications
-	for i := 1; i <= maxNotifyErrors; i++ {
+	// First (maxNotifyErrors-1) errors should send normal notifications
+	for i := 1; i < maxNotifyErrors; i++ {
 		dewy.handleError(ctx, testErr)
 		messages := mockNotify.GetMessages()
 		if len(messages) != i {
@@ -254,7 +255,24 @@ func TestHandleError(t *testing.T) {
 		}
 	}
 
-	// Beyond maxNotifyErrors errors should not send notifications
+	// The maxNotifyErrors-th error should send final notification with warning
+	dewy.handleError(ctx, testErr)
+	messages := mockNotify.GetMessages()
+	if len(messages) != maxNotifyErrors {
+		t.Errorf("Expected %d messages (including final notification), got %d", maxNotifyErrors, len(messages))
+	}
+	if dewy.errorCount != maxNotifyErrors {
+		t.Errorf("Expected error count %d, got %d", maxNotifyErrors, dewy.errorCount)
+	}
+
+	// Check that final notification contains the warning message
+	finalMessage := messages[len(messages)-1]
+	expectedWarning := "This is the last notification. No more error notifications will be sent until errors are resolved."
+	if !strings.Contains(finalMessage, expectedWarning) {
+		t.Errorf("Final notification should contain warning message, got: %s", finalMessage)
+	}
+
+	// Further errors should not send more notifications
 	for i := maxNotifyErrors + 1; i <= maxNotifyErrors+3; i++ {
 		dewy.handleError(ctx, testErr)
 		messages := mockNotify.GetMessages()
@@ -300,7 +318,7 @@ func TestResetErrorCount(t *testing.T) {
 	// Test that after reset, notifications work again
 	dewy.handleError(ctx, testErr)
 	messages := mockNotify.GetMessages()
-	expectedMessages := maxNotifyErrors + 1 // maxNotifyErrors from before + 1 new notification
+	expectedMessages := maxNotifyErrors + 1 // maxNotifyErrors from before + 1 new notification after reset
 	if len(messages) != expectedMessages {
 		t.Errorf("Expected %d messages after reset, got %d", expectedMessages, len(messages))
 	}
