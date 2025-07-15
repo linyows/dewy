@@ -24,14 +24,14 @@ type cli struct {
 	env              Env
 	command          string
 	args             []string
-	LogLevel         string `long:"log-level" short:"l" arg:"(debug|info|warn|error)" description:"Level displayed as log"`
-	Interval         int    `long:"interval" arg:"seconds" short:"i" description:"The polling interval to the repository (default: 10)"`
-	Port             string `long:"port" short:"p" description:"TCP port to listen"`
-	Registry         string `long:"registry" description:"Registry for application"`
-	Notify           string `long:"notify" description:"Notify for application"`
-	Notifier         string `long:"notifier" description:"Notifier for application"`
-	BeforeDeployHook string `long:"before-deploy-hook" description:"Command to execute before deploy"`
-	AfterDeployHook  string `long:"after-deploy-hook" description:"Command to execute after deploy"`
+	LogLevel         string `long:"log-level" short:"l" arg:"(debug|info|warn|error)" description:"Set log level for output"`
+	Interval         int    `long:"interval" arg:"seconds" short:"i" description:"Polling interval in seconds for checking registry updates (default: 10)"`
+	Port             string `long:"port" short:"p" description:"TCP port for server command to listen on"`
+	Registry         string `long:"registry" description:"Registry URL (e.g., ghr://owner/repo, s3://region/bucket/prefix)"`
+	Notify           string `long:"notify" description:"[DEPRECATED] Use --notifier instead"`
+	Notifier         string `long:"notifier" description:"Notifier URL for deployment notifications (e.g., slack://channel, mail://smtp:port/recipient)"`
+	BeforeDeployHook string `long:"before-deploy-hook" description:"Shell command to execute before deployment begins"`
+	AfterDeployHook  string `long:"after-deploy-hook" description:"Shell command to execute after successful deployment"`
 	Help             bool   `long:"help" short:"h" description:"show this help message and exit"`
 	Version          bool   `long:"version" short:"v" description:"prints the version number"`
 }
