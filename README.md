@@ -36,87 +36,6 @@ Dewy is software primarily designed to declaratively deploy applications written
   <img alt="Dewy Architecture" src="https://github.com/linyows/dewy/blob/main/misc/dewy-architecture.svg?raw=true" width="640"/>
 </p>
 
-Deployment Workflow
---
-
-The following sequence diagram illustrates Dewy's deployment workflow from polling to server restart:
-
-```mermaid
-sequenceDiagram
-    participant S as Scheduler
-    participant D as Dewy
-    participant R as Registry
-    participant A as Artifact Store
-    participant C as Cache
-    participant F as File System
-    participant H as Hooks
-    participant App as Application
-    participant N as Notifier
-
-    Note over S,N: Scheduled Deployment Cycle
-
-    S->>D: Run() - Start deployment check
-    D->>R: Current() - Get latest version
-    R-->>D: {ID, Tag, ArtifactURL}
-
-    D->>C: Read("current") - Check current version
-    D->>C: List() - Get cached artifacts
-    C-->>D: Cached version info
-
-    alt Version changed or not cached
-        D->>A: Download(ArtifactURL)
-        A-->>D: Artifact binary data
-        D->>C: Write(cacheKey, artifact)
-        D->>C: Write("current", cacheKey)
-        Note over D,C: Cache: v1.2.3--app_linux_amd64.tar.gz
-    else Version unchanged
-        Note over D: Skip deployment - already current
-    end
-
-    D->>N: Send("Ready for v1.2.3")
-
-    Note over D,App: Deployment Process
-
-    D->>H: execHook(BeforeDeployHook)
-    H-->>D: Success/Failure
-
-    alt Before hook failed
-        D->>N: SendError("Before hook failed")
-        Note over D: Abort deployment
-    else Before hook succeeded
-        D->>F: ExtractArchive(cache → releases/timestamp/)
-        D->>F: Remove old symlink
-        D->>F: Symlink(releases/timestamp/ → current)
-
-        alt Server Application
-            D->>App: Start/Restart server process
-            App-->>D: Process started
-            D->>N: Send("Server restarted for v1.2.3")
-        end
-
-        D->>H: execHook(AfterDeployHook)
-        H-->>D: Success/Failure (logged only)
-
-        D->>R: Report({ID, Tag}) - Audit log
-        D->>F: keepReleases() - Clean old releases
-
-        Note over D,N: Success - Reset error count
-        D->>N: ResetErrorCount()
-    end
-
-    Note over S,N: Cycle repeats every interval (default: 10s)
-```
-
-### Key Workflow Points
-
-- **Polling**: Dewy continuously polls the registry at configurable intervals
-- **Version Detection**: Uses semantic versioning to detect newer releases
-- **Caching**: Downloads are cached to avoid repeated downloads
-- **Atomic Deployment**: Old symlink is removed and new one created atomically
-- **Hook Integration**: Before/after hooks can abort or customize deployment
-- **Error Handling**: Failed deployments trigger error notifications (with limiting)
-- **Audit Trail**: Successful deployments are reported back to registry
-
 Features
 --
 
@@ -373,6 +292,87 @@ v1.2.3-beta.2
 ```
 
 For details, visit https://semver.org/
+
+Deployment Workflow
+--
+
+The following sequence diagram illustrates Dewy's deployment workflow from polling to server restart:
+
+```mermaid
+sequenceDiagram
+    participant S as Scheduler
+    participant D as Dewy
+    participant R as Registry
+    participant A as Artifact Store
+    participant C as Cache
+    participant F as File System
+    participant H as Hooks
+    participant App as Application
+    participant N as Notifier
+
+    Note over S,N: Scheduled Deployment Cycle
+
+    S->>D: Run() - Start deployment check
+    D->>R: Current() - Get latest version
+    R-->>D: {ID, Tag, ArtifactURL}
+
+    D->>C: Read("current") - Check current version
+    D->>C: List() - Get cached artifacts
+    C-->>D: Cached version info
+
+    alt Version changed or not cached
+        D->>A: Download(ArtifactURL)
+        A-->>D: Artifact binary data
+        D->>C: Write(cacheKey, artifact)
+        D->>C: Write("current", cacheKey)
+        Note over D,C: Cache: v1.2.3--app_linux_amd64.tar.gz
+    else Version unchanged
+        Note over D: Skip deployment - already current
+    end
+
+    D->>N: Send("Ready for v1.2.3")
+
+    Note over D,App: Deployment Process
+
+    D->>H: execHook(BeforeDeployHook)
+    H-->>D: Success/Failure
+
+    alt Before hook failed
+        D->>N: SendError("Before hook failed")
+        Note over D: Abort deployment
+    else Before hook succeeded
+        D->>F: ExtractArchive(cache → releases/timestamp/)
+        D->>F: Remove old symlink
+        D->>F: Symlink(releases/timestamp/ → current)
+
+        alt Server Application
+            D->>App: Start/Restart server process
+            App-->>D: Process started
+            D->>N: Send("Server restarted for v1.2.3")
+        end
+
+        D->>H: execHook(AfterDeployHook)
+        H-->>D: Success/Failure (logged only)
+
+        D->>R: Report({ID, Tag}) - Audit log
+        D->>F: keepReleases() - Clean old releases
+
+        Note over D,N: Success - Reset error count
+        D->>N: ResetErrorCount()
+    end
+
+    Note over S,N: Cycle repeats every interval (default: 10s)
+```
+
+### Key Workflow Points
+
+- **Polling**: Dewy continuously polls the registry at configurable intervals
+- **Version Detection**: Uses semantic versioning to detect newer releases
+- **Caching**: Downloads are cached to avoid repeated downloads
+- **Atomic Deployment**: Old symlink is removed and new one created atomically
+- **Hook Integration**: Before/after hooks can abort or customize deployment
+- **Error Handling**: Failed deployments trigger error notifications (with limiting)
+- **Audit Trail**: Successful deployments are reported back to registry
 
 Signal Handling
 --
