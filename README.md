@@ -293,6 +293,18 @@ v1.2.3-beta.2
 
 For details, visit https://semver.org/
 
+### Pre-release and Staging
+
+Semantic versioning includes a concept called pre-release. A pre-release version is created by appending a suffix with a hyphen to the version number. In a staging environment, adding the option `pre-release=true` to the registry settings enables deployment of pre-release versions.
+
+```sh
+# Production environment (stable releases only)
+$ dewy --registry ghr://linyows/myapp ...
+
+# Staging environment (includes pre-release versions)
+$ dewy --registry ghr://linyows/myapp?pre-release=true ...
+```
+
 Deployment Workflow
 --
 
@@ -396,10 +408,6 @@ $ kill -USR1 <dewy-pid>
 $ systemctl kill -s USR1 dewy.service
 ```
 
-Staging
---
-
-Semantic versioning includes a concept called pre-release. A pre-release version is created by appending a suffix with a hyphen to the version number. In a staging environment, adding the option `pre-release=true` to the registry settings enables deployment of pre-release versions.
 
 System Requirements
 --
