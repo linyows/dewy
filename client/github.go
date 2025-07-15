@@ -17,17 +17,17 @@ func NewGitHub() (*github.Client, error) {
 	if token == "" {
 		token = os.Getenv("GH_TOKEN")
 	}
-	
+
 	if token == "" {
 		return nil, fmt.Errorf("no GitHub token found in GITHUB_TOKEN or GH_TOKEN environment variables")
 	}
-	
+
 	ctx := context.Background()
 	ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
 	tc := oauth2.NewClient(ctx, ts)
-	
+
 	client := github.NewClient(tc)
-	
+
 	// Handle custom API URL - support both GITHUB_ENDPOINT and GITHUB_API_URL
 	apiURL := os.Getenv("GITHUB_API_URL")
 	if apiURL == "" {
@@ -40,7 +40,7 @@ func NewGitHub() (*github.Client, error) {
 		}
 		client.BaseURL = baseURL
 	}
-	
+
 	return client, nil
 }
 
