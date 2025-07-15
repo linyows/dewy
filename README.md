@@ -57,10 +57,56 @@ The registry and notification configurations are URL-like structures, where the 
 Commands
 --
 
-Dewy provides two main commands: `Server` and `Assets`. The `Server` command is designed for server applications, managing the application’s processes and ensuring the application version stays up to date. The `Assets` command focuses on static files such as HTML, CSS, and JavaScript, keeping these assets updated to the latest version.
+Dewy provides two main commands: `Server` and `Assets`. The `Server` command is designed for server applications, managing the application's processes and ensuring the application version stays up to date. The `Assets` command focuses on static files such as HTML, CSS, and JavaScript, keeping these assets updated to the latest version.
 
 -	server
 -	assets
+
+Deployment Hooks
+--
+
+Dewy supports deployment hooks that allow you to execute custom commands before and after deployments. These hooks are executed via shell (`/bin/sh -c`) in the working directory with full environment access.
+
+### Hook Options
+
+- `--before-deploy-hook`: Execute a command before deployment begins
+- `--after-deploy-hook`: Execute a command after successful deployment
+
+### Usage Examples
+
+```sh
+# Backup database before deployment
+$ dewy server --registry ghr://myapp/api \
+  --before-deploy-hook "pg_dump mydb > /backup/$(date +%Y%m%d_%H%M%S).sql" \
+  --after-deploy-hook "echo 'Deployment completed' | mail -s 'Deploy Success' admin@example.com" \
+  -- /opt/myapp/current/myapp
+
+# Stop services before deployment and restart after
+$ dewy server --registry ghr://myapp/api \
+  --before-deploy-hook "systemctl stop nginx" \
+  --after-deploy-hook "systemctl start nginx && systemctl reload nginx" \
+  -- /opt/myapp/current/myapp
+
+# Run database migrations after deployment
+$ dewy assets --registry ghr://myapp/frontend \
+  --after-deploy-hook "/opt/myapp/current/migrate-db.sh"
+```
+
+### Hook Behavior
+
+- **Before Hook**: If the before-deploy-hook fails, the deployment is aborted
+- **After Hook**: Executed only after successful deployment. If it fails, the deployment is still considered successful
+- **Environment**: Hooks inherit all environment variables and run in the working directory
+- **Logging**: All hook execution details (command, stdout, stderr) are logged
+
+> [!TIP]
+> **Common Use Cases**
+> - **Database operations**: Backups, migrations, schema updates
+> - **Service management**: Stopping/starting related services
+> - **Cache management**: Clearing caches, warming up new deployments
+> - **Notifications**: Custom alerting beyond built-in notifications
+> - **Health checks**: Validating deployment success
+> - **Configuration updates**: Dynamic configuration changes
 
 Interfaces
 --
@@ -164,6 +210,9 @@ The Notifier interface sends deployment status updates. Slack and Mail (SMTP) ar
 > [!WARNING]
 > The `--notify` argument is deprecated and will be removed in a future version. Please use `--notifier` instead.
 
+> [!IMPORTANT]
+> **Error Notification Limiting**: Dewy automatically limits error notifications to prevent spam during persistent failures. After 3 error notifications, further notifications are suppressed until operations return to normal, at which point notification limiting is automatically reset.
+
 ### Slack
 
 To use Slack for notifications, configure as follows. Options include a title and url that can link to the repository name or URL. You’ll need to [create a Slack App](https://api.slack.com/apps), generate an OAuth Token, and set the required environment variables. The app should have `channels:join` and `chat:write` permissions.
@@ -209,10 +258,29 @@ tls      | bool   | Use TLS encryption           | true
 host     | string | SMTP server hostname         | (extracted from URL)
 port     | int    | SMTP server port             | 587
 
+Release Management
+--
+
+Dewy automatically manages releases in the local filesystem:
+
+- **Release Storage**: Each deployment is stored in `releases/<timestamp>/` directory
+- **Current Link**: A `current` symlink always points to the latest deployed version
+- **Automatic Cleanup**: Only the 7 most recent releases are kept; older releases are automatically deleted
+- **Directory Structure**:
+  ```
+  /opt/myapp/
+  ├── current -> releases/20240315T143022Z/
+  ├── releases/
+  │   ├── 20240315T143022Z/    # Latest
+  │   ├── 20240314T091534Z/
+  │   ├── 20240313T172145Z/
+  │   └── ...                  # Up to 7 releases total
+  ```
+
 Semantic Versioning
 --
 
-Dewy uses semantic versioning to determine the recency of artifact versions. Therefore, it’s essential to manage software versions using semantic versioning.
+Dewy uses semantic versioning to determine the recency of artifact versions. Therefore, it's essential to manage software versions using semantic versioning.
 
 ```text
 # Pre release versions：
@@ -222,15 +290,58 @@ v1.2.3-beta.2
 
 For details, visit https://semver.org/
 
+Signal Handling
+--
+
+Dewy responds to various system signals for process management:
+
+- **SIGHUP**: Ignored (Dewy continues operation)
+- **SIGUSR1**: Triggers manual server restart
+- **SIGINT, SIGTERM, SIGQUIT**: Initiates graceful shutdown
+- **Internal SIGHUP**: Used internally for server restarts
+
+### Manual Server Restart
+
+You can manually restart the server application without restarting Dewy:
+
+```sh
+# Send SIGUSR1 to trigger server restart
+$ kill -USR1 <dewy-pid>
+
+# Or using systemctl if Dewy is managed by systemd
+$ systemctl kill -s USR1 dewy.service
+```
+
 Staging
 --
 
 Semantic versioning includes a concept called pre-release. A pre-release version is created by appending a suffix with a hyphen to the version number. In a staging environment, adding the option `pre-release=true` to the registry settings enables deployment of pre-release versions.
 
+System Requirements
+--
+
+Dewy has minimal system requirements for deployment:
+
+### File System Requirements
+
+- **Write permissions**: Required in the working directory for release management
+- **Symlink support**: File system must support symbolic links for the `current` pointer
+- **Temporary directory**: Access to system temp directory for cache storage
+- **Disk space**: Sufficient space for 7 releases plus cache (typically a few hundred MB)
+
+### Process Requirements
+
+- **Shell access**: `/bin/sh` must be available for hook execution
+- **Network access**: Outbound connections to registries and artifact stores
+- **Signal handling**: Process must be able to receive and handle system signals
+
+> [!NOTE]
+> Dewy runs as a single binary with no external dependencies beyond the Go runtime (which is compiled in).
+
 Provisioning
 --
 
-Provisioning for Dewy is available via Chef and Puppet. Ansible support is not currently available—feel free to contribute if you’re interested.
+Provisioning for Dewy is available via Chef and Puppet. Ansible support is not currently available—feel free to contribute if you're interested.
 
 - Chef: https://github.com/linyows/dewy-cookbook
 - Puppet: https://github.com/takumakume/puppet-dewy
