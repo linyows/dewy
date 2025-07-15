@@ -65,52 +65,6 @@ Dewy provides two main commands: `Server` and `Assets`. The `Server` command is 
 -	server
 -	assets
 
-Deployment Hooks
---
-
-Dewy supports deployment hooks that allow you to execute custom commands before and after deployments. These hooks are executed via shell (`/bin/sh -c`) in the working directory with full environment access.
-
-### Hook Options
-
-- `--before-deploy-hook`: Execute a command before deployment begins
-- `--after-deploy-hook`: Execute a command after successful deployment
-
-### Usage Examples
-
-```sh
-# Backup database before deployment
-$ dewy server --registry ghr://myapp/api \
-  --before-deploy-hook "pg_dump mydb > /backup/$(date +%Y%m%d_%H%M%S).sql" \
-  --after-deploy-hook "echo 'Deployment completed' | mail -s 'Deploy Success' admin@example.com" \
-  -- /opt/myapp/current/myapp
-
-# Stop services before deployment and restart after
-$ dewy server --registry ghr://myapp/api \
-  --before-deploy-hook "systemctl stop nginx" \
-  --after-deploy-hook "systemctl start nginx && systemctl reload nginx" \
-  -- /opt/myapp/current/myapp
-
-# Run database migrations after deployment
-$ dewy assets --registry ghr://myapp/frontend \
-  --after-deploy-hook "/opt/myapp/current/migrate-db.sh"
-```
-
-### Hook Behavior
-
-- **Before Hook**: If the before-deploy-hook fails, the deployment is aborted
-- **After Hook**: Executed only after successful deployment. If it fails, the deployment is still considered successful
-- **Environment**: Hooks inherit all environment variables and run in the working directory
-- **Logging**: All hook execution details (command, stdout, stderr) are logged
-
-> [!TIP]
-> **Common Use Cases**
-> - **Database operations**: Backups, migrations, schema updates
-> - **Service management**: Stopping/starting related services
-> - **Cache management**: Clearing caches, warming up new deployments
-> - **Notifications**: Custom alerting beyond built-in notifications
-> - **Health checks**: Validating deployment success
-> - **Configuration updates**: Dynamic configuration changes
-
 Interfaces
 --
 
@@ -385,6 +339,52 @@ sequenceDiagram
 - **Hook Integration**: Before/after hooks can abort or customize deployment
 - **Error Handling**: Failed deployments trigger error notifications (with limiting)
 - **Audit Trail**: Successful deployments are reported back to registry
+
+Deployment Hooks
+--
+
+Dewy supports deployment hooks that allow you to execute custom commands before and after deployments. These hooks are executed via shell (`/bin/sh -c`) in the working directory with full environment access.
+
+### Hook Options
+
+- `--before-deploy-hook`: Execute a command before deployment begins
+- `--after-deploy-hook`: Execute a command after successful deployment
+
+### Usage Examples
+
+```sh
+# Backup database before deployment
+$ dewy server --registry ghr://myapp/api \
+  --before-deploy-hook "pg_dump mydb > /backup/$(date +%Y%m%d_%H%M%S).sql" \
+  --after-deploy-hook "echo 'Deployment completed' | mail -s 'Deploy Success' admin@example.com" \
+  -- /opt/myapp/current/myapp
+
+# Stop services before deployment and restart after
+$ dewy server --registry ghr://myapp/api \
+  --before-deploy-hook "systemctl stop nginx" \
+  --after-deploy-hook "systemctl start nginx && systemctl reload nginx" \
+  -- /opt/myapp/current/myapp
+
+# Run database migrations after deployment
+$ dewy assets --registry ghr://myapp/frontend \
+  --after-deploy-hook "/opt/myapp/current/migrate-db.sh"
+```
+
+### Hook Behavior
+
+- **Before Hook**: If the before-deploy-hook fails, the deployment is aborted
+- **After Hook**: Executed only after successful deployment. If it fails, the deployment is still considered successful
+- **Environment**: Hooks inherit all environment variables and run in the working directory
+- **Logging**: All hook execution details (command, stdout, stderr) are logged
+
+> [!TIP]
+> **Common Use Cases**
+> - **Database operations**: Backups, migrations, schema updates
+> - **Service management**: Stopping/starting related services
+> - **Cache management**: Clearing caches, warming up new deployments
+> - **Notifications**: Custom alerting beyond built-in notifications
+> - **Health checks**: Validating deployment success
+> - **Configuration updates**: Dynamic configuration changes
 
 Signal Handling
 --

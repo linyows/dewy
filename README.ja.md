@@ -71,52 +71,6 @@ Assetsはhtmlやcssやjsなど、静的ファイルのバージョンを最新�
 - server
 - assets
 
-デプロイフック
---
-
-Dewyはデプロイの前後にカスタムコマンドを実行できるフック機能をサポートしています。これらのフックは作業ディレクトリでシェル(`/bin/sh -c`)経由で実行され、全ての環境変数にアクセスできます。
-
-### フックオプション
-
-- `--before-deploy-hook`: デプロイ開始前にコマンドを実行
-- `--after-deploy-hook`: デプロイ成功後にコマンドを実行
-
-### 使用例
-
-```sh
-# デプロイ前にデータベースをバックアップ
-$ dewy server --registry ghr://myapp/api \
-  --before-deploy-hook "pg_dump mydb > /backup/$(date +%Y%m%d_%H%M%S).sql" \
-  --after-deploy-hook "echo 'デプロイ完了' | mail -s 'デプロイ成功' admin@example.com" \
-  -- /opt/myapp/current/myapp
-
-# デプロイ前にサービス停止、後に再起動
-$ dewy server --registry ghr://myapp/api \
-  --before-deploy-hook "systemctl stop nginx" \
-  --after-deploy-hook "systemctl start nginx && systemctl reload nginx" \
-  -- /opt/myapp/current/myapp
-
-# デプロイ後にデータベースマイグレーション実行
-$ dewy assets --registry ghr://myapp/frontend \
-  --after-deploy-hook "/opt/myapp/current/migrate-db.sh"
-```
-
-### フックの動作
-
-- **Before Hook**: before-deploy-hookが失敗するとデプロイは中止されます
-- **After Hook**: デプロイ成功後のみ実行されます。失敗してもデプロイは成功扱いになります
-- **実行環境**: フックは全ての環境変数を継承し、作業ディレクトリで実行されます
-- **ログ**: 全てのフック実行詳細（コマンド、stdout、stderr）がログに記録されます
-
-> [!TIP]
-> **よくある用途**
-> - **データベース操作**: バックアップ、マイグレーション、スキーマ更新
-> - **サービス管理**: 関連サービスの停止・開始
-> - **キャッシュ管理**: キャッシュクリア、新デプロイの事前ウォームアップ
-> - **通知**: 内蔵通知以外のカスタムアラート
-> - **ヘルスチェック**: デプロイ成功の検証
-> - **設定更新**: 動的な設定変更
-
 インターフェース
 --
 
@@ -400,6 +354,52 @@ sequenceDiagram
 - **エラーハンドリング**: 失敗したデプロイはエラー通知をトリガーします（制限付き）
 - **監査証跡**: 成功したデプロイはレジストリに報告されます
 
+デプロイフック
+--
+
+Dewyはデプロイの前後にカスタムコマンドを実行できるフック機能をサポートしています。これらのフックは作業ディレクトリでシェル(`/bin/sh -c`)経由で実行され、全ての環境変数にアクセスできます。
+
+### フックオプション
+
+- `--before-deploy-hook`: デプロイ開始前にコマンドを実行
+- `--after-deploy-hook`: デプロイ成功後にコマンドを実行
+
+### 使用例
+
+```sh
+# デプロイ前にデータベースをバックアップ
+$ dewy server --registry ghr://myapp/api \
+  --before-deploy-hook "pg_dump mydb > /backup/$(date +%Y%m%d_%H%M%S).sql" \
+  --after-deploy-hook "echo 'デプロイ完了' | mail -s 'デプロイ成功' admin@example.com" \
+  -- /opt/myapp/current/myapp
+
+# デプロイ前にサービス停止、後に再起動
+$ dewy server --registry ghr://myapp/api \
+  --before-deploy-hook "systemctl stop nginx" \
+  --after-deploy-hook "systemctl start nginx && systemctl reload nginx" \
+  -- /opt/myapp/current/myapp
+
+# デプロイ後にデータベースマイグレーション実行
+$ dewy assets --registry ghr://myapp/frontend \
+  --after-deploy-hook "/opt/myapp/current/migrate-db.sh"
+```
+
+### フックの動作
+
+- **Before Hook**: before-deploy-hookが失敗するとデプロイは中止されます
+- **After Hook**: デプロイ成功後のみ実行されます。失敗してもデプロイは成功扱いになります
+- **実行環境**: フックは全ての環境変数を継承し、作業ディレクトリで実行されます
+- **ログ**: 全てのフック実行詳細（コマンド、stdout、stderr）がログに記録されます
+
+> [!TIP]
+> **よくある用途**
+> - **データベース操作**: バックアップ、マイグレーション、スキーマ更新
+> - **サービス管理**: 関連サービスの停止・開始
+> - **キャッシュ管理**: キャッシュクリア、新デプロイの事前ウォームアップ
+> - **通知**: 内蔵通知以外のカスタムアラート
+> - **ヘルスチェック**: デプロイ成功の検証
+> - **設定更新**: 動的な設定変更
+
 シグナルハンドリング
 --
 
@@ -421,7 +421,6 @@ $ kill -USR1 <dewy-pid>
 # systemdでDewyが管理されている場合
 $ systemctl kill -s USR1 dewy.service
 ```
-
 
 システム要件
 --
