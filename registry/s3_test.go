@@ -75,6 +75,23 @@ func TestNewS3(t *testing.T) {
 	}
 }
 
+type MockS3Client struct {
+	// For LatestVersion test
+	CommonPrefixes [][]types.CommonPrefix
+	PageIndex      int
+}
+
+func (m *MockS3Client) PutObject(ctx context.Context, input *s3.PutObjectInput, opts ...func(*s3.Options)) (*s3.PutObjectOutput, error) {
+	return &s3.PutObjectOutput{}, nil
+}
+
+func (m *MockS3Client) ListObjectsV2(ctx context.Context, input *s3.ListObjectsV2Input, opts ...func(*s3.Options)) (*s3.ListObjectsV2Output, error) {
+	// Return empty result for getVersionDirectoryCreatedAt calls
+	return &s3.ListObjectsV2Output{
+		Contents: []types.Object{},
+	}, nil
+}
+
 type MockListObjectsV2Pager struct {
 	// Pages   [][]types.Object
 	// Pages   []*s3.ListObjectsV2Output
@@ -135,6 +152,7 @@ func TestS3LatestVersion(t *testing.T) {
 				// If you create a mocking object outside of iteration,
 				// the pageindex will be updated and the page will become 0 from the second time onwards, so create it during iteration.
 				pager: &MockListObjectsV2Pager{Pages: data},
+				cl:    &MockS3Client{},
 			}
 
 			gotPrefix, gotVer, err := s3.LatestVersion(context.Background())

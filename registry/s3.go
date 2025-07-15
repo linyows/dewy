@@ -157,9 +157,11 @@ func (s *S3) Current(ctx context.Context) (*CurrentResponse, error) {
 	}
 
 	if !found {
+		// Only get the creation time when artifact is not found
+		artifactCreatedAt, _ := s.getVersionDirectoryCreatedAt(ctx, prefix)
 		return nil, &ArtifactNotFoundError{
 			ArtifactName: prefix + artifactName,
-			ReleaseTime:  createdAt,
+			ReleaseTime:  artifactCreatedAt,
 			Message:      fmt.Sprintf("artifact not found: %s%s", prefix, artifactName),
 		}
 	}
@@ -250,6 +252,27 @@ func (s *S3) ListObjects(ctx context.Context, prefix string) ([]types.Object, er
 
 func (s *S3) extractFilenameFromObjectKey(key, prefix string) string {
 	return strings.TrimPrefix(removeTrailingSlash(key), prefix)
+}
+
+// getVersionDirectoryCreatedAt gets the creation time of the first object in a version directory
+func (s *S3) getVersionDirectoryCreatedAt(ctx context.Context, prefix string) (*time.Time, error) {
+	pager := s3.NewListObjectsV2Paginator(s.cl, &s3.ListObjectsV2Input{
+		Bucket:  aws.String(s.Bucket),
+		Prefix:  aws.String(prefix),
+		MaxKeys: aws.Int32(1), // We only need the first object
+	})
+
+	if pager.HasMorePages() {
+		output, err := pager.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list objects for version directory: %w", err)
+		}
+		if len(output.Contents) > 0 {
+			return output.Contents[0].LastModified, nil
+		}
+	}
+
+	return nil, fmt.Errorf("no objects found in version directory: %s", prefix)
 }
 
 func (s *S3) LatestVersion(ctx context.Context) (string, *SemVer, error) {
