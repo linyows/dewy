@@ -102,6 +102,9 @@ $ export GITHUB_TOKEN=****.....
 $ dewy --registry ghr://linyows/myapp?pre-release=true&artifact=dewy.tar ...
 ```
 
+> [!NOTE]
+> To prevent false alerts during CI/CD builds, Dewy automatically waits 30 minutes before reporting "artifact not found" errors for newly created releases. This grace period accommodates GitHub Actions and other CI systems that may take time to build and upload artifacts after creating a release.
+
 ### AWS S3
 
 To use AWS S3 as a registry, configure it as follows. Options include specifying the region and endpoint (for S3-compatible services). Required AWS API credentials must also be set as environment variables.
