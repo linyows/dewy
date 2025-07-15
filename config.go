@@ -58,7 +58,7 @@ type CacheConfig struct {
 type Config struct {
 	Command          Command
 	Registry         string
-	Notify           string
+	Notifier         string
 	Cache            CacheConfig
 	Starter          starter.Config
 	BeforeDeployHook string

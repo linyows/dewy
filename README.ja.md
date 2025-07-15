@@ -53,7 +53,7 @@ Dewyは、いわゆるプル型のデプロイを実現します。Dewyは、レ
 
 ```sh
 $ dewy server --registry ghr://linyows/myapp \
-  --notify slack://general?title=myapp -p 8000 -l info -- /opt/myapp/current/myapp
+  --notifier slack://general?title=myapp -p 8000 -l info -- /opt/myapp/current/myapp
 ```
 
 レジストリと通知の指定はurlを模擬した構成になっています。urlのschemeにあたる箇所はレジストリや通知の名前です。レジストリの項目で詳しく解説します。
@@ -76,7 +76,7 @@ Dewyにはいくつかのインターフェースがあり、それぞれ選択�
 - Registry
 - Artifact
 - Cache
-- Notify
+- Notifier
 
 Registry
 --
@@ -167,10 +167,13 @@ Cache
 
 キャッシュは、現在のバージョンやアーティファクトをDewyが保持するためのインターフェースです。キャッシュの実装には、ファイルシステムとメモリとHashicorp ConsulとRedisがあります。
 
-Notify
+Notifier
 --
 
 通知は、デプロイの状態を通知するインターフェースです。通知は、Slack、メール（SMTP）から選択できます。
+
+> [!WARNING]
+> `--notify`引数は非推奨となり、将来のバージョンで削除されます。代わりに`--notifier`を使用してください。
 
 ### Slack
 
@@ -184,7 +187,7 @@ slack://<channel-name>?<options: title, url>
 
 # 例
 $ export SLACK_TOKEN=****.....
-$ dewy --notify slack://dewy?title=myapp&url=https://dewy.liny.ws ...
+$ dewy --notifier slack://dewy?title=myapp&url=https://dewy.liny.ws ...
 ```
 
 ### Mail
@@ -197,13 +200,13 @@ mail://<smtp-host>:<port>/<recipient-mail>?<options: username, password, from, s
 smtp://<smtp-host>:<port>/<recipient-mail>?<options: username, password, from, subject, tls>
 
 # URLパラメータを使用する例
-$ dewy --notify mail://smtp.gmail.com:587/recipient@example.com?username=sender@gmail.com&password=app-password&from=sender@gmail.com&subject=Dewy+Deployment ...
+$ dewy --notifier mail://smtp.gmail.com:587/recipient@example.com?username=sender@gmail.com&password=app-password&from=sender@gmail.com&subject=Dewy+Deployment ...
 
 # 環境変数を使用する例
 $ export MAIL_USERNAME=sender@gmail.com
 $ export MAIL_PASSWORD=app-password
 $ export MAIL_FROM=sender@gmail.com
-$ dewy --notify mail://smtp.gmail.com:587/recipient@example.com ...
+$ dewy --notifier mail://smtp.gmail.com:587/recipient@example.com ...
 ```
 
 #### メール設定オプション

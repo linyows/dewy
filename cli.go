@@ -29,6 +29,7 @@ type cli struct {
 	Port             string `long:"port" short:"p" description:"TCP port to listen"`
 	Registry         string `long:"registry" description:"Registry for application"`
 	Notify           string `long:"notify" description:"Notify for application"`
+	Notifier         string `long:"notifier" description:"Notifier for application"`
 	BeforeDeployHook string `long:"before-deploy-hook" description:"Command to execute before deploy"`
 	AfterDeployHook  string `long:"after-deploy-hook" description:"Command to execute after deploy"`
 	Help             bool   `long:"help" short:"h" description:"show this help message and exit"`
@@ -108,6 +109,7 @@ func (c *cli) showHelp() {
 		"Interval",
 		"Registry",
 		"Notify",
+		"Notifier",
 		"Port",
 		"LogLevel",
 		"BeforeDeployHook",
@@ -178,7 +180,13 @@ func (c *cli) run() int {
 		return ExitErr
 	}
 	conf.Registry = c.Registry
-	conf.Notify = c.Notify
+	// Handle notifier argument with backward compatibility
+	if c.Notifier != "" {
+		conf.Notifier = c.Notifier
+	} else if c.Notify != "" {
+		fmt.Fprintf(c.env.Err, "⚠️ notify argument is deprecated and will be removed. Use notifier instead.\n")
+		conf.Notifier = c.Notify
+	}
 	conf.BeforeDeployHook = c.BeforeDeployHook
 	conf.AfterDeployHook = c.AfterDeployHook
 

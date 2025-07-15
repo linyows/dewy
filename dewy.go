@@ -21,7 +21,7 @@ import (
 	starter "github.com/lestrrat-go/server-starter"
 	"github.com/linyows/dewy/artifact"
 	"github.com/linyows/dewy/kvs"
-	"github.com/linyows/dewy/notify"
+	"github.com/linyows/dewy/notifier"
 	"github.com/linyows/dewy/registry"
 )
 
@@ -48,7 +48,7 @@ type Dewy struct {
 	disableReport   bool
 	root            string
 	job             *scheduler.Job
-	notify          notify.Notifier
+	notifier        notifier.Notifier
 	sync.RWMutex
 }
 
@@ -89,20 +89,20 @@ func (d *Dewy) Start(i int) {
 		log.Printf("[ERROR] Registry failure: %#v", err)
 	}
 
-	d.notify, err = notify.New(ctx, d.config.Notify)
+	d.notifier, err = notifier.New(ctx, d.config.Notifier)
 	if err != nil {
-		log.Printf("[ERROR] Notify failure: %#v", err)
+		log.Printf("[ERROR] Notifier failure: %#v", err)
 	}
 
-	d.notify.Send(ctx, "Automatic shipping started by *Dewy*")
+	d.notifier.Send(ctx, "Automatic shipping started by *Dewy*")
 
 	d.job, err = scheduler.Every(i).Seconds().Run(func() {
 		e := d.Run()
 		if e != nil {
 			log.Printf("[ERROR] Dewy run failure: %#v", e)
-			d.notify.SendError(context.Background(), e)
+			d.notifier.SendError(context.Background(), e)
 		} else {
-			d.notify.ResetErrorCount()
+			d.notifier.ResetErrorCount()
 		}
 	})
 	if err != nil {
@@ -128,7 +128,7 @@ func (d *Dewy) waitSigs(ctx context.Context) {
 			} else {
 				msg := fmt.Sprintf("Restarted receiving by \"%s\" signal", "SIGUSR1")
 				log.Printf("[INFO] %s", msg)
-				d.notify.Send(ctx, msg)
+				d.notifier.Send(ctx, msg)
 			}
 			continue
 
@@ -136,7 +136,7 @@ func (d *Dewy) waitSigs(ctx context.Context) {
 			d.job.Quit <- true
 			msg := fmt.Sprintf("Stop receiving by \"%s\" signal", sig)
 			log.Printf("[INFO] %s", msg)
-			d.notify.Send(ctx, msg)
+			d.notifier.Send(ctx, msg)
 			return
 		}
 	}
@@ -216,7 +216,7 @@ func (d *Dewy) Run() error {
 		log.Printf("[INFO] Cached as %s", cachekeyName)
 	}
 
-	d.notify.Send(ctx, fmt.Sprintf("Ready for `%s`", res.Tag))
+	d.notifier.Send(ctx, fmt.Sprintf("Ready for `%s`", res.Tag))
 
 	if err := d.deploy(cachekeyName); err != nil {
 		return err
@@ -226,12 +226,12 @@ func (d *Dewy) Run() error {
 		if d.isServerRunning {
 			err = d.restartServer()
 			if err == nil {
-				d.notify.Send(ctx, fmt.Sprintf("Server restarted for `%s`", res.Tag))
+				d.notifier.Send(ctx, fmt.Sprintf("Server restarted for `%s`", res.Tag))
 			}
 		} else {
 			err = d.startServer()
 			if err == nil {
-				d.notify.Send(ctx, fmt.Sprintf("Server started for `%s`", res.Tag))
+				d.notifier.Send(ctx, fmt.Sprintf("Server started for `%s`", res.Tag))
 			}
 		}
 		if err != nil {
