@@ -3,6 +3,7 @@ package dewy
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/url"
@@ -157,6 +158,16 @@ func (d *Dewy) Run() error {
 	// Get current
 	res, err := d.registry.Current(ctx)
 	if err != nil {
+		// Check if this is an artifact not found error within 30 minute grace period
+		var artifactNotFoundErr *registry.ArtifactNotFoundError
+		if errors.As(err, &artifactNotFoundErr) {
+			gracePeriod := 30 * time.Minute
+			if artifactNotFoundErr.IsWithinGracePeriod(gracePeriod) {
+				log.Printf("[DEBUG] Artifact not found within 30 minute grace period, skipping error notification: %s", 
+					artifactNotFoundErr.Message)
+				return nil // Return nil to avoid error notification
+			}
+		}
 		log.Printf("[ERROR] Current failure: %#v", err)
 		return err
 	}

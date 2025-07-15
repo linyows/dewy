@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/gorilla/schema"
 )
@@ -32,6 +33,8 @@ type CurrentResponse struct {
 	// ArtifactURL is the URL to download the artifact.
 	// The URL is not only "https://"
 	ArtifactURL string
+	// CreatedAt is the creation time of the release
+	CreatedAt *time.Time
 }
 
 // ReportRequest is the request to report the result of deploying the artifact.

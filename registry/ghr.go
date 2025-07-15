@@ -15,6 +15,25 @@ import (
 	"github.com/linyows/dewy/client"
 )
 
+// ArtifactNotFoundError wraps artifact not found errors with release information
+type ArtifactNotFoundError struct {
+	ArtifactName string
+	ReleaseTime  *time.Time
+	Message      string
+}
+
+func (e *ArtifactNotFoundError) Error() string {
+	return e.Message
+}
+
+// IsWithinGracePeriod checks if the error occurred within the grace period
+func (e *ArtifactNotFoundError) IsWithinGracePeriod(gracePeriod time.Duration) bool {
+	if e.ReleaseTime == nil || gracePeriod == 0 {
+		return false
+	}
+	return time.Since(*e.ReleaseTime) < gracePeriod
+}
+
 const (
 	// ISO8601 for time format.
 	ISO8601 = "20060102T150405Z0700"
@@ -93,7 +112,11 @@ func (g *GHR) Current(ctx context.Context) (*CurrentResponse, error) {
 			}
 		}
 		if !found {
-			return nil, fmt.Errorf("artifact not found: %s", artifactName)
+			return nil, &ArtifactNotFoundError{
+				ArtifactName: artifactName,
+				ReleaseTime:  release.CreatedAt.GetTime(),
+				Message:      fmt.Sprintf("artifact not found: %s", artifactName),
+			}
 		}
 	} else {
 		arch := getArch()
@@ -133,7 +156,11 @@ func (g *GHR) Current(ctx context.Context) (*CurrentResponse, error) {
 			break
 		}
 		if !found {
-			return nil, fmt.Errorf("artifact not found: %s", artifactName)
+			return nil, &ArtifactNotFoundError{
+				ArtifactName: artifactName,
+				ReleaseTime:  release.CreatedAt.GetTime(),
+				Message:      fmt.Sprintf("artifact not found: %s", artifactName),
+			}
 		}
 	}
 
@@ -143,6 +170,7 @@ func (g *GHR) Current(ctx context.Context) (*CurrentResponse, error) {
 		ID:          time.Now().Format(ISO8601),
 		Tag:         release.GetTagName(),
 		ArtifactURL: au,
+		CreatedAt:   release.CreatedAt.GetTime(),
 	}, nil
 }
 

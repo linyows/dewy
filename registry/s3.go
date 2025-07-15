@@ -100,6 +100,7 @@ func (s *S3) Current(ctx context.Context) (*CurrentResponse, error) {
 	}
 
 	var artifactName string
+	var createdAt *time.Time
 	found := false
 
 	if s.Artifact != "" {
@@ -108,6 +109,7 @@ func (s *S3) Current(ctx context.Context) (*CurrentResponse, error) {
 			name := s.extractFilenameFromObjectKey(*v.Key, prefix)
 			if name == artifactName {
 				found = true
+				createdAt = v.LastModified
 				log.Printf("[DEBUG] Fetched: %+v", v)
 				break
 			}
@@ -148,19 +150,25 @@ func (s *S3) Current(ctx context.Context) (*CurrentResponse, error) {
 				continue
 			}
 			artifactName = name
+			createdAt = v.LastModified
 			log.Printf("[DEBUG] Fetched: %+v", v)
 			break
 		}
 	}
 
 	if !found {
-		return nil, fmt.Errorf("artifact not found: %s%s", prefix, artifactName)
+		return nil, &ArtifactNotFoundError{
+			ArtifactName: prefix + artifactName,
+			ReleaseTime:  createdAt,
+			Message:      fmt.Sprintf("artifact not found: %s%s", prefix, artifactName),
+		}
 	}
 
 	return &CurrentResponse{
 		ID:          time.Now().Format(ISO8601),
 		Tag:         version.String(),
 		ArtifactURL: s.buildArtifactURL(prefix + artifactName),
+		CreatedAt:   createdAt,
 	}, nil
 }
 

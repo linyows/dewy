@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -54,10 +56,15 @@ func TestNew(t *testing.T) {
 }
 
 type mockRegistry struct {
-	url string
+	url         string
+	currentFunc func(context.Context) (*registry.CurrentResponse, error)
+	reportFunc  func(context.Context, *registry.ReportRequest) error
 }
 
 func (r *mockRegistry) Current(ctx context.Context) (*registry.CurrentResponse, error) {
+	if r.currentFunc != nil {
+		return r.currentFunc(ctx)
+	}
 	return &registry.CurrentResponse{
 		ID:          "id",
 		Tag:         "tag",
@@ -66,6 +73,9 @@ func (r *mockRegistry) Current(ctx context.Context) (*registry.CurrentResponse, 
 }
 
 func (r *mockRegistry) Report(ctx context.Context, req *registry.ReportRequest) error {
+	if r.reportFunc != nil {
+		return r.reportFunc(ctx, req)
+	}
 	return nil
 }
 
@@ -383,3 +393,156 @@ func TestErrorCountOverflow(t *testing.T) {
 		t.Errorf("Expected error count to remain at 1000, got %d", mockNotify.errorCount)
 	}
 }
+
+func TestDewy_Run_ArtifactNotFoundGracePeriod(t *testing.T) {
+	tests := []struct {
+		name                 string
+		releaseTime          *time.Time
+		artifactName         string
+		expectError          bool
+		expectErrorSuppressed bool
+		description          string
+	}{
+		{
+			name:                  "artifact not found within 30min grace period - should suppress error",
+			releaseTime:           func() *time.Time { t := time.Now().Add(-15 * time.Minute); return &t }(),
+			artifactName:          "test-artifact",
+			expectError:           true,
+			expectErrorSuppressed: true,
+			description:           "When artifact is not found but release is recent, error should be suppressed",
+		},
+		{
+			name:                  "artifact not found outside 30min grace period - should return error",
+			releaseTime:           func() *time.Time { t := time.Now().Add(-45 * time.Minute); return &t }(),
+			artifactName:          "test-artifact",
+			expectError:           true,
+			expectErrorSuppressed: false,
+			description:           "When artifact is not found and release is old, error should be returned",
+		},
+		{
+			name:                  "artifact not found with nil release time - should return error",
+			releaseTime:           nil,
+			artifactName:          "test-artifact",
+			expectError:           true,
+			expectErrorSuppressed: false,
+			description:           "When release time is unknown, error should be returned",
+		},
+		{
+			name:                  "non-artifact-not-found error - should return error",
+			releaseTime:           nil,
+			artifactName:          "",
+			expectError:           true,
+			expectErrorSuppressed: false,
+			description:           "Generic registry errors should not be suppressed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			
+			mockReg := &mockRegistry{
+				currentFunc: func(ctx context.Context) (*registry.CurrentResponse, error) {
+					if tt.artifactName != "" {
+						// Return ArtifactNotFoundError
+						return nil, &registry.ArtifactNotFoundError{
+							ArtifactName: tt.artifactName,
+							ReleaseTime:  tt.releaseTime,
+							Message:      "artifact not found: " + tt.artifactName,
+						}
+					}
+					// Return generic error
+					return nil, errors.New("generic registry error")
+				},
+			}
+
+			config := Config{
+				Command:  ASSETS,
+				Registry: "ghr://test/test",
+				Cache: CacheConfig{
+					Type:       FILE,
+					Expiration: 10,
+				},
+			}
+
+			dewy, err := New(config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			dewy.root = root
+			dewy.registry = mockReg
+
+			// Set up notifier
+			notifyInstance, err := notifier.New(context.Background(), "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			dewy.notifier = notifyInstance
+
+			err = dewy.Run()
+
+			if tt.expectError {
+				if tt.expectErrorSuppressed {
+					// Error should be suppressed (nil returned)
+					if err != nil {
+						t.Errorf("%s: Expected error to be suppressed (nil), but got: %v", tt.description, err)
+					}
+				} else {
+					// Error should be returned
+					if err == nil {
+						t.Errorf("%s: Expected error to be returned, but got nil", tt.description)
+					}
+				}
+			} else {
+				if err != nil {
+					t.Errorf("%s: Expected no error, but got: %v", tt.description, err)
+				}
+			}
+		})
+	}
+}
+
+
+func TestArtifactNotFoundError_TypeChecking(t *testing.T) {
+	// Test that our custom error can be detected using errors.As
+	releaseTime := time.Now()
+	originalErr := &registry.ArtifactNotFoundError{
+		ArtifactName: "test-artifact",
+		ReleaseTime:  &releaseTime,
+		Message:      "artifact not found: test-artifact",
+	}
+
+	// Test direct error type checking
+	var artifactNotFoundErr *registry.ArtifactNotFoundError
+	if !errors.As(originalErr, &artifactNotFoundErr) {
+		t.Errorf("errors.As should detect ArtifactNotFoundError")
+	}
+
+	// Test that error implements error interface correctly
+	if originalErr.Error() != "artifact not found: test-artifact" {
+		t.Errorf("Error() method returned unexpected message: %s", originalErr.Error())
+	}
+
+	// Test IsWithinGracePeriod method
+	if !artifactNotFoundErr.IsWithinGracePeriod(1 * time.Hour) {
+		t.Errorf("Should be within grace period of 1 hour")
+	}
+
+	if artifactNotFoundErr.IsWithinGracePeriod(0) {
+		t.Errorf("Should not be within grace period when grace period is 0")
+	}
+
+	// Test with old release time
+	oldTime := time.Now().Add(-2 * time.Hour)
+	oldErr := &registry.ArtifactNotFoundError{
+		ArtifactName: "test-artifact",
+		ReleaseTime:  &oldTime,
+		Message:      "artifact not found: test-artifact",
+	}
+
+	if oldErr.IsWithinGracePeriod(1 * time.Hour) {
+		t.Errorf("Should not be within grace period when release is 2 hours old")
+	}
+}
+
+

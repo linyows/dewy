@@ -3,6 +3,7 @@ package registry
 import (
 	"context"
 	"net/url"
+	"time"
 
 	pb "github.com/linyows/dewy/registry/gen/dewy"
 	"google.golang.org/grpc"
@@ -66,10 +67,17 @@ func (c *GRPC) Current(ctx context.Context) (*CurrentResponse, error) {
 	if err != nil {
 		return nil, err
 	}
+	var createdAt *time.Time
+	if cres.CreatedAt != nil {
+		t := cres.CreatedAt.AsTime()
+		createdAt = &t
+	}
+	
 	res := &CurrentResponse{
 		ID:          cres.Id,
 		Tag:         cres.Tag,
 		ArtifactURL: cres.ArtifactUrl,
+		CreatedAt:   createdAt,
 	}
 	return res, nil
 }

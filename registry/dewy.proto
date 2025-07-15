@@ -1,6 +1,7 @@
 syntax = "proto3";
 
 import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
 
 package dewy;
 
@@ -20,9 +21,10 @@ message CurrentRequest {
 
 // CurrentResponse is the response to get the current artifact.
 message CurrentResponse {
-	string id = 1;           // id uniquely identifies the response.
-  string tag = 2;          // tag uniquely identifies the artifact concerned.
-  string artifact_url = 3; // artifact_url is the URL to download the artifact.
+	string id = 1;                                   // id uniquely identifies the response.
+  string tag = 2;                                  // tag uniquely identifies the artifact concerned.
+  string artifact_url = 3;                         // artifact_url is the URL to download the artifact.
+  optional google.protobuf.Timestamp created_at = 4; // created_at is the creation time of the release.
 }
 
 // ReportRequest is the request to report the result of deploying the artifact.
