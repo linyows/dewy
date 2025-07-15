@@ -15,7 +15,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/linyows/dewy/kvs"
-	"github.com/linyows/dewy/notify"
+	"github.com/linyows/dewy/notifier"
 	"github.com/linyows/dewy/registry"
 )
 
@@ -162,11 +162,11 @@ func TestRun(t *testing.T) {
 		binary: binary,
 		url:    artifact,
 	}
-	notifier, err := notify.New(context.Background(), "")
+	notifyInstance, err := notifier.New(context.Background(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	dewy.notify = notifier
+	dewy.notifier = notifyInstance
 
 	if err := dewy.Run(); err != nil {
 		t.Error(err)
@@ -228,7 +228,7 @@ func TestDeployHook(t *testing.T) {
 				binary: "dewy",
 				url:    artifact,
 			}
-			dewy.notify, err = notify.New(context.Background(), "")
+			dewy.notifier, err = notifier.New(context.Background(), "")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -267,14 +267,14 @@ func TestHandleError(t *testing.T) {
 	}
 
 	mockNotify := &mockNotify{messages: []string{}}
-	dewy.notify = mockNotify
+	dewy.notifier = mockNotify
 
 	// Test error notification limiting
 	testErr := fmt.Errorf("test error")
 
 	// First 2 errors should send normal notifications
 	for i := 1; i < 3; i++ {
-		dewy.notify.SendError(ctx, testErr)
+		dewy.notifier.SendError(ctx, testErr)
 		messages := mockNotify.GetMessages()
 		if len(messages) != i {
 			t.Errorf("Expected %d messages, got %d", i, len(messages))
@@ -285,7 +285,7 @@ func TestHandleError(t *testing.T) {
 	}
 
 	// The 3rd error should send final notification with warning
-	dewy.notify.SendError(ctx, testErr)
+	dewy.notifier.SendError(ctx, testErr)
 	messages := mockNotify.GetMessages()
 	if len(messages) != 3 {
 		t.Errorf("Expected %d messages (including final notification), got %d", 3, len(messages))
@@ -303,7 +303,7 @@ func TestHandleError(t *testing.T) {
 
 	// Further errors should not send more notifications
 	for i := 4; i <= 6; i++ {
-		dewy.notify.SendError(ctx, testErr)
+		dewy.notifier.SendError(ctx, testErr)
 		messages := mockNotify.GetMessages()
 		if len(messages) != 3 {
 			t.Errorf("Expected %d messages (no new notifications), got %d", 3, len(messages))
@@ -325,12 +325,12 @@ func TestResetErrorCount(t *testing.T) {
 	}
 
 	mockNotify := &mockNotify{messages: []string{}}
-	dewy.notify = mockNotify
+	dewy.notifier = mockNotify
 
 	// Set error count to 5
 	testErr := fmt.Errorf("test error")
 	for i := 0; i < 5; i++ {
-		dewy.notify.SendError(ctx, testErr)
+		dewy.notifier.SendError(ctx, testErr)
 	}
 
 	if mockNotify.errorCount != 5 {
@@ -338,14 +338,14 @@ func TestResetErrorCount(t *testing.T) {
 	}
 
 	// Reset error count
-	dewy.notify.ResetErrorCount()
+	dewy.notifier.ResetErrorCount()
 
 	if mockNotify.errorCount != 0 {
 		t.Errorf("Expected error count 0 after reset, got %d", mockNotify.errorCount)
 	}
 
 	// Test that after reset, notifications work again
-	dewy.notify.SendError(ctx, testErr)
+	dewy.notifier.SendError(ctx, testErr)
 	messages := mockNotify.GetMessages()
 	expectedMessages := 3 + 1 // 3 from before + 1 new notification after reset
 	if len(messages) != expectedMessages {
@@ -364,7 +364,7 @@ func TestErrorCountOverflow(t *testing.T) {
 	}
 
 	mockNotify := &mockNotify{messages: []string{}}
-	dewy.notify = mockNotify
+	dewy.notifier = mockNotify
 
 	// Manually set error count to near the limit
 	mockNotify.errorCount = 999
@@ -372,13 +372,13 @@ func TestErrorCountOverflow(t *testing.T) {
 	testErr := fmt.Errorf("test error")
 	
 	// This should increment to 1000 (max limit)
-	dewy.notify.SendError(ctx, testErr)
+	dewy.notifier.SendError(ctx, testErr)
 	if mockNotify.errorCount != 1000 {
 		t.Errorf("Expected error count 1000, got %d", mockNotify.errorCount)
 	}
 	
 	// This should NOT increment beyond 1000
-	dewy.notify.SendError(ctx, testErr)
+	dewy.notifier.SendError(ctx, testErr)
 	if mockNotify.errorCount != 1000 {
 		t.Errorf("Expected error count to remain at 1000, got %d", mockNotify.errorCount)
 	}

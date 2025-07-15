@@ -49,7 +49,7 @@ The following Server command demonstrates how to use GitHub Releases as a regist
 
 ```sh
 $ dewy server --registry ghr://linyows/myapp \
-  --notify slack://general?title=myapp -p 8000 -l info -- /opt/myapp/current/myapp
+  --notifier slack://general?title=myapp -p 8000 -l info -- /opt/myapp/current/myapp
 ```
 
 The registry and notification configurations are URL-like structures, where the scheme component represents the registry or notification type. More details are provided in the Registry section.
@@ -70,7 +70,7 @@ Dewy provides several interfaces, each with multiple implementations to choose f
 - Registry
 - Artifact
 - Cache
-- Notify
+- Notifier
 
 Registry
 --
@@ -156,10 +156,13 @@ Cache
 
 The Cache interface stores the current versions and artifacts. Supported implementations include the file system, memory, HashiCorp Consul, and Redis.
 
-Notify
+Notifier
 --
 
-The Notify interface sends deployment status updates. Slack and Mail (SMTP) are available as notification methods.
+The Notifier interface sends deployment status updates. Slack and Mail (SMTP) are available as notification methods.
+
+> [!WARNING]
+> The `--notify` argument is deprecated and will be removed in a future version. Please use `--notifier` instead.
 
 ### Slack
 
@@ -171,7 +174,7 @@ To use Slack for notifications, configure as follows. Options include a title an
 
 # Example
 $ export SLACK_TOKEN=****.....
-$ dewy --notify slack://dewy?title=myapp&url=https://dewy.liny.ws ...
+$ dewy --notifier slack://dewy?title=myapp&url=https://dewy.liny.ws ...
 ```
 
 ### Mail
@@ -184,13 +187,13 @@ To use mail for notifications, configure as follows. You can specify SMTP settin
 # smtp://<smtp-host>:<port>/<recipient-mail>?<options: username, password, from, subject, tls>
 
 # Example with URL parameters
-$ dewy --notify mail://smtp.gmail.com:587/recipient@example.com?username=sender@gmail.com&password=app-password&from=sender@gmail.com&subject=Dewy+Deployment ...
+$ dewy --notifier mail://smtp.gmail.com:587/recipient@example.com?username=sender@gmail.com&password=app-password&from=sender@gmail.com&subject=Dewy+Deployment ...
 
 # Example with environment variables
 $ export MAIL_USERNAME=sender@gmail.com
 $ export MAIL_PASSWORD=app-password
 $ export MAIL_FROM=sender@gmail.com
-$ dewy --notify mail://smtp.gmail.com:587/recipient@example.com ...
+$ dewy --notifier mail://smtp.gmail.com:587/recipient@example.com ...
 ```
 
 #### Mail Configuration Options
