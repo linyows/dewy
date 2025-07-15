@@ -109,6 +109,9 @@ $ export GITHUB_TOKEN=****.....
 $ dewy --registry ghr://linyows/myapp?pre-release=true&artifact=dewy.tar ...
 ```
 
+> [!NOTE]
+> CI/CDビルド中の誤ったアラートを防ぐため、Dewyは新しく作成されたリリースに対して「artifact not found」エラーを報告する前に自動的に30分間待機します。この猶予期間により、GitHub Actionsやその他のCIシステムがリリース作成後にアーティファクトをビルドしてアップロードする時間を確保できます。
+
 ### AWS S3
 
 AWS S3をレジストリに使う場合は以下の設定をします。
