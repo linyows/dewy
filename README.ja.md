@@ -25,6 +25,9 @@
   <a href="http://godoc.org/github.com/linyows/dewy">
     <img src="http://img.shields.io/badge/go-documentation-blue.svg?style=for-the-badge&labelColor=000000" alt="Go Documentation">
   </a>
+  <a href="https://deepwiki.com/linyows/dewy">
+    <img src="http://img.shields.io/badge/deepwiki-documentation-purple.svg?style=for-the-badge&labelColor=000000" alt="Deepwiki Documentation">
+  </a>
 </p>
 
 Dewyは、主にGoで作られたアプリケーションを非コンテナ環境において宣言的にデプロイするソフトウェアです。

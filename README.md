@@ -25,6 +25,9 @@
   <a href="http://godoc.org/github.com/linyows/dewy">
     <img src="http://img.shields.io/badge/go-documentation-blue.svg?style=for-the-badge&labelColor=000000" alt="Go Documentation">
   </a>
+  <a href="https://deepwiki.com/linyows/dewy">
+    <img src="http://img.shields.io/badge/deepwiki-documentation-purple.svg?style=for-the-badge&labelColor=000000" alt="Deepwiki Documentation">
+  </a>
 </p>
 
 Dewy is software primarily designed to declaratively deploy applications written in Go in non-container environments. Dewy acts as a supervisor for applications, running as the main process while launching the application as a child process. Its scheduler polls specified registries and, upon detecting the latest version (using semantic versioning), deploys from the designated artifact store. This enables Dewy to perform pull-based deployments. Dewy’s architecture is composed of abstracted components: registries, artifact stores, cache stores, and notification channels. Below are diagrams illustrating Dewy's deployment process and architecture.
