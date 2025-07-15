@@ -40,6 +40,87 @@ Dewyは、いわゆるプル型のデプロイを実現します。Dewyは、レ
   <img alt="Dewyのデプロイプロセスとアーキテクチャ" src="https://github.com/linyows/dewy/blob/main/misc/dewy-architecture.svg?raw=true" width="640"/>
 </p>
 
+デプロイワークフロー
+--
+
+以下のシーケンス図は、ポーリングからサーバー再起動までのDewyのデプロイワークフローを示しています：
+
+```mermaid
+sequenceDiagram
+    participant S as スケジューラー
+    participant D as Dewy
+    participant R as レジストリ
+    participant A as アーティファクトストア
+    participant C as キャッシュ
+    participant F as ファイルシステム
+    participant H as フック
+    participant App as アプリケーション
+    participant N as 通知
+
+    Note over S,N: スケジュールされたデプロイサイクル
+
+    S->>D: Run() - デプロイチェック開始
+    D->>R: Current() - 最新バージョン取得
+    R-->>D: {ID, Tag, ArtifactURL}
+
+    D->>C: Read("current") - 現在バージョン確認
+    D->>C: List() - キャッシュされたアーティファクト取得
+    C-->>D: キャッシュバージョン情報
+
+    alt バージョン変更またはキャッシュなし
+        D->>A: Download(ArtifactURL)
+        A-->>D: アーティファクトバイナリデータ
+        D->>C: Write(cacheKey, artifact)
+        D->>C: Write("current", cacheKey)
+        Note over D,C: キャッシュ: v1.2.3--app_linux_amd64.tar.gz
+    else バージョン未変更
+        Note over D: デプロイスキップ - 既に最新
+    end
+
+    D->>N: Send("Ready for v1.2.3")
+
+    Note over D,App: デプロイプロセス
+
+    D->>H: execHook(BeforeDeployHook)
+    H-->>D: 成功/失敗
+
+    alt Before hook失敗
+        D->>N: SendError("Before hook failed")
+        Note over D: デプロイ中止
+    else Before hook成功
+        D->>F: ExtractArchive(cache → releases/timestamp/)
+        D->>F: 古いシンボリックリンク削除
+        D->>F: Symlink(releases/timestamp/ → current)
+
+        alt サーバーアプリケーション
+            D->>App: サーバープロセス開始/再起動
+            App-->>D: プロセス開始完了
+            D->>N: Send("Server restarted for v1.2.3")
+        end
+
+        D->>H: execHook(AfterDeployHook)
+        H-->>D: 成功/失敗（ログのみ）
+
+        D->>R: Report({ID, Tag}) - 監査ログ
+        D->>F: keepReleases() - 古いリリース削除
+
+        Note over D,N: 成功 - エラーカウントリセット
+        D->>N: ResetErrorCount()
+    end
+
+    Note over S,N: インターバル毎にサイクル繰り返し（デフォルト: 10秒）
+```
+
+### ワークフローの主要ポイント
+
+- **ポーリング**: Dewyは設定可能な間隔でレジストリを継続的にポーリング
+- **バージョン検出**: セマンティックバージョニングを使用して新しいリリースを検出
+- **キャッシュ**: ダウンロードは繰り返しダウンロードを避けるためキャッシュされる
+- **アトミックデプロイ**: 古いシンボリックリンクを削除し、新しいものをアトミックに作成
+- **フック統合**: Before/Afterフックがデプロイを中止またはカスタマイズ可能
+- **エラーハンドリング**: 失敗したデプロイはエラー通知をトリガー（制限付き）
+- **監査証跡**: 成功したデプロイはレジストリに報告される
+
 主な機能
 --
 
