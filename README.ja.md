@@ -25,6 +25,9 @@
   <a href="http://godoc.org/github.com/linyows/dewy">
     <img src="http://img.shields.io/badge/go-documentation-blue.svg?style=for-the-badge&labelColor=000000" alt="Go Documentation">
   </a>
+  <a href="https://deepwiki.com/linyows/dewy">
+    <img src="http://img.shields.io/badge/deepwiki-documentation-purple.svg?style=for-the-badge&labelColor=000000" alt="Deepwiki Documentation">
+  </a>
 </p>
 
 Dewyは、主にGoで作られたアプリケーションを非コンテナ環境において宣言的にデプロイするソフトウェアです。
@@ -67,6 +70,52 @@ Assetsはhtmlやcssやjsなど、静的ファイルのバージョンを最新�
 
 - server
 - assets
+
+デプロイフック
+--
+
+Dewyはデプロイの前後にカスタムコマンドを実行できるフック機能をサポートしています。これらのフックは作業ディレクトリでシェル(`/bin/sh -c`)経由で実行され、全ての環境変数にアクセスできます。
+
+### フックオプション
+
+- `--before-deploy-hook`: デプロイ開始前にコマンドを実行
+- `--after-deploy-hook`: デプロイ成功後にコマンドを実行
+
+### 使用例
+
+```sh
+# デプロイ前にデータベースをバックアップ
+$ dewy server --registry ghr://myapp/api \
+  --before-deploy-hook "pg_dump mydb > /backup/$(date +%Y%m%d_%H%M%S).sql" \
+  --after-deploy-hook "echo 'デプロイ完了' | mail -s 'デプロイ成功' admin@example.com" \
+  -- /opt/myapp/current/myapp
+
+# デプロイ前にサービス停止、後に再起動
+$ dewy server --registry ghr://myapp/api \
+  --before-deploy-hook "systemctl stop nginx" \
+  --after-deploy-hook "systemctl start nginx && systemctl reload nginx" \
+  -- /opt/myapp/current/myapp
+
+# デプロイ後にデータベースマイグレーション実行
+$ dewy assets --registry ghr://myapp/frontend \
+  --after-deploy-hook "/opt/myapp/current/migrate-db.sh"
+```
+
+### フックの動作
+
+- **Before Hook**: before-deploy-hookが失敗するとデプロイは中止されます
+- **After Hook**: デプロイ成功後のみ実行されます。失敗してもデプロイは成功扱いになります
+- **実行環境**: フックは全ての環境変数を継承し、作業ディレクトリで実行されます
+- **ログ**: 全てのフック実行詳細（コマンド、stdout、stderr）がログに記録されます
+
+> [!TIP]
+> **よくある用途**
+> - **データベース操作**: バックアップ、マイグレーション、スキーマ更新
+> - **サービス管理**: 関連サービスの停止・開始
+> - **キャッシュ管理**: キャッシュクリア、新デプロイの事前ウォームアップ
+> - **通知**: 内蔵通知以外のカスタムアラート
+> - **ヘルスチェック**: デプロイ成功の検証
+> - **設定更新**: 動的な設定変更
 
 インターフェース
 --
@@ -175,6 +224,9 @@ Notifier
 > [!WARNING]
 > `--notify`引数は非推奨となり、将来のバージョンで削除されます。代わりに`--notifier`を使用してください。
 
+> [!IMPORTANT]
+> **エラー通知制限**: Dewyは継続的な障害時のスパム防止のため、エラー通知を自動的に制限します。3回のエラー通知後、正常に復旧するまで通知が抑制され、復旧時に通知制限は自動的にリセットされます。
+
 ### Slack
 
 Slackを通知に使う場合は以下の設定をします。オプションには、通知に付加する `title` と そのリンクである `url` が設定できます。リポジトリ名やそのURLを設定すると良いでしょう。
@@ -222,6 +274,25 @@ tls        | bool   | TLS暗号化を使用        | true
 host       | string | SMTPサーバーホスト名   | (URLから抽出)
 port       | int    | SMTPサーバーポート番号 | 587
 
+リリース管理
+--
+
+Dewyはローカルファイルシステム内でリリースを自動管理します：
+
+- **リリース保存**: 各デプロイは`releases/<timestamp>/`ディレクトリに保存されます
+- **現在リンク**: `current`シンボリックリンクが常に最新デプロイバージョンを指します
+- **自動クリーンアップ**: 最新7リリースのみ保持され、古いリリースは自動削除されます
+- **ディレクトリ構造**:
+  ```
+  /opt/myapp/
+  ├── current -> releases/20240315T143022Z/
+  ├── releases/
+  │   ├── 20240315T143022Z/    # 最新
+  │   ├── 20240314T091534Z/
+  │   ├── 20240313T172145Z/
+  │   └── ...                  # 最大7リリース
+  ```
+
 セマンティックバージョニング
 --
 
@@ -236,11 +307,142 @@ v1.2.3-rc
 v1.2.3-beta.2
 ```
 
-ステージング
+### プレリリースとステージング
+
+セマンティックバージョニングには、プレリリースという考え方があります。バージョンに対してハイフンをつけてsuffixを付加したものがプレリリースバージョンになります。ステージング環境では、registryのオプションに `pre-release=true`を追加することで、プレリリースバージョンがデプロイされるようになります。
+
+```sh
+# プロダクション環境（安定版のみ）
+$ dewy --registry ghr://linyows/myapp ...
+
+# ステージング環境（プレリリース版を含む）
+$ dewy --registry ghr://linyows/myapp?pre-release=true ...
+```
+
+デプロイワークフロー
 --
 
-セマンティックバージョニングには、プレリリースという考え方があります。バージョンに対してハイフンをつけてsuffixを付加したものが
-プレリリースバージョンになります。ステージング環境では、registryのオプションに `pre-release=true`を追加することで、プレリリースバージョンがデプロイされるようになります。
+次のシーケンス図は、ポーリングからサーバー再起動までのDewyのデプロイワークフローを示しています：
+
+```mermaid
+sequenceDiagram
+    participant S as Scheduler
+    participant D as Dewy
+    participant R as Registry
+    participant A as Artifact Store
+    participant C as Cache
+    participant F as File System
+    participant H as Hooks
+    participant App as Application
+    participant N as Notifier
+
+    Note over S,N: Scheduled Deployment Cycle
+
+    S->>D: Run() - Start deployment check
+    D->>R: Current() - Get latest version
+    R-->>D: {ID, Tag, ArtifactURL}
+
+    D->>C: Read("current") - Check current version
+    D->>C: List() - Get cached artifacts
+    C-->>D: Cached version info
+
+    alt Version changed or not cached
+        D->>A: Download(ArtifactURL)
+        A-->>D: Artifact binary data
+        D->>C: Write(cacheKey, artifact)
+        D->>C: Write("current", cacheKey)
+        Note over D,C: Cache: v1.2.3--app_linux_amd64.tar.gz
+    else Version unchanged
+        Note over D: Skip deployment - already current
+    end
+
+    D->>N: Send("Ready for v1.2.3")
+
+    Note over D,App: Deployment Process
+
+    D->>H: execHook(BeforeDeployHook)
+    H-->>D: Success/Failure
+
+    alt Before hook failed
+        D->>N: SendError("Before hook failed")
+        Note over D: Abort deployment
+    else Before hook succeeded
+        D->>F: ExtractArchive(cache → releases/timestamp/)
+        D->>F: Remove old symlink
+        D->>F: Symlink(releases/timestamp/ → current)
+
+        alt Server Application
+            D->>App: Start/Restart server process
+            App-->>D: Process started
+            D->>N: Send("Server restarted for v1.2.3")
+        end
+
+        D->>H: execHook(AfterDeployHook)
+        H-->>D: Success/Failure (logged only)
+
+        D->>R: Report({ID, Tag}) - Audit log
+        D->>F: keepReleases() - Clean old releases
+
+        Note over D,N: Success - Reset error count
+        D->>N: ResetErrorCount()
+    end
+
+    Note over S,N: Cycle repeats every interval (default: 10s)
+```
+
+### 主なワークフローポイント
+
+- **ポーリング**: Dewyは設定可能な間隔でレジストリを継続的にポーリングします
+- **バージョン検出**: セマンティックバージョニングを使用して新しいリリースを検出します
+- **キャッシュ**: ダウンロードはキャッシュされ、重複ダウンロードを回避します
+- **アトミックデプロイ**: 古いシンボリックリンクを削除し、新しいものをアトミックに作成します
+- **フック統合**: Before/afterフックがデプロイを中止またはカスタマイズできます
+- **エラーハンドリング**: 失敗したデプロイはエラー通知をトリガーします（制限付き）
+- **監査証跡**: 成功したデプロイはレジストリに報告されます
+
+シグナルハンドリング
+--
+
+Dewyはプロセス管理のための各種システムシグナルに対応しています：
+
+- **SIGHUP**: 無視（Dewyは動作を継続）
+- **SIGUSR1**: 手動サーバー再起動をトリガー
+- **SIGINT, SIGTERM, SIGQUIT**: グレースフルシャットダウンを開始
+- **内部SIGHUP**: サーバー再起動に内部的に使用
+
+### 手動サーバー再起動
+
+Dewyを再起動せずにサーバーアプリケーションのみを手動で再起動できます：
+
+```sh
+# SIGUSR1を送信してサーバー再起動をトリガー
+$ kill -USR1 <dewy-pid>
+
+# systemdでDewyが管理されている場合
+$ systemctl kill -s USR1 dewy.service
+```
+
+
+システム要件
+--
+
+Dewyのデプロイには最小限のシステム要件があります：
+
+### ファイルシステム要件
+
+- **書き込み権限**: リリース管理のため作業ディレクトリへの書き込み権限が必要
+- **シンボリックリンクサポート**: `current`ポインタのためファイルシステムでシンボリックリンクサポートが必要
+- **一時ディレクトリ**: キャッシュストレージのためシステム一時ディレクトリへのアクセスが必要
+- **ディスク容量**: 7リリース分とキャッシュのための十分な容量（通常数百MB）
+
+### プロセス要件
+
+- **シェルアクセス**: フック実行のため`/bin/sh`が利用可能である必要
+- **ネットワークアクセス**: レジストリとアーティファクトストアへのアウトバウンド接続
+- **シグナルハンドリング**: プロセスがシステムシグナルを受信・処理できること
+
+> [!NOTE]
+> DewyはGoランタイム（コンパイル済み）以外の外部依存関係がない単一バイナリとして動作します。
 
 プロビジョニング
 --
