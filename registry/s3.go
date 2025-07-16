@@ -116,43 +116,23 @@ func (s *S3) Current(ctx context.Context) (*CurrentResponse, error) {
 		}
 
 	} else {
-		arch := getArch()
-		os := getOS()
-		archMatchs := []string{arch}
-		if arch == "amd64" {
-			archMatchs = append(archMatchs, "x86_64")
-		}
-		osMatchs := []string{os}
-		if os == "darwin" {
-			osMatchs = append(osMatchs, "macos")
-		}
-
+		// Extract object names
+		var objectNames []string
+		var objectMap = make(map[string]*types.Object)
 		for _, v := range objects {
 			name := s.extractFilenameFromObjectKey(*v.Key, prefix)
-			n := strings.ToLower(name)
-			for _, arch := range archMatchs {
-				if strings.Contains(n, arch) {
-					found = true
-					break
-				}
+			objectNames = append(objectNames, name)
+			objectMap[name] = &v
+		}
+		
+		// Use common pattern matching
+		matchedName, found := MatchArtifactByPlatform(objectNames)
+		if found {
+			artifactName = matchedName
+			if obj, exists := objectMap[matchedName]; exists {
+				createdAt = obj.LastModified
+				log.Printf("[DEBUG] Fetched: %+v", obj)
 			}
-			if !found {
-				continue
-			}
-			found = false
-			for _, os := range osMatchs {
-				if strings.Contains(n, os) {
-					found = true
-					break
-				}
-			}
-			if !found {
-				continue
-			}
-			artifactName = name
-			createdAt = v.LastModified
-			log.Printf("[DEBUG] Fetched: %+v", v)
-			break
 		}
 	}
 
@@ -285,16 +265,9 @@ func (s *S3) LatestVersion(ctx context.Context) (string, *SemVer, error) {
 		})
 	}
 
-	var latestObject *types.CommonPrefix
-	var latestVersion *SemVer
-
-	matched := func(str string, pre bool) bool {
-		if pre {
-			return SemVerRegex.MatchString(str)
-		} else {
-			return SemVerRegexWithoutPreRelease.MatchString(str)
-		}
-	}
+	// Collect all version directory names
+	var versionNames []string
+	var objectMap = make(map[string]*types.CommonPrefix)
 
 	for pager.HasMorePages() {
 		output, err := pager.NextPage(ctx)
@@ -304,21 +277,17 @@ func (s *S3) LatestVersion(ctx context.Context) (string, *SemVer, error) {
 		// Use output.CommonPrefixes instead of output.Contents to process only directories under prefix.
 		for i, obj := range output.CommonPrefixes {
 			name := s.extractFilenameFromObjectKey(*obj.Prefix, s.Prefix)
-			if matched(name, s.PreRelease) {
-				ver := ParseSemVer(name)
-				if ver != nil {
-					if latestVersion == nil || ver.Compare(latestVersion) > 0 {
-						latestVersion = ver
-						latestObject = &output.CommonPrefixes[i]
-					}
-				}
-			}
+			versionNames = append(versionNames, name)
+			objectMap[name] = &output.CommonPrefixes[i]
 		}
 	}
 
-	if latestObject == nil {
-		return "", nil, fmt.Errorf("no valid versioned object found")
+	// Use common latest version finding logic
+	latestVersion, latestName, err := FindLatestSemVer(versionNames, s.PreRelease)
+	if err != nil {
+		return "", nil, err
 	}
 
+	latestObject := objectMap[latestName]
 	return *latestObject.Prefix, latestVersion, nil
 }

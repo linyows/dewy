@@ -1,6 +1,9 @@
 package registry
 
-import "runtime"
+import (
+	"runtime"
+	"strings"
+)
 
 var (
 	// TestArch overrides runtime.GOARCH when set (for testing)
@@ -23,4 +26,56 @@ func getOS() string {
 		return TestOS
 	}
 	return runtime.GOOS
+}
+
+// MatchArtifactByPlatform finds the first artifact name that matches current OS and architecture
+func MatchArtifactByPlatform(artifactNames []string) (string, bool) {
+	arch := getArch()
+	os := getOS()
+
+	archMatches := []string{arch}
+	if arch == "amd64" {
+		archMatches = append(archMatches, "x86_64")
+	}
+
+	osMatches := []string{os}
+	if os == "darwin" {
+		osMatches = append(osMatches, "macos")
+	}
+
+	for _, name := range artifactNames {
+		if matchesPlatform(name, archMatches, osMatches) {
+			return name, true
+		}
+	}
+
+	return "", false
+}
+
+// matchesPlatform checks if artifact name contains both arch and OS patterns
+func matchesPlatform(artifactName string, archMatches, osMatches []string) bool {
+	n := strings.ToLower(artifactName)
+
+	// Check architecture match
+	archFound := false
+	for _, arch := range archMatches {
+		if strings.Contains(n, arch) {
+			archFound = true
+			break
+		}
+	}
+	if !archFound {
+		return false
+	}
+
+	// Check OS match
+	osFound := false
+	for _, os := range osMatches {
+		if strings.Contains(n, os) {
+			osFound = true
+			break
+		}
+	}
+
+	return osFound
 }

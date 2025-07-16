@@ -3,6 +3,7 @@ module github.com/linyows/dewy
 go 1.24.4
 
 require (
+	cloud.google.com/go/storage v1.49.0
 	github.com/aws/aws-sdk-go-v2 v1.36.5
 	github.com/aws/aws-sdk-go-v2/config v1.29.17
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.83.0
@@ -21,6 +22,7 @@ require (
 	github.com/mholt/archives v0.1.3
 	github.com/migueleliasweb/go-github-mock v1.4.0
 	golang.org/x/oauth2 v0.30.0
+	google.golang.org/api v0.223.0
 	google.golang.org/grpc v1.73.0
 	google.golang.org/protobuf v1.36.6
 	gopkg.in/mail.v2 v2.3.1
@@ -50,7 +52,6 @@ require (
 	cloud.google.com/go/kms v1.20.1 // indirect
 	cloud.google.com/go/longrunning v0.6.2 // indirect
 	cloud.google.com/go/monitoring v1.21.2 // indirect
-	cloud.google.com/go/storage v1.49.0 // indirect
 	code.gitea.io/sdk/gitea v0.18.0 // indirect
 	connectrpc.com/connect v1.18.1 // indirect
 	connectrpc.com/otelconnect v0.7.2 // indirect
@@ -529,7 +530,6 @@ require (
 	golang.org/x/time v0.11.0 // indirect
 	golang.org/x/tools v0.34.0 // indirect
 	golang.org/x/xerrors v0.0.0-20231012003039-104605ab7028 // indirect
-	google.golang.org/api v0.223.0 // indirect
 	google.golang.org/genproto v0.0.0-20241118233622-e639e219e697 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250603155806-513f23925822 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250603155806-513f23925822 // indirect

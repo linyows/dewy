@@ -85,7 +85,7 @@ Registry
 --
 
 レジストリは、アプリケーションやファイルのバージョンを管理するインターフェースです。
-レジストリは、Github Releases、AWS S3、GRPCから選択できます。
+レジストリは、Github Releases、AWS S3、Google Cloud Storage、GRPCから選択できます。
 
 #### 共通オプション
 
@@ -95,6 +95,9 @@ Option　　　　　　　　　　 | Type   | Description
 ---         | ---    | ---
 pre-release | bool   | セマンティックバージョニングにおけるプレリリースバージョンを含める場合は `true` を設定します
 artifact    | string | アーティファクトのファイル名が `name_os_arch.ext` のようなフォーマットであれば Dewy パターンマッチすることができますが、そうでない場合は明示的に指定してください
+
+> [!IMPORTANT]
+> **アーティファクトパターンマッチング**: `artifact` オプションが指定されていない場合、Dewyはファイル名から現在のOSとアーキテクチャをマッチングして自動的にアーティファクトを選択します。OS（`linux`、`darwin`/`macos`、`windows`）とアーキテクチャ（`amd64`/`x86_64`、`arm64`など）に対して大文字小文字を区別しない部分文字列マッチングを行います。現在のOSとアーキテクチャの両方を含む最初のアーティファクトが選択されます。複数のアーティファクトがマッチする場合や特定のアーティファクトが必要な場合は、`artifact` パラメータで明示的に指定してください。
 
 ### Github Releases
 
@@ -148,6 +151,36 @@ Dewyは、 `aws-sdk-go-v2` を使っているので regionやendpointも環境�
 ```sh
 $ export AWS_ENDPOINT_URL="http://localhost:9000"
 ```
+
+### Google Cloud Storage
+
+Google Cloud Storageをレジストリに使う場合は以下の設定をします。Google Cloudの認証情報は、サービスアカウントキーやGoogle Cloud SDKでサポートされている他の認証方法で設定する必要があります。
+
+```sh
+# 書式
+# gcs://<project-id>/<bucket-name>/<path-prefix>?<options: pre-release, artifact>
+
+# 例
+$ export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account.json"
+$ dewy --registry gcs://my-project/dewy-bucket/foo/bar/myapp ...
+```
+
+Google Cloud Storageでのオブジェクトパスは、S3と同じ順序に従ってください: `<prefix>/<semver>/<artifact>`。例：
+
+```sh
+# <prefix>/<semver>/<artifact>
+foo/bar/baz/v1.2.4-rc/dewy-testapp_linux_x86_64.tar.gz
+                   /dewy-testapp_linux_arm64.tar.gz
+                   /dewy-testapp_darwin_arm64.tar.gz
+foo/bar/baz/v1.2.3/dewy-testapp_linux_x86_64.tar.gz
+                  /dewy-testapp_linux_arm64.tar.gz
+                  /dewy-testapp_darwin_arm64.tar.gz
+foo/bar/baz/v1.2.2/dewy-testapp_linux_x86_64.tar.gz
+                  /dewy-testapp_linux_arm64.tar.gz
+                  /dewy-testapp_darwin_arm64.tar.gz
+```
+
+DewyはGoogle Cloud Storage Go クライアントライブラリを使用するため、認証はサービスアカウントキー、ワークロードアイデンティティ、デフォルトアプリケーション認証情報など、標準的なGoogle Cloud認証方法に従います。
 
 ### GRPC
 
