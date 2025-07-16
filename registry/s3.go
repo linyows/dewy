@@ -116,43 +116,23 @@ func (s *S3) Current(ctx context.Context) (*CurrentResponse, error) {
 		}
 
 	} else {
-		arch := getArch()
-		os := getOS()
-		archMatchs := []string{arch}
-		if arch == "amd64" {
-			archMatchs = append(archMatchs, "x86_64")
-		}
-		osMatchs := []string{os}
-		if os == "darwin" {
-			osMatchs = append(osMatchs, "macos")
-		}
-
+		// Extract object names
+		var objectNames []string
+		var objectMap = make(map[string]*types.Object)
 		for _, v := range objects {
 			name := s.extractFilenameFromObjectKey(*v.Key, prefix)
-			n := strings.ToLower(name)
-			for _, arch := range archMatchs {
-				if strings.Contains(n, arch) {
-					found = true
-					break
-				}
+			objectNames = append(objectNames, name)
+			objectMap[name] = &v
+		}
+		
+		// Use common pattern matching
+		matchedName, found := MatchArtifactByPlatform(objectNames)
+		if found {
+			artifactName = matchedName
+			if obj, exists := objectMap[matchedName]; exists {
+				createdAt = obj.LastModified
+				log.Printf("[DEBUG] Fetched: %+v", obj)
 			}
-			if !found {
-				continue
-			}
-			found = false
-			for _, os := range osMatchs {
-				if strings.Contains(n, os) {
-					found = true
-					break
-				}
-			}
-			if !found {
-				continue
-			}
-			artifactName = name
-			createdAt = v.LastModified
-			log.Printf("[DEBUG] Fetched: %+v", v)
-			break
 		}
 	}
 

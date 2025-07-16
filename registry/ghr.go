@@ -119,42 +119,14 @@ func (g *GHR) Current(ctx context.Context) (*CurrentResponse, error) {
 			}
 		}
 	} else {
-		arch := getArch()
-		os := getOS()
-		archMatchs := []string{arch}
-		if arch == "amd64" {
-			archMatchs = append(archMatchs, "x86_64")
-		}
-		osMatchs := []string{os}
-		if os == "darwin" {
-			osMatchs = append(osMatchs, "macos")
-		}
-		found := false
+		// Extract asset names
+		var assetNames []string
 		for _, v := range release.Assets {
-			n := strings.ToLower(v.GetName())
-			for _, arch := range archMatchs {
-				if strings.Contains(n, arch) {
-					found = true
-					break
-				}
-			}
-			if !found {
-				continue
-			}
-			found = false
-			for _, os := range osMatchs {
-				if strings.Contains(n, os) {
-					found = true
-					break
-				}
-			}
-			if !found {
-				continue
-			}
-			artifactName = v.GetName()
-			log.Printf("[DEBUG] Fetched: %+v", v)
-			break
+			assetNames = append(assetNames, v.GetName())
 		}
+		
+		// Use common pattern matching
+		matchedName, found := MatchArtifactByPlatform(assetNames)
 		if !found {
 			return nil, &ArtifactNotFoundError{
 				ArtifactName: artifactName,
@@ -162,6 +134,9 @@ func (g *GHR) Current(ctx context.Context) (*CurrentResponse, error) {
 				Message:      fmt.Sprintf("artifact not found: %s", artifactName),
 			}
 		}
+		
+		artifactName = matchedName
+		log.Printf("[DEBUG] Fetched: %s", artifactName)
 	}
 
 	au := fmt.Sprintf("%s://%s/%s/tag/%s/%s", ghrScheme, g.Owner, g.Repo, release.GetTagName(), artifactName)
