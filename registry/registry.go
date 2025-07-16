@@ -14,6 +14,7 @@ var (
 	s3Scheme   = "s3"
 	ghrScheme  = "ghr"
 	grpcScheme = "grpc"
+	gcsScheme  = "gcs"
 )
 
 type Registry interface {
@@ -56,6 +57,9 @@ func New(ctx context.Context, url string) (Registry, error) {
 
 	case s3Scheme:
 		return NewS3(ctx, url)
+
+	case gcsScheme:
+		return NewGCS(ctx, url)
 
 	case grpcScheme:
 		return NewGRPC(ctx, url)
