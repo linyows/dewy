@@ -78,7 +78,7 @@ Dewy provides several interfaces, each with multiple implementations to choose f
 Registry
 --
 
-The Registry interface manages versions of applications and files. It currently supports GitHub Releases, AWS S3, and GRPC as sources.
+The Registry interface manages versions of applications and files. It currently supports GitHub Releases, AWS S3, Google Cloud Storage, and GRPC as sources.
 
 ### Common Options
 
@@ -139,6 +139,36 @@ Dewy leverages aws-sdk-go-v2, so you can also specify region and endpoint throug
 ```sh
 $ export AWS_ENDPOINT_URL="http://localhost:9000"
 ```
+
+### Google Cloud Storage
+
+To use Google Cloud Storage as a registry, configure it as follows. Required Google Cloud credentials must be set up through service account keys or other authentication methods supported by the Google Cloud SDK.
+
+```sh
+# Format
+# gcs://<project-id>/<bucket-name>/<path-prefix>?<options: pre-release, artifact>
+
+# Example
+$ export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account.json"
+$ dewy --registry gcs://my-project/dewy-bucket/foo/bar/myapp ...
+```
+
+Please ensure that the object path in Google Cloud Storage follows the same order as S3: `<prefix>/<semver>/<artifact>`. For example:
+
+```sh
+# <prefix>/<semver>/<artifact>
+foo/bar/baz/v1.2.4-rc/dewy-testapp_linux_x86_64.tar.gz
+                   /dewy-testapp_linux_arm64.tar.gz
+                   /dewy-testapp_darwin_arm64.tar.gz
+foo/bar/baz/v1.2.3/dewy-testapp_linux_x86_64.tar.gz
+                  /dewy-testapp_linux_arm64.tar.gz
+                  /dewy-testapp_darwin_arm64.tar.gz
+foo/bar/baz/v1.2.2/dewy-testapp_linux_x86_64.tar.gz
+                  /dewy-testapp_linux_arm64.tar.gz
+                  /dewy-testapp_darwin_arm64.tar.gz
+```
+
+Dewy uses the Google Cloud Storage Go client library, so authentication follows standard Google Cloud authentication methods including service account keys, workload identity, and default application credentials.
 
 ### GRPC
 
