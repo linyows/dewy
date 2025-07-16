@@ -78,3 +78,4 @@ func addTrailingSlash(path string) string {
 func removeTrailingSlash(path string) string {
 	return strings.TrimSuffix(path, "/")
 }
+

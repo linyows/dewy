@@ -32,30 +32,30 @@ func getOS() string {
 func MatchArtifactByPlatform(artifactNames []string) (string, bool) {
 	arch := getArch()
 	os := getOS()
-	
+
 	archMatches := []string{arch}
 	if arch == "amd64" {
 		archMatches = append(archMatches, "x86_64")
 	}
-	
+
 	osMatches := []string{os}
 	if os == "darwin" {
 		osMatches = append(osMatches, "macos")
 	}
-	
+
 	for _, name := range artifactNames {
 		if matchesPlatform(name, archMatches, osMatches) {
 			return name, true
 		}
 	}
-	
+
 	return "", false
 }
 
 // matchesPlatform checks if artifact name contains both arch and OS patterns
 func matchesPlatform(artifactName string, archMatches, osMatches []string) bool {
 	n := strings.ToLower(artifactName)
-	
+
 	// Check architecture match
 	archFound := false
 	for _, arch := range archMatches {
@@ -67,7 +67,7 @@ func matchesPlatform(artifactName string, archMatches, osMatches []string) bool 
 	if !archFound {
 		return false
 	}
-	
+
 	// Check OS match
 	osFound := false
 	for _, os := range osMatches {
@@ -76,6 +76,6 @@ func matchesPlatform(artifactName string, archMatches, osMatches []string) bool 
 			break
 		}
 	}
-	
+
 	return osFound
 }

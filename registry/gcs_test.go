@@ -138,7 +138,7 @@ func TestGCSBuildArtifactURL(t *testing.T) {
 
 	name := "path/to/artifact.tar.gz"
 	expected := "gcs://test-project/test-bucket/path/to/artifact.tar.gz"
-	
+
 	result := gcs.buildArtifactURL(name)
 	if result != expected {
 		t.Errorf("expected %s, got %s", expected, result)
@@ -147,7 +147,7 @@ func TestGCSBuildArtifactURL(t *testing.T) {
 
 func TestGCSExtractFilenameFromObjectName(t *testing.T) {
 	gcs := &GCS{}
-	
+
 	tests := []struct {
 		name     string
 		prefix   string

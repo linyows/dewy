@@ -236,16 +236,9 @@ func (g *GCS) LatestVersion(ctx context.Context) (string, *SemVer, error) {
 		Delimiter: "/",
 	}
 
-	var latestObjectName string
-	var latestVersion *SemVer
-
-	matched := func(str string, pre bool) bool {
-		if pre {
-			return SemVerRegex.MatchString(str)
-		} else {
-			return SemVerRegexWithoutPreRelease.MatchString(str)
-		}
-	}
+	// Collect all version directory names
+	var versionNames []string
+	var objectMap = make(map[string]string)
 
 	it := bucket.Objects(ctx, query)
 	for {
@@ -263,20 +256,16 @@ func (g *GCS) LatestVersion(ctx context.Context) (string, *SemVer, error) {
 		}
 
 		name := g.extractFilenameFromObjectName(attrs.Prefix, g.Prefix)
-		if matched(name, g.PreRelease) {
-			ver := ParseSemVer(name)
-			if ver != nil {
-				if latestVersion == nil || ver.Compare(latestVersion) > 0 {
-					latestVersion = ver
-					latestObjectName = attrs.Prefix
-				}
-			}
-		}
+		versionNames = append(versionNames, name)
+		objectMap[name] = attrs.Prefix
 	}
 
-	if latestObjectName == "" {
-		return "", nil, fmt.Errorf("no valid versioned object found")
+	// Use common latest version finding logic
+	latestVersion, latestName, err := FindLatestSemVer(versionNames, g.PreRelease)
+	if err != nil {
+		return "", nil, err
 	}
 
+	latestObjectName := objectMap[latestName]
 	return latestObjectName, latestVersion, nil
 }

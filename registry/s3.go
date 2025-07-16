@@ -265,16 +265,9 @@ func (s *S3) LatestVersion(ctx context.Context) (string, *SemVer, error) {
 		})
 	}
 
-	var latestObject *types.CommonPrefix
-	var latestVersion *SemVer
-
-	matched := func(str string, pre bool) bool {
-		if pre {
-			return SemVerRegex.MatchString(str)
-		} else {
-			return SemVerRegexWithoutPreRelease.MatchString(str)
-		}
-	}
+	// Collect all version directory names
+	var versionNames []string
+	var objectMap = make(map[string]*types.CommonPrefix)
 
 	for pager.HasMorePages() {
 		output, err := pager.NextPage(ctx)
@@ -284,21 +277,17 @@ func (s *S3) LatestVersion(ctx context.Context) (string, *SemVer, error) {
 		// Use output.CommonPrefixes instead of output.Contents to process only directories under prefix.
 		for i, obj := range output.CommonPrefixes {
 			name := s.extractFilenameFromObjectKey(*obj.Prefix, s.Prefix)
-			if matched(name, s.PreRelease) {
-				ver := ParseSemVer(name)
-				if ver != nil {
-					if latestVersion == nil || ver.Compare(latestVersion) > 0 {
-						latestVersion = ver
-						latestObject = &output.CommonPrefixes[i]
-					}
-				}
-			}
+			versionNames = append(versionNames, name)
+			objectMap[name] = &output.CommonPrefixes[i]
 		}
 	}
 
-	if latestObject == nil {
-		return "", nil, fmt.Errorf("no valid versioned object found")
+	// Use common latest version finding logic
+	latestVersion, latestName, err := FindLatestSemVer(versionNames, s.PreRelease)
+	if err != nil {
+		return "", nil, err
 	}
 
+	latestObject := objectMap[latestName]
 	return *latestObject.Prefix, latestVersion, nil
 }
