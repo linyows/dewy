@@ -89,6 +89,9 @@ Option | Type | Description
 pre-release | bool | Set to true to include pre-release versions, following semantic versioning.
 artifact | string | Specify the artifact filename if it does not follow the name_os_arch.ext pattern that Dewy matches by default.
 
+> [!IMPORTANT]
+> **Artifact Pattern Matching**: When the `artifact` option is not specified, Dewy automatically selects artifacts by matching the current OS and architecture in filenames. It performs case-insensitive substring matching for OS (`linux`, `darwin`/`macos`, `windows`) and architecture (`amd64`/`x86_64`, `arm64`, etc.). The first artifact containing both the current OS and architecture will be selected. If multiple artifacts match or if you need a specific artifact, use the `artifact` parameter to specify it explicitly.
+
 ### Github Releases
 
 To use GitHub Releases as a registry, configure it as follows and set up the required environment variables for accessing the GitHub API.
