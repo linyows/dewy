@@ -997,8 +997,8 @@ github.com/k1LoW/grpcstub v0.25.11 h1:rlSp/xYs2G/ebv76RjS+JZeoYqVWZofYaWkkj+AFFY
 github.com/k1LoW/grpcstub v0.25.11/go.mod h1:xqq2ygCR5KvcWpYna0P8J/OOkzVDmzTGpWmlfATeWzM=
 github.com/k1LoW/protoresolv v0.1.7 h1:jlKBERyIM20s/S9pk2DbOnqrSU5hpGSTA7qG5jV0Oqc=
 github.com/k1LoW/protoresolv v0.1.7/go.mod h1:QOhK9xINLO15vlemgzJJ0HKfhWx1U+dci6d1LuR7+nw=
-github.com/k1LoW/remote v0.3.2 h1:+M6x9JxIGrKPGs3r4Qm0d0gGm/250aILqgtfXschesQ=
-github.com/k1LoW/remote v0.3.2/go.mod h1:bd+1dC5LTaPKHI1d0J1BFfwBLQH0Hq3IJPqo3m6imbc=
+github.com/k1LoW/remote v0.3.3 h1:HkhBJbDNREI8eBAZDnXhUf1S5D2MFDFp+LJ8YKHefEc=
+github.com/k1LoW/remote v0.3.3/go.mod h1:ddD8WKzsxWHQdpAVMxDawRYZwwSw4fsdPe8Mdatwab0=
 github.com/karamaru-alpha/copyloopvar v1.2.1 h1:wmZaZYIjnJ0b5UoKDjUHrikcV0zuPyyxI4SVplLd2CI=
 github.com/karamaru-alpha/copyloopvar v1.2.1/go.mod h1:nFmMlFNlClC2BPvNaHMdkirmTJxVCY0lhxBtlfOypMM=
 github.com/kevinburke/ssh_config v1.2.0 h1:x584FjTGwHzMwvHx18PXxbBVzfnxogHaAReU4gf13a4=
