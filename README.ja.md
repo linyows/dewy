@@ -17,16 +17,16 @@
 
 <p align="center">
   <a href="https://github.com/linyows/dewy/actions/workflows/build.yml">
-    <img alt="GitHub Workflow Status" src="https://img.shields.io/github/actions/workflow/status/linyows/dewy/build.yml?branch=main&style=for-the-badge&labelColor=000000">
+    <img alt="GitHub Workflow Status" src="https://img.shields.io/github/actions/workflow/status/linyows/dewy/build.yml?branch=main&style=for-the-badge&labelColor=666666">
   </a>
   <a href="https://github.com/linyows/dewy/releases">
-    <img src="http://img.shields.io/github/release/linyows/dewy.svg?style=for-the-badge&labelColor=000000" alt="GitHub Release">
+    <img src="http://img.shields.io/github/release/linyows/dewy.svg?style=for-the-badge&labelColor=666666&color=DDDDDD" alt="GitHub Release">
   </a>
   <a href="http://godoc.org/github.com/linyows/dewy">
-    <img src="http://img.shields.io/badge/go-documentation-blue.svg?style=for-the-badge&labelColor=000000" alt="Go Documentation">
+    <img src="http://img.shields.io/badge/go-docs-blue.svg?style=for-the-badge&labelColor=666666&color=DDDDDD" alt="Go Documentation">
   </a>
   <a href="https://deepwiki.com/linyows/dewy">
-    <img src="http://img.shields.io/badge/deepwiki-documentation-purple.svg?style=for-the-badge&labelColor=000000" alt="Deepwiki Documentation">
+    <img src="http://img.shields.io/badge/deepwiki-docs-purple.svg?style=for-the-badge&labelColor=666666&color=DDDDDD" alt="Deepwiki Documentation">
   </a>
 </p>
 
