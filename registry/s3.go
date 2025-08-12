@@ -124,7 +124,7 @@ func (s *S3) Current(ctx context.Context) (*CurrentResponse, error) {
 			objectNames = append(objectNames, name)
 			objectMap[name] = &v
 		}
-		
+
 		// Use common pattern matching
 		matchedName, found := MatchArtifactByPlatform(objectNames)
 		if found {

@@ -72,7 +72,7 @@ func (c *GRPC) Current(ctx context.Context) (*CurrentResponse, error) {
 		t := cres.CreatedAt.AsTime()
 		createdAt = &t
 	}
-	
+
 	res := &CurrentResponse{
 		ID:          cres.Id,
 		Tag:         cres.Tag,

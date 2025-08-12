@@ -163,7 +163,7 @@ func (d *Dewy) Run() error {
 		if errors.As(err, &artifactNotFoundErr) {
 			gracePeriod := 30 * time.Minute
 			if artifactNotFoundErr.IsWithinGracePeriod(gracePeriod) {
-				log.Printf("[DEBUG] Artifact not found within 30 minute grace period, skipping error notification: %s", 
+				log.Printf("[DEBUG] Artifact not found within 30 minute grace period, skipping error notification: %s",
 					artifactNotFoundErr.Message)
 				return nil // Return nil to avoid error notification
 			}
@@ -339,7 +339,7 @@ func (d *Dewy) startServer() error {
 	defer d.Unlock()
 
 	log.Print("[INFO] Start server")
-	
+
 	// Try to create starter first (synchronous validation)
 	s, err := starter.NewStarter(d.config.Starter)
 	if err != nil {
@@ -416,4 +416,3 @@ func (d *Dewy) execHook(cmd string) error {
 	}
 	return nil
 }
-

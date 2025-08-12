@@ -65,7 +65,6 @@ type Config struct {
 	AfterDeployHook  string
 }
 
-
 // DefaultConfig returns default Config.
 func DefaultConfig() Config {
 	return Config{

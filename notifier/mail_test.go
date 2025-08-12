@@ -280,18 +280,18 @@ func TestMail_Send(t *testing.T) {
 func TestMail_formatMessage(t *testing.T) {
 	mail := &Mail{}
 	message := "Test notification"
-	
+
 	formatted := mail.formatMessage(message)
-	
+
 	if formatted == "" {
 		t.Error("formatMessage() returned empty string")
 	}
-	
+
 	// Check that the original message is included
 	if !strings.Contains(formatted, message) {
 		t.Errorf("formatMessage() doesn't contain original message: %v", formatted)
 	}
-	
+
 	// Check that system info is included
 	if !strings.Contains(formatted, "Host:") {
 		t.Error("formatMessage() doesn't contain Host information")
@@ -310,9 +310,9 @@ func TestMail_formatMessage(t *testing.T) {
 func TestMail_SetDialer(t *testing.T) {
 	mail := &Mail{}
 	mockDialer := &MockDialer{}
-	
+
 	mail.SetDialer(mockDialer)
-	
+
 	if mail.dialer != mockDialer {
 		t.Error("SetDialer() didn't set the dialer correctly")
 	}

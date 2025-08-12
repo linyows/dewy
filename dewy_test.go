@@ -119,12 +119,12 @@ func (n *mockNotify) Send(ctx context.Context, msg string) {
 func (n *mockNotify) SendError(ctx context.Context, err error) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	
+
 	// Prevent integer overflow by capping the error count
 	if n.errorCount < 1000 {
 		n.errorCount++
 	}
-	
+
 	// Send notification if error count is within the limit
 	if n.errorCount < 3 {
 		msg := fmt.Sprintf("Error occurred (count: %d): %v", n.errorCount, err)
@@ -378,15 +378,15 @@ func TestErrorCountOverflow(t *testing.T) {
 
 	// Manually set error count to near the limit
 	mockNotify.errorCount = 999
-	
+
 	testErr := fmt.Errorf("test error")
-	
+
 	// This should increment to 1000 (max limit)
 	dewy.notifier.SendError(ctx, testErr)
 	if mockNotify.errorCount != 1000 {
 		t.Errorf("Expected error count 1000, got %d", mockNotify.errorCount)
 	}
-	
+
 	// This should NOT increment beyond 1000
 	dewy.notifier.SendError(ctx, testErr)
 	if mockNotify.errorCount != 1000 {
@@ -396,12 +396,12 @@ func TestErrorCountOverflow(t *testing.T) {
 
 func TestDewy_Run_ArtifactNotFoundGracePeriod(t *testing.T) {
 	tests := []struct {
-		name                 string
-		releaseTime          *time.Time
-		artifactName         string
-		expectError          bool
+		name                  string
+		releaseTime           *time.Time
+		artifactName          string
+		expectError           bool
 		expectErrorSuppressed bool
-		description          string
+		description           string
 	}{
 		{
 			name:                  "artifact not found within 30min grace period - should suppress error",
@@ -440,7 +440,7 @@ func TestDewy_Run_ArtifactNotFoundGracePeriod(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			root := t.TempDir()
-			
+
 			mockReg := &mockRegistry{
 				currentFunc: func(ctx context.Context) (*registry.CurrentResponse, error) {
 					if tt.artifactName != "" {
@@ -502,7 +502,6 @@ func TestDewy_Run_ArtifactNotFoundGracePeriod(t *testing.T) {
 	}
 }
 
-
 func TestArtifactNotFoundError_TypeChecking(t *testing.T) {
 	// Test that our custom error can be detected using errors.As
 	releaseTime := time.Now()
@@ -544,5 +543,3 @@ func TestArtifactNotFoundError_TypeChecking(t *testing.T) {
 		t.Errorf("Should not be within grace period when release is 2 hours old")
 	}
 }
-
-

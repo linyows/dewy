@@ -26,16 +26,16 @@ type cli struct {
 	env              Env
 	command          string
 	args             []string
-	LogLevel         string `long:"log-level" short:"l" arg:"(debug|info|warn|error)" description:"Set log level for output"`
-	Interval         int    `long:"interval" arg:"seconds" short:"i" description:"Polling interval in seconds for checking registry updates (default: 10)"`
+	LogLevel         string   `long:"log-level" short:"l" arg:"(debug|info|warn|error)" description:"Set log level for output"`
+	Interval         int      `long:"interval" arg:"seconds" short:"i" description:"Polling interval in seconds for checking registry updates (default: 10)"`
 	Ports            []string `long:"port" short:"p" description:"TCP ports for server command to listen on (comma-separated, ranges, or multiple flags)"`
-	Registry         string `long:"registry" description:"Registry URL (e.g., ghr://owner/repo, s3://region/bucket/prefix)"`
-	Notify           string `long:"notify" description:"[DEPRECATED] Use --notifier instead"`
-	Notifier         string `long:"notifier" description:"Notifier URL for deployment notifications (e.g., slack://channel, mail://smtp:port/recipient)"`
-	BeforeDeployHook string `long:"before-deploy-hook" description:"Shell command to execute before deployment begins"`
-	AfterDeployHook  string `long:"after-deploy-hook" description:"Shell command to execute after successful deployment"`
-	Help             bool   `long:"help" short:"h" description:"show this help message and exit"`
-	Version          bool   `long:"version" short:"v" description:"prints the version number"`
+	Registry         string   `long:"registry" description:"Registry URL (e.g., ghr://owner/repo, s3://region/bucket/prefix)"`
+	Notify           string   `long:"notify" description:"[DEPRECATED] Use --notifier instead"`
+	Notifier         string   `long:"notifier" description:"Notifier URL for deployment notifications (e.g., slack://channel, mail://smtp:port/recipient)"`
+	BeforeDeployHook string   `long:"before-deploy-hook" description:"Shell command to execute before deployment begins"`
+	AfterDeployHook  string   `long:"after-deploy-hook" description:"Shell command to execute after successful deployment"`
+	Help             bool     `long:"help" short:"h" description:"show this help message and exit"`
+	Version          bool     `long:"version" short:"v" description:"prints the version number"`
 }
 
 // Env struct.

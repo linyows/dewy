@@ -124,7 +124,7 @@ func (g *GHR) Current(ctx context.Context) (*CurrentResponse, error) {
 		for _, v := range release.Assets {
 			assetNames = append(assetNames, v.GetName())
 		}
-		
+
 		// Use common pattern matching
 		matchedName, found := MatchArtifactByPlatform(assetNames)
 		if !found {
@@ -134,7 +134,7 @@ func (g *GHR) Current(ctx context.Context) (*CurrentResponse, error) {
 				Message:      fmt.Sprintf("artifact not found: %s", artifactName),
 			}
 		}
-		
+
 		artifactName = matchedName
 		log.Printf("[DEBUG] Fetched: %s", artifactName)
 	}

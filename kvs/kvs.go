@@ -29,7 +29,7 @@ func New(t string, c Config) (KVS, error) {
 	}
 }
 
-//nolint
+// nolint
 type item struct {
 	content    []byte
 	lock       sync.Mutex

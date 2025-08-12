@@ -24,7 +24,6 @@ type Registry interface {
 	Report(context.Context, *ReportRequest) error
 }
 
-
 // CurrentResponse is the response to get the current artifact.
 type CurrentResponse struct {
 	// ID uniquely identifies the response.
@@ -78,4 +77,3 @@ func addTrailingSlash(path string) string {
 func removeTrailingSlash(path string) string {
 	return strings.TrimSuffix(path, "/")
 }
-

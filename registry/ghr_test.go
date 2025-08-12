@@ -10,7 +10,7 @@ func TestArtifactNotFoundError_Error(t *testing.T) {
 		ArtifactName: "test-artifact",
 		Message:      "artifact not found: test-artifact",
 	}
-	
+
 	expected := "artifact not found: test-artifact"
 	if err.Error() != expected {
 		t.Errorf("Error() = %v, want %v", err.Error(), expected)
