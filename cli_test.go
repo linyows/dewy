@@ -250,7 +250,7 @@ func TestCLI_ConfigurationParsing(t *testing.T) {
 					}
 				case "--port":
 					if i+1 < len(tt.args) {
-						cli.Port = tt.args[i+1]
+						cli.Ports = []string{tt.args[i+1]}
 					}
 				case "--registry":
 					if i+1 < len(tt.args) {
@@ -292,8 +292,10 @@ func TestCLI_ConfigurationParsing(t *testing.T) {
 			if cli.LogLevel != tt.expectLogLevel {
 				t.Errorf("Expected log level %s, got %s", tt.expectLogLevel, cli.LogLevel)
 			}
-			if cli.Port != tt.expectPort {
-				t.Errorf("Expected port %s, got %s", tt.expectPort, cli.Port)
+			if len(cli.Ports) == 1 && cli.Ports[0] != tt.expectPort {
+				t.Errorf("Expected port %s, got %s", tt.expectPort, cli.Ports[0])
+			} else if len(cli.Ports) != 1 && tt.expectPort != "" {
+				t.Errorf("Expected single port %s, got %v", tt.expectPort, cli.Ports)
 			}
 			if conf.Command != tt.expectCommand {
 				t.Errorf("Expected command %v, got %v", tt.expectCommand, conf.Command)
