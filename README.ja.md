@@ -59,6 +59,20 @@ $ dewy server --registry ghr://linyows/myapp \
   --notifier slack://general?title=myapp -p 8000 -l info -- /opt/myapp/current/myapp
 ```
 
+### マルチポート対応
+
+Dewyはサーバーアプリケーションの複数ポート設定をサポートしています：
+
+```sh
+# 複数ポート (カンマ区切り)
+$ dewy server --registry ghr://linyows/myapp \
+  -p 8000,8001,8002 -- /opt/myapp/current/myapp
+
+# ポート範囲指定
+$ dewy server --registry ghr://linyows/myapp \
+  -p 8000-8005 -- /opt/myapp/current/myapp
+```
+
 レジストリと通知の指定はurlを模擬した構成になっています。urlのschemeにあたる箇所はレジストリや通知の名前です。レジストリの項目で詳しく解説します。
 
 コマンド
