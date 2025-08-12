@@ -55,6 +55,28 @@ $ dewy server --registry ghr://linyows/myapp \
   --notifier slack://general?title=myapp -p 8000 -l info -- /opt/myapp/current/myapp
 ```
 
+### Multi-Port Support
+
+Dewy supports multiple port configurations for server applications:
+
+```sh
+# Multiple ports (comma-separated)
+$ dewy server --registry ghr://linyows/myapp \
+  -p 8000,8001,8002 -- /opt/myapp/current/myapp
+
+# Port ranges
+$ dewy server --registry ghr://linyows/myapp \
+  -p 8000-8005 -- /opt/myapp/current/myapp
+
+# Multiple port flags
+$ dewy server --registry ghr://linyows/myapp \
+  -p 8000 -p 8001 -p 8002 -- /opt/myapp/current/myapp
+
+# Mixed formats
+$ dewy server --registry ghr://linyows/myapp \
+  -p 8000,8001 -p 8010-8012 -p 9000 -- /opt/myapp/current/myapp
+```
+
 The registry and notification configurations are URL-like structures, where the scheme component represents the registry or notification type. More details are provided in the Registry section.
 
 Commands
