@@ -9,7 +9,7 @@ import (
 
 // Banner displays the Dewy ASCII art logo
 func Banner(w io.Writer) {
-	green := color.RGB(0, 175, 0)
+	green := color.RGB(194, 73, 85)
 	grey := color.New(color.FgHiBlack)
 
 	green.Fprint(w, strings.TrimLeft(`
