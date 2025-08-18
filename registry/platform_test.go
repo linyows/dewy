@@ -283,6 +283,31 @@ func TestMatchArtifactByPlatform(t *testing.T) {
 			expectedName:  "first-linux-amd64.tar.gz",
 			expectedFound: true,
 		},
+		{
+			name: "checksum files should not be selected",
+			arch: "amd64",
+			os:   "linux",
+			artifactNames: []string{
+				"software-v1.0-linux-amd64.tar.gz",
+				"software-v1.0-linux-amd64.tar.gz.sha256",
+				"software-v1.0-linux-amd64.tar.gz.md5",
+				"software-v1.0-linux-amd64.tar.gz.sig",
+			},
+			expectedName:  "software-v1.0-linux-amd64.tar.gz",
+			expectedFound: true,
+		},
+		{
+			name: "only checksum files available - should not match",
+			arch: "amd64",
+			os:   "linux",
+			artifactNames: []string{
+				"software-v1.0-linux-amd64.tar.gz.sha256",
+				"software-v1.0-linux-amd64.tar.gz.md5",
+				"another-linux-amd64.zip.sig",
+			},
+			expectedName:  "",
+			expectedFound: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -299,6 +324,55 @@ func TestMatchArtifactByPlatform(t *testing.T) {
 
 			if gotName != tt.expectedName {
 				t.Errorf("expected name=%s, got name=%s", tt.expectedName, gotName)
+			}
+		})
+	}
+}
+
+func TestIsArchiveFile(t *testing.T) {
+	tests := []struct {
+		name     string
+		filename string
+		expected bool
+	}{
+		// Supported archive formats
+		{"tar.gz file", "app-linux-amd64.tar.gz", true},
+		{"tgz file", "app-linux-amd64.tgz", true},
+		{"tar.bz2 file", "app-linux-amd64.tar.bz2", true},
+		{"tbz2 file", "app-linux-amd64.tbz2", true},
+		{"tar.xz file", "app-linux-amd64.tar.xz", true},
+		{"txz file", "app-linux-amd64.txz", true},
+		{"tar file", "app-linux-amd64.tar", true},
+		{"zip file", "app-linux-amd64.zip", true},
+		
+		// Case insensitive
+		{"uppercase extension", "APP-LINUX-AMD64.TAR.GZ", true},
+		{"mixed case", "App-Linux-Amd64.Zip", true},
+		
+		// Checksum and signature files should be rejected
+		{"sha256 checksum", "app-linux-amd64.tar.gz.sha256", false},
+		{"md5 checksum", "app-linux-amd64.tar.gz.md5", false},
+		{"signature file", "app-linux-amd64.tar.gz.sig", false},
+		{"asc signature", "app-linux-amd64.tar.gz.asc", false},
+		
+		// Other unsupported files
+		{"plain text file", "README.txt", false},
+		{"executable", "app-linux-amd64", false},
+		{"deb package", "app-linux-amd64.deb", false},
+		{"rpm package", "app-linux-amd64.rpm", false},
+		
+		// Edge cases
+		{"empty filename", "", false},
+		{"just extension", ".tar.gz", true},
+		{"partial match", "app.tar", true},
+		{"contains tar but not archive", "app.gz.tar.txt", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isArchiveFile(tt.filename)
+			if got != tt.expected {
+				t.Errorf("isArchiveFile(%q) = %v, want %v", tt.filename, got, tt.expected)
 			}
 		})
 	}
