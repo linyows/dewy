@@ -5,7 +5,7 @@ go 1.24.4
 require (
 	cloud.google.com/go/storage v1.56.0
 	github.com/aws/aws-sdk-go-v2 v1.38.0
-	github.com/aws/aws-sdk-go-v2/config v1.29.17
+	github.com/aws/aws-sdk-go-v2/config v1.31.0
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.87.0
 	github.com/carlescere/scheduler v0.0.0-20170109141437-ee74d2f83d82
 	github.com/cli/safeexec v1.0.1
@@ -113,8 +113,8 @@ require (
 	github.com/atc0005/go-teams-notify/v2 v2.10.0 // indirect
 	github.com/aws/aws-sdk-go v1.53.0 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.0 // indirect
-	github.com/aws/aws-sdk-go-v2/credentials v1.17.70 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.32 // indirect
+	github.com/aws/aws-sdk-go-v2/credentials v1.18.4 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.3 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.16.9 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.3 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.3 // indirect
@@ -127,9 +127,9 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.3 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.3 // indirect
 	github.com/aws/aws-sdk-go-v2/service/kms v1.30.0 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sso v1.25.5 // indirect
-	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.30.3 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sts v1.34.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.28.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.33.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.37.0 // indirect
 	github.com/aws/smithy-go v1.22.5 // indirect
 	github.com/awslabs/amazon-ecr-credential-helper/ecr-login v0.0.0-20240514230400-03fa26f5508f // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
