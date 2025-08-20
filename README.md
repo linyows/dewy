@@ -43,6 +43,7 @@ Features
 - Graceful restarts
 - Configurable registries and artifact stores
 - Deployment status notifications
+- Structured logging with JSON format support
 - Audit logging
 
 Usage
@@ -54,6 +55,27 @@ The following Server command demonstrates how to use GitHub Releases as a regist
 $ dewy server --registry ghr://linyows/myapp \
   --notifier slack://general?title=myapp -p 8000 -l info -- /opt/myapp/current/myapp
 ```
+
+### Structured Logging
+
+Dewy supports structured logging with JSON format for better observability and integration with log aggregation systems:
+
+```sh
+# Enable JSON structured logging
+$ dewy server --registry ghr://linyows/myapp \
+  --log-format json -l info -- /opt/myapp/current/myapp
+
+# Default text format (human-readable)
+$ dewy server --registry ghr://linyows/myapp \
+  --log-format text -l info -- /opt/myapp/current/myapp
+```
+
+JSON format provides structured fields for easier parsing and filtering:
+- `time`: RFC3339 timestamp
+- `level`: Log level (INFO, WARN, ERROR, etc.)
+- `msg`: Log message
+- `component`: Source component (dewy, registry, artifact, etc.)
+- Additional contextual fields based on the operation
 
 ### Multi-Port Support
 
