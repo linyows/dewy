@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -24,9 +24,10 @@ type GHR struct {
 	artifact string
 	url      string
 	cl       *github.Client
+	logger   *slog.Logger
 }
 
-func NewGHR(ctx context.Context, url string) (*GHR, error) {
+func NewGHR(ctx context.Context, url string, logger *slog.Logger) (*GHR, error) {
 	// ghr://owner/repo/tag/v1.0.0/artifact.zip
 	splitted := strings.Split(strings.TrimPrefix(url, fmt.Sprintf("%s://", ghrScheme)), "/")
 	if len(splitted) != 5 {
@@ -45,6 +46,7 @@ func NewGHR(ctx context.Context, url string) (*GHR, error) {
 		artifact: splitted[4],
 		url:      url,
 		cl:       cl,
+		logger:   logger,
 	}, nil
 }
 
@@ -52,7 +54,7 @@ func NewGHR(ctx context.Context, url string) (*GHR, error) {
 func (r *GHR) Download(ctx context.Context, w io.Writer) error {
 	// Wait 1 second on first download to allow CDN authentication to stabilize
 	firstDownloadOnce.Do(func() {
-		log.Printf("[INFO] First download attempt, waiting 1 second for CDN auth stabilization...")
+		r.logger.Info("First download attempt, waiting for CDN auth stabilization", slog.Duration("wait_time", time.Second))
 		time.Sleep(1 * time.Second)
 	})
 
@@ -93,7 +95,7 @@ L:
 		return fmt.Errorf("failed github.Repositories.DownloadReleaseAsset: %w", err)
 	}
 	if redirectURL != "" {
-		log.Printf("[INFO] Following redirect to: %s", redirectURL)
+		r.logger.Info("Following redirect", slog.String("url", redirectURL))
 		res, err := r.cl.Client().Get(redirectURL)
 		if err != nil {
 			return err
@@ -106,7 +108,7 @@ L:
 		return fmt.Errorf("failed io.Copy: %w", err)
 	}
 
-	log.Printf("[INFO] Artifact downloaded")
+	r.logger.Info("Artifact downloaded")
 
 	return nil
 }

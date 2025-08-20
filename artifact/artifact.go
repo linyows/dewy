@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"strings"
 )
 
@@ -19,18 +20,18 @@ type Artifact interface {
 	Download(ctx context.Context, w io.Writer) error
 }
 
-func New(ctx context.Context, url string) (Artifact, error) {
+func New(ctx context.Context, url string, logger *slog.Logger) (Artifact, error) {
 	splitted := strings.SplitN(url, "://", 2)
 
 	switch splitted[0] {
 	case ghrScheme:
-		return NewGHR(ctx, url)
+		return NewGHR(ctx, url, logger)
 
 	case s3Scheme:
-		return NewS3(ctx, url)
+		return NewS3(ctx, url, logger)
 
 	case gcsScheme:
-		return NewGCS(ctx, url)
+		return NewGCS(ctx, url, logger)
 	}
 
 	return nil, fmt.Errorf("unsupported scheme: %s", url)

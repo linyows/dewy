@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/url"
 	"os"
 	"strings"
@@ -24,10 +24,11 @@ type S3 struct {
 	Endpoint string `schema:"endpoint"`
 	url      string
 	cl       S3Client
+	logger   *slog.Logger
 }
 
 // s3://<region>/<bucket>/<key>?endpoint=bbb"
-func NewS3(ctx context.Context, strUrl string) (*S3, error) {
+func NewS3(ctx context.Context, strUrl string, logger *slog.Logger) (*S3, error) {
 	u, err := url.Parse(strUrl)
 	if err != nil {
 		return nil, err
@@ -44,6 +45,7 @@ func NewS3(ctx context.Context, strUrl string) (*S3, error) {
 		Bucket: splitted[0],
 		Key:    splitted[1],
 		url:    strUrl,
+		logger: logger,
 	}
 	if err = decoder.Decode(s, u.Query()); err != nil {
 		return nil, err
@@ -80,7 +82,7 @@ func (s *S3) Download(ctx context.Context, w io.Writer) error {
 	}
 	defer res.Body.Close()
 
-	log.Printf("[INFO] Downloaded from %s", s.url)
+	s.logger.Info("Downloaded from S3", slog.String("url", s.url))
 	_, err = io.Copy(w, res.Body)
 	if err != nil {
 		return fmt.Errorf("failed to write artifact to writer: %w", err)
