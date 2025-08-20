@@ -58,8 +58,8 @@ func TestNew(t *testing.T) {
 			} else {
 				opts := []cmp.Option{
 					cmp.AllowUnexported(GHR{}, S3{}),
-					cmpopts.IgnoreFields(GHR{}, "cl"),
-					cmpopts.IgnoreFields(S3{}, "cl"),
+					cmpopts.IgnoreFields(GHR{}, "cl", "logger"),
+					cmpopts.IgnoreFields(S3{}, "cl", "logger"),
 				}
 				if diff := cmp.Diff(got, tt.want, opts...); diff != "" {
 					t.Error(diff)

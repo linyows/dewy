@@ -3,6 +3,8 @@ package registry
 import (
 	"context"
 	"fmt"
+	"io"
+	"log/slog"
 	"os"
 	"testing"
 
@@ -10,6 +12,11 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/k1LoW/grpcstub"
 )
+
+// testLogger creates a logger that discards output for testing
+func testLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
+}
 
 
 func TestNew(t *testing.T) {
@@ -109,8 +116,8 @@ func TestNew(t *testing.T) {
 			}
 			opts := []cmp.Option{
 				cmp.AllowUnexported(GHR{}, GRPC{}, S3{}),
-				cmpopts.IgnoreFields(GHR{}, "cl"),
-				cmpopts.IgnoreFields(S3{}, "cl"),
+				cmpopts.IgnoreFields(GHR{}, "cl", "logger"),
+				cmpopts.IgnoreFields(S3{}, "cl", "logger"),
 				cmpopts.IgnoreFields(GRPC{}, "cl"),
 			}
 			if diff := cmp.Diff(got, tt.want, opts...); diff != "" {

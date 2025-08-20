@@ -3,19 +3,12 @@ package registry
 import (
 	"context"
 	"fmt"
-	"io"
-	"log/slog"
 	"testing"
 
 	"cloud.google.com/go/storage"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
-
-// testLogger creates a logger that discards output for testing
-func testLogger() *slog.Logger {
-	return slog.New(slog.NewTextHandler(io.Discard, nil))
-}
 
 func TestNewGCS(t *testing.T) {
 	tests := []struct {
