@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/md5" //nolint:gosec
 	"fmt"
-	"log"
+	"log/slog"
 	"net/url"
 	"os"
 	"strings"
@@ -42,15 +42,16 @@ type Slack struct {
 	token    string
 	github   *Github
 	sender   SlackSender // for testing
+	logger   *slog.Logger
 }
 
-func NewSlack(schema string) (*Slack, error) {
+func NewSlack(schema string, logger *slog.Logger) (*Slack, error) {
 	u, err := url.Parse(schema)
 	if err != nil {
 		return nil, err
 	}
 
-	s := &Slack{Channel: u.Path}
+	s := &Slack{Channel: u.Path, logger: logger}
 	if err := decoder.Decode(s, u.Query()); err != nil {
 		return nil, err
 	}
@@ -87,7 +88,7 @@ func (s *Slack) Send(ctx context.Context, message string) {
 	}
 
 	if err != nil {
-		log.Printf("[ERROR] Slack postMessage failure: %#v", err)
+		s.logger.Error("Slack postMessage failure", slog.String("error", err.Error()))
 	}
 }
 

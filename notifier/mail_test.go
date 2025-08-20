@@ -3,12 +3,19 @@ package notifier
 import (
 	"context"
 	"errors"
+	"io"
+	"log/slog"
 	"os"
 	"strings"
 	"testing"
 
 	"gopkg.in/mail.v2"
 )
+
+// testLogger creates a logger that discards output for testing
+func testLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
+}
 
 // MockDialer implements MailDialer interface for testing
 type MockDialer struct {
@@ -164,7 +171,7 @@ func TestNewMail(t *testing.T) {
 				}
 			}()
 
-			got, err := NewMail(tt.schema)
+			got, err := NewMail(tt.schema, testLogger())
 			if (err != nil) != tt.wantErr {
 				t.Errorf("NewMail() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -220,6 +227,7 @@ func TestMail_Send(t *testing.T) {
 				To:       "to@example.com",
 				Subject:  "Test Subject",
 				TLS:      true,
+				logger:   testLogger(),
 			},
 			message: "Test message",
 			mockFunc: func(m ...*mail.Message) error {
@@ -238,6 +246,7 @@ func TestMail_Send(t *testing.T) {
 				To:       "to@example.com",
 				Subject:  "Test Subject",
 				TLS:      false,
+				logger:   testLogger(),
 			},
 			message: "Test message",
 			mockFunc: func(m ...*mail.Message) error {

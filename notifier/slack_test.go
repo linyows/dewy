@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-go/slack/objects"
 )
 
+
 // Mock implementations for testing
 
 type MockSlackSender struct {
@@ -126,7 +127,7 @@ func TestNewSlack(t *testing.T) {
 				}
 			}()
 
-			got, err := NewSlack(tt.schema)
+			got, err := NewSlack(tt.schema, testLogger())
 			if (err != nil) != tt.wantErr {
 				t.Errorf("NewSlack() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -165,6 +166,7 @@ func TestSlack_Send(t *testing.T) {
 				Channel: "/general",
 				Title:   "Test",
 				token:   "xoxb-test-token",
+				logger:  testLogger(),
 			},
 			message: "Test message",
 			mockFunc: func(ctx context.Context, channel, username, iconURL, text string, attachment *objects.Attachment) error {
@@ -178,6 +180,7 @@ func TestSlack_Send(t *testing.T) {
 				Channel: "/general",
 				Title:   "Test",
 				token:   "xoxb-test-token",
+				logger:  testLogger(),
 			},
 			message: "Test message",
 			mockFunc: func(ctx context.Context, channel, username, iconURL, text string, attachment *objects.Attachment) error {
