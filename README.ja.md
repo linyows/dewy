@@ -47,6 +47,7 @@ Dewyは、いわゆるプル型のデプロイを実現します。Dewyは、レ
 - グレースフルリスタート
 - 選択可能なレジストリとアーティファクトストア
 - デプロイ状況の通知
+- JSON形式対応の構造化ログ
 - オーディットログ
 
 使いかた
@@ -57,20 +58,6 @@ Dewyは、いわゆるプル型のデプロイを実現します。Dewyは、レ
 ```sh
 $ dewy server --registry ghr://linyows/myapp \
   --notifier slack://general?title=myapp -p 8000 -l info -- /opt/myapp/current/myapp
-```
-
-### マルチポート対応
-
-Dewyはサーバーアプリケーションの複数ポート設定をサポートしています：
-
-```sh
-# 複数ポート (カンマ区切り)
-$ dewy server --registry ghr://linyows/myapp \
-  -p 8000,8001,8002 -- /opt/myapp/current/myapp
-
-# ポート範囲指定
-$ dewy server --registry ghr://linyows/myapp \
-  -p 8000-8005 -- /opt/myapp/current/myapp
 ```
 
 レジストリと通知の指定はurlを模擬した構成になっています。urlのschemeにあたる箇所はレジストリや通知の名前です。レジストリの項目で詳しく解説します。
@@ -449,6 +436,46 @@ $ dewy assets --registry ghr://myapp/frontend \
 > - **通知**: 内蔵通知以外のカスタムアラート
 > - **ヘルスチェック**: デプロイ成功の検証
 > - **設定更新**: 動的な設定変更
+
+詳細設定
+--
+
+Dewyは、拡張機能とモダンなインフラとのより良い統合のための詳細設定オプションを提供しています。
+
+### 構造化ログ
+
+Dewyは、より良い可観測性とログ集約システムとの統合のために、JSON形式の構造化ログをサポートしています：
+
+```sh
+# JSON構造化ログを有効にする
+$ dewy server --registry ghr://linyows/myapp \
+  --log-format json -l info -- /opt/myapp/current/myapp
+
+# デフォルトのテキスト形式（人間が読みやすい）
+$ dewy server --registry ghr://linyows/myapp \
+  --log-format text -l info -- /opt/myapp/current/myapp
+```
+
+JSON形式では、解析とフィルタリングを簡単にする構造化されたフィールドが提供されます：
+- `time`: RFC3339タイムスタンプ
+- `level`: ログレベル（INFO、WARN、ERROR など）
+- `msg`: ログメッセージ
+- `component`: ソースコンポーネント（dewy、registry、artifact など）
+- 操作に基づく追加のコンテキストフィールド
+
+### マルチポート対応
+
+Dewyはサーバーアプリケーションの複数ポート設定をサポートしています：
+
+```sh
+# 複数ポート (カンマ区切り)
+$ dewy server --registry ghr://linyows/myapp \
+  -p 8000,8001,8002 -- /opt/myapp/current/myapp
+
+# ポート範囲指定
+$ dewy server --registry ghr://linyows/myapp \
+  -p 8000-8005 -- /opt/myapp/current/myapp
+```
 
 シグナルハンドリング
 --

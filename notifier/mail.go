@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/url"
 	"os"
 	"strconv"
@@ -29,10 +29,11 @@ type Mail struct {
 	Subject  string     `schema:"subject"`
 	TLS      bool       `schema:"tls"`
 	dialer   MailDialer // for testing
+	logger   *slog.Logger
 }
 
 // NewMail creates a new Mail notifier.
-func NewMail(schema string) (*Mail, error) {
+func NewMail(schema string, logger *slog.Logger) (*Mail, error) {
 	// Add scheme to make it a valid URL for parsing
 	u, err := url.Parse("smtp://" + schema)
 	if err != nil {
@@ -97,6 +98,7 @@ func NewMail(schema string) (*Mail, error) {
 		return nil, fmt.Errorf("mail to address is required")
 	}
 
+	m.logger = logger
 	return m, nil
 }
 
@@ -135,7 +137,7 @@ func (m *Mail) Send(ctx context.Context, message string) {
 	}
 
 	if err := dialer.DialAndSend(msg); err != nil {
-		log.Printf("[ERROR] Mail send failure: %#v", err)
+		m.logger.Error("Mail send failure", slog.String("error", err.Error()))
 	}
 }
 

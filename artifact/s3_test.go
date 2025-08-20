@@ -58,7 +58,7 @@ func TestNewS3(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			s3, err := NewS3(context.Background(), tt.url)
+			s3, err := NewS3(context.Background(), tt.url, testLogger())
 			if tt.expectErr {
 				if err == nil || err.Error() != tt.err.Error() {
 					t.Errorf("expected error %s, got %s", tt.err, err)
@@ -66,7 +66,7 @@ func TestNewS3(t *testing.T) {
 			} else {
 				opts := []cmp.Option{
 					cmp.AllowUnexported(S3{}),
-					cmpopts.IgnoreFields(S3{}, "cl"),
+					cmpopts.IgnoreFields(S3{}, "cl", "logger"),
 				}
 				if diff := cmp.Diff(s3, tt.expected, opts...); diff != "" {
 					t.Error(diff)
@@ -137,6 +137,7 @@ func TestS3Download(t *testing.T) {
 				Bucket: "test-bucket",
 				Key:    "test-key/v1.2.3/test.tar",
 				url:    "s3://ap-northeast-1/test-bucket/test-key/v1.2.3/test.tar",
+				logger: testLogger(),
 			}
 
 			var buf bytes.Buffer

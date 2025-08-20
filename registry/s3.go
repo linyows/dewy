@@ -3,7 +3,7 @@ package registry
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/url"
 	"os"
 	"strings"
@@ -29,10 +29,11 @@ type S3 struct {
 	PreRelease bool   `schema:"pre-release"`
 	cl         S3Client
 	pager      ListObjectsV2Pager
+	logger     *slog.Logger
 }
 
 // NewS3 returns S3.
-func NewS3(ctx context.Context, u string) (*S3, error) {
+func NewS3(ctx context.Context, u string, logger *slog.Logger) (*S3, error) {
 	ur, err := url.Parse(u)
 	if err != nil {
 		return nil, err
@@ -84,6 +85,7 @@ func NewS3(ctx context.Context, u string) (*S3, error) {
 		s.cl = s3.NewFromConfig(cfg)
 	}
 
+	s.logger = logger
 	return s, nil
 }
 
@@ -110,7 +112,7 @@ func (s *S3) Current(ctx context.Context) (*CurrentResponse, error) {
 			if name == artifactName {
 				found = true
 				createdAt = v.LastModified
-				log.Printf("[DEBUG] Fetched: %+v", v)
+				s.logger.Debug("Fetched S3 version", slog.Any("version", v))
 				break
 			}
 		}
@@ -131,7 +133,7 @@ func (s *S3) Current(ctx context.Context) (*CurrentResponse, error) {
 			artifactName = matchedName
 			if obj, exists := objectMap[matchedName]; exists {
 				createdAt = obj.LastModified
-				log.Printf("[DEBUG] Fetched: %+v", obj)
+				s.logger.Debug("Fetched S3 object", slog.Any("object", obj))
 			}
 		}
 	}

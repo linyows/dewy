@@ -16,8 +16,12 @@ protobuf:
 	cd registry && go tool buf generate
 
 test:
-	go test $(TEST) $(TESTARGS)
-	go test -race $(TEST) $(TESTARGS) -coverprofile=coverage.out -covermode=atomic
+	@go test -race -v ./... -coverprofile=coverage.out -covermode=atomic | \
+		grep -v '^=== RUN' | \
+		sed -E 's/--- PASS:/\x1B[38;5;34m✔︎\x1B[0m/g' | \
+		sed -E 's/--- FAIL:/\x1B[31m✘\x1B[0m/g' | \
+		sed -E 's/^PASS$$/\x1B[38;5;34m✔︎ Pass\x1B[0m/' | \
+		sed -E 's/^FAIL$$/\x1B[31m✘ Fail\x1B[0m/'
 
 integration:
 	go test -integration $(TEST) $(TESTARGS)

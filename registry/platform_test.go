@@ -344,23 +344,23 @@ func TestIsArchiveFile(t *testing.T) {
 		{"txz file", "app-linux-amd64.txz", true},
 		{"tar file", "app-linux-amd64.tar", true},
 		{"zip file", "app-linux-amd64.zip", true},
-		
+
 		// Case insensitive
 		{"uppercase extension", "APP-LINUX-AMD64.TAR.GZ", true},
 		{"mixed case", "App-Linux-Amd64.Zip", true},
-		
+
 		// Checksum and signature files should be rejected
 		{"sha256 checksum", "app-linux-amd64.tar.gz.sha256", false},
 		{"md5 checksum", "app-linux-amd64.tar.gz.md5", false},
 		{"signature file", "app-linux-amd64.tar.gz.sig", false},
 		{"asc signature", "app-linux-amd64.tar.gz.asc", false},
-		
+
 		// Other unsupported files
 		{"plain text file", "README.txt", false},
 		{"executable", "app-linux-amd64", false},
 		{"deb package", "app-linux-amd64.deb", false},
 		{"rpm package", "app-linux-amd64.rpm", false},
-		
+
 		// Edge cases
 		{"empty filename", "", false},
 		{"just extension", ".tar.gz", true},

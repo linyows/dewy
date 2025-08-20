@@ -51,7 +51,7 @@ func TestNewGHR(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			s3, err := NewGHR(context.Background(), tt.url)
+			s3, err := NewGHR(context.Background(), tt.url, testLogger())
 			if tt.expectErr {
 				if err == nil || err.Error() != tt.err.Error() {
 					t.Errorf("expected error %s, got %s", tt.err, err)
@@ -59,7 +59,7 @@ func TestNewGHR(t *testing.T) {
 			} else {
 				opts := []cmp.Option{
 					cmp.AllowUnexported(GHR{}),
-					cmpopts.IgnoreFields(GHR{}, "cl"),
+					cmpopts.IgnoreFields(GHR{}, "cl", "logger"),
 				}
 				if diff := cmp.Diff(s3, tt.expected, opts...); diff != "" {
 					t.Error(diff)
@@ -134,6 +134,7 @@ func TestGHRDownload(t *testing.T) {
 				tag:      "v1.0.0",
 				artifact: "artifact.zip",
 				cl:       cl,
+				logger:   testLogger(),
 			}
 
 			var buf bytes.Buffer

@@ -5,7 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/url"
 	"os"
 	"os/exec"
@@ -19,11 +19,11 @@ import (
 
 	"github.com/carlescere/scheduler"
 	"github.com/cli/safeexec"
-	starter "github.com/lestrrat-go/server-starter"
 	"github.com/linyows/dewy/artifact"
 	"github.com/linyows/dewy/kvs"
 	"github.com/linyows/dewy/notifier"
 	"github.com/linyows/dewy/registry"
+	starter "github.com/linyows/server-starter"
 )
 
 const (
@@ -50,13 +50,15 @@ type Dewy struct {
 	root            string
 	job             *scheduler.Job
 	notifier        notifier.Notifier
+	logger          *slog.Logger
 	sync.RWMutex
 }
 
 // New returns Dewy.
-func New(c Config) (*Dewy, error) {
+func New(c Config, logger *slog.Logger) (*Dewy, error) {
 	kv := &kvs.File{}
 	kv.Default()
+	kv.SetLogger(logger)
 
 	wd, err := os.Getwd()
 	if err != nil {
@@ -75,6 +77,7 @@ func New(c Config) (*Dewy, error) {
 		cache:           kv,
 		isServerRunning: false,
 		root:            wd,
+		logger:          logger,
 	}, nil
 }
 
@@ -85,14 +88,14 @@ func (d *Dewy) Start(i int) {
 
 	var err error
 
-	d.registry, err = registry.New(ctx, d.config.Registry)
+	d.registry, err = registry.New(ctx, d.config.Registry, d.logger)
 	if err != nil {
-		log.Printf("[ERROR] Registry failure: %#v", err)
+		d.logger.Error("Registry failure", slog.String("error", err.Error()))
 	}
 
-	d.notifier, err = notifier.New(ctx, d.config.Notifier)
+	d.notifier, err = notifier.New(ctx, d.config.Notifier, d.logger)
 	if err != nil {
-		log.Printf("[ERROR] Notifier failure: %#v", err)
+		d.logger.Error("Notifier failure", slog.String("error", err.Error()))
 	}
 
 	d.notifier.Send(ctx, "Automatic shipping started by *Dewy*")
@@ -100,14 +103,14 @@ func (d *Dewy) Start(i int) {
 	d.job, err = scheduler.Every(i).Seconds().Run(func() {
 		e := d.Run()
 		if e != nil {
-			log.Printf("[ERROR] Dewy run failure: %#v", e)
+			d.logger.Error("Dewy run failure", slog.String("error", e.Error()))
 			d.notifier.SendError(context.Background(), e)
 		} else {
 			d.notifier.ResetErrorCount()
 		}
 	})
 	if err != nil {
-		log.Printf("[ERROR] Scheduler failure: %#v", err)
+		d.logger.Error("Scheduler failure", slog.String("error", err.Error()))
 	}
 
 	d.waitSigs(ctx)
@@ -118,17 +121,19 @@ func (d *Dewy) waitSigs(ctx context.Context) {
 	signal.Notify(sigCh, syscall.SIGHUP, syscall.SIGUSR1, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
 	for sig := range sigCh {
-		log.Printf("[DEBUG] PID %d received signal as %s", os.Getpid(), sig)
+		d.logger.Debug("PID received signal",
+			slog.Int("pid", os.Getpid()),
+			slog.String("signal", sig.String()))
 		switch sig {
 		case syscall.SIGHUP:
 			continue
 
 		case syscall.SIGUSR1:
 			if err := d.restartServer(); err != nil {
-				log.Printf("[ERROR] Restart failure: %#v", err)
+				d.logger.Error("Restart failure", slog.String("error", err.Error()))
 			} else {
 				msg := fmt.Sprintf("Restarted receiving by \"%s\" signal", "SIGUSR1")
-				log.Printf("[INFO] %s", msg)
+				d.logger.Info("Restart notification", slog.String("message", msg))
 				d.notifier.Send(ctx, msg)
 			}
 			continue
@@ -136,7 +141,7 @@ func (d *Dewy) waitSigs(ctx context.Context) {
 		case syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:
 			d.job.Quit <- true
 			msg := fmt.Sprintf("Stop receiving by \"%s\" signal", sig)
-			log.Printf("[INFO] %s", msg)
+			d.logger.Info("Shutdown notification", slog.String("message", msg))
 			d.notifier.Send(ctx, msg)
 			return
 		}
@@ -163,12 +168,13 @@ func (d *Dewy) Run() error {
 		if errors.As(err, &artifactNotFoundErr) {
 			gracePeriod := 30 * time.Minute
 			if artifactNotFoundErr.IsWithinGracePeriod(gracePeriod) {
-				log.Printf("[DEBUG] Artifact not found within 30 minute grace period, skipping error notification: %s",
-					artifactNotFoundErr.Message)
+				d.logger.Debug("Artifact not found within grace period",
+					slog.String("message", artifactNotFoundErr.Message),
+					slog.Duration("grace_period", 30*time.Minute))
 				return nil // Return nil to avoid error notification
 			}
 		}
-		log.Printf("[ERROR] Current failure: %#v", err)
+		d.logger.Error("Current failure", slog.String("error", err.Error()))
 		return err
 	}
 
@@ -184,7 +190,7 @@ func (d *Dewy) Run() error {
 	for _, key := range list {
 		// same current version and already cached
 		if string(currentkeyValue) == cachekeyName && key == cachekeyName {
-			log.Print("[DEBUG] Deploy skipped")
+			d.logger.Debug("Deploy skipped")
 			if d.isServerRunning {
 				return nil
 			}
@@ -207,7 +213,7 @@ func (d *Dewy) Run() error {
 		buf := new(bytes.Buffer)
 
 		if d.artifact == nil {
-			d.artifact, err = artifact.New(ctx, res.ArtifactURL)
+			d.artifact, err = artifact.New(ctx, res.ArtifactURL, d.logger)
 			if err != nil {
 				return fmt.Errorf("failed artifact.New: %w", err)
 			}
@@ -224,7 +230,7 @@ func (d *Dewy) Run() error {
 		if err := d.cache.Write(currentkeyName, []byte(cachekeyName)); err != nil {
 			return fmt.Errorf("failed cache.Write currentkeyName: %w", err)
 		}
-		log.Printf("[INFO] Cached as %s", cachekeyName)
+		d.logger.Info("Cached artifact", slog.String("cache_key", cachekeyName))
 	}
 
 	d.notifier.Send(ctx, fmt.Sprintf("Ready for `%s`", res.Tag))
@@ -246,26 +252,26 @@ func (d *Dewy) Run() error {
 			}
 		}
 		if err != nil {
-			log.Printf("[ERROR] Server failure: %#v", err)
+			d.logger.Error("Server failure", slog.String("error", err.Error()))
 			return err
 		}
 	}
 
 	if !d.disableReport {
-		log.Print("[DEBUG] Report shipping")
+		d.logger.Debug("Report shipping")
 		err := d.registry.Report(ctx, &registry.ReportRequest{
 			ID:  res.ID,
 			Tag: res.Tag,
 		})
 		if err != nil {
-			log.Printf("[ERROR] Report shipping failure: %#v", err)
+			d.logger.Error("Report shipping failure", slog.String("error", err.Error()))
 		}
 	}
 
-	log.Printf("[INFO] Keep releases as %d", keepReleases)
+	d.logger.Info("Keep releases", slog.Int("count", keepReleases))
 	err = d.keepReleases()
 	if err != nil {
-		log.Printf("[ERROR] Keep releases failure: %#v", err)
+		d.logger.Error("Keep releases failure", slog.String("error", err.Error()))
 	}
 
 	return nil
@@ -273,7 +279,7 @@ func (d *Dewy) Run() error {
 
 func (d *Dewy) deploy(key string) (err error) {
 	if err := d.execHook(d.config.BeforeDeployHook); err != nil {
-		log.Printf("[ERROR] Before deploy hook failure: %#v", err)
+		d.logger.Error("Before deploy hook failure", slog.String("error", err.Error()))
 		return err
 	}
 	defer func() {
@@ -282,23 +288,25 @@ func (d *Dewy) deploy(key string) (err error) {
 		}
 		// When deploy is success, run after deploy hook
 		if err := d.execHook(d.config.AfterDeployHook); err != nil {
-			log.Printf("[ERROR] After deploy hook failure: %#v", err)
+			d.logger.Error("After deploy hook failure", slog.String("error", err.Error()))
 		}
 	}()
 	p := filepath.Join(d.cache.GetDir(), key)
 	linkFrom, err := d.preserve(p)
 	if err != nil {
-		log.Printf("[ERROR] Preserve failure: %#v", err)
+		d.logger.Error("Preserve failure", slog.String("error", err.Error()))
 		return err
 	}
-	log.Printf("[INFO] Extract archive to %s", linkFrom)
+	d.logger.Info("Extract archive", slog.String("path", linkFrom))
 
 	linkTo := filepath.Join(d.root, symlinkDir)
 	if _, err := os.Lstat(linkTo); err == nil {
 		os.Remove(linkTo)
 	}
 
-	log.Printf("[INFO] Create symlink to %s from %s", linkTo, linkFrom)
+	d.logger.Info("Create symlink",
+		slog.String("from", linkFrom),
+		slog.String("to", linkTo))
 	if err := os.Symlink(linkFrom, linkTo); err != nil {
 		return err
 	}
@@ -329,7 +337,7 @@ func (d *Dewy) restartServer() error {
 	if err != nil {
 		return err
 	}
-	log.Printf("[INFO] Send SIGHUP to PID:%d for server restart", pid)
+	d.logger.Info("Send SIGHUP for server restart", slog.Int("pid", pid))
 
 	return nil
 }
@@ -338,12 +346,12 @@ func (d *Dewy) startServer() error {
 	d.Lock()
 	defer d.Unlock()
 
-	log.Print("[INFO] Start server")
+	d.logger.Info("Start server")
 
 	// Try to create starter first (synchronous validation)
 	s, err := starter.NewStarter(d.config.Starter)
 	if err != nil {
-		log.Printf("[ERROR] Starter failure: %#v", err)
+		d.logger.Error("Starter failure", slog.String("error", err.Error()))
 		return err
 	}
 
@@ -351,7 +359,7 @@ func (d *Dewy) startServer() error {
 	go func() {
 		err := s.Run()
 		if err != nil {
-			log.Printf("[ERROR] Server run failure: %#v", err)
+			d.logger.Error("Server run failure", slog.String("error", err.Error()))
 			d.Lock()
 			d.isServerRunning = false
 			d.Unlock()
@@ -409,7 +417,10 @@ func (d *Dewy) execHook(cmd string) error {
 	c.Stdout = stdout
 	c.Stderr = stderr
 	defer func() {
-		log.Printf("[INFO] execute hook: command=%q stdout=%q stderr=%q", cmd, stdout.String(), stderr.String())
+		d.logger.Info("Execute hook",
+			slog.String("command", cmd),
+			slog.String("stdout", stdout.String()),
+			slog.String("stderr", stderr.String()))
 	}()
 	if err := c.Run(); err != nil {
 		return err

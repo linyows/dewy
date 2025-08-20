@@ -1,7 +1,7 @@
 package dewy
 
 import (
-	starter "github.com/lestrrat-go/server-starter"
+	starter "github.com/linyows/server-starter"
 )
 
 // Command for CLI.

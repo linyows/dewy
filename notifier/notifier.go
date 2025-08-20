@@ -3,7 +3,7 @@ package notifier
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/user"
 	"strings"
@@ -32,6 +32,7 @@ type ErrorLimitingSender struct {
 	underlying Sender
 	errorCount int
 	mu         sync.RWMutex
+	logger     *slog.Logger
 }
 
 // Send sends a message only if error count is 0
@@ -64,7 +65,7 @@ func (e *ErrorLimitingSender) SendError(ctx context.Context, err error) {
 	}
 
 	// Log all errors regardless of notification count
-	log.Printf("[ERROR] Error count: %d, %v", e.errorCount, err)
+	e.logger.Error("Error count", slog.Int("count", e.errorCount), slog.String("error", err.Error()))
 }
 
 // ResetErrorCount resets error count when operation succeeds
@@ -73,13 +74,13 @@ func (e *ErrorLimitingSender) ResetErrorCount() {
 	defer e.mu.Unlock()
 
 	if e.errorCount > 0 {
-		log.Printf("[INFO] Error count reset from %d to 0", e.errorCount)
+		e.logger.Info("Error count reset", slog.Int("from", e.errorCount), slog.Int("to", 0))
 		e.errorCount = 0
 	}
 }
 
 // New returns Notifier.
-func New(ctx context.Context, url string) (Notifier, error) {
+func New(ctx context.Context, url string, logger *slog.Logger) (Notifier, error) {
 	splitted := strings.SplitN(url, "://", 2)
 
 	var underlying Sender
@@ -87,17 +88,17 @@ func New(ctx context.Context, url string) (Notifier, error) {
 	case "":
 		underlying = &Null{}
 	case "slack":
-		sl, err := NewSlack(splitted[1])
+		sl, err := NewSlack(splitted[1], logger)
 		if err != nil {
-			log.Printf("[ERROR] %s", err)
+			logger.Error("Notification error", slog.String("error", err.Error()))
 			underlying = &Null{}
 		} else {
 			underlying = sl
 		}
 	case "mail", "smtp":
-		ml, err := NewMail(splitted[1])
+		ml, err := NewMail(splitted[1], logger)
 		if err != nil {
-			log.Printf("[ERROR] %s", err)
+			logger.Error("Notification error", slog.String("error", err.Error()))
 			underlying = &Null{}
 		} else {
 			underlying = ml
@@ -109,6 +110,7 @@ func New(ctx context.Context, url string) (Notifier, error) {
 	return &ErrorLimitingSender{
 		underlying: underlying,
 		errorCount: 0,
+		logger:     logger,
 	}, nil
 }
 

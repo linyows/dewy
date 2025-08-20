@@ -43,6 +43,7 @@ Features
 - Graceful restarts
 - Configurable registries and artifact stores
 - Deployment status notifications
+- Structured logging with JSON format support
 - Audit logging
 
 Usage
@@ -53,20 +54,6 @@ The following Server command demonstrates how to use GitHub Releases as a regist
 ```sh
 $ dewy server --registry ghr://linyows/myapp \
   --notifier slack://general?title=myapp -p 8000 -l info -- /opt/myapp/current/myapp
-```
-
-### Multi-Port Support
-
-Dewy supports multiple port configurations for server applications:
-
-```sh
-# Multiple ports (comma-separated)
-$ dewy server --registry ghr://linyows/myapp \
-  -p 8000,8001,8002 -- /opt/myapp/current/myapp
-
-# Port ranges
-$ dewy server --registry ghr://linyows/myapp \
-  -p 8000-8005 -- /opt/myapp/current/myapp
 ```
 
 The registry and notification configurations are URL-like structures, where the scheme component represents the registry or notification type. More details are provided in the Registry section.
@@ -435,6 +422,46 @@ $ dewy assets --registry ghr://myapp/frontend \
 > - **Notifications**: Custom alerting beyond built-in notifications
 > - **Health checks**: Validating deployment success
 > - **Configuration updates**: Dynamic configuration changes
+
+Advanced Configuration
+--
+
+Dewy provides advanced configuration options for enhanced functionality and better integration with modern infrastructure.
+
+### Structured Logging
+
+Dewy supports structured logging with JSON format for better observability and integration with log aggregation systems:
+
+```sh
+# Enable JSON structured logging
+$ dewy server --registry ghr://linyows/myapp \
+  --log-format json -l info -- /opt/myapp/current/myapp
+
+# Default text format (human-readable)
+$ dewy server --registry ghr://linyows/myapp \
+  --log-format text -l info -- /opt/myapp/current/myapp
+```
+
+JSON format provides structured fields for easier parsing and filtering:
+- `time`: RFC3339 timestamp
+- `level`: Log level (INFO, WARN, ERROR, etc.)
+- `msg`: Log message
+- `component`: Source component (dewy, registry, artifact, etc.)
+- Additional contextual fields based on the operation
+
+### Multi-Port Support
+
+Dewy supports multiple port configurations for server applications:
+
+```sh
+# Multiple ports (comma-separated)
+$ dewy server --registry ghr://linyows/myapp \
+  -p 8000,8001,8002 -- /opt/myapp/current/myapp
+
+# Port ranges
+$ dewy server --registry ghr://linyows/myapp \
+  -p 8000-8005 -- /opt/myapp/current/myapp
+```
 
 Signal Handling
 --

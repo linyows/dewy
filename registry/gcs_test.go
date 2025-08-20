@@ -34,7 +34,7 @@ func TestNewGCS(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			mockClient := &MockGCSClient{}
-			_, err := NewGCSWithClient(context.Background(), tt.url, mockClient)
+			_, err := NewGCSWithClient(context.Background(), tt.url, testLogger(), mockClient)
 			if tt.expectErr {
 				if err == nil || err.Error() != tt.err.Error() {
 					t.Errorf("expected error %s, got %s", tt.err, err)
@@ -96,7 +96,7 @@ func TestNewGCSWithMockClient(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			mockClient := &MockGCSClient{}
-			gcs, err := NewGCSWithClient(context.Background(), tt.url, mockClient)
+			gcs, err := NewGCSWithClient(context.Background(), tt.url, testLogger(), mockClient)
 			if tt.expectErr {
 				if err == nil || err.Error() != tt.err.Error() {
 					t.Errorf("expected error %s, got %s", tt.err, err)
@@ -108,7 +108,7 @@ func TestNewGCSWithMockClient(t *testing.T) {
 				}
 				opts := []cmp.Option{
 					cmp.AllowUnexported(GCS{}),
-					cmpopts.IgnoreFields(GCS{}, "client"),
+					cmpopts.IgnoreFields(GCS{}, "client", "logger"),
 				}
 				if diff := cmp.Diff(gcs, tt.expected, opts...); diff != "" {
 					t.Error(diff)

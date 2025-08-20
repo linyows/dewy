@@ -3,17 +3,18 @@ package artifact
 import (
 	"context"
 	"io"
-	"log"
+	"log/slog"
 
 	"github.com/k1LoW/remote"
 )
 
 type GCS struct {
-	url string
+	url    string
+	logger *slog.Logger
 }
 
-func NewGCS(ctx context.Context, u string) (*GCS, error) {
-	return &GCS{url: u}, nil
+func NewGCS(ctx context.Context, u string, logger *slog.Logger) (*GCS, error) {
+	return &GCS{url: u, logger: logger}, nil
 }
 
 func (g *GCS) Download(ctx context.Context, w io.Writer) error {
@@ -22,7 +23,7 @@ func (g *GCS) Download(ctx context.Context, w io.Writer) error {
 		return err
 	}
 	defer f.Close()
-	log.Printf("[INFO] Downloaded from %s", g.url)
+	g.logger.Info("Downloaded from GCS", slog.String("url", g.url))
 	if _, err := io.Copy(w, f); err != nil {
 		return err
 	}

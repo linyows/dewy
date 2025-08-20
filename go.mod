@@ -1,6 +1,6 @@
 module github.com/linyows/dewy
 
-go 1.24.4
+go 1.25
 
 require (
 	cloud.google.com/go/storage v1.56.0
@@ -20,6 +20,7 @@ require (
 	github.com/k1LoW/remote v0.3.3
 	github.com/lestrrat-go/server-starter v0.0.0-20210101230921-50cd1900b5bc
 	github.com/lestrrat-go/slack v0.0.0-20190827134815-1aaae719550a
+	github.com/linyows/server-starter v0.1.0
 	github.com/mholt/archives v0.1.3
 	github.com/migueleliasweb/go-github-mock v1.4.0
 	golang.org/x/oauth2 v0.30.0
