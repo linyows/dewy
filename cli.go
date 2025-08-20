@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"reflect"
 	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/fatih/color"
 	"github.com/hashicorp/logutils"
 	flags "github.com/jessevdk/go-flags"
 )
@@ -27,6 +29,7 @@ type cli struct {
 	command          string
 	args             []string
 	LogLevel         string   `long:"log-level" short:"l" arg:"(debug|info|warn|error)" description:"Set log level for output"`
+	LogFormat        string   `long:"format" short:"f" arg:"(text|json)" description:"Set log format for output (default: text)"`
 	Interval         int      `long:"interval" arg:"seconds" short:"i" description:"Polling interval in seconds for checking registry updates (default: 10)"`
 	Ports            []string `long:"port" short:"p" description:"TCP ports for server command to listen on (comma-separated, ranges, or multiple flags)"`
 	Registry         string   `long:"registry" description:"Registry URL (e.g., ghr://owner/repo, s3://region/bucket/prefix)"`
@@ -114,6 +117,7 @@ func (c *cli) showHelp() {
 		"Notifier",
 		"Ports",
 		"LogLevel",
+		"LogFormat",
 		"BeforeDeployHook",
 		"AfterDeployHook",
 	}), "\n")
@@ -140,7 +144,24 @@ func (c *cli) run() int {
 	}
 
 	if c.Version {
-		fmt.Fprintf(c.env.Err, "dewy version %s [%v, %v]\n", c.env.Version, c.env.Commit, c.env.Date)
+		if c.LogFormat == "" {
+			c.LogFormat = "text"
+		}
+
+		if c.LogFormat == "json" {
+			slogger := SetupLogger("INFO", c.LogFormat, c.env.Err)
+			slogger.Info("dewy version",
+				"version", c.env.Version,
+				"commit", c.env.Commit,
+				"date", c.env.Date)
+		} else {
+			// Text format: traditional format with shortened commit hash
+			shortCommit := c.env.Commit
+			if len(shortCommit) > 7 {
+				shortCommit = shortCommit[:7]
+			}
+			fmt.Fprintf(c.env.Out, "dewy version: %s [%s, %s]\n", c.env.Version, shortCommit, c.env.Date)
+		}
 		return ExitOK
 	}
 
@@ -166,6 +187,21 @@ func (c *cli) run() int {
 		c.LogLevel = "ERROR"
 	}
 
+	if c.LogFormat == "" {
+		c.LogFormat = "text"
+	}
+
+	// Set up structured logger
+	slogger := SetupLogger(c.LogLevel, c.LogFormat, c.env.Err)
+
+	// Test structured logging (temporary)
+	slogger.Info("Dewy started",
+		"version", c.env.Version,
+		"commit", c.env.Commit,
+		"log_level", c.LogLevel,
+		"log_format", c.LogFormat)
+
+	// Keep backward compatibility with existing log usage
 	filter := &logutils.LevelFilter{
 		Levels:   []logutils.LogLevel{"DEBUG", "INFO", "WARN", "ERROR"},
 		MinLevel: logutils.LogLevel(c.LogLevel),
@@ -173,7 +209,6 @@ func (c *cli) run() int {
 	}
 	log.SetOutput(filter)
 
-	PrintVersion(c.env.Out, c.env.Version, c.env.Commit, c.env.Date)
 	conf := DefaultConfig()
 
 	if c.Registry == "" {
@@ -199,16 +234,25 @@ func (c *cli) run() int {
 			fmt.Fprintf(c.env.Err, "Error: invalid port specification: %s\n", err)
 			return ExitErr
 		}
+		var command string
+		var cmdArgs []string
+		if len(c.args) > 0 {
+			command = c.args[0]
+			if len(c.args) > 1 {
+				cmdArgs = c.args[1:]
+			}
+		}
 		conf.Starter = &StarterConfig{
-			ports:   parsedPorts,
-			command: c.args[0],
-			args:    c.args[1:],
+			ports:     parsedPorts,
+			command:   command,
+			args:      cmdArgs,
+			logformat: c.LogFormat,
 		}
 	} else {
 		conf.Command = ASSETS
 	}
 
-	d, err := New(conf)
+	d, err := New(conf, slogger)
 	if err != nil {
 		fmt.Fprintf(c.env.Err, "Error: %s\n", err)
 		return ExitErr
@@ -326,7 +370,7 @@ func validatePortNumber(port int) error {
 		return fmt.Errorf("port number must be between 1 and 65535, got %d", port)
 	}
 	if port < 1024 {
-		log.Printf("[WARN] Using privileged port %d (< 1024) may require root privileges", port)
+		slog.Warn("Using privileged port may require root privileges", slog.Int("port", port))
 	}
 	return nil
 }
@@ -357,4 +401,22 @@ func validateAndDeduplicatePorts(ports []string) ([]string, error) {
 	})
 
 	return result, nil
+}
+
+// Banner displays the Dewy ASCII art logo
+func Banner(w io.Writer) {
+	green := color.RGB(194, 73, 85)
+	grey := color.New(color.FgHiBlack)
+
+	green.Fprint(w, strings.TrimLeft(`
+ ___   ___  _____ __  __
+|   \ | __| \  / /\ \/ /
+|   | | __| \ / /  \  /
+|___/ |___| \_/_/  |__|
+`, "\n"))
+	grey.Fprint(w, `
+Dewy - A declarative deployment tool of apps in non-K8s environments.
+https://github.com/linyows/dewy
+
+`)
 }

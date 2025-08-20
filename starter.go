@@ -13,6 +13,7 @@ type StarterConfig struct {
 	command    string
 	dir        string
 	interval   int
+	logformat  string
 	pidfile    string
 	ports      []string
 	paths      []string
@@ -50,3 +51,6 @@ func (c StarterConfig) SignalOnTERM() os.Signal { return starter.SigFromName(c.s
 
 // StatusFile for StarterConfig.
 func (c StarterConfig) StatusFile() string { return c.statusfile }
+
+// LogFormat for StarterConfig.
+func (c StarterConfig) LogFormat() string { return c.logformat }
