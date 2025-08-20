@@ -1057,6 +1057,8 @@ github.com/lestrrat-go/slack v0.0.0-20190827134815-1aaae719550a h1:1SkDXQ4ho+45i
 github.com/lestrrat-go/slack v0.0.0-20190827134815-1aaae719550a/go.mod h1:2wxkiO7lExZoef2wz5rt3Mt2IGSYzQchxuQoWV7mfRM=
 github.com/letsencrypt/boulder v0.0.0-20231026200631-000cd05d5491 h1:WGrKdjHtWC67RX96eTkYD2f53NDHhrq/7robWTAfk4s=
 github.com/letsencrypt/boulder v0.0.0-20231026200631-000cd05d5491/go.mod h1:o158RFmdEbYyIZmXAbrvmJWesbyxlLKee6X64VPVuOc=
+github.com/linyows/server-starter v0.1.0 h1:Fv9Dko/F6v4nmR07M++gxk6GzRU8e3Sqbn4juUgvXaM=
+github.com/linyows/server-starter v0.1.0/go.mod h1:XkcHCAjzBQpeWzATmlPNg/wPy8VM97Q6294lFh8ePfk=
 github.com/lucasb-eyer/go-colorful v1.2.0 h1:1nnpGOrhyZZuNyfu1QjKiUICQ74+3FNCN69Aj6K7nkY=
 github.com/lucasb-eyer/go-colorful v1.2.0/go.mod h1:R4dSotOR9KMtayYi1e77YzuveK+i7ruzyGqttikkLy0=
 github.com/lyft/protoc-gen-star v0.5.3/go.mod h1:V0xaHgaf5oCCqmcxYcWiDfTiKsZsRc87/1qhoTACD8w=
