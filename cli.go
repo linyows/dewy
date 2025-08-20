@@ -173,7 +173,7 @@ func (c *cli) run() int {
 	}
 	log.SetOutput(filter)
 
-	Banner(c.env.Out)
+	PrintVersion(c.env.Out, c.env.Version, c.env.Commit, c.env.Date)
 	conf := DefaultConfig()
 
 	if c.Registry == "" {

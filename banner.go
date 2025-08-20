@@ -1,6 +1,7 @@
 package dewy
 
 import (
+	"fmt"
 	"io"
 	"strings"
 
@@ -23,4 +24,9 @@ Dewy - A declarative deployment tool of apps in non-K8s environments.
 https://github.com/linyows/dewy
 
 `)
+}
+
+// PrintVersion displays version information in a single line
+func PrintVersion(w io.Writer, version, revision, date string) {
+	fmt.Fprintf(w, "dewy version %s [%s, %s]\n", version, revision, date)
 }
