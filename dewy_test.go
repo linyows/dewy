@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,11 +22,16 @@ import (
 	"github.com/linyows/dewy/registry"
 )
 
+// testLogger creates a logger that discards output for testing
+func testLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
+}
+
 func TestNew(t *testing.T) {
 	reg := "ghr://linyows/dewy?pre-release=true"
 	c := DefaultConfig()
 	c.Registry = reg
-	dewy, err := New(c)
+	dewy, err := New(c, testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,8 +53,8 @@ func TestNew(t *testing.T) {
 
 	opts := []cmp.Option{
 		cmp.AllowUnexported(Dewy{}, kvs.File{}),
-		cmpopts.IgnoreFields(Dewy{}, "RWMutex"),
-		cmpopts.IgnoreFields(kvs.File{}, "mutex"),
+		cmpopts.IgnoreFields(Dewy{}, "RWMutex", "logger"),
+		cmpopts.IgnoreFields(kvs.File{}, "mutex", "logger"),
 	}
 	if diff := cmp.Diff(dewy, expect, opts...); diff != "" {
 		t.Error(diff)
@@ -159,7 +165,7 @@ func TestRun(t *testing.T) {
 		Type:       FILE,
 		Expiration: 10,
 	}
-	dewy, err := New(c)
+	dewy, err := New(c, testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +178,7 @@ func TestRun(t *testing.T) {
 		binary: binary,
 		url:    artifact,
 	}
-	notifyInstance, err := notifier.New(context.Background(), "")
+	notifyInstance, err := notifier.New(context.Background(), "", testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +233,7 @@ func TestDeployHook(t *testing.T) {
 				Type:       FILE,
 				Expiration: 10,
 			}
-			dewy, err := New(c)
+			dewy, err := New(c, testLogger())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -238,7 +244,7 @@ func TestDeployHook(t *testing.T) {
 				binary: "dewy",
 				url:    artifact,
 			}
-			dewy.notifier, err = notifier.New(context.Background(), "")
+			dewy.notifier, err = notifier.New(context.Background(), "", testLogger())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -271,7 +277,7 @@ func TestHandleError(t *testing.T) {
 	c := DefaultConfig()
 	c.Registry = "ghr://linyows/dewy"
 
-	dewy, err := New(c)
+	dewy, err := New(c, testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -329,7 +335,7 @@ func TestResetErrorCount(t *testing.T) {
 	c := DefaultConfig()
 	c.Registry = "ghr://linyows/dewy"
 
-	dewy, err := New(c)
+	dewy, err := New(c, testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -368,7 +374,7 @@ func TestErrorCountOverflow(t *testing.T) {
 	c := DefaultConfig()
 	c.Registry = "ghr://linyows/dewy"
 
-	dewy, err := New(c)
+	dewy, err := New(c, testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -465,7 +471,7 @@ func TestDewy_Run_ArtifactNotFoundGracePeriod(t *testing.T) {
 				},
 			}
 
-			dewy, err := New(config)
+			dewy, err := New(config, testLogger())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -473,7 +479,7 @@ func TestDewy_Run_ArtifactNotFoundGracePeriod(t *testing.T) {
 			dewy.registry = mockReg
 
 			// Set up notifier
-			notifyInstance, err := notifier.New(context.Background(), "")
+			notifyInstance, err := notifier.New(context.Background(), "", testLogger())
 			if err != nil {
 				t.Fatal(err)
 			}

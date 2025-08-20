@@ -25,7 +25,7 @@ func TestRunCLI(t *testing.T) {
 			name:        "version flag",
 			args:        []string{"--version"},
 			expectExit:  ExitOK,
-			expectError: "dewy version test-version",
+			expectOutput: "dewy version: test-version",
 		},
 		{
 			name:        "no command",

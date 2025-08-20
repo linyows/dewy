@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,6 +32,7 @@ type File struct {
 	mutex    sync.Mutex //nolint
 	MaxItems int
 	MaxSize  int64
+	logger   *slog.Logger
 }
 
 // GetDir returns dir.
@@ -43,6 +44,11 @@ func (f *File) GetDir() string {
 func (f *File) Default() {
 	f.dir = DefaultTempDir
 	f.MaxSize = DefaultMaxSize
+}
+
+// SetLogger sets the logger for the File instance.
+func (f *File) SetLogger(logger *slog.Logger) {
+	f.logger = logger
 }
 
 // Read data by key from file.
@@ -86,7 +92,9 @@ func (f *File) Write(key string, data []byte) error {
 		return err
 	}
 
-	log.Printf("[INFO] Write file to %s", p)
+	if f.logger != nil {
+		f.logger.Info("Write file", slog.String("path", p))
+	}
 
 	return nil
 }
