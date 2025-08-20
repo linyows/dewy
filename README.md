@@ -426,6 +426,8 @@ $ dewy assets --registry ghr://myapp/frontend \
 Advanced Configuration
 --
 
+Dewy provides advanced configuration options for enhanced functionality and better integration with modern infrastructure.
+
 ### Structured Logging
 
 Dewy supports structured logging with JSON format for better observability and integration with log aggregation systems:
