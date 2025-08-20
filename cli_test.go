@@ -22,9 +22,9 @@ func TestRunCLI(t *testing.T) {
 			expectOutput: "Usage: dewy",
 		},
 		{
-			name:        "version flag",
-			args:        []string{"--version"},
-			expectExit:  ExitOK,
+			name:         "version flag",
+			args:         []string{"--version"},
+			expectExit:   ExitOK,
 			expectOutput: "dewy version: test-version",
 		},
 		{

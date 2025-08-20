@@ -12,7 +12,6 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
-
 func TestNewS3(t *testing.T) {
 	tests := []struct {
 		desc      string

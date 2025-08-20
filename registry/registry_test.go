@@ -18,7 +18,6 @@ func testLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
-
 func TestNew(t *testing.T) {
 	if os.Getenv("GITHUB_TOKEN") == "" {
 		t.Skip("GITHUB_TOKEN is not set")

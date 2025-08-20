@@ -10,7 +10,6 @@ import (
 	"github.com/lestrrat-go/slack/objects"
 )
 
-
 // Mock implementations for testing
 
 type MockSlackSender struct {

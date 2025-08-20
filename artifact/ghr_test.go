@@ -15,7 +15,6 @@ import (
 	"github.com/migueleliasweb/go-github-mock/src/mock"
 )
 
-
 func TestNewGHR(t *testing.T) {
 	if os.Getenv("GITHUB_TOKEN") == "" {
 		t.Skip("GITHUB_TOKEN is not set")
