@@ -3,7 +3,7 @@ package registry
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/url"
 	"os"
 	"strings"
@@ -25,15 +25,16 @@ type GCS struct {
 	Artifact   string `schema:"artifact"`
 	PreRelease bool   `schema:"pre-release"`
 	client     GCSClient
+	logger     *slog.Logger
 }
 
 // NewGCS returns GCS.
-func NewGCS(ctx context.Context, u string) (*GCS, error) {
-	return NewGCSWithClient(ctx, u, nil)
+func NewGCS(ctx context.Context, u string, logger *slog.Logger) (*GCS, error) {
+	return NewGCSWithClient(ctx, u, logger, nil)
 }
 
 // NewGCSWithClient returns GCS with custom client (for testing).
-func NewGCSWithClient(ctx context.Context, u string, client GCSClient) (*GCS, error) {
+func NewGCSWithClient(ctx context.Context, u string, logger *slog.Logger, client GCSClient) (*GCS, error) {
 	ur, err := url.Parse(u)
 	if err != nil {
 		return nil, err
@@ -54,6 +55,7 @@ func NewGCSWithClient(ctx context.Context, u string, client GCSClient) (*GCS, er
 		Project: ur.Host,
 		Bucket:  bucket,
 		Prefix:  prefix,
+		logger:  logger,
 	}
 	if err = decoder.Decode(g, ur.Query()); err != nil {
 		return nil, err
@@ -102,7 +104,7 @@ func (g *GCS) Current(ctx context.Context) (*CurrentResponse, error) {
 			if name == artifactName {
 				found = true
 				createdAt = &obj.Created
-				log.Printf("[DEBUG] Fetched: %+v", obj)
+				g.logger.Debug("Fetched GCS object", slog.Any("object", obj))
 				break
 			}
 		}
@@ -122,7 +124,7 @@ func (g *GCS) Current(ctx context.Context) (*CurrentResponse, error) {
 			artifactName = matchedName
 			if obj, exists := objectMap[matchedName]; exists {
 				createdAt = &obj.Created
-				log.Printf("[DEBUG] Fetched: %+v", obj)
+				g.logger.Debug("Fetched GCS object", slog.Any("object", obj))
 			}
 		}
 	}

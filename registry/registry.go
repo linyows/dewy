@@ -3,6 +3,7 @@ package registry
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -47,18 +48,18 @@ type ReportRequest struct {
 	Err error
 }
 
-func New(ctx context.Context, url string) (Registry, error) {
+func New(ctx context.Context, url string, logger *slog.Logger) (Registry, error) {
 	splitted := strings.SplitN(url, "://", 2)
 
 	switch splitted[0] {
 	case ghrScheme:
-		return NewGHR(ctx, url)
+		return NewGHR(ctx, url, logger)
 
 	case s3Scheme:
-		return NewS3(ctx, url)
+		return NewS3(ctx, url, logger)
 
 	case gcsScheme:
-		return NewGCS(ctx, url)
+		return NewGCS(ctx, url, logger)
 
 	case grpcScheme:
 		return NewGRPC(ctx, url)

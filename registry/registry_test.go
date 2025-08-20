@@ -11,6 +11,7 @@ import (
 	"github.com/k1LoW/grpcstub"
 )
 
+
 func TestNew(t *testing.T) {
 	if os.Getenv("GITHUB_TOKEN") == "" {
 		t.Skip("GITHUB_TOKEN is not set")
@@ -101,7 +102,7 @@ func TestNew(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.urlstr, func(t *testing.T) {
 			ctx := context.Background()
-			got, err := New(ctx, tt.urlstr)
+			got, err := New(ctx, tt.urlstr, testLogger())
 			if (err != nil) != tt.wantErr {
 				t.Errorf("New() error = %v, wantErr %v", err, tt.wantErr)
 				return

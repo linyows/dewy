@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/url"
 	"os"
 	"strings"
@@ -47,10 +47,11 @@ type GHR struct {
 	PreRelease            bool   `schema:"pre-release"`
 	DisableRecordShipping bool   // FIXME: For testing. Remove this.
 	cl                    *github.Client
+	logger                *slog.Logger
 }
 
 // New returns GHR.
-func NewGHR(ctx context.Context, u string) (*GHR, error) {
+func NewGHR(ctx context.Context, u string, logger *slog.Logger) (*GHR, error) {
 	ur, err := url.Parse(u)
 	if err != nil {
 		return nil, err
@@ -77,6 +78,7 @@ func NewGHR(ctx context.Context, u string) (*GHR, error) {
 		return nil, err
 	}
 
+	ghr.logger = logger
 	return ghr, nil
 }
 
@@ -107,7 +109,7 @@ func (g *GHR) Current(ctx context.Context) (*CurrentResponse, error) {
 		for _, v := range release.Assets {
 			if v.GetName() == artifactName {
 				found = true
-				log.Printf("[DEBUG] Fetched: %+v", v)
+				g.logger.Debug("Fetched release", slog.Any("release", v))
 				break
 			}
 		}
@@ -136,7 +138,7 @@ func (g *GHR) Current(ctx context.Context) (*CurrentResponse, error) {
 		}
 
 		artifactName = matchedName
-		log.Printf("[DEBUG] Fetched: %s", artifactName)
+		g.logger.Debug("Fetched artifact", slog.String("name", artifactName))
 	}
 
 	au := fmt.Sprintf("%s://%s/%s/tag/%s/%s", ghrScheme, g.Owner, g.Repo, release.GetTagName(), artifactName)
