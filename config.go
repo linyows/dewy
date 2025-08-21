@@ -63,6 +63,7 @@ type Config struct {
 	Starter          starter.Config
 	BeforeDeployHook string
 	AfterDeployHook  string
+	*Info
 }
 
 // DefaultConfig returns default Config.

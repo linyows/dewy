@@ -83,6 +83,12 @@ func New(c Config, logger *slog.Logger) (*Dewy, error) {
 
 // Start dewy.
 func (d *Dewy) Start(i int) {
+	fmt.Printf("%#v\n", d.config)
+	d.logger.Info("Dewy started",
+		slog.String("version", d.config.Info.Version),
+		slog.String("date", d.config.Info.Date),
+		slog.String("commit", d.config.Info.ShortCommit()))
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -98,7 +104,9 @@ func (d *Dewy) Start(i int) {
 		d.logger.Error("Notifier failure", slog.String("error", err.Error()))
 	}
 
-	d.notifier.Send(ctx, "Automatic shipping started by *Dewy*")
+	msg := fmt.Sprintf("Automatic shipping started by *Dewy* (%s)", d.config.Version)
+	d.logger.Info("Dewy start notification", slog.String("message", msg))
+	d.notifier.Send(ctx, msg)
 
 	d.job, err = scheduler.Every(i).Seconds().Run(func() {
 		e := d.Run()
@@ -121,9 +129,7 @@ func (d *Dewy) waitSigs(ctx context.Context) {
 	signal.Notify(sigCh, syscall.SIGHUP, syscall.SIGUSR1, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
 	for sig := range sigCh {
-		d.logger.Debug("PID received signal",
-			slog.Int("pid", os.Getpid()),
-			slog.String("signal", sig.String()))
+		d.logger.Debug("PID received signal", slog.Int("pid", os.Getpid()), slog.String("signal", sig.String()))
 		switch sig {
 		case syscall.SIGHUP:
 			continue
@@ -233,7 +239,9 @@ func (d *Dewy) Run() error {
 		d.logger.Info("Cached artifact", slog.String("cache_key", cachekeyName))
 	}
 
-	d.notifier.Send(ctx, fmt.Sprintf("Ready for `%s`", res.Tag))
+	msg := fmt.Sprintf("Ready for `%s`", res.Tag)
+	d.logger.Info("New version notification", slog.String("message", msg))
+	d.notifier.Send(ctx, msg)
 
 	if err := d.deploy(cachekeyName); err != nil {
 		return err
@@ -243,12 +251,16 @@ func (d *Dewy) Run() error {
 		if d.isServerRunning {
 			err = d.restartServer()
 			if err == nil {
-				d.notifier.Send(ctx, fmt.Sprintf("Server restarted for `%s`", res.Tag))
+				msg := fmt.Sprintf("Server restarted for `%s`", res.Tag)
+				d.logger.Info("Restart notification", slog.String("message", msg))
+				d.notifier.Send(ctx, msg)
 			}
 		} else {
 			err = d.startServer()
 			if err == nil {
-				d.notifier.Send(ctx, fmt.Sprintf("Server started for `%s`", res.Tag))
+				msg := fmt.Sprintf("Server started for `%s`", res.Tag)
+				d.logger.Info("Start notification", slog.String("message", msg))
+				d.notifier.Send(ctx, msg)
 			}
 		}
 		if err != nil {
