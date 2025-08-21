@@ -460,7 +460,6 @@ JSON形式では、解析とフィルタリングを簡単にする構造化さ�
 - `time`: RFC3339タイムスタンプ
 - `level`: ログレベル（INFO、WARN、ERROR など）
 - `msg`: ログメッセージ
-- `component`: ソースコンポーネント（dewy、registry、artifact など）
 - 操作に基づく追加のコンテキストフィールド
 
 ### マルチポート対応

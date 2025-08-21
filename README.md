@@ -446,7 +446,6 @@ JSON format provides structured fields for easier parsing and filtering:
 - `time`: RFC3339 timestamp
 - `level`: Log level (INFO, WARN, ERROR, etc.)
 - `msg`: Log message
-- `component`: Source component (dewy, registry, artifact, etc.)
 - Additional contextual fields based on the operation
 
 ### Multi-Port Support
