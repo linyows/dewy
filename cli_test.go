@@ -57,12 +57,14 @@ func TestRunCLI(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var outBuf, errBuf bytes.Buffer
 			env := Env{
-				Out:     &outBuf,
-				Err:     &errBuf,
-				Args:    tt.args,
-				Version: "test-version",
-				Commit:  "test-commit",
-				Date:    "test-date",
+				Out:  &outBuf,
+				Err:  &errBuf,
+				Args: tt.args,
+				Info: &Info{
+					Version: "test-version",
+					Commit:  "test-commit",
+					Date:    "test-date",
+				},
 			}
 
 			exitCode := RunCLI(env)
@@ -119,12 +121,14 @@ func TestCLI_NotifierBackwardCompatibility(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var outBuf, errBuf bytes.Buffer
 			env := Env{
-				Out:     &outBuf,
-				Err:     &errBuf,
-				Args:    tt.args,
-				Version: "test-version",
-				Commit:  "test-commit",
-				Date:    "test-date",
+				Out:  &outBuf,
+				Err:  &errBuf,
+				Args: tt.args,
+				Info: &Info{
+					Version: "test-version",
+					Commit:  "test-commit",
+					Date:    "test-date",
+				},
 			}
 
 			// We can't easily test the full CLI execution due to the Start() method
@@ -225,12 +229,14 @@ func TestCLI_ConfigurationParsing(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var outBuf, errBuf bytes.Buffer
 			env := Env{
-				Out:     &outBuf,
-				Err:     &errBuf,
-				Args:    tt.args,
-				Version: "test-version",
-				Commit:  "test-commit",
-				Date:    "test-date",
+				Out:  &outBuf,
+				Err:  &errBuf,
+				Args: tt.args,
+				Info: &Info{
+					Version: "test-version",
+					Commit:  "test-commit",
+					Date:    "test-date",
+				},
 			}
 
 			// Mock the CLI parsing

@@ -14,11 +14,13 @@ var (
 
 func main() {
 	os.Exit(dewy.RunCLI(dewy.Env{
-		Out:     os.Stdout,
-		Err:     os.Stderr,
-		Args:    os.Args[1:],
-		Version: version,
-		Commit:  commit,
-		Date:    date,
+		Out:  os.Stdout,
+		Err:  os.Stderr,
+		Args: os.Args[1:],
+		Info: &dewy.Info{
+			Version: version,
+			Commit:  commit,
+			Date:    date,
+		},
 	}))
 }

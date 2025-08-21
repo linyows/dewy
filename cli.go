@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"log"
 	"log/slog"
 	"reflect"
 	"sort"
@@ -12,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
-	"github.com/hashicorp/logutils"
 	flags "github.com/jessevdk/go-flags"
 )
 
@@ -45,9 +43,20 @@ type cli struct {
 type Env struct {
 	Out, Err io.Writer
 	Args     []string
-	Version  string
-	Commit   string
-	Date     string
+	*Info
+}
+
+type Info struct {
+	Version string
+	Commit  string
+	Date    string
+}
+
+func (i *Info) ShortCommit() string {
+	if len(i.Commit) > 7 {
+		return i.Commit[:7]
+	}
+	return i.Commit
 }
 
 // RunCLI runs as cli.
@@ -150,17 +159,12 @@ func (c *cli) run() int {
 
 		if c.LogFormat == "json" {
 			slogger := SetupLogger("INFO", c.LogFormat, c.env.Err)
-			slogger.Info("dewy version",
-				"version", c.env.Version,
-				"commit", c.env.Commit,
-				"date", c.env.Date)
+			slogger.Info("Dewy version",
+				"version", c.env.Info.Version,
+				"commit", c.env.Info.ShortCommit(),
+				"date", c.env.Info.Date)
 		} else {
-			// Text format: traditional format with shortened commit hash
-			shortCommit := c.env.Commit
-			if len(shortCommit) > 7 {
-				shortCommit = shortCommit[:7]
-			}
-			fmt.Fprintf(c.env.Out, "dewy version: %s [%s, %s]\n", c.env.Version, shortCommit, c.env.Date)
+			fmt.Fprintf(c.env.Out, "dewy version: %s [%s, %s]\n", c.env.Info.Version, c.env.Info.ShortCommit(), c.env.Info.Date)
 		}
 		return ExitOK
 	}
@@ -191,25 +195,8 @@ func (c *cli) run() int {
 		c.LogFormat = "text"
 	}
 
-	// Set up structured logger
-	slogger := SetupLogger(c.LogLevel, c.LogFormat, c.env.Err)
-
-	// Test structured logging (temporary)
-	slogger.Info("Dewy started",
-		"version", c.env.Version,
-		"commit", c.env.Commit,
-		"log_level", c.LogLevel,
-		"log_format", c.LogFormat)
-
-	// Keep backward compatibility with existing log usage
-	filter := &logutils.LevelFilter{
-		Levels:   []logutils.LogLevel{"DEBUG", "INFO", "WARN", "ERROR"},
-		MinLevel: logutils.LogLevel(c.LogLevel),
-		Writer:   c.env.Err,
-	}
-	log.SetOutput(filter)
-
 	conf := DefaultConfig()
+	conf.Info = c.env.Info
 
 	if c.Registry == "" {
 		fmt.Fprintf(c.env.Err, "Error: --registry is not set\n")
@@ -251,6 +238,9 @@ func (c *cli) run() int {
 	} else {
 		conf.Command = ASSETS
 	}
+
+	// Set up structured logger
+	slogger := SetupLogger(c.LogLevel, c.LogFormat, c.env.Err)
 
 	d, err := New(conf, slogger)
 	if err != nil {
