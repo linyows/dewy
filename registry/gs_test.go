@@ -10,7 +10,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
-func TestNewGCS(t *testing.T) {
+func TestNewGS(t *testing.T) {
 	tests := []struct {
 		desc      string
 		url       string
@@ -18,23 +18,17 @@ func TestNewGCS(t *testing.T) {
 		err       error
 	}{
 		{
-			"error is returned when project is missing",
-			"gcs:///mybucket",
-			true,
-			fmt.Errorf("project is required: %s", gcsFormat),
-		},
-		{
 			"error is returned when bucket is missing",
-			"gcs://my-project",
+			"gs://",
 			true,
-			fmt.Errorf("bucket is required: %s", gcsFormat),
+			fmt.Errorf("bucket is required: %s", gsFormat),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			mockClient := &MockGCSClient{}
-			_, err := NewGCSWithClient(context.Background(), tt.url, testLogger(), mockClient)
+			mockClient := &MockGSClient{}
+			_, err := NewGSWithClient(context.Background(), tt.url, testLogger(), mockClient)
 			if tt.expectErr {
 				if err == nil || err.Error() != tt.err.Error() {
 					t.Errorf("expected error %s, got %s", tt.err, err)
@@ -48,30 +42,29 @@ func TestNewGCS(t *testing.T) {
 	}
 }
 
-// MockGCSClient is a mock client for testing
-type MockGCSClient struct{}
+// MockGSClient is a mock client for testing.
+type MockGSClient struct{}
 
-func (m *MockGCSClient) Bucket(name string) *storage.BucketHandle {
+func (m *MockGSClient) Bucket(name string) *storage.BucketHandle {
 	return &storage.BucketHandle{}
 }
 
-func (m *MockGCSClient) Close() error {
+func (m *MockGSClient) Close() error {
 	return nil
 }
 
-func TestNewGCSWithMockClient(t *testing.T) {
+func TestNewGSWithMockClient(t *testing.T) {
 	tests := []struct {
 		desc      string
 		url       string
-		expected  *GCS
+		expected  *GS
 		expectErr bool
 		err       error
 	}{
 		{
 			"valid small structure is returned",
-			"gcs://my-project/mybucket",
-			&GCS{
-				Project:  "my-project",
+			"gs://mybucket",
+			&GS{
 				Bucket:   "mybucket",
 				Prefix:   "",
 				Artifact: "",
@@ -81,9 +74,8 @@ func TestNewGCSWithMockClient(t *testing.T) {
 		},
 		{
 			"valid large structure is returned",
-			"gcs://my-project/mybucket/myteam/myapp?artifact=myapp-linux-x86_64.zip",
-			&GCS{
-				Project:  "my-project",
+			"gs://mybucket/myteam/myapp?artifact=myapp-linux-x86_64.zip",
+			&GS{
 				Bucket:   "mybucket",
 				Prefix:   "myteam/myapp/",
 				Artifact: "myapp-linux-x86_64.zip",
@@ -95,8 +87,8 @@ func TestNewGCSWithMockClient(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			mockClient := &MockGCSClient{}
-			gcs, err := NewGCSWithClient(context.Background(), tt.url, testLogger(), mockClient)
+			mockClient := &MockGSClient{}
+			gs, err := NewGSWithClient(context.Background(), tt.url, testLogger(), mockClient)
 			if tt.expectErr {
 				if err == nil || err.Error() != tt.err.Error() {
 					t.Errorf("expected error %s, got %s", tt.err, err)
@@ -107,10 +99,10 @@ func TestNewGCSWithMockClient(t *testing.T) {
 					return
 				}
 				opts := []cmp.Option{
-					cmp.AllowUnexported(GCS{}),
-					cmpopts.IgnoreFields(GCS{}, "client", "logger"),
+					cmp.AllowUnexported(GS{}),
+					cmpopts.IgnoreFields(GS{}, "client", "logger"),
 				}
-				if diff := cmp.Diff(gcs, tt.expected, opts...); diff != "" {
+				if diff := cmp.Diff(gs, tt.expected, opts...); diff != "" {
 					t.Error(diff)
 				}
 			}
@@ -118,35 +110,34 @@ func TestNewGCSWithMockClient(t *testing.T) {
 	}
 }
 
-// Note: Testing LatestVersion requires complex mocking of GCS client
-// For now, we'll test other functions and skip the integration test for LatestVersion
-func TestGCSLatestVersion(t *testing.T) {
-	t.Skip("Complex GCS client mocking required - integration test should be run separately")
+// Note: Testing LatestVersion requires complex mocking of GS client
+// For now, we'll test other functions and skip the integration test for LatestVersion.
+func TestGSLatestVersion(t *testing.T) {
+	t.Skip("Complex GS client mocking required - integration test should be run separately")
 }
 
-// Note: Testing Current requires complex mocking of GCS client
-// For now, we'll test other functions and skip the integration test for Current
-func TestGCSCurrent(t *testing.T) {
-	t.Skip("Complex GCS client mocking required - integration test should be run separately")
+// Note: Testing Current requires complex mocking of GS client
+// For now, we'll test other functions and skip the integration test for Current.
+func TestGSCurrent(t *testing.T) {
+	t.Skip("Complex GS client mocking required - integration test should be run separately")
 }
 
-func TestGCSBuildArtifactURL(t *testing.T) {
-	gcs := &GCS{
-		Project: "test-project",
-		Bucket:  "test-bucket",
+func TestGSBuildArtifactURL(t *testing.T) {
+	gs := &GS{
+		Bucket: "test-bucket",
 	}
 
 	name := "path/to/artifact.tar.gz"
-	expected := "gcs://test-project/test-bucket/path/to/artifact.tar.gz"
+	expected := "gs://test-bucket/path/to/artifact.tar.gz"
 
-	result := gcs.buildArtifactURL(name)
+	result := gs.buildArtifactURL(name)
 	if result != expected {
 		t.Errorf("expected %s, got %s", expected, result)
 	}
 }
 
-func TestGCSExtractFilenameFromObjectName(t *testing.T) {
-	gcs := &GCS{}
+func TestGSExtractFilenameFromObjectName(t *testing.T) {
+	gs := &GS{}
 
 	tests := []struct {
 		name     string
@@ -161,7 +152,7 @@ func TestGCSExtractFilenameFromObjectName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("name=%s,prefix=%s", tt.name, tt.prefix), func(t *testing.T) {
-			result := gcs.extractFilenameFromObjectName(tt.name, tt.prefix)
+			result := gs.extractFilenameFromObjectName(tt.name, tt.prefix)
 			if result != tt.expected {
 				t.Errorf("expected %s, got %s", tt.expected, result)
 			}

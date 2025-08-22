@@ -150,11 +150,11 @@ To use Google Cloud Storage as a registry, configure it as follows. Required Goo
 
 ```sh
 # Format
-# gcs://<project-id>/<bucket-name>/<path-prefix>?<options: pre-release, artifact>
+# gs://<bucket-name>/<path-prefix>?<options: pre-release, artifact>
 
 # Example
 $ export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account.json"
-$ dewy --registry gcs://my-project/dewy-bucket/foo/bar/myapp ...
+$ dewy --registry gs://dewy-bucket/foo/bar/myapp ...
 ```
 
 Please ensure that the object path in Google Cloud Storage follows the same order as S3: `<prefix>/<semver>/<artifact>`. For example:

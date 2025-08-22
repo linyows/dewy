@@ -84,8 +84,8 @@ func New(c Config, log *logging.Logger) (*Dewy, error) {
 
 // Start dewy.
 func (d *Dewy) Start(i int) {
-	d.logger.Info("Dewy started", slog.String("version", d.config.Info.Version),
-		slog.String("date", d.config.Info.Date), slog.String("commit", d.config.Info.ShortCommit()))
+	d.logger.Info("Dewy started", slog.String("version", d.config.Version),
+		slog.String("date", d.config.Date), slog.String("commit", d.config.ShortCommit()))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

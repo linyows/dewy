@@ -16,7 +16,7 @@ import (
 	"github.com/linyows/dewy/logging"
 )
 
-// ArtifactNotFoundError wraps artifact not found errors with release information
+// ArtifactNotFoundError wraps artifact not found errors with release information.
 type ArtifactNotFoundError struct {
 	ArtifactName string
 	ReleaseTime  *time.Time
@@ -27,7 +27,7 @@ func (e *ArtifactNotFoundError) Error() string {
 	return e.Message
 }
 
-// IsWithinGracePeriod checks if the error occurred within the grace period
+// IsWithinGracePeriod checks if the error occurred within the grace period.
 func (e *ArtifactNotFoundError) IsWithinGracePeriod(gracePeriod time.Duration) bool {
 	if e.ReleaseTime == nil || gracePeriod == 0 {
 		return false
@@ -195,7 +195,7 @@ func (g *GHR) Report(ctx context.Context, req *ReportRequest) error {
 		for _, r := range releases {
 			if r.GetTagName() == req.Tag {
 				s := fmt.Sprintf("repos/%s/%s/releases/%d/assets", g.Owner, g.Repo, r.GetID())
-				opt := &github.UploadOptions{Name: strings.Replace(info, " ", "_", -1) + ".txt"}
+				opt := &github.UploadOptions{Name: strings.ReplaceAll(info, " ", "_") + ".txt"}
 
 				u, err := url.Parse(s)
 				if err != nil {

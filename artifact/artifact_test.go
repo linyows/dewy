@@ -11,7 +11,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
-// testLogger creates a logger that discards output for testing
+// testLogger creates a logger that discards output for testing.
 func testLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }

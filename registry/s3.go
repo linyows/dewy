@@ -186,7 +186,7 @@ func (s *S3) Report(ctx context.Context, req *ReportRequest) error {
 	now := time.Now().UTC().Format(ISO8601)
 	hostname, _ := os.Hostname()
 	info := fmt.Sprintf("shipped to %s at %s", strings.ToLower(hostname), now)
-	filename := fmt.Sprintf("%s.txt", strings.Replace(info, " ", "_", -1))
+	filename := fmt.Sprintf("%s.txt", strings.ReplaceAll(info, " ", "_"))
 	key := fmt.Sprintf("%s%s/%s", s.Prefix, req.Tag, filename)
 	err := s.PutTextObject(ctx, key, "")
 
@@ -243,7 +243,7 @@ func (s *S3) extractFilenameFromObjectKey(key, prefix string) string {
 	return strings.TrimPrefix(removeTrailingSlash(key), prefix)
 }
 
-// getVersionDirectoryCreatedAt gets the creation time of the first object in a version directory
+// getVersionDirectoryCreatedAt gets the creation time of the first object in a version directory.
 func (s *S3) getVersionDirectoryCreatedAt(ctx context.Context, prefix string) (*time.Time, error) {
 	pager := s3.NewListObjectsV2Paginator(s.cl, &s3.ListObjectsV2Input{
 		Bucket:  aws.String(s.Bucket),

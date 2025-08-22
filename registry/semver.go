@@ -68,7 +68,7 @@ func (v *SemVer) String() string {
 	return fmt.Sprintf("%s%d.%d.%d%s", v.V, v.Major, v.Minor, v.Patch, pre)
 }
 
-// matchSemVerPattern checks if a string matches semantic versioning patterns
+// matchSemVerPattern checks if a string matches semantic versioning patterns.
 func matchSemVerPattern(str string, allowPreRelease bool) bool {
 	if allowPreRelease {
 		return SemVerRegex.MatchString(str)
@@ -77,7 +77,7 @@ func matchSemVerPattern(str string, allowPreRelease bool) bool {
 	}
 }
 
-// FindLatestSemVer finds the latest semantic version from a list of version strings
+// FindLatestSemVer finds the latest semantic version from a list of version strings.
 func FindLatestSemVer(versionNames []string, allowPreRelease bool) (*SemVer, string, error) {
 	var latestVersion *SemVer
 	var latestName string

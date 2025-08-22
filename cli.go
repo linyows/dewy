@@ -160,11 +160,11 @@ func (c *cli) run() int {
 		if c.LogFormat == "json" {
 			slogger := SetupLogger("INFO", c.LogFormat, c.env.Err)
 			slogger.Info("Dewy version",
-				"version", c.env.Info.Version,
-				"commit", c.env.Info.ShortCommit(),
-				"date", c.env.Info.Date)
+				"version", c.env.Version,
+				"commit", c.env.ShortCommit(),
+				"date", c.env.Date)
 		} else {
-			fmt.Fprintf(c.env.Out, "dewy version: %s [%s, %s]\n", c.env.Info.Version, c.env.Info.ShortCommit(), c.env.Info.Date)
+			fmt.Fprintf(c.env.Out, "dewy version: %s [%s, %s]\n", c.env.Version, c.env.ShortCommit(), c.env.Date)
 		}
 		return ExitOK
 	}
@@ -253,7 +253,7 @@ func (c *cli) run() int {
 	return ExitOK
 }
 
-// parsePorts parses port specifications from CLI arguments
+// parsePorts parses port specifications from CLI arguments.
 func parsePorts(portSpecs []string) ([]string, error) {
 	if len(portSpecs) == 0 {
 		return nil, nil
@@ -272,7 +272,7 @@ func parsePorts(portSpecs []string) ([]string, error) {
 	return validateAndDeduplicatePorts(allPorts)
 }
 
-// parsePortSpec parses a single port specification (supports comma-separated and ranges)
+// parsePortSpec parses a single port specification (supports comma-separated and ranges).
 func parsePortSpec(spec string) ([]string, error) {
 	if spec == "" {
 		return nil, nil
@@ -306,7 +306,7 @@ func parsePortSpec(spec string) ([]string, error) {
 	return ports, nil
 }
 
-// parsePortRange parses a port range like "8000-8005"
+// parsePortRange parses a port range like "8000-8005".
 func parsePortRange(rangeSpec string) ([]string, error) {
 	parts := strings.Split(rangeSpec, "-")
 	if len(parts) != 2 {
@@ -318,12 +318,12 @@ func parsePortRange(rangeSpec string) ([]string, error) {
 
 	start, err := strconv.Atoi(startStr)
 	if err != nil {
-		return nil, fmt.Errorf("invalid start port in range %s: %v", rangeSpec, err)
+		return nil, fmt.Errorf("invalid start port in range %s: %w", rangeSpec, err)
 	}
 
 	end, err := strconv.Atoi(endStr)
 	if err != nil {
-		return nil, fmt.Errorf("invalid end port in range %s: %v", rangeSpec, err)
+		return nil, fmt.Errorf("invalid end port in range %s: %w", rangeSpec, err)
 	}
 
 	if start > end {
@@ -337,7 +337,7 @@ func parsePortRange(rangeSpec string) ([]string, error) {
 	var ports []string
 	for i := start; i <= end; i++ {
 		if err := validatePortNumber(i); err != nil {
-			return nil, fmt.Errorf("invalid port %d in range %s: %v", i, rangeSpec, err)
+			return nil, fmt.Errorf("invalid port %d in range %s: %w", i, rangeSpec, err)
 		}
 		ports = append(ports, strconv.Itoa(i))
 	}
@@ -345,7 +345,7 @@ func parsePortRange(rangeSpec string) ([]string, error) {
 	return ports, nil
 }
 
-// validatePort validates a port string
+// validatePort validates a port string.
 func validatePort(port string) error {
 	portNum, err := strconv.Atoi(port)
 	if err != nil {
@@ -354,7 +354,7 @@ func validatePort(port string) error {
 	return validatePortNumber(portNum)
 }
 
-// validatePortNumber validates a port number
+// validatePortNumber validates a port number.
 func validatePortNumber(port int) error {
 	if port < 1 || port > 65535 {
 		return fmt.Errorf("port number must be between 1 and 65535, got %d", port)
@@ -365,7 +365,7 @@ func validatePortNumber(port int) error {
 	return nil
 }
 
-// validateAndDeduplicatePorts removes duplicates and sorts ports
+// validateAndDeduplicatePorts removes duplicates and sorts ports.
 func validateAndDeduplicatePorts(ports []string) ([]string, error) {
 	if len(ports) == 0 {
 		return ports, nil
@@ -393,7 +393,7 @@ func validateAndDeduplicatePorts(ports []string) ([]string, error) {
 	return result, nil
 }
 
-// Banner displays the Dewy ASCII art logo
+// Banner displays the Dewy ASCII art logo.
 func Banner(w io.Writer) {
 	green := color.RGB(194, 73, 85)
 	grey := color.New(color.FgHiBlack)
