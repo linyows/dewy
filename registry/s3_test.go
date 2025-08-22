@@ -1,15 +1,20 @@
 package registry
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	awslogging "github.com/aws/smithy-go/logging"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/linyows/dewy/logging"
 )
 
 func TestNewS3(t *testing.T) {
@@ -164,6 +169,69 @@ func TestS3LatestVersion(t *testing.T) {
 			}
 			if gotVer.String() != tt.expectedVer {
 				t.Errorf("expected latest version key %s, got %s", tt.expectedVer, gotVer)
+			}
+		})
+	}
+}
+
+func TestCustomLogger(t *testing.T) {
+	tests := []struct {
+		name           string
+		classification awslogging.Classification
+		message        string
+		expectedLevel  string
+		checkTime      bool
+	}{
+		{
+			name:           "Warn level with AWS SDK message",
+			classification: awslogging.Warn,
+			message:        "Response has no supported checksum. Not validating response payload.",
+			expectedLevel:  "WARN",
+			checkTime:      true,
+		},
+		{
+			name:           "Debug level",
+			classification: awslogging.Debug,
+			message:        "test message",
+			expectedLevel:  "DEBUG",
+			checkTime:      false,
+		},
+		{
+			name:           "Info level (default)",
+			classification: awslogging.Classification("unknown"),
+			message:        "test message",
+			expectedLevel:  "INFO",
+			checkTime:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			log := logging.SetupLogger("DEBUG", "json", &buf)
+			awsLogger := &customLogger{Logger: log}
+
+			awsLogger.Logf(tt.classification, "%s", tt.message)
+
+			output := buf.String()
+			var logEntry map[string]interface{}
+			if err := json.Unmarshal([]byte(strings.TrimSpace(output)), &logEntry); err != nil {
+				t.Errorf("Failed to parse JSON log output: %v", err)
+			}
+
+			// Verify log level
+			if logEntry["level"] != tt.expectedLevel {
+				t.Errorf("Expected level %s, got %v", tt.expectedLevel, logEntry["level"])
+			}
+
+			// Verify message
+			if logEntry["msg"] != tt.message {
+				t.Errorf("Expected msg '%s', got %v", tt.message, logEntry["msg"])
+			}
+
+			// Verify time field is present (for the main test case)
+			if tt.checkTime && logEntry["time"] == nil {
+				t.Error("Expected time to be present")
 			}
 		})
 	}

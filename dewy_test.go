@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,13 +17,14 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/linyows/dewy/kvs"
+	"github.com/linyows/dewy/logging"
 	"github.com/linyows/dewy/notifier"
 	"github.com/linyows/dewy/registry"
 )
 
 // testLogger creates a logger that discards output for testing
-func testLogger() *slog.Logger {
-	return slog.New(slog.NewTextHandler(io.Discard, nil))
+func testLogger() *logging.Logger {
+	return logging.SetupLogger("INFO", "text", io.Discard)
 }
 
 func TestNew(t *testing.T) {
@@ -178,7 +178,7 @@ func TestRun(t *testing.T) {
 		binary: binary,
 		url:    artifact,
 	}
-	notifyInstance, err := notifier.New(context.Background(), "", testLogger())
+	notifyInstance, err := notifier.New(context.Background(), "", testLogger().Logger)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,7 +244,7 @@ func TestDeployHook(t *testing.T) {
 				binary: "dewy",
 				url:    artifact,
 			}
-			dewy.notifier, err = notifier.New(context.Background(), "", testLogger())
+			dewy.notifier, err = notifier.New(context.Background(), "", testLogger().Logger)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -479,7 +479,7 @@ func TestDewy_Run_ArtifactNotFoundGracePeriod(t *testing.T) {
 			dewy.registry = mockReg
 
 			// Set up notifier
-			notifyInstance, err := notifier.New(context.Background(), "", testLogger())
+			notifyInstance, err := notifier.New(context.Background(), "", testLogger().Logger)
 			if err != nil {
 				t.Fatal(err)
 			}
