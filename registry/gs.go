@@ -2,6 +2,7 @@ package registry
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/url"
@@ -155,7 +156,7 @@ func (g *GS) Report(ctx context.Context, req *ReportRequest) error {
 	now := time.Now().UTC().Format(ISO8601)
 	hostname, _ := os.Hostname()
 	info := fmt.Sprintf("shipped to %s at %s", strings.ToLower(hostname), now)
-	filename := fmt.Sprintf("%s.txt", strings.Replace(info, " ", "_", -1))
+	filename := fmt.Sprintf("%s.txt", strings.ReplaceAll(info, " ", "_"))
 	key := fmt.Sprintf("%s%s/%s", g.Prefix, req.Tag, filename)
 	err := g.putTextObject(ctx, key, "")
 
@@ -191,7 +192,7 @@ func (g *GS) listObjects(ctx context.Context, prefix string) ([]*storage.ObjectA
 	it := bucket.Objects(ctx, query)
 	for {
 		attrs, err := it.Next()
-		if err == iterator.Done {
+		if errors.Is(err, iterator.Done) {
 			break
 		}
 		if err != nil {
@@ -207,7 +208,7 @@ func (g *GS) extractFilenameFromObjectName(name, prefix string) string {
 	return strings.TrimPrefix(removeTrailingSlash(name), prefix)
 }
 
-// getVersionDirectoryCreatedAt gets the creation time of the first object in a version directory
+// getVersionDirectoryCreatedAt gets the creation time of the first object in a version directory.
 func (g *GS) getVersionDirectoryCreatedAt(ctx context.Context, prefix string) (*time.Time, error) {
 	bucket := g.client.Bucket(g.Bucket)
 	query := &storage.Query{
@@ -216,7 +217,7 @@ func (g *GS) getVersionDirectoryCreatedAt(ctx context.Context, prefix string) (*
 
 	it := bucket.Objects(ctx, query)
 	attrs, err := it.Next()
-	if err == iterator.Done {
+	if errors.Is(err, iterator.Done) {
 		return nil, fmt.Errorf("no objects found in version directory: %s", prefix)
 	}
 	if err != nil {
@@ -240,7 +241,7 @@ func (g *GS) LatestVersion(ctx context.Context) (string, *SemVer, error) {
 	it := bucket.Objects(ctx, query)
 	for {
 		attrs, err := it.Next()
-		if err == iterator.Done {
+		if errors.Is(err, iterator.Done) {
 			break
 		}
 		if err != nil {

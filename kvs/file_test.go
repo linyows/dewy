@@ -165,7 +165,7 @@ func TestExtractArchivePreservesPermissions(t *testing.T) {
 	}
 }
 
-// createTestArchive creates a tar.gz archive with files having different permissions
+// createTestArchive creates a tar.gz archive with files having different permissions.
 func createTestArchive(archivePath string) error {
 	file, err := os.Create(archivePath)
 	if err != nil {
@@ -202,7 +202,7 @@ func createTestArchive(archivePath string) error {
 	return nil
 }
 
-// addFileToArchive adds a file to tar archive with specified permissions
+// addFileToArchive adds a file to tar archive with specified permissions.
 func addFileToArchive(tw *tar.Writer, name, content string, mode os.FileMode) error {
 	header := &tar.Header{
 		Name: name,
@@ -216,7 +216,7 @@ func addFileToArchive(tw *tar.Writer, name, content string, mode os.FileMode) er
 	return err
 }
 
-// addDirToArchive adds a directory to tar archive with specified permissions
+// addDirToArchive adds a directory to tar archive with specified permissions.
 func addDirToArchive(tw *tar.Writer, name string, mode os.FileMode) error {
 	header := &tar.Header{
 		Name:     name,

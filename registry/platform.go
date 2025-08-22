@@ -6,13 +6,13 @@ import (
 )
 
 var (
-	// TestArch overrides runtime.GOARCH when set (for testing)
+	// TestArch overrides runtime.GOARCH when set (for testing).
 	TestArch string
-	// TestOS overrides runtime.GOOS when set (for testing)
+	// TestOS overrides runtime.GOOS when set (for testing).
 	TestOS string
 )
 
-// getArch returns TestArch if set, otherwise runtime.GOARCH
+// getArch returns TestArch if set, otherwise runtime.GOARCH.
 func getArch() string {
 	if TestArch != "" {
 		return TestArch
@@ -20,7 +20,7 @@ func getArch() string {
 	return runtime.GOARCH
 }
 
-// getOS returns TestOS if set, otherwise runtime.GOOS
+// getOS returns TestOS if set, otherwise runtime.GOOS.
 func getOS() string {
 	if TestOS != "" {
 		return TestOS
@@ -28,7 +28,7 @@ func getOS() string {
 	return runtime.GOOS
 }
 
-// MatchArtifactByPlatform finds the first artifact name that matches current OS and architecture
+// MatchArtifactByPlatform finds the first artifact name that matches current OS and architecture.
 func MatchArtifactByPlatform(artifactNames []string) (string, bool) {
 	arch := getArch()
 	os := getOS()
@@ -52,7 +52,7 @@ func MatchArtifactByPlatform(artifactNames []string) (string, bool) {
 	return "", false
 }
 
-// matchesPlatform checks if artifact name contains both arch and OS patterns
+// matchesPlatform checks if artifact name contains both arch and OS patterns.
 func matchesPlatform(artifactName string, archMatches, osMatches []string) bool {
 	n := strings.ToLower(artifactName)
 
@@ -80,7 +80,7 @@ func matchesPlatform(artifactName string, archMatches, osMatches []string) bool 
 	return osFound
 }
 
-// isArchiveFile checks if the filename is a supported archive format
+// isArchiveFile checks if the filename is a supported archive format.
 func isArchiveFile(filename string) bool {
 	name := strings.ToLower(filename)
 

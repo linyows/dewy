@@ -7,18 +7,18 @@ import (
 	"strings"
 )
 
-// Logger wraps slog.Logger with format information
+// Logger wraps slog.Logger with format information.
 type Logger struct {
 	*slog.Logger
 	format string
 }
 
-// Format returns the logger format (json or text)
+// Format returns the logger format (json or text).
 func (l *Logger) Format() string {
 	return l.format
 }
 
-// SetupLogger creates and configures a structured logger
+// SetupLogger creates and configures a structured logger.
 func SetupLogger(level, format string, output io.Writer) *Logger {
 	var slogLevel slog.Level
 	switch strings.ToUpper(level) {

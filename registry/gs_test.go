@@ -42,7 +42,7 @@ func TestNewGS(t *testing.T) {
 	}
 }
 
-// MockGSClient is a mock client for testing
+// MockGSClient is a mock client for testing.
 type MockGSClient struct{}
 
 func (m *MockGSClient) Bucket(name string) *storage.BucketHandle {
@@ -111,13 +111,13 @@ func TestNewGSWithMockClient(t *testing.T) {
 }
 
 // Note: Testing LatestVersion requires complex mocking of GS client
-// For now, we'll test other functions and skip the integration test for LatestVersion
+// For now, we'll test other functions and skip the integration test for LatestVersion.
 func TestGSLatestVersion(t *testing.T) {
 	t.Skip("Complex GS client mocking required - integration test should be run separately")
 }
 
 // Note: Testing Current requires complex mocking of GS client
-// For now, we'll test other functions and skip the integration test for Current
+// For now, we'll test other functions and skip the integration test for Current.
 func TestGSCurrent(t *testing.T) {
 	t.Skip("Complex GS client mocking required - integration test should be run separately")
 }

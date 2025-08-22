@@ -235,7 +235,7 @@ func TestNewMockGitHub_ClientCreation(t *testing.T) {
 	}
 }
 
-// Test for edge cases and error conditions
+// Test for edge cases and error conditions.
 func TestNewGitHub_EdgeCases(t *testing.T) {
 	tests := []struct {
 		name      string

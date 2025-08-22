@@ -12,12 +12,12 @@ import (
 	"gopkg.in/mail.v2"
 )
 
-// testLogger creates a logger that discards output for testing
+// testLogger creates a logger that discards output for testing.
 func testLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
-// MockDialer implements MailDialer interface for testing
+// MockDialer implements MailDialer interface for testing.
 type MockDialer struct {
 	DialAndSendFunc func(m ...*mail.Message) error
 	Messages        []*mail.Message

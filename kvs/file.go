@@ -74,10 +74,10 @@ func (f *File) Write(key string, data []byte) error {
 	}
 
 	if !dirstat.Mode().IsDir() {
-		return errors.New("File.dir is not dir")
+		return errors.New("file.dir is not dir")
 	}
 	if dirstat.Size() > f.MaxSize {
-		return errors.New("Max size has been reached")
+		return errors.New("max size has been reached")
 	}
 
 	p := filepath.Join(f.dir, key)

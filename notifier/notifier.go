@@ -15,7 +15,7 @@ type Sender interface {
 	Send(ctx context.Context, message string)
 }
 
-// Notifier interface extends Sender with error handling
+// Notifier interface extends Sender with error handling.
 type Notifier interface {
 	Sender
 	SendError(ctx context.Context, err error)
@@ -27,7 +27,7 @@ const (
 	maxErrorCount   = 1000 // Prevent integer overflow
 )
 
-// ErrorLimitingSender wraps a Sender implementation with error limiting functionality
+// ErrorLimitingSender wraps a Sender implementation with error limiting functionality.
 type ErrorLimitingSender struct {
 	underlying Sender
 	errorCount int
@@ -35,7 +35,7 @@ type ErrorLimitingSender struct {
 	logger     *slog.Logger
 }
 
-// Send sends a message only if error count is 0
+// Send sends a message only if error count is 0.
 func (e *ErrorLimitingSender) Send(ctx context.Context, message string) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
@@ -45,7 +45,7 @@ func (e *ErrorLimitingSender) Send(ctx context.Context, message string) {
 	}
 }
 
-// SendError handles error notifications with count limiting
+// SendError handles error notifications with count limiting.
 func (e *ErrorLimitingSender) SendError(ctx context.Context, err error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -68,7 +68,7 @@ func (e *ErrorLimitingSender) SendError(ctx context.Context, err error) {
 	e.logger.Error("Error count", slog.Int("count", e.errorCount), slog.String("error", err.Error()))
 }
 
-// ResetErrorCount resets error count when operation succeeds
+// ResetErrorCount resets error count when operation succeeds.
 func (e *ErrorLimitingSender) ResetErrorCount() {
 	e.mu.Lock()
 	defer e.mu.Unlock()

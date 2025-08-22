@@ -22,7 +22,7 @@ import (
 	"github.com/linyows/dewy/registry"
 )
 
-// testLogger creates a logger that discards output for testing
+// testLogger creates a logger that discards output for testing.
 func testLogger() *logging.Logger {
 	return logging.SetupLogger("INFO", "text", io.Discard)
 }
@@ -107,7 +107,7 @@ func (a *mockArtifact) Download(ctx context.Context, w io.Writer) error {
 	return nil
 }
 
-// mockNotify is a mock notify for testing error notification limiting
+// mockNotify is a mock notify for testing error notification limiting.
 type mockNotify struct {
 	messages   []string
 	errorCount int

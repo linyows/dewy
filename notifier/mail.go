@@ -126,11 +126,13 @@ func (m *Mail) Send(ctx context.Context, message string) {
 			d.TLSConfig = &tls.Config{
 				ServerName:         m.Host,
 				InsecureSkipVerify: false,
+				MinVersion:         tls.VersionTLS12,
 			}
 		} else {
 			d.TLSConfig = &tls.Config{
 				ServerName:         m.Host,
-				InsecureSkipVerify: true,
+				InsecureSkipVerify: false,
+				MinVersion:         tls.VersionTLS12,
 			}
 		}
 		dialer = d

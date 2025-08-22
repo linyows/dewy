@@ -13,7 +13,7 @@ import (
 	"github.com/linyows/dewy/logging"
 )
 
-// testLogger creates a logger that discards output for testing
+// testLogger creates a logger that discards output for testing.
 func testLogger() *logging.Logger {
 	return logging.SetupLogger("INFO", "text", io.Discard)
 }

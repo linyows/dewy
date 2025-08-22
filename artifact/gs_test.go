@@ -100,7 +100,7 @@ func (m *MockObjectHandle) NewReader(ctx context.Context) (*storage.Reader, erro
 	return m.NewReaderFunc(ctx)
 }
 
-// MockReader implements io.ReadCloser for testing
+// MockReader implements io.ReadCloser for testing.
 type MockReader struct {
 	*bytes.Reader
 }
