@@ -7,6 +7,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.38.0
 	github.com/aws/aws-sdk-go-v2/config v1.31.0
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.87.0
+	github.com/aws/smithy-go v1.22.5
 	github.com/carlescere/scheduler v0.0.0-20170109141437-ee74d2f83d82
 	github.com/cli/safeexec v1.0.1
 	github.com/fatih/color v1.18.0
@@ -14,10 +15,8 @@ require (
 	github.com/google/go-github/v73 v73.0.0
 	github.com/google/go-querystring v1.1.0
 	github.com/gorilla/schema v1.4.1
-	github.com/hashicorp/logutils v1.0.0
 	github.com/jessevdk/go-flags v1.6.1
 	github.com/k1LoW/grpcstub v0.25.11
-	github.com/k1LoW/remote v0.3.3
 	github.com/lestrrat-go/server-starter v0.0.0-20210101230921-50cd1900b5bc
 	github.com/lestrrat-go/slack v0.0.0-20190827134815-1aaae719550a
 	github.com/linyows/server-starter v0.1.0
@@ -131,7 +130,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sso v1.28.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.33.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.37.0 // indirect
-	github.com/aws/smithy-go v1.22.5 // indirect
 	github.com/awslabs/amazon-ecr-credential-helper/ecr-login v0.0.0-20240514230400-03fa26f5508f // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
@@ -147,7 +145,6 @@ require (
 	github.com/bodgit/sevenzip v1.6.0 // indirect
 	github.com/bodgit/windows v1.0.1 // indirect
 	github.com/bombsimon/wsl/v4 v4.5.0 // indirect
-	github.com/bradleyfalzon/ghinstallation/v2 v2.15.0 // indirect
 	github.com/breml/bidichk v0.3.2 // indirect
 	github.com/breml/errchkjson v0.4.0 // indirect
 	github.com/bufbuild/buf v1.55.1 // indirect
@@ -179,7 +176,6 @@ require (
 	github.com/chavacava/garif v0.1.0 // indirect
 	github.com/chrismellard/docker-credential-acr-env v0.0.0-20230304212654-82a0ddb27589 // indirect
 	github.com/ckaznocha/intrange v0.3.0 // indirect
-	github.com/cli/go-gh/v2 v2.12.1 // indirect
 	github.com/cloudflare/circl v1.6.1 // indirect
 	github.com/cncf/xds/go v0.0.0-20250501225837-2ac532fd4443 // indirect
 	github.com/containerd/console v1.0.4 // indirect
@@ -267,9 +263,7 @@ require (
 	github.com/golangci/unconvert v0.0.0-20240309020433-c5143eacb3ed // indirect
 	github.com/google/cel-go v0.25.0 // indirect
 	github.com/google/go-containerregistry v0.20.6 // indirect
-	github.com/google/go-github/v58 v58.0.0 // indirect
 	github.com/google/go-github/v62 v62.0.0 // indirect
-	github.com/google/go-github/v71 v71.0.0 // indirect
 	github.com/google/ko v0.15.4 // indirect
 	github.com/google/pprof v0.0.0-20250607225305-033d6d78b36a // indirect
 	github.com/google/rpmpack v0.6.1-0.20240329070804-c2247cbb881a // indirect
@@ -324,11 +318,8 @@ require (
 	github.com/jjti/go-spancheck v0.6.4 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
-	github.com/jszwec/s3fs v0.4.0 // indirect
 	github.com/julz/importas v0.2.0 // indirect
 	github.com/k1LoW/bufresolv v0.7.8 // indirect
-	github.com/k1LoW/ghfs v1.2.0 // indirect
-	github.com/k1LoW/go-github-client/v58 v58.0.11 // indirect
 	github.com/k1LoW/protoresolv v0.1.7 // indirect
 	github.com/karamaru-alpha/copyloopvar v1.2.1 // indirect
 	github.com/kevinburke/ssh_config v1.2.0 // indirect
@@ -361,7 +352,6 @@ require (
 	github.com/mattn/go-localereader v0.0.1 // indirect
 	github.com/mattn/go-mastodon v0.0.8 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
-	github.com/mauri870/gcsfs v0.0.0-20220203135357-0da01ba4e96d // indirect
 	github.com/mgechev/revive v1.7.0 // indirect
 	github.com/mikelolasagasti/xz v1.0.1 // indirect
 	github.com/minio/minlz v1.0.0 // indirect
