@@ -1,8 +1,8 @@
 package dewy
 
 import (
-	"io"
 	"github.com/linyows/dewy/logging"
+	"io"
 )
 
 // SetupLogger creates and configures a structured logger
