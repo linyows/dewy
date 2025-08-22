@@ -3,11 +3,11 @@ package registry
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/gorilla/schema"
+	"github.com/linyows/dewy/logging"
 )
 
 var (
@@ -48,18 +48,18 @@ type ReportRequest struct {
 	Err error
 }
 
-func New(ctx context.Context, url string, logger *slog.Logger) (Registry, error) {
+func New(ctx context.Context, url string, log *logging.Logger) (Registry, error) {
 	splitted := strings.SplitN(url, "://", 2)
 
 	switch splitted[0] {
 	case ghrScheme:
-		return NewGHR(ctx, url, logger)
+		return NewGHR(ctx, url, log)
 
 	case s3Scheme:
-		return NewS3(ctx, url, logger)
+		return NewS3(ctx, url, log)
 
 	case gcsScheme:
-		return NewGCS(ctx, url, logger)
+		return NewGCS(ctx, url, log)
 
 	case grpcScheme:
 		return NewGRPC(ctx, url)
