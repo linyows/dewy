@@ -26,8 +26,8 @@ type cli struct {
 	env              Env
 	command          string
 	args             []string
-	LogLevel         string   `long:"log-level" short:"l" arg:"(debug|info|warn|error)" description:"Set log level for output"`
-	LogFormat        string   `long:"format" short:"f" arg:"(text|json)" description:"Set log format for output (default: text)"`
+	LogLevel         string   `long:"log-level" short:"l" arg:"(debug|info|warn|error)" description:"Set log level for output (default: error)"`
+	LogFormat        string   `long:"log-format" short:"f" arg:"(text|json)" description:"Set log format for output (default: text)"`
 	Interval         int      `long:"interval" arg:"seconds" short:"i" description:"Polling interval in seconds for checking registry updates (default: 10)"`
 	Ports            []string `long:"port" short:"p" description:"TCP ports for server command to listen on (comma-separated, ranges, or multiple flags)"`
 	Registry         string   `long:"registry" description:"Registry URL (e.g., ghr://owner/repo, s3://region/bucket/prefix)"`

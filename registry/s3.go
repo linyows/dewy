@@ -128,7 +128,8 @@ func (s *S3) Current(ctx context.Context) (*CurrentResponse, error) {
 		}
 
 		// Use common pattern matching
-		matchedName, found := MatchArtifactByPlatform(objectNames)
+		var matchedName string
+		matchedName, found = MatchArtifactByPlatform(objectNames)
 		if found {
 			artifactName = matchedName
 			if obj, exists := objectMap[matchedName]; exists {
