@@ -15,58 +15,51 @@ import (
 )
 
 const (
-	gcsFormat string = "gcs://<project>/<bucket>/<prefix>"
+	gsFormat string = "gs://<bucket>/<prefix>"
 )
 
-// GCS struct.
-type GCS struct {
-	Project    string `schema:"project"`
+// GS struct.
+type GS struct {
 	Bucket     string `schema:"-"`
 	Prefix     string `schema:"-"`
 	Artifact   string `schema:"artifact"`
 	PreRelease bool   `schema:"pre-release"`
-	client     GCSClient
+	client     GSClient
 	logger     *logging.Logger
 }
 
-// NewGCS returns GCS.
-func NewGCS(ctx context.Context, u string, log *logging.Logger) (*GCS, error) {
-	return NewGCSWithClient(ctx, u, log, nil)
+// NewGS returns GS.
+func NewGS(ctx context.Context, u string, log *logging.Logger) (*GS, error) {
+	return NewGSWithClient(ctx, u, log, nil)
 }
 
-// NewGCSWithClient returns GCS with custom client (for testing).
-func NewGCSWithClient(ctx context.Context, u string, log *logging.Logger, client GCSClient) (*GCS, error) {
+// NewGSWithClient returns GS with custom client (for testing).
+func NewGSWithClient(ctx context.Context, u string, log *logging.Logger, client GSClient) (*GS, error) {
 	ur, err := url.Parse(u)
 	if err != nil {
 		return nil, err
 	}
 
-	after, _ := strings.CutPrefix(ur.Path, "/")
-	splitted := strings.SplitN(after, "/", 2)
-	bucket := ""
+	bucket := ur.Host
 	prefix := ""
-	if len(splitted) > 0 {
-		bucket = splitted[0]
-	}
-	if len(splitted) > 1 {
-		prefix = strings.TrimPrefix(addTrailingSlash(splitted[1]), "/")
+	if ur.Path != "" {
+		path := strings.TrimPrefix(ur.Path, "/")
+		if path != "" {
+			prefix = addTrailingSlash(path)
+		}
 	}
 
-	g := &GCS{
-		Project: ur.Host,
-		Bucket:  bucket,
-		Prefix:  prefix,
-		logger:  log,
+	g := &GS{
+		Bucket: bucket,
+		Prefix: prefix,
+		logger: log,
 	}
 	if err = decoder.Decode(g, ur.Query()); err != nil {
 		return nil, err
 	}
 
-	if g.Project == "" {
-		return nil, fmt.Errorf("project is required: %s", gcsFormat)
-	}
 	if g.Bucket == "" {
-		return nil, fmt.Errorf("bucket is required: %s", gcsFormat)
+		return nil, fmt.Errorf("bucket is required: %s", gsFormat)
 	}
 
 	if client == nil {
@@ -83,7 +76,7 @@ func NewGCSWithClient(ctx context.Context, u string, log *logging.Logger, client
 }
 
 // Current returns current artifact.
-func (g *GCS) Current(ctx context.Context) (*CurrentResponse, error) {
+func (g *GS) Current(ctx context.Context) (*CurrentResponse, error) {
 	prefix, version, err := g.LatestVersion(ctx)
 	if err != nil {
 		return nil, err
@@ -105,7 +98,7 @@ func (g *GCS) Current(ctx context.Context) (*CurrentResponse, error) {
 			if name == artifactName {
 				found = true
 				createdAt = &obj.Created
-				g.logger.Debug("Fetched GCS object", slog.Any("object", obj))
+				g.logger.Debug("Fetched Google Cloud Storage object", slog.Any("object", obj))
 				break
 			}
 		}
@@ -126,7 +119,7 @@ func (g *GCS) Current(ctx context.Context) (*CurrentResponse, error) {
 			artifactName = matchedName
 			if obj, exists := objectMap[matchedName]; exists {
 				createdAt = &obj.Created
-				g.logger.Debug("Fetched GCS object", slog.Any("object", obj))
+				g.logger.Debug("Fetched Google Cloud Storage object", slog.Any("object", obj))
 			}
 		}
 	}
@@ -149,12 +142,12 @@ func (g *GCS) Current(ctx context.Context) (*CurrentResponse, error) {
 	}, nil
 }
 
-func (g *GCS) buildArtifactURL(name string) string {
-	return fmt.Sprintf("%s://%s/%s/%s", gcsScheme, g.Project, g.Bucket, name)
+func (g *GS) buildArtifactURL(name string) string {
+	return fmt.Sprintf("%s://%s/%s", gsScheme, g.Bucket, name)
 }
 
 // Report report shipping.
-func (g *GCS) Report(ctx context.Context, req *ReportRequest) error {
+func (g *GS) Report(ctx context.Context, req *ReportRequest) error {
 	if req.Err != nil {
 		return req.Err
 	}
@@ -169,12 +162,12 @@ func (g *GCS) Report(ctx context.Context, req *ReportRequest) error {
 	return err
 }
 
-type GCSClient interface {
+type GSClient interface {
 	Bucket(name string) *storage.BucketHandle
 	Close() error
 }
 
-func (g *GCS) putTextObject(ctx context.Context, name, content string) error {
+func (g *GS) putTextObject(ctx context.Context, name, content string) error {
 	bucket := g.client.Bucket(g.Bucket)
 	obj := bucket.Object(name)
 	w := obj.NewWriter(ctx)
@@ -182,13 +175,13 @@ func (g *GCS) putTextObject(ctx context.Context, name, content string) error {
 	defer w.Close()
 
 	if _, err := w.Write([]byte(content)); err != nil {
-		return fmt.Errorf("failed to write text to GCS: %w", err)
+		return fmt.Errorf("failed to write text to Google Cloud Storage: %w", err)
 	}
 
 	return nil
 }
 
-func (g *GCS) listObjects(ctx context.Context, prefix string) ([]*storage.ObjectAttrs, error) {
+func (g *GS) listObjects(ctx context.Context, prefix string) ([]*storage.ObjectAttrs, error) {
 	bucket := g.client.Bucket(g.Bucket)
 	query := &storage.Query{
 		Prefix: prefix,
@@ -210,12 +203,12 @@ func (g *GCS) listObjects(ctx context.Context, prefix string) ([]*storage.Object
 	return objects, nil
 }
 
-func (g *GCS) extractFilenameFromObjectName(name, prefix string) string {
+func (g *GS) extractFilenameFromObjectName(name, prefix string) string {
 	return strings.TrimPrefix(removeTrailingSlash(name), prefix)
 }
 
 // getVersionDirectoryCreatedAt gets the creation time of the first object in a version directory
-func (g *GCS) getVersionDirectoryCreatedAt(ctx context.Context, prefix string) (*time.Time, error) {
+func (g *GS) getVersionDirectoryCreatedAt(ctx context.Context, prefix string) (*time.Time, error) {
 	bucket := g.client.Bucket(g.Bucket)
 	query := &storage.Query{
 		Prefix: prefix,
@@ -233,7 +226,7 @@ func (g *GCS) getVersionDirectoryCreatedAt(ctx context.Context, prefix string) (
 	return &attrs.Created, nil
 }
 
-func (g *GCS) LatestVersion(ctx context.Context) (string, *SemVer, error) {
+func (g *GS) LatestVersion(ctx context.Context) (string, *SemVer, error) {
 	bucket := g.client.Bucket(g.Bucket)
 	query := &storage.Query{
 		Prefix:    g.Prefix,
