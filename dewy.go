@@ -21,6 +21,7 @@ import (
 	"github.com/cli/safeexec"
 	"github.com/linyows/dewy/artifact"
 	"github.com/linyows/dewy/kvs"
+	"github.com/linyows/dewy/logging"
 	"github.com/linyows/dewy/notifier"
 	"github.com/linyows/dewy/registry"
 	starter "github.com/linyows/server-starter"
@@ -50,15 +51,15 @@ type Dewy struct {
 	root            string
 	job             *scheduler.Job
 	notifier        notifier.Notifier
-	logger          *slog.Logger
+	logger          *logging.Logger
 	sync.RWMutex
 }
 
 // New returns Dewy.
-func New(c Config, logger *slog.Logger) (*Dewy, error) {
+func New(c Config, log *logging.Logger) (*Dewy, error) {
 	kv := &kvs.File{}
 	kv.Default()
-	kv.SetLogger(logger)
+	kv.SetLogger(log.Logger)
 
 	wd, err := os.Getwd()
 	if err != nil {
@@ -77,7 +78,7 @@ func New(c Config, logger *slog.Logger) (*Dewy, error) {
 		cache:           kv,
 		isServerRunning: false,
 		root:            wd,
-		logger:          logger,
+		logger:          log,
 	}, nil
 }
 
@@ -96,7 +97,7 @@ func (d *Dewy) Start(i int) {
 		d.logger.Error("Registry failure", slog.String("error", err.Error()))
 	}
 
-	d.notifier, err = notifier.New(ctx, d.config.Notifier, d.logger)
+	d.notifier, err = notifier.New(ctx, d.config.Notifier, d.logger.Logger)
 	if err != nil {
 		d.logger.Error("Notifier failure", slog.String("error", err.Error()))
 	}
@@ -216,7 +217,7 @@ func (d *Dewy) Run() error {
 		buf := new(bytes.Buffer)
 
 		if d.artifact == nil {
-			d.artifact, err = artifact.New(ctx, res.ArtifactURL, d.logger)
+			d.artifact, err = artifact.New(ctx, res.ArtifactURL, d.logger.Logger)
 			if err != nil {
 				return fmt.Errorf("failed artifact.New: %w", err)
 			}
