@@ -306,13 +306,26 @@ type customLogger struct {
 }
 
 func (l *customLogger) Logf(classification awslogging.Classification, format string, v ...any) {
-	s := fmt.Sprintf(format, v...)
-	switch classification {
-	case awslogging.Warn:
-		l.Warn(s)
-	case awslogging.Debug:
-		l.Debug(s)
-	default:
-		l.Info(s)
+	if l.Format() == "json" {
+		// For JSON format, use structured logging
+		switch classification {
+		case awslogging.Warn:
+			l.Warn("aws", "message", fmt.Sprintf(format, v...))
+		case awslogging.Debug:
+			l.Debug("aws", "message", fmt.Sprintf(format, v...))
+		default:
+			l.Info("aws", "message", fmt.Sprintf(format, v...))
+		}
+	} else {
+		// For text format, use simple message
+		s := fmt.Sprintf(format, v...)
+		switch classification {
+		case awslogging.Warn:
+			l.Warn(s)
+		case awslogging.Debug:
+			l.Debug(s)
+		default:
+			l.Info(s)
+		}
 	}
 }
