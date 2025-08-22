@@ -13,6 +13,7 @@ import (
 	"github.com/google/go-github/v73/github"
 	"github.com/google/go-querystring/query"
 	"github.com/linyows/dewy/client"
+	"github.com/linyows/dewy/logging"
 )
 
 // ArtifactNotFoundError wraps artifact not found errors with release information
@@ -47,11 +48,11 @@ type GHR struct {
 	PreRelease            bool   `schema:"pre-release"`
 	DisableRecordShipping bool   // FIXME: For testing. Remove this.
 	cl                    *github.Client
-	logger                *slog.Logger
+	logger                *logging.Logger
 }
 
 // New returns GHR.
-func NewGHR(ctx context.Context, u string, logger *slog.Logger) (*GHR, error) {
+func NewGHR(ctx context.Context, u string, log *logging.Logger) (*GHR, error) {
 	ur, err := url.Parse(u)
 	if err != nil {
 		return nil, err
@@ -78,7 +79,7 @@ func NewGHR(ctx context.Context, u string, logger *slog.Logger) (*GHR, error) {
 		return nil, err
 	}
 
-	ghr.logger = logger
+	ghr.logger = log
 	return ghr, nil
 }
 

@@ -13,6 +13,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	awslogging "github.com/aws/smithy-go/logging"
+	"github.com/linyows/dewy/logging"
 )
 
 const (
@@ -29,11 +31,11 @@ type S3 struct {
 	PreRelease bool   `schema:"pre-release"`
 	cl         S3Client
 	pager      ListObjectsV2Pager
-	logger     *slog.Logger
+	logger     *logging.Logger
 }
 
 // NewS3 returns S3.
-func NewS3(ctx context.Context, u string, logger *slog.Logger) (*S3, error) {
+func NewS3(ctx context.Context, u string, log *logging.Logger) (*S3, error) {
 	ur, err := url.Parse(u)
 	if err != nil {
 		return nil, err
@@ -66,7 +68,11 @@ func NewS3(ctx context.Context, u string, logger *slog.Logger) (*S3, error) {
 		return nil, fmt.Errorf("bucket is required: %s", s3Format)
 	}
 
-	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(s.Region))
+	cfg, err := config.LoadDefaultConfig(ctx,
+		config.WithRegion(s.Region),
+		config.WithLogger(&customLogger{Logger: log}),
+		config.WithClientLogMode(aws.LogResponse),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +91,7 @@ func NewS3(ctx context.Context, u string, logger *slog.Logger) (*S3, error) {
 		s.cl = s3.NewFromConfig(cfg)
 	}
 
-	s.logger = logger
+	s.logger = log
 	return s, nil
 }
 
@@ -293,4 +299,20 @@ func (s *S3) LatestVersion(ctx context.Context) (string, *SemVer, error) {
 
 	latestObject := objectMap[latestName]
 	return *latestObject.Prefix, latestVersion, nil
+}
+
+type customLogger struct {
+	*logging.Logger
+}
+
+func (l *customLogger) Logf(classification awslogging.Classification, format string, v ...any) {
+	s := fmt.Sprintf(format, v...)
+	switch classification {
+	case awslogging.Warn:
+		l.Warn(s)
+	case awslogging.Debug:
+		l.Debug(s)
+	default:
+		l.Info(s)
+	}
 }

@@ -4,18 +4,18 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/k1LoW/grpcstub"
+	"github.com/linyows/dewy/logging"
 )
 
 // testLogger creates a logger that discards output for testing
-func testLogger() *slog.Logger {
-	return slog.New(slog.NewTextHandler(io.Discard, nil))
+func testLogger() *logging.Logger {
+	return logging.SetupLogger("INFO", "text", io.Discard)
 }
 
 func TestNew(t *testing.T) {
