@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
+	"github.com/linyows/dewy/logging"
 	"google.golang.org/api/iterator"
 )
 
@@ -25,16 +26,16 @@ type GCS struct {
 	Artifact   string `schema:"artifact"`
 	PreRelease bool   `schema:"pre-release"`
 	client     GCSClient
-	logger     *slog.Logger
+	logger     *logging.Logger
 }
 
 // NewGCS returns GCS.
-func NewGCS(ctx context.Context, u string, logger *slog.Logger) (*GCS, error) {
-	return NewGCSWithClient(ctx, u, logger, nil)
+func NewGCS(ctx context.Context, u string, log *logging.Logger) (*GCS, error) {
+	return NewGCSWithClient(ctx, u, log, nil)
 }
 
 // NewGCSWithClient returns GCS with custom client (for testing).
-func NewGCSWithClient(ctx context.Context, u string, logger *slog.Logger, client GCSClient) (*GCS, error) {
+func NewGCSWithClient(ctx context.Context, u string, log *logging.Logger, client GCSClient) (*GCS, error) {
 	ur, err := url.Parse(u)
 	if err != nil {
 		return nil, err
@@ -55,7 +56,7 @@ func NewGCSWithClient(ctx context.Context, u string, logger *slog.Logger, client
 		Project: ur.Host,
 		Bucket:  bucket,
 		Prefix:  prefix,
-		logger:  logger,
+		logger:  log,
 	}
 	if err = decoder.Decode(g, ur.Query()); err != nil {
 		return nil, err
