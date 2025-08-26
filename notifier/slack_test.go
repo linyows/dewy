@@ -233,24 +233,6 @@ func TestSlack_BuildAttachment(t *testing.T) {
 		want    func(attachment objects.Attachment) bool
 	}{
 		{
-			name: "attachment with github info",
-			slack: &Slack{
-				Channel: "/general",
-				github: &Github{
-					Owner:    "testowner",
-					Repo:     "testrepo",
-					Artifact: "test-artifact",
-				},
-			},
-			message: "Test message",
-			want: func(attachment objects.Attachment) bool {
-				return attachment.Text == "Test message" &&
-					attachment.Title == "testrepo" &&
-					attachment.AuthorName == "testowner" &&
-					strings.Contains(attachment.TitleLink, "github.com/testowner/testrepo")
-			},
-		},
-		{
 			name: "attachment with title and URL",
 			slack: &Slack{
 				Channel:  "/general",
@@ -261,7 +243,9 @@ func TestSlack_BuildAttachment(t *testing.T) {
 			want: func(attachment objects.Attachment) bool {
 				return strings.Contains(attachment.Text, "Test message") &&
 					strings.Contains(attachment.Text, "Test Project") &&
-					strings.Contains(attachment.Text, "https://example.com")
+					strings.Contains(attachment.Text, "https://example.com") &&
+					attachment.Footer != "" &&
+					attachment.Timestamp != 0
 			},
 		},
 		{
@@ -273,7 +257,9 @@ func TestSlack_BuildAttachment(t *testing.T) {
 			message: "Test message",
 			want: func(attachment objects.Attachment) bool {
 				return strings.Contains(attachment.Text, "Test message") &&
-					strings.Contains(attachment.Text, "Test Project")
+					strings.Contains(attachment.Text, "Test Project") &&
+					attachment.Footer != "" &&
+					attachment.Timestamp != 0
 			},
 		},
 		{
@@ -283,7 +269,9 @@ func TestSlack_BuildAttachment(t *testing.T) {
 			},
 			message: "Test message",
 			want: func(attachment objects.Attachment) bool {
-				return strings.Contains(attachment.Text, "Test message")
+				return strings.Contains(attachment.Text, "Test message") &&
+					attachment.Footer != "" &&
+					attachment.Timestamp != 0
 			},
 		},
 	}
@@ -323,35 +311,6 @@ func TestSlack_genColor(t *testing.T) {
 	}
 }
 
-func TestGithub_OwnerURL(t *testing.T) {
-	github := &Github{Owner: "testowner"}
-	expected := "https://github.com/testowner"
-	got := github.OwnerURL()
-
-	if got != expected {
-		t.Errorf("OwnerURL() = %v, want %v", got, expected)
-	}
-}
-
-func TestGithub_OwnerIconURL(t *testing.T) {
-	github := &Github{Owner: "testowner"}
-	expected := "https://github.com/testowner.png?size=200"
-	got := github.OwnerIconURL()
-
-	if got != expected {
-		t.Errorf("OwnerIconURL() = %v, want %v", got, expected)
-	}
-}
-
-func TestGithub_RepoURL(t *testing.T) {
-	github := &Github{Owner: "testowner", Repo: "testrepo"}
-	expected := "https://github.com/testowner/testrepo"
-	got := github.RepoURL()
-
-	if got != expected {
-		t.Errorf("RepoURL() = %v, want %v", got, expected)
-	}
-}
 
 func TestSlack_SetSender(t *testing.T) {
 	slack := &Slack{}
