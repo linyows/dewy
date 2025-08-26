@@ -237,8 +237,8 @@ func (d *Dewy) Run() error {
 		d.logger.Info("Cached artifact", slog.String("cache_key", cachekeyName))
 	}
 
-	msg := fmt.Sprintf("Ready for `%s`", res.Tag)
-	d.logger.Info("New version notification", slog.String("message", msg))
+	msg := fmt.Sprintf("Downloaded artifact for `%s`", res.Tag)
+	d.logger.Info("Download notification", slog.String("message", msg))
 	d.notifier.Send(ctx, msg)
 
 	if err := d.deploy(cachekeyName); err != nil {
