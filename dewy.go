@@ -102,7 +102,7 @@ func (d *Dewy) Start(i int) {
 		d.logger.Error("Notifier failure", slog.String("error", err.Error()))
 	}
 
-	msg := fmt.Sprintf("Automatic shipping started by *Dewy* (%s)", d.config.Version)
+	msg := fmt.Sprintf("Automatic shipping started by *Dewy* (v%s)", d.config.Version)
 	d.logger.Info("Dewy start notification", slog.String("message", msg))
 	d.notifier.Send(ctx, msg)
 
@@ -136,7 +136,7 @@ func (d *Dewy) waitSigs(ctx context.Context) {
 			if err := d.restartServer(); err != nil {
 				d.logger.Error("Restart failure", slog.String("error", err.Error()))
 			} else {
-				msg := fmt.Sprintf("Restarted receiving by \"%s\" signal", "SIGUSR1")
+				msg := fmt.Sprintf("Restarted receiving by `%s` signal", "SIGUSR1")
 				d.logger.Info("Restart notification", slog.String("message", msg))
 				d.notifier.Send(ctx, msg)
 			}
@@ -144,7 +144,7 @@ func (d *Dewy) waitSigs(ctx context.Context) {
 
 		case syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:
 			d.job.Quit <- true
-			msg := fmt.Sprintf("Stop receiving by \"%s\" signal", sig)
+			msg := fmt.Sprintf("Stop receiving by `%s` signal", sig)
 			d.logger.Info("Shutdown notification", slog.String("message", msg))
 			d.notifier.Send(ctx, msg)
 			return
