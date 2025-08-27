@@ -159,11 +159,11 @@ Google Cloud Storageをレジストリに使う場合は以下の設定をしま
 
 ```sh
 # 書式
-# gcs://<project-id>/<bucket-name>/<path-prefix>?<options: pre-release, artifact>
+# gs://<project-id>/<bucket-name>/<path-prefix>?<options: pre-release, artifact>
 
 # 例
 $ export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account.json"
-$ dewy --registry gcs://my-project/dewy-bucket/foo/bar/myapp ...
+$ dewy --registry gs://my-project/dewy-bucket/foo/bar/myapp ...
 ```
 
 Google Cloud Storageでのオブジェクトパスは、S3と同じ順序に従ってください: `<prefix>/<semver>/<artifact>`。例：
