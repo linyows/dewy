@@ -347,7 +347,7 @@ sequenceDiagram
         Note over D: Skip deployment - already current
     end
 
-    D->>N: Send("Ready for v1.2.3")
+    D->>N: Send("Downloaded artifact for v1.2.3")
 
     Note over D,App: Deployment Process
 
