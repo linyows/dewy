@@ -195,11 +195,15 @@ func (d *Dewy) Run() error {
 		// same current version and already cached
 		if string(currentkeyValue) == cachekeyName && key == cachekeyName {
 			d.logger.Debug("Deploy skipped")
-			if d.isServerRunning {
-				return nil
+			if d.config.Command == SERVER {
+				if d.isServerRunning {
+					return nil
+				}
+				// when the server fails to start (SERVER mode only)
+				break
+			} else if d.config.Command == ASSETS {
+				return nil // always skip for assets command
 			}
-			// when the server fails to start
-			break
 		}
 
 		// no current version but already cached
