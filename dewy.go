@@ -102,7 +102,7 @@ func (d *Dewy) Start(i int) {
 		d.logger.Error("Notifier failure", slog.String("error", err.Error()))
 	}
 
-	msg := fmt.Sprintf("Automatic shipping started by *Dewy* (v%s)", d.config.Version)
+	msg := fmt.Sprintf("Automatic shipping started by *Dewy* (v%s: %s)", d.config.Version, d.config.Command.String())
 	d.logger.Info("Dewy start notification", slog.String("message", msg))
 	d.notifier.Send(ctx, msg)
 
