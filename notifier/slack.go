@@ -93,23 +93,21 @@ func (s *Slack) genColor() string {
 	return strings.ToUpper(fmt.Sprintf("#%x", md5.Sum([]byte(hostname())))[0:7]) //nolint:gosec
 }
 
-
 // BuildAttachment returns attachment for slack.
 func (s *Slack) BuildAttachment(message string) objects.Attachment {
 	var at objects.Attachment
 	at.Color = s.genColor()
+	at.Text = message
 
 	// Set message text based on title configuration
 	if s.Title != "" && s.TitleURL != "" {
-		at.Text = fmt.Sprintf("%s of <%s|%s>", message, s.TitleURL, s.Title)
+		at.Footer = fmt.Sprintf("<%s|%s>/%s", s.TitleURL, s.Title, hostname())
 	} else if s.Title != "" {
-		at.Text = fmt.Sprintf("%s of %s", message, s.Title)
+		at.Footer = fmt.Sprintf("%s/%s", s.Title, hostname())
 	} else {
-		at.Text = message
+		at.Footer = hostname()
 	}
 
-	// Add hostname to footer with timestamp
-	at.Footer = hostname()
 	at.FooterIcon = SlackFooterIcon
 	at.Timestamp = objects.Timestamp(time.Now().Unix())
 

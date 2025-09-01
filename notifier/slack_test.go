@@ -242,8 +242,8 @@ func TestSlack_BuildAttachment(t *testing.T) {
 			message: "Test message",
 			want: func(attachment objects.Attachment) bool {
 				return strings.Contains(attachment.Text, "Test message") &&
-					strings.Contains(attachment.Text, "Test Project") &&
-					strings.Contains(attachment.Text, "https://example.com") &&
+					strings.Contains(attachment.Footer, "Test Project") &&
+					strings.Contains(attachment.Footer, "https://example.com") &&
 					attachment.Footer != "" &&
 					attachment.Timestamp != 0
 			},
@@ -257,7 +257,7 @@ func TestSlack_BuildAttachment(t *testing.T) {
 			message: "Test message",
 			want: func(attachment objects.Attachment) bool {
 				return strings.Contains(attachment.Text, "Test message") &&
-					strings.Contains(attachment.Text, "Test Project") &&
+					strings.Contains(attachment.Footer, "Test Project") &&
 					attachment.Footer != "" &&
 					attachment.Timestamp != 0
 			},
@@ -310,7 +310,6 @@ func TestSlack_genColor(t *testing.T) {
 		t.Errorf("genColor() = %v, should be 7 characters long", color)
 	}
 }
-
 
 func TestSlack_SetSender(t *testing.T) {
 	slack := &Slack{}
