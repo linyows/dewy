@@ -173,7 +173,7 @@ func (s *Slack) BuildHookAttachment(hookType string, result *HookResult) objects
 	return at
 }
 
-// formatOutput formats long output text for Slack display with proper truncation
+// formatOutput formats long output text for Slack display with proper truncation.
 func (s *Slack) formatOutput(output string) string {
 	const maxFieldLength = 2000 // Slack attachment field limit is ~3000, leave some buffer
 	const maxLines = 50         // Limit number of lines to prevent very long outputs

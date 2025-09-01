@@ -16,7 +16,7 @@ type Sender interface {
 	Send(ctx context.Context, message string)
 }
 
-// HookResult represents the result of executing a deploy hook
+// HookResult represents the result of executing a deploy hook.
 type HookResult struct {
 	Command  string
 	Stdout   string
