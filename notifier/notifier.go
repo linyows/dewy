@@ -8,6 +8,7 @@ import (
 	"os/user"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Sender interface for basic message sending.
@@ -15,9 +16,25 @@ type Sender interface {
 	Send(ctx context.Context, message string)
 }
 
-// Notifier interface extends Sender with error handling.
+// HookResult represents the result of executing a deploy hook
+type HookResult struct {
+	Command  string
+	Stdout   string
+	Stderr   string
+	ExitCode int
+	Duration time.Duration
+	Success  bool
+}
+
+// AttachmentSender interface for sending messages with attachments.
+type AttachmentSender interface {
+	SendHookResult(ctx context.Context, hookType string, result *HookResult)
+}
+
+// Notifier interface extends Sender with error handling and hook result notifications.
 type Notifier interface {
 	Sender
+	AttachmentSender
 	SendError(ctx context.Context, err error)
 	ResetErrorCount()
 }
@@ -76,6 +93,35 @@ func (e *ErrorLimitingSender) ResetErrorCount() {
 	if e.errorCount > 0 {
 		e.logger.Info("Error count reset", slog.Int("from", e.errorCount), slog.Int("to", 0))
 		e.errorCount = 0
+	}
+}
+
+// SendHookResult sends hook result notification.
+func (e *ErrorLimitingSender) SendHookResult(ctx context.Context, hookType string, result *HookResult) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	if e.errorCount == 0 {
+		if attachmentSender, ok := e.underlying.(AttachmentSender); ok {
+			attachmentSender.SendHookResult(ctx, hookType, result)
+		} else {
+			// Fallback to regular message for notifiers that don't support attachments
+			statusIcon := "✓"
+			if !result.Success {
+				statusIcon = "✗"
+			}
+			msg := fmt.Sprintf("%s %s Hook Result\n**Command:** `%s`\n**Exit Code:** %d\n**Duration:** %s",
+				statusIcon, hookType, result.Command, result.ExitCode, result.Duration)
+
+			if result.Stdout != "" {
+				msg += fmt.Sprintf("\n**Stdout:**\n```\n%s\n```", result.Stdout)
+			}
+			if result.Stderr != "" {
+				msg += fmt.Sprintf("\n**Stderr:**\n```\n%s\n```", result.Stderr)
+			}
+
+			e.underlying.Send(ctx, msg)
+		}
 	}
 }
 

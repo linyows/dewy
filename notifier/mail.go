@@ -143,6 +143,81 @@ func (m *Mail) Send(ctx context.Context, message string) {
 	}
 }
 
+// SendHookResult sends hook result via email.
+func (m *Mail) SendHookResult(ctx context.Context, hookType string, result *HookResult) {
+	statusIcon := "SUCCESS"
+	if !result.Success {
+		statusIcon = "FAILED"
+	}
+
+	subject := fmt.Sprintf("Dewy %s Hook %s", hookType, statusIcon)
+
+	msg := mail.NewMessage()
+	msg.SetHeader("From", m.From)
+	msg.SetHeader("To", m.To)
+	msg.SetHeader("Subject", subject)
+
+	body := m.formatHookResult(hookType, result)
+	msg.SetBody("text/plain", body)
+
+	var dialer MailDialer
+	if m.dialer != nil {
+		dialer = m.dialer
+	} else {
+		d := mail.NewDialer(m.Host, m.Port, m.Username, m.Password)
+		if m.TLS {
+			d.TLSConfig = &tls.Config{
+				ServerName:         m.Host,
+				InsecureSkipVerify: false,
+				MinVersion:         tls.VersionTLS12,
+			}
+		} else {
+			d.TLSConfig = &tls.Config{
+				ServerName:         m.Host,
+				InsecureSkipVerify: false,
+				MinVersion:         tls.VersionTLS12,
+			}
+		}
+		dialer = d
+	}
+
+	if err := dialer.DialAndSend(msg); err != nil {
+		m.logger.Error("Mail hook result send failure", slog.String("error", err.Error()))
+	}
+}
+
+func (m *Mail) formatHookResult(hookType string, result *HookResult) string {
+	status := "SUCCESS"
+	if !result.Success {
+		status = "FAILED"
+	}
+
+	body := fmt.Sprintf(`%s Hook %s
+
+Command: %s
+Exit Code: %d
+Duration: %s
+
+`, hookType, status, result.Command, result.ExitCode, result.Duration)
+
+	if result.Stdout != "" {
+		body += fmt.Sprintf("STDOUT:\n%s\n\n", result.Stdout)
+	}
+
+	if result.Stderr != "" {
+		body += fmt.Sprintf("STDERR:\n%s\n\n", result.Stderr)
+	}
+
+	body += fmt.Sprintf(`Host: %s
+User: %s
+Working dir: %s
+
+--
+Dewy: https://github.com/linyows/dewy`, hostname(), username(), cwd())
+
+	return body
+}
+
 func (m *Mail) formatMessage(message string) string {
 	return fmt.Sprintf(`%s
 

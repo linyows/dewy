@@ -292,17 +292,28 @@ func (d *Dewy) Run() error {
 }
 
 func (d *Dewy) deploy(key string) (err error) {
-	if err := d.execHook(d.config.BeforeDeployHook); err != nil {
-		d.logger.Error("Before deploy hook failure", slog.String("error", err.Error()))
-		return err
+	ctx := context.Background()
+
+	beforeResult, beforeErr := d.execHook(d.config.BeforeDeployHook)
+	if beforeResult != nil {
+		d.notifier.SendHookResult(ctx, "Before Deploy", beforeResult)
 	}
+	if beforeErr != nil {
+		d.logger.Error("Before deploy hook failure", slog.String("error", beforeErr.Error()))
+		// Continue with deploy even if before hook fails
+	}
+
 	defer func() {
 		if err != nil {
 			return
 		}
 		// When deploy is success, run after deploy hook
-		if err := d.execHook(d.config.AfterDeployHook); err != nil {
-			d.logger.Error("After deploy hook failure", slog.String("error", err.Error()))
+		afterResult, afterErr := d.execHook(d.config.AfterDeployHook)
+		if afterResult != nil {
+			d.notifier.SendHookResult(ctx, "After Deploy", afterResult)
+		}
+		if afterErr != nil {
+			d.logger.Error("After deploy hook failure", slog.String("error", afterErr.Error()))
 		}
 	}()
 	p := filepath.Join(d.cache.GetDir(), key)
@@ -415,14 +426,17 @@ func (d *Dewy) keepReleases() error {
 	return nil
 }
 
-func (d *Dewy) execHook(cmd string) error {
+func (d *Dewy) execHook(cmd string) (*notifier.HookResult, error) {
 	if cmd == "" {
-		return nil
+		return nil, nil
 	}
+
+	start := time.Now()
 	sh, err := safeexec.LookPath("sh")
 	if err != nil {
-		return err
+		return nil, err
 	}
+
 	stdout := new(bytes.Buffer)
 	stderr := new(bytes.Buffer)
 	c := exec.Command(sh, "-c", cmd)
@@ -430,14 +444,44 @@ func (d *Dewy) execHook(cmd string) error {
 	c.Env = os.Environ()
 	c.Stdout = stdout
 	c.Stderr = stderr
-	defer func() {
-		d.logger.Info("Execute hook",
-			slog.String("command", cmd),
-			slog.String("stdout", stdout.String()),
-			slog.String("stderr", stderr.String()))
-	}()
-	if err := c.Run(); err != nil {
-		return err
+
+	result := &notifier.HookResult{
+		Command: cmd,
 	}
-	return nil
+
+	if err := c.Run(); err != nil {
+		result.Duration = time.Since(start)
+		result.Stdout = strings.TrimSpace(stdout.String())
+		result.Stderr = strings.TrimSpace(stderr.String())
+		result.Success = false
+
+		if exitError, ok := err.(*exec.ExitError); ok {
+			result.ExitCode = exitError.ExitCode()
+		} else {
+			result.ExitCode = 1
+		}
+
+		d.logger.Info("Execute hook failed",
+			slog.String("command", cmd),
+			slog.String("stdout", result.Stdout),
+			slog.String("stderr", result.Stderr),
+			slog.Int("exit_code", result.ExitCode),
+			slog.Duration("duration", result.Duration))
+
+		return result, err
+	}
+
+	result.Duration = time.Since(start)
+	result.Stdout = strings.TrimSpace(stdout.String())
+	result.Stderr = strings.TrimSpace(stderr.String())
+	result.Success = true
+	result.ExitCode = 0
+
+	d.logger.Info("Execute hook",
+		slog.String("command", cmd),
+		slog.String("stdout", result.Stdout),
+		slog.String("stderr", result.Stderr),
+		slog.Duration("duration", result.Duration))
+
+	return result, nil
 }

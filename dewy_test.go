@@ -126,9 +126,10 @@ func (a *mockArtifact) GetDownloadCount() int {
 
 // mockNotify is a mock notify for testing error notification limiting.
 type mockNotify struct {
-	messages   []string
-	errorCount int
-	mu         sync.Mutex
+	messages    []string
+	hookResults []*notifier.HookResult
+	errorCount  int
+	mu          sync.Mutex
 }
 
 func (n *mockNotify) Send(ctx context.Context, msg string) {
@@ -164,10 +165,33 @@ func (n *mockNotify) ResetErrorCount() {
 	n.errorCount = 0
 }
 
+func (n *mockNotify) SendHookResult(ctx context.Context, hookType string, result *notifier.HookResult) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.errorCount == 0 {
+		statusIcon := "✓"
+		if !result.Success {
+			statusIcon = "✗"
+		}
+		msg := fmt.Sprintf("%s %s Hook: %s (exit: %d)", statusIcon, hookType, result.Command, result.ExitCode)
+		n.messages = append(n.messages, msg)
+		// Store the actual hook result for detailed testing
+		n.hookResults = append(n.hookResults, result)
+	}
+}
+
 func (n *mockNotify) GetMessages() []string {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	return append([]string(nil), n.messages...)
+}
+
+func (n *mockNotify) GetHookResults() []*notifier.HookResult {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	results := make([]*notifier.HookResult, len(n.hookResults))
+	copy(results, n.hookResults)
+	return results
 }
 
 func TestRun(t *testing.T) {
@@ -863,5 +887,226 @@ func TestDifferentVersionsDownload(t *testing.T) {
 	expectedCurrentKey := "v2.0.0--artifact.zip"
 	if string(currentValue) != expectedCurrentKey {
 		t.Errorf("Expected current key to be '%s', but got '%s'", expectedCurrentKey, string(currentValue))
+	}
+}
+
+func TestHookResultNotification(t *testing.T) {
+	tests := []struct {
+		name         string
+		beforeHook   string
+		afterHook    string
+		expectHooks  int
+		expectErrors int
+		description  string
+	}{
+		{
+			name:         "successful_hooks",
+			beforeHook:   "echo 'Before hook executed'",
+			afterHook:    "echo 'After hook executed'",
+			expectHooks:  2,
+			expectErrors: 0,
+			description:  "Both hooks should succeed and send notifications",
+		},
+		{
+			name:         "before_hook_fails",
+			beforeHook:   "exit 1",
+			afterHook:    "echo 'After hook executed'",
+			expectHooks:  2,
+			expectErrors: 0,
+			description:  "Before hook failure should not prevent deploy or after hook",
+		},
+		{
+			name:         "after_hook_fails",
+			beforeHook:   "echo 'Before hook executed'",
+			afterHook:    "exit 1",
+			expectHooks:  2,
+			expectErrors: 0,
+			description:  "After hook failure should not cause deploy error",
+		},
+		{
+			name:         "no_hooks",
+			beforeHook:   "",
+			afterHook:    "",
+			expectHooks:  0,
+			expectErrors: 0,
+			description:  "No hooks configured should not send hook notifications",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			artifact := "ghr://linyows/dewy/tag/v1.2.3/artifact.zip"
+			registry := "ghr://linyows/dewy"
+			root := t.TempDir()
+
+			c := DefaultConfig()
+			c.Command = ASSETS
+			c.Registry = registry
+			c.BeforeDeployHook = tt.beforeHook
+			c.AfterDeployHook = tt.afterHook
+			c.Cache = CacheConfig{
+				Type:       FILE,
+				Expiration: 10,
+			}
+
+			dewy, err := New(c, testLogger())
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// Use separate cache instance
+			fileKvs := &kvs.File{}
+			fileKvs.SetLogger(testLogger().Logger)
+			fileKvs.Default()
+			dewy.cache = fileKvs
+
+			mockArt := &mockArtifact{
+				binary: "dewy",
+				url:    artifact,
+			}
+
+			dewy.registry = &mockRegistry{
+				url: artifact,
+				tag: tt.name,
+			}
+			dewy.artifact = mockArt
+
+			// Use mock notifier to capture hook notifications
+			mockNotify := &mockNotify{}
+			dewy.notifier = mockNotify
+			dewy.root = root
+
+			// Run deploy
+			err = dewy.Run()
+			if err != nil {
+				t.Errorf("%s: Expected no error, but got: %v", tt.description, err)
+			}
+
+			// Check hook notifications
+			messages := mockNotify.GetMessages()
+			hookCount := 0
+			for _, msg := range messages {
+				if strings.Contains(msg, "Hook:") {
+					hookCount++
+				}
+			}
+
+			if hookCount != tt.expectHooks {
+				t.Errorf("%s: Expected %d hook notifications, but got %d. Messages: %v",
+					tt.description, tt.expectHooks, hookCount, messages)
+			}
+		})
+	}
+}
+
+func TestHookStdoutStderrTrimming(t *testing.T) {
+	tests := []struct {
+		name        string
+		command     string
+		expectTrim  bool
+		description string
+	}{
+		{
+			name:        "stdout_with_trailing_newlines",
+			command:     "printf 'output\\n\\n\\n'",
+			expectTrim:  true,
+			description: "Stdout with trailing newlines should be trimmed",
+		},
+		{
+			name:        "stderr_with_trailing_spaces",
+			command:     "printf 'error\\n   \\n' >&2; exit 1",
+			expectTrim:  true,
+			description: "Stderr with trailing spaces should be trimmed",
+		},
+		{
+			name:        "clean_output",
+			command:     "echo 'clean'",
+			expectTrim:  false,
+			description: "Clean output should remain unchanged",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			artifact := "ghr://linyows/dewy/tag/v1.2.3/artifact.zip"
+			registry := "ghr://linyows/dewy"
+			root := t.TempDir()
+
+			c := DefaultConfig()
+			c.Command = ASSETS
+			c.Registry = registry
+			c.BeforeDeployHook = tt.command
+			c.Cache = CacheConfig{
+				Type:       FILE,
+				Expiration: 10,
+			}
+
+			dewy, err := New(c, testLogger())
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// Use separate cache instance
+			fileKvs := &kvs.File{}
+			fileKvs.SetLogger(testLogger().Logger)
+			fileKvs.Default()
+			dewy.cache = fileKvs
+
+			mockArt := &mockArtifact{
+				binary: "dewy",
+				url:    artifact,
+			}
+
+			dewy.registry = &mockRegistry{
+				url: artifact,
+				tag: tt.name,
+			}
+			dewy.artifact = mockArt
+
+			// Use mock notifier to capture hook results
+			mockNotify := &mockNotify{}
+			dewy.notifier = mockNotify
+			dewy.root = root
+
+			// Run deploy
+			err = dewy.Run()
+			if err != nil {
+				t.Errorf("%s: Expected no error, but got: %v", tt.description, err)
+			}
+
+			// Check hook results for trimming
+			hookResults := mockNotify.GetHookResults()
+			if len(hookResults) == 0 {
+				t.Errorf("%s: Expected hook result, but got no results", tt.description)
+				return
+			}
+
+			result := hookResults[0]
+			
+			// Verify trimming based on command type
+			if tt.name == "stdout_with_trailing_newlines" {
+				if strings.HasSuffix(result.Stdout, "\n") {
+					t.Errorf("%s: Expected stdout to be trimmed, but got: %q", tt.description, result.Stdout)
+				}
+				if result.Stdout != "output" {
+					t.Errorf("%s: Expected stdout to be 'output', but got: %q", tt.description, result.Stdout)
+				}
+			}
+			
+			if tt.name == "stderr_with_trailing_spaces" {
+				if strings.HasSuffix(result.Stderr, "\n") || strings.HasSuffix(result.Stderr, " ") {
+					t.Errorf("%s: Expected stderr to be trimmed, but got: %q", tt.description, result.Stderr)
+				}
+				if result.Stderr != "error" {
+					t.Errorf("%s: Expected stderr to be 'error', but got: %q", tt.description, result.Stderr)
+				}
+			}
+			
+			if tt.name == "clean_output" {
+				if result.Stdout != "clean" {
+					t.Errorf("%s: Expected stdout to be 'clean', but got: %q", tt.description, result.Stdout)
+				}
+			}
+		})
 	}
 }

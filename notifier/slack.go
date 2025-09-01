@@ -93,6 +93,120 @@ func (s *Slack) genColor() string {
 	return strings.ToUpper(fmt.Sprintf("#%x", md5.Sum([]byte(hostname())))[0:7]) //nolint:gosec
 }
 
+// SendHookResult sends hook result with detailed attachment.
+func (s *Slack) SendHookResult(ctx context.Context, hookType string, result *HookResult) {
+	at := s.BuildHookAttachment(hookType, result)
+
+	var err error
+	if s.sender != nil {
+		err = s.sender.SendMessage(ctx, s.Channel, SlackUsername, SlackIconURL, "", &at)
+	} else {
+		cl := slack.New(s.token)
+		_, err = cl.Chat().PostMessage(s.Channel).Username(SlackUsername).
+			IconURL(SlackIconURL).Attachment(&at).Text("").Do(ctx)
+	}
+
+	if err != nil {
+		s.logger.Error("Slack hook result notification failure", slog.String("error", err.Error()))
+	}
+}
+
+// BuildHookAttachment returns attachment for hook result.
+func (s *Slack) BuildHookAttachment(hookType string, result *HookResult) objects.Attachment {
+	var at objects.Attachment
+
+	// Set color based on success/failure
+	if result.Success {
+		at.Color = "#36a64f" // Green for success
+	} else {
+		at.Color = "#dd0000" // Red for failure
+	}
+
+	// Set title with status icon at the end
+	at.Title = fmt.Sprintf("%s Hook", hookType)
+
+	// Set command in text field
+	at.Text = fmt.Sprintf("`%s`", result.Command)
+
+	// Add exit code and duration fields (short)
+	at.Fields = append(at.Fields, &objects.AttachmentField{
+		Title: "Exit Code",
+		Value: fmt.Sprintf("%d", result.ExitCode),
+		Short: true,
+	})
+
+	at.Fields = append(at.Fields, &objects.AttachmentField{
+		Title: "Duration",
+		Value: result.Duration.String(),
+		Short: true,
+	})
+
+	// Add fields for stdout and stderr if they exist
+	if result.Stdout != "" {
+		at.Fields = append(at.Fields, &objects.AttachmentField{
+			Title: "Stdout",
+			Value: s.formatOutput(result.Stdout),
+			Short: false,
+		})
+	}
+
+	if result.Stderr != "" {
+		at.Fields = append(at.Fields, &objects.AttachmentField{
+			Title: "Stderr",
+			Value: s.formatOutput(result.Stderr),
+			Short: false,
+		})
+	}
+
+	// Set footer
+	if s.Title != "" && s.TitleURL != "" {
+		at.Footer = fmt.Sprintf("<%s|%s>/%s", s.TitleURL, s.Title, hostname())
+	} else if s.Title != "" {
+		at.Footer = fmt.Sprintf("%s/%s", s.Title, hostname())
+	} else {
+		at.Footer = hostname()
+	}
+
+	at.FooterIcon = SlackFooterIcon
+	at.Timestamp = objects.Timestamp(time.Now().Unix())
+
+	return at
+}
+
+// formatOutput formats long output text for Slack display with proper truncation
+func (s *Slack) formatOutput(output string) string {
+	const maxFieldLength = 2000 // Slack attachment field limit is ~3000, leave some buffer
+	const maxLines = 50         // Limit number of lines to prevent very long outputs
+
+	lines := strings.Split(output, "\n")
+
+	// Limit number of lines
+	if len(lines) > maxLines {
+		lines = lines[:maxLines]
+		lines = append(lines, fmt.Sprintf("... (%d more lines truncated)", len(strings.Split(output, "\n"))-maxLines))
+	}
+
+	truncatedOutput := strings.Join(lines, "\n")
+
+	// If still too long, truncate by character count
+	if len(truncatedOutput) > maxFieldLength {
+		// Find a good truncation point (prefer newline)
+		truncateAt := maxFieldLength - 100 // Leave space for truncation message
+		for truncateAt > 0 && truncatedOutput[truncateAt] != '\n' {
+			truncateAt--
+		}
+		if truncateAt <= 0 {
+			truncateAt = maxFieldLength - 100
+		}
+
+		truncatedOutput = truncatedOutput[:truncateAt]
+		truncatedOutput += fmt.Sprintf("\n... (%d more characters truncated)", len(output)-truncateAt)
+	}
+
+	// Wrap in code block, ensuring it's properly closed
+	return fmt.Sprintf("```\n%s\n```", truncatedOutput)
+}
+
 // BuildAttachment returns attachment for slack.
 func (s *Slack) BuildAttachment(message string) objects.Attachment {
 	var at objects.Attachment
