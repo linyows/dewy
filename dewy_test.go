@@ -63,6 +63,7 @@ func TestNew(t *testing.T) {
 
 type mockRegistry struct {
 	url         string
+	tag         string
 	currentFunc func(context.Context) (*registry.CurrentResponse, error)
 	reportFunc  func(context.Context, *registry.ReportRequest) error
 }
@@ -71,9 +72,13 @@ func (r *mockRegistry) Current(ctx context.Context) (*registry.CurrentResponse, 
 	if r.currentFunc != nil {
 		return r.currentFunc(ctx)
 	}
+	tag := r.tag
+	if tag == "" {
+		tag = "tag"
+	}
 	return &registry.CurrentResponse{
 		ID:          "id",
-		Tag:         "tag",
+		Tag:         tag,
 		ArtifactURL: r.url,
 	}, nil
 }
@@ -86,11 +91,17 @@ func (r *mockRegistry) Report(ctx context.Context, req *registry.ReportRequest) 
 }
 
 type mockArtifact struct {
-	binary string
-	url    string
+	binary        string
+	url           string
+	downloadCount int
+	mutex         sync.Mutex
 }
 
 func (a *mockArtifact) Download(ctx context.Context, w io.Writer) error {
+	a.mutex.Lock()
+	a.downloadCount++
+	a.mutex.Unlock()
+
 	zw := zip.NewWriter(w)
 	defer zw.Close()
 
@@ -105,6 +116,12 @@ func (a *mockArtifact) Download(ctx context.Context, w io.Writer) error {
 	}
 
 	return nil
+}
+
+func (a *mockArtifact) GetDownloadCount() int {
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+	return a.downloadCount
 }
 
 // mockNotify is a mock notify for testing error notification limiting.
@@ -212,9 +229,9 @@ func TestDeployHook(t *testing.T) {
 		executedBeforeHook bool
 		executedAfterHook  bool
 	}{
-		{"execute a hook before run", "touch before", "", true, false},
-		{"execute a hook after run", "", "touch after", false, true},
-		{"execute both the before hook and after hook", "touch before", "touch after", true, true},
+		{"execute_a_hook_before_run", "touch before", "", true, false},
+		{"execute_a_hook_after_run", "", "touch after", false, true},
+		{"execute_both_the_before_hook_and_after_hook", "touch before", "touch after", true, true},
 	}
 
 	for _, tt := range tests {
@@ -237,8 +254,10 @@ func TestDeployHook(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			dewy.registry = &mockRegistry{
 				url: artifact,
+				tag: tt.name, // Use test name as unique tag
 			}
 			dewy.artifact = &mockArtifact{
 				binary: "dewy",
@@ -547,5 +566,302 @@ func TestArtifactNotFoundError_TypeChecking(t *testing.T) {
 
 	if oldErr.IsWithinGracePeriod(1 * time.Hour) {
 		t.Errorf("Should not be within grace period when release is 2 hours old")
+	}
+}
+
+func TestNoDuplicateDownload(t *testing.T) {
+	tests := []struct {
+		name           string
+		command        Command
+		expectDownload int
+		description    string
+	}{
+		{
+			name:           "assets_no_duplicate",
+			command:        ASSETS,
+			expectDownload: 1,
+			description:    "ASSETS command should not download the same version twice",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			artifact := "ghr://linyows/dewy/tag/v1.2.3/artifact.zip"
+			registry := "ghr://linyows/dewy"
+			root := t.TempDir()
+
+			c := DefaultConfig()
+			c.Command = tt.command
+			c.Registry = registry
+			c.Cache = CacheConfig{
+				Type:       FILE,
+				Expiration: 10,
+			}
+
+			dewy, err := New(c, testLogger())
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// Use separate cache instance for each test
+			fileKvs := &kvs.File{}
+			fileKvs.SetLogger(testLogger().Logger)
+			fileKvs.Default()
+			// Each test gets its own cache instance to avoid conflicts
+			dewy.cache = fileKvs
+
+			mockArt := &mockArtifact{
+				binary: "dewy",
+				url:    artifact,
+			}
+
+			dewy.registry = &mockRegistry{
+				url: artifact,
+				tag: tt.name,
+			}
+			dewy.artifact = mockArt
+			dewy.notifier, err = notifier.New(context.Background(), "", testLogger().Logger)
+			if err != nil {
+				t.Fatal(err)
+			}
+			dewy.root = root
+
+			// ASSETS command doesn't need server configuration
+
+			// First run - should download
+			err1 := dewy.Run()
+			if err1 != nil {
+				t.Errorf("First run failed: %v", err1)
+			}
+
+			// Second run - should NOT download (should be cached)
+			err2 := dewy.Run()
+			if err2 != nil {
+				t.Errorf("Second run failed: %v", err2)
+			}
+
+			// Check download count
+			downloadCount := mockArt.GetDownloadCount()
+			if downloadCount != tt.expectDownload {
+				t.Errorf("%s: Expected %d downloads, but got %d downloads",
+					tt.description, tt.expectDownload, downloadCount)
+			}
+		})
+	}
+}
+
+func TestCacheSkipBehavior(t *testing.T) {
+	artifact := "ghr://linyows/dewy/tag/v1.2.3/artifact.zip"
+	registry := "ghr://linyows/dewy"
+	root := t.TempDir()
+
+	// Create a buffer to capture log output
+	var logBuffer bytes.Buffer
+
+	c := DefaultConfig()
+	c.Command = ASSETS
+	c.Registry = registry
+	c.Cache = CacheConfig{
+		Type:       FILE,
+		Expiration: 10,
+	}
+
+	// Create logger that writes to buffer for log capture
+	logger := logging.SetupLogger("DEBUG", "text", &logBuffer)
+
+	dewy, err := New(c, logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Use separate cache instance
+	fileKvs := &kvs.File{}
+	fileKvs.SetLogger(logger.Logger)
+	fileKvs.Default()
+	dewy.cache = fileKvs
+
+	mockArt := &mockArtifact{
+		binary: "dewy",
+		url:    artifact,
+	}
+
+	dewy.registry = &mockRegistry{
+		url: artifact,
+		tag: "cache_skip_test",
+	}
+	dewy.artifact = mockArt
+	dewy.notifier, err = notifier.New(context.Background(), "", logger.Logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dewy.root = root
+
+	// First run - should download and cache
+	err1 := dewy.Run()
+	if err1 != nil {
+		t.Errorf("First run failed: %v", err1)
+	}
+
+	// Reset log buffer to capture only second run logs
+	logBuffer.Reset()
+
+	// Second run - should skip due to cache
+	err2 := dewy.Run()
+	if err2 != nil {
+		t.Errorf("Second run failed: %v", err2)
+	}
+
+	// Check that download was called only once
+	downloadCount := mockArt.GetDownloadCount()
+	if downloadCount != 1 {
+		t.Errorf("Expected 1 download, but got %d downloads", downloadCount)
+	}
+
+	// Check that "Deploy skipped" message appears in logs
+	logOutput := logBuffer.String()
+	if !strings.Contains(logOutput, "Deploy skipped") {
+		t.Errorf("Expected 'Deploy skipped' message in logs, but got: %s", logOutput)
+	}
+
+	// Verify cache contains the expected key
+	cacheList, err := dewy.cache.List()
+	if err != nil {
+		t.Errorf("Failed to list cache: %v", err)
+	}
+
+	expectedCacheKey := "cache_skip_test--artifact.zip"
+	found := false
+	for _, key := range cacheList {
+		if key == expectedCacheKey {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("Expected cache key '%s' not found in cache. Cache contents: %v", expectedCacheKey, cacheList)
+	}
+
+	// Verify current key is set correctly
+	currentValue, err := dewy.cache.Read("current")
+	if err != nil {
+		t.Errorf("Failed to read current key: %v", err)
+	}
+	if string(currentValue) != expectedCacheKey {
+		t.Errorf("Expected current key to be '%s', but got '%s'", expectedCacheKey, string(currentValue))
+	}
+}
+
+func TestDifferentVersionsDownload(t *testing.T) {
+	artifact := "ghr://linyows/dewy/tag/v1.2.3/artifact.zip"
+	registry := "ghr://linyows/dewy"
+	root := t.TempDir()
+
+	c := DefaultConfig()
+	c.Command = ASSETS
+	c.Registry = registry
+	c.Cache = CacheConfig{
+		Type:       FILE,
+		Expiration: 10,
+	}
+
+	dewy, err := New(c, testLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Use separate cache instance
+	fileKvs := &kvs.File{}
+	fileKvs.SetLogger(testLogger().Logger)
+	fileKvs.Default()
+	dewy.cache = fileKvs
+
+	mockArt := &mockArtifact{
+		binary: "dewy",
+		url:    artifact,
+	}
+
+	// Start with version 1.0.0
+	mockReg := &mockRegistry{
+		url: artifact,
+		tag: "v1.0.0",
+	}
+
+	dewy.registry = mockReg
+	dewy.artifact = mockArt
+	dewy.notifier, err = notifier.New(context.Background(), "", testLogger().Logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dewy.root = root
+
+	// First run with v1.0.0 - should download
+	err1 := dewy.Run()
+	if err1 != nil {
+		t.Errorf("First run failed: %v", err1)
+	}
+
+	// Check download count after first version
+	downloadCount1 := mockArt.GetDownloadCount()
+	if downloadCount1 != 1 {
+		t.Errorf("Expected 1 download after first version, but got %d downloads", downloadCount1)
+	}
+
+	// Change to version v2.0.0
+	mockReg.tag = "v2.0.0"
+
+	// Second run with v2.0.0 - should download again (different version)
+	dewy.artifact = mockArt // Reset artifact after it was set to nil
+	err2 := dewy.Run()
+	if err2 != nil {
+		t.Errorf("Second run failed: %v", err2)
+	}
+
+	// Check download count after second version
+	downloadCount2 := mockArt.GetDownloadCount()
+	if downloadCount2 != 2 {
+		t.Errorf("Expected 2 downloads after different version, but got %d downloads", downloadCount2)
+	}
+
+	// Third run with same v2.0.0 - should NOT download (same version)
+	dewy.artifact = mockArt // Reset artifact after it was set to nil
+	err3 := dewy.Run()
+	if err3 != nil {
+		t.Errorf("Third run failed: %v", err3)
+	}
+
+	// Check download count after third run (should still be 2)
+	downloadCount3 := mockArt.GetDownloadCount()
+	if downloadCount3 != 2 {
+		t.Errorf("Expected 2 downloads after repeated same version, but got %d downloads", downloadCount3)
+	}
+
+	// Verify cache contains both versions
+	cacheList, err := dewy.cache.List()
+	if err != nil {
+		t.Errorf("Failed to list cache: %v", err)
+	}
+
+	expectedKeys := []string{"v1.0.0--artifact.zip", "v2.0.0--artifact.zip", "current"}
+	for _, expectedKey := range expectedKeys {
+		found := false
+		for _, key := range cacheList {
+			if key == expectedKey {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected cache key '%s' not found in cache. Cache contents: %v", expectedKey, cacheList)
+		}
+	}
+
+	// Verify current key points to latest version
+	currentValue, err := dewy.cache.Read("current")
+	if err != nil {
+		t.Errorf("Failed to read current key: %v", err)
+	}
+	expectedCurrentKey := "v2.0.0--artifact.zip"
+	if string(currentValue) != expectedCurrentKey {
+		t.Errorf("Expected current key to be '%s', but got '%s'", expectedCurrentKey, string(currentValue))
 	}
 }
