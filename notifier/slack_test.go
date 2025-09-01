@@ -311,7 +311,6 @@ func TestSlack_genColor(t *testing.T) {
 	}
 }
 
-
 func TestSlack_SetSender(t *testing.T) {
 	slack := &Slack{}
 	mockSender := &MockSlackSender{}
