@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -224,4 +225,70 @@ func addDirToArchive(tw *tar.Writer, name string, mode os.FileMode) error {
 		Typeflag: tar.TypeDir,
 	}
 	return tw.WriteHeader(header)
+}
+
+func TestCreatePersistentCacheDir(t *testing.T) {
+	tests := []struct {
+		name          string
+		dewyCacheDir  string
+		expectedPath  func() string
+		shouldContain string
+	}{
+		{
+			name:         "DEWY_CACHEDIR priority",
+			dewyCacheDir: "/tmp/custom-dewy-cache",
+			expectedPath: func() string { return "/tmp/custom-dewy-cache" },
+		},
+		{
+			name:          "Default PWD cache",
+			dewyCacheDir:  "",
+			shouldContain: ".dewy/cache",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Save original environment
+			originalDewyCacheDir := os.Getenv("DEWY_CACHEDIR")
+			
+			// Set test environment
+			if tt.dewyCacheDir != "" {
+				os.Setenv("DEWY_CACHEDIR", tt.dewyCacheDir)
+			} else {
+				os.Unsetenv("DEWY_CACHEDIR")
+			}
+			
+			// Test the function
+			result := createPersistentCacheDir()
+			
+			// Verify result
+			if tt.expectedPath != nil {
+				expected := tt.expectedPath()
+				if result != expected {
+					t.Errorf("createPersistentCacheDir() = %v, want %v", result, expected)
+				}
+			} else if tt.shouldContain != "" {
+				if !strings.Contains(result, tt.shouldContain) {
+					t.Errorf("createPersistentCacheDir() = %v, should contain %v", result, tt.shouldContain)
+				}
+			}
+			
+			// Verify directory exists
+			if _, err := os.Stat(result); os.IsNotExist(err) {
+				t.Errorf("Created directory does not exist: %v", result)
+			}
+			
+			// Clean up created directory for custom cache dir test
+			if tt.dewyCacheDir != "" && strings.HasPrefix(tt.dewyCacheDir, "/tmp/") {
+				os.RemoveAll(tt.dewyCacheDir)
+			}
+			
+			// Restore original environment
+			if originalDewyCacheDir != "" {
+				os.Setenv("DEWY_CACHEDIR", originalDewyCacheDir)
+			} else {
+				os.Unsetenv("DEWY_CACHEDIR")
+			}
+		})
+	}
 }

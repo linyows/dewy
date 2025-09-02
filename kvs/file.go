@@ -14,14 +14,35 @@ import (
 )
 
 var (
-	// DefaultTempDir creates temp dir.
-	DefaultTempDir = createTempDir()
+	// DefaultCacheDir creates persistent cache dir.
+	DefaultCacheDir = createPersistentCacheDir()
 	// DefaultMaxSize for data size.
 	DefaultMaxSize int64 = 64 * 1024 * 1024
 )
 
-func createTempDir() string {
-	dir, _ := os.MkdirTemp("", "dewy-")
+func createPersistentCacheDir() string {
+	var dir string
+	
+	// 1. Use DEWY_CACHEDIR if set
+	if cacheDir := os.Getenv("DEWY_CACHEDIR"); cacheDir != "" {
+		dir = cacheDir
+	} else {
+		// 2. Default: current working directory
+		if pwd, err := os.Getwd(); err == nil {
+			dir = filepath.Join(pwd, ".dewy", "cache")
+		} else {
+			// Fallback if PWD is not available
+			dir = filepath.Join(".", ".dewy", "cache")
+		}
+	}
+	
+	// Create directory if it doesn't exist
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		// If creation fails, fall back to temp directory
+		tempDir, _ := os.MkdirTemp("", "dewy-")
+		return tempDir
+	}
+	
 	return dir
 }
 
@@ -40,9 +61,14 @@ func (f *File) GetDir() string {
 	return f.dir
 }
 
+// SetDir sets the cache directory.
+func (f *File) SetDir(dir string) {
+	f.dir = dir
+}
+
 // Default sets to struct.
 func (f *File) Default() {
-	f.dir = DefaultTempDir
+	f.dir = DefaultCacheDir
 	f.MaxSize = DefaultMaxSize
 }
 
