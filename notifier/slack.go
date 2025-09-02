@@ -126,12 +126,12 @@ func (s *Slack) BuildHookAttachment(hookType string, result *HookResult) objects
 	at.Title = fmt.Sprintf("%s Hook", hookType)
 
 	// Set command in text field
-	at.Text = fmt.Sprintf("`%s`", result.Command)
+	at.Text = fmt.Sprintf("```\n%s\n```", result.Command)
 
 	// Add exit code and duration fields (short)
 	at.Fields = append(at.Fields, &objects.AttachmentField{
 		Title: "Exit Code",
-		Value: fmt.Sprintf("%d", result.ExitCode),
+		Value: fmt.Sprintf("`%d`", result.ExitCode),
 		Short: true,
 	})
 
