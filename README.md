@@ -506,6 +506,38 @@ Dewy has minimal system requirements for deployment:
 > [!NOTE]
 > Dewy runs as a single binary with no external dependencies beyond the Go runtime (which is compiled in).
 
+Cache Configuration
+--
+
+Dewy automatically caches downloaded artifacts to avoid redundant network traffic and prevent unnecessary deployments of the same version. By default, cache files are stored persistently to survive system restarts and cleanup processes.
+
+### Cache Directory Priority
+
+1. **`DEWY_CACHEDIR` environment variable** (if set) - Highest priority
+2. **`$PWD/.dewy/cache`** - Default location in current working directory
+
+If directory creation fails due to permission issues, Dewy automatically falls back to a temporary directory.
+
+### Usage Examples
+
+```sh
+# Custom cache directory (systemd service)
+Environment=DEWY_CACHEDIR=/var/cache/dewy
+
+# Docker with persistent volume
+docker run -e DEWY_CACHEDIR=/app/cache -v /host/cache:/app/cache dewy
+
+# Default behavior (no configuration needed)
+# Uses $PWD/.dewy/cache automatically
+```
+
+### Benefits
+
+- **Persistent cache**: Survives system restarts and OS cleanup processes
+- **Prevents redundant downloads**: Same version artifacts are downloaded only once
+- **Reduces deployment cycles**: Skips deployment when cache contains the current version
+- **Network efficiency**: Minimizes bandwidth usage in long-running deployments
+
 Provisioning
 --
 
