@@ -14,15 +14,44 @@ import (
 )
 
 var (
-	// DefaultTempDir creates temp dir.
-	DefaultTempDir = createTempDir()
+	// DefaultCacheDir creates persistent cache dir.
+	DefaultCacheDir = createPersistentCacheDir()
 	// DefaultMaxSize for data size.
 	DefaultMaxSize int64 = 64 * 1024 * 1024
 )
 
-func createTempDir() string {
-	dir, _ := os.MkdirTemp("", "dewy-")
+func createPersistentCacheDir() string {
+	var dir string
+	
+	// 1. First priority: DEWY_CACHEDIR environment variable
+	if cacheDir := os.Getenv("DEWY_CACHEDIR"); cacheDir != "" {
+		dir = cacheDir
+	} else if isSystemdEnvironment() {
+		// 2. Second priority: systemd environment uses /var/cache/dewy
+		dir = "/var/cache/dewy"
+	} else {
+		// 3. Default: current working directory
+		if pwd, err := os.Getwd(); err == nil {
+			dir = filepath.Join(pwd, ".dewy", "cache")
+		} else {
+			// Fallback if PWD is not available
+			dir = filepath.Join(".", ".dewy", "cache")
+		}
+	}
+	
+	// Create directory if it doesn't exist
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		// If creation fails, fall back to temp directory
+		tempDir, _ := os.MkdirTemp("", "dewy-")
+		return tempDir
+	}
+	
 	return dir
+}
+
+func isSystemdEnvironment() bool {
+	// Check if running under systemd by looking for common systemd environment variables
+	return os.Getenv("INVOCATION_ID") != "" || os.Getenv("JOURNAL_STREAM") != ""
 }
 
 // File struct.
@@ -42,7 +71,7 @@ func (f *File) GetDir() string {
 
 // Default sets to struct.
 func (f *File) Default() {
-	f.dir = DefaultTempDir
+	f.dir = DefaultCacheDir
 	f.MaxSize = DefaultMaxSize
 }
 

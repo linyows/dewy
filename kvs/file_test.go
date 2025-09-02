@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -224,4 +225,182 @@ func addDirToArchive(tw *tar.Writer, name string, mode os.FileMode) error {
 		Typeflag: tar.TypeDir,
 	}
 	return tw.WriteHeader(header)
+}
+
+func TestIsSystemdEnvironment(t *testing.T) {
+	tests := []struct {
+		name           string
+		invocationID   string
+		journalStream  string
+		expectedResult bool
+	}{
+		{
+			name:           "No systemd environment variables",
+			invocationID:   "",
+			journalStream:  "",
+			expectedResult: false,
+		},
+		{
+			name:           "INVOCATION_ID set",
+			invocationID:   "test-invocation-id",
+			journalStream:  "",
+			expectedResult: true,
+		},
+		{
+			name:           "JOURNAL_STREAM set",
+			invocationID:   "",
+			journalStream:  "8:123456",
+			expectedResult: true,
+		},
+		{
+			name:           "Both environment variables set",
+			invocationID:   "test-invocation-id",
+			journalStream:  "8:123456",
+			expectedResult: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Save original environment
+			originalInvocationID := os.Getenv("INVOCATION_ID")
+			originalJournalStream := os.Getenv("JOURNAL_STREAM")
+			
+			// Set test environment
+			if tt.invocationID != "" {
+				os.Setenv("INVOCATION_ID", tt.invocationID)
+			} else {
+				os.Unsetenv("INVOCATION_ID")
+			}
+			if tt.journalStream != "" {
+				os.Setenv("JOURNAL_STREAM", tt.journalStream)
+			} else {
+				os.Unsetenv("JOURNAL_STREAM")
+			}
+			
+			// Test the function
+			result := isSystemdEnvironment()
+			if result != tt.expectedResult {
+				t.Errorf("isSystemdEnvironment() = %v, want %v", result, tt.expectedResult)
+			}
+			
+			// Restore original environment
+			if originalInvocationID != "" {
+				os.Setenv("INVOCATION_ID", originalInvocationID)
+			} else {
+				os.Unsetenv("INVOCATION_ID")
+			}
+			if originalJournalStream != "" {
+				os.Setenv("JOURNAL_STREAM", originalJournalStream)
+			} else {
+				os.Unsetenv("JOURNAL_STREAM")
+			}
+		})
+	}
+}
+
+func TestCreatePersistentCacheDir(t *testing.T) {
+	tests := []struct {
+		name           string
+		dewyCacheDir   string
+		invocationID   string
+		journalStream  string
+		expectedPath   func() string
+		shouldContain  string
+	}{
+		{
+			name:         "DEWY_CACHEDIR priority",
+			dewyCacheDir: "/tmp/custom-dewy-cache",
+			expectedPath: func() string { return "/tmp/custom-dewy-cache" },
+		},
+		{
+			name:         "Systemd environment",
+			dewyCacheDir: "",
+			invocationID: "test-invocation",
+			expectedPath: func() string { return "/var/cache/dewy" },
+		},
+		{
+			name:          "Default PWD cache",
+			dewyCacheDir:  "",
+			invocationID:  "",
+			journalStream: "",
+			shouldContain: ".dewy/cache",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Save original environment
+			originalDewyCacheDir := os.Getenv("DEWY_CACHEDIR")
+			originalInvocationID := os.Getenv("INVOCATION_ID")
+			originalJournalStream := os.Getenv("JOURNAL_STREAM")
+			
+			// Set test environment
+			if tt.dewyCacheDir != "" {
+				os.Setenv("DEWY_CACHEDIR", tt.dewyCacheDir)
+			} else {
+				os.Unsetenv("DEWY_CACHEDIR")
+			}
+			if tt.invocationID != "" {
+				os.Setenv("INVOCATION_ID", tt.invocationID)
+			} else {
+				os.Unsetenv("INVOCATION_ID")
+			}
+			if tt.journalStream != "" {
+				os.Setenv("JOURNAL_STREAM", tt.journalStream)
+			} else {
+				os.Unsetenv("JOURNAL_STREAM")
+			}
+			
+			// Test the function
+			result := createPersistentCacheDir()
+			
+			// Verify result
+			if tt.expectedPath != nil {
+				// For /var/cache/dewy, it might fail due to permissions, so check if it falls back to temp
+				expected := tt.expectedPath()
+				if expected == "/var/cache/dewy" {
+					// Check if it's either the expected path or a temp fallback
+					if result != expected && !strings.HasPrefix(result, os.TempDir()) {
+						t.Errorf("createPersistentCacheDir() = %v, want %v or temp fallback", result, expected)
+					}
+				} else {
+					if result != expected {
+						t.Errorf("createPersistentCacheDir() = %v, want %v", result, expected)
+					}
+				}
+			} else if tt.shouldContain != "" {
+				if !strings.Contains(result, tt.shouldContain) {
+					t.Errorf("createPersistentCacheDir() = %v, should contain %v", result, tt.shouldContain)
+				}
+			}
+			
+			// Verify directory exists
+			if _, err := os.Stat(result); os.IsNotExist(err) {
+				t.Errorf("Created directory does not exist: %v", result)
+			}
+			
+			// Clean up created directory for custom cache dir test
+			if tt.dewyCacheDir != "" && strings.HasPrefix(tt.dewyCacheDir, "/tmp/") {
+				os.RemoveAll(tt.dewyCacheDir)
+			}
+			
+			// Restore original environment
+			if originalDewyCacheDir != "" {
+				os.Setenv("DEWY_CACHEDIR", originalDewyCacheDir)
+			} else {
+				os.Unsetenv("DEWY_CACHEDIR")
+			}
+			if originalInvocationID != "" {
+				os.Setenv("INVOCATION_ID", originalInvocationID)
+			} else {
+				os.Unsetenv("INVOCATION_ID")
+			}
+			if originalJournalStream != "" {
+				os.Setenv("JOURNAL_STREAM", originalJournalStream)
+			} else {
+				os.Unsetenv("JOURNAL_STREAM")
+			}
+		})
+	}
 }
