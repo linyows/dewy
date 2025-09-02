@@ -526,17 +526,7 @@ Environment=DEWY_CACHEDIR=/var/cache/dewy
 
 # Docker with persistent volume
 docker run -e DEWY_CACHEDIR=/app/cache -v /host/cache:/app/cache dewy
-
-# Default behavior (no configuration needed)
-# Uses $PWD/.dewy/cache automatically
 ```
-
-### Benefits
-
-- **Persistent cache**: Survives system restarts and OS cleanup processes
-- **Prevents redundant downloads**: Same version artifacts are downloaded only once
-- **Reduces deployment cycles**: Skips deployment when cache contains the current version
-- **Network efficiency**: Minimizes bandwidth usage in long-running deployments
 
 Provisioning
 --
