@@ -28,11 +28,15 @@ func (e *ArtifactNotFoundError) Error() string {
 }
 
 // IsWithinGracePeriod checks if the error occurred within the grace period.
+// This helps prevent false alerts during CI/CD builds where artifacts may not be
+// immediately available after release creation.
 func (e *ArtifactNotFoundError) IsWithinGracePeriod(gracePeriod time.Duration) bool {
 	if e.ReleaseTime == nil || gracePeriod == 0 {
 		return false
 	}
-	return time.Since(*e.ReleaseTime) < gracePeriod
+	// Use UTC() to ensure timezone consistency between ReleaseTime (from GitHub API)
+	// and time.Since() (which uses time.Now() in local timezone)
+	return time.Since(e.ReleaseTime.UTC()) < gracePeriod
 }
 
 const (
@@ -117,7 +121,11 @@ func (g *GHR) Current(ctx context.Context) (*CurrentResponse, error) {
 		if !found {
 			return nil, &ArtifactNotFoundError{
 				ArtifactName: artifactName,
-				ReleaseTime:  release.CreatedAt.GetTime(),
+				// Use PublishedAt instead of CreatedAt for accurate grace period calculation.
+				// GitHub Actions typically creates releases on tag creation, then uploads artifacts later.
+				// PublishedAt reflects the actual release publication time, while CreatedAt
+				// may be much older (when the release object was first created).
+				ReleaseTime:  release.PublishedAt.GetTime(),
 				Message:      fmt.Sprintf("artifact not found: %s", artifactName),
 			}
 		}
@@ -133,7 +141,11 @@ func (g *GHR) Current(ctx context.Context) (*CurrentResponse, error) {
 		if !found {
 			return nil, &ArtifactNotFoundError{
 				ArtifactName: artifactName,
-				ReleaseTime:  release.CreatedAt.GetTime(),
+				// Use PublishedAt instead of CreatedAt for accurate grace period calculation.
+				// GitHub Actions typically creates releases on tag creation, then uploads artifacts later.
+				// PublishedAt reflects the actual release publication time, while CreatedAt
+				// may be much older (when the release object was first created).
+				ReleaseTime:  release.PublishedAt.GetTime(),
 				Message:      fmt.Sprintf("artifact not found: %s", artifactName),
 			}
 		}
@@ -148,7 +160,7 @@ func (g *GHR) Current(ctx context.Context) (*CurrentResponse, error) {
 		ID:          time.Now().Format(ISO8601),
 		Tag:         release.GetTagName(),
 		ArtifactURL: au,
-		CreatedAt:   release.CreatedAt.GetTime(),
+		CreatedAt:   release.PublishedAt.GetTime(),
 	}, nil
 }
 
@@ -164,7 +176,7 @@ func (g *GHR) latest(ctx context.Context) (*github.RepositoryRelease, error) {
 			if *v.Draft {
 				continue
 			}
-			return r, nil
+			return v, nil
 		}
 	}
 	r, _, err := g.cl.Repositories.GetLatestRelease(ctx, g.Owner, g.Repo)
