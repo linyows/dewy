@@ -128,20 +128,7 @@ func (s *Slack) BuildHookAttachment(hookType string, result *HookResult) objects
 	// Set command in text field
 	at.Text = fmt.Sprintf("```\n%s\n```", result.Command)
 
-	// Add exit code and duration fields (short)
-	at.Fields = append(at.Fields, &objects.AttachmentField{
-		Title: "Exit Code",
-		Value: fmt.Sprintf("`%d`", result.ExitCode),
-		Short: true,
-	})
-
-	at.Fields = append(at.Fields, &objects.AttachmentField{
-		Title: "Duration",
-		Value: result.Duration.String(),
-		Short: true,
-	})
-
-	// Add fields for stdout and stderr if they exist
+	// Add fields for stdout and stderr first if they exist
 	if result.Stdout != "" {
 		at.Fields = append(at.Fields, &objects.AttachmentField{
 			Title: "Stdout",
@@ -157,6 +144,19 @@ func (s *Slack) BuildHookAttachment(hookType string, result *HookResult) objects
 			Short: false,
 		})
 	}
+
+	// Add exit code and duration fields (short)
+	at.Fields = append(at.Fields, &objects.AttachmentField{
+		Title: "Exit Code",
+		Value: fmt.Sprintf("`%d`", result.ExitCode),
+		Short: true,
+	})
+
+	at.Fields = append(at.Fields, &objects.AttachmentField{
+		Title: "Duration",
+		Value: result.Duration.String(),
+		Short: true,
+	})
 
 	// Set footer
 	if s.Title != "" && s.TitleURL != "" {
