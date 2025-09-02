@@ -1082,7 +1082,7 @@ func TestHookStdoutStderrTrimming(t *testing.T) {
 			}
 
 			result := hookResults[0]
-			
+
 			// Verify trimming based on command type
 			if tt.name == "stdout_with_trailing_newlines" {
 				if strings.HasSuffix(result.Stdout, "\n") {
@@ -1092,7 +1092,7 @@ func TestHookStdoutStderrTrimming(t *testing.T) {
 					t.Errorf("%s: Expected stdout to be 'output', but got: %q", tt.description, result.Stdout)
 				}
 			}
-			
+
 			if tt.name == "stderr_with_trailing_spaces" {
 				if strings.HasSuffix(result.Stderr, "\n") || strings.HasSuffix(result.Stderr, " ") {
 					t.Errorf("%s: Expected stderr to be trimmed, but got: %q", tt.description, result.Stderr)
@@ -1101,7 +1101,7 @@ func TestHookStdoutStderrTrimming(t *testing.T) {
 					t.Errorf("%s: Expected stderr to be 'error', but got: %q", tt.description, result.Stderr)
 				}
 			}
-			
+
 			if tt.name == "clean_output" {
 				if result.Stdout != "clean" {
 					t.Errorf("%s: Expected stdout to be 'clean', but got: %q", tt.description, result.Stdout)
