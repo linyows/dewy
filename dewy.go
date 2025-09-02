@@ -167,7 +167,9 @@ func (d *Dewy) Run() error {
 	// Get current
 	res, err := d.registry.Current(ctx)
 	if err != nil {
-		// Check if this is an artifact not found error within 30 minute grace period
+		// Check if this is an artifact not found error within 30 minute grace period.
+		// This prevents false alerts when GitHub Actions or other CI systems are still
+		// building and uploading artifacts after release creation.
 		var artifactNotFoundErr *registry.ArtifactNotFoundError
 		if errors.As(err, &artifactNotFoundErr) {
 			gracePeriod := 30 * time.Minute
