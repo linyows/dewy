@@ -23,14 +23,11 @@ var (
 func createPersistentCacheDir() string {
 	var dir string
 	
-	// 1. First priority: DEWY_CACHEDIR environment variable
+	// 1. Use DEWY_CACHEDIR if set
 	if cacheDir := os.Getenv("DEWY_CACHEDIR"); cacheDir != "" {
 		dir = cacheDir
-	} else if isSystemdEnvironment() {
-		// 2. Second priority: systemd environment uses /var/cache/dewy
-		dir = "/var/cache/dewy"
 	} else {
-		// 3. Default: current working directory
+		// 2. Default: current working directory
 		if pwd, err := os.Getwd(); err == nil {
 			dir = filepath.Join(pwd, ".dewy", "cache")
 		} else {
@@ -49,11 +46,6 @@ func createPersistentCacheDir() string {
 	return dir
 }
 
-func isSystemdEnvironment() bool {
-	// Check if running under systemd by looking for common systemd environment variables
-	return os.Getenv("INVOCATION_ID") != "" || os.Getenv("JOURNAL_STREAM") != ""
-}
-
 // File struct.
 type File struct {
 	items    map[string]*item //nolint
@@ -67,6 +59,11 @@ type File struct {
 // GetDir returns dir.
 func (f *File) GetDir() string {
 	return f.dir
+}
+
+// SetDir sets the cache directory.
+func (f *File) SetDir(dir string) {
+	f.dir = dir
 }
 
 // Default sets to struct.

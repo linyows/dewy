@@ -627,11 +627,13 @@ func TestNoDuplicateDownload(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			// Use separate cache instance for each test
+			// Use separate cache instance for each test with isolated directory
 			fileKvs := &kvs.File{}
 			fileKvs.SetLogger(testLogger().Logger)
-			fileKvs.Default()
-			// Each test gets its own cache instance to avoid conflicts
+			testCacheDir := t.TempDir()
+			fileKvs.MaxSize = kvs.DefaultMaxSize
+			// Set isolated cache directory for this test
+			fileKvs.SetDir(testCacheDir)
 			dewy.cache = fileKvs
 
 			mockArt := &mockArtifact{
@@ -698,10 +700,12 @@ func TestCacheSkipBehavior(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Use separate cache instance
+	// Use separate cache instance with isolated directory
 	fileKvs := &kvs.File{}
 	fileKvs.SetLogger(logger.Logger)
-	fileKvs.Default()
+	testCacheDir := t.TempDir()
+	fileKvs.MaxSize = kvs.DefaultMaxSize
+	fileKvs.SetDir(testCacheDir)
 	dewy.cache = fileKvs
 
 	mockArt := &mockArtifact{
@@ -793,10 +797,12 @@ func TestDifferentVersionsDownload(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Use separate cache instance
+	// Use separate cache instance with isolated directory
 	fileKvs := &kvs.File{}
 	fileKvs.SetLogger(testLogger().Logger)
-	fileKvs.Default()
+	testCacheDir := t.TempDir()
+	fileKvs.MaxSize = kvs.DefaultMaxSize
+	fileKvs.SetDir(testCacheDir)
 	dewy.cache = fileKvs
 
 	mockArt := &mockArtifact{
