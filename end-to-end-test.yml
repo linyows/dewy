@@ -35,6 +35,10 @@ jobs:
         go build -o ./testdata/ghr/dewy ./cmd/dewy;
         go build -o ./testdata/s3/dewy ./cmd/dewy;
         go build -o ./testdata/gs/dewy ./cmd/dewy
+    test: status == 0
+    echo: |
+      STDOUT: {{ res.stdout }}
+      STDERR: {{ res.stderr }}
 
 - name: Create new version
   needs: [build]
