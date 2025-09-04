@@ -1,0 +1,208 @@
+name: Deploy Testing
+description: Verify that the deployment is correct
+
+vars:
+  github_token: "{{ GITHUB_TOKEN ?? '' }}"
+  aws_access_key_id: "{{ AWS_ACCESS_KEY_ID ?? '' }}"
+  aws_secret_access_key: "{{ AWS_SECRET_ACCESS_KEY ?? '' }}"
+  google_application_credentials: "{{ GOOGLE_APPLICATION_CREDENTIALS ?? '' }}"
+
+jobs:
+- name: Check credentials
+  id: check
+  steps:
+  - name: GITHUB_TOKEN is not empty
+    uses: hello
+    test: vars.github_token != ''
+  - name: AWS_ACCESS_KEY_ID is not empty
+    uses: hello
+    test: vars.aws_access_key_id != ''
+  - name: AWS_SECRET_ACCESS_KEY is not empty
+    uses: hello
+    test: vars.aws_secret_access_key != ''
+  - name: GOOGLE_APPLICATION_CREDENTIALS is not empty
+    uses: hello
+    test: vars.google_application_credentials != ''
+
+- name: Build dewy
+  id: build
+  needs: [check]
+  steps:
+  - name: Go build
+    uses: shell
+    with:
+      cmd: |
+        go build -o ./testdata/ghr/dewy ./cmd/dewy;
+        go build -o ./testdata/s3/dewy ./cmd/dewy;
+        go build -o ./testdata/gs/dewy ./cmd/dewy
+
+- name: Create new version
+  needs: [build]
+  steps:
+  - name: Create release
+    id: release
+    uses: shell
+    wait: 15s
+    with:
+      env:
+        GH_TOKEN: "{{ vars.github_token }}"
+      cmd: |
+        gh release create {{ vars.version }} \
+          --repo linyows/dewy-testapp \
+          --title {{ vars.version }} \
+          --notes "End-to-end Testing by Probe"
+    vars:
+      version: v3.0.0-{{ unixtime() }}
+    test: status == 0
+    outputs:
+      version: vars.version
+    echo: |
+      {{res.stdout}}
+
+- name: Use github releases registry
+  needs: [build]
+  steps:
+  - name: Start dewy for Github releases registry
+    id: ghr
+    uses: shell
+    with:
+      workdir: ./testdata/ghr
+      background: true
+      env:
+        GITHUB_TOKEN: "{{ vars.github_token }}"
+      cmd: |
+        ./dewy server -p 8000 -l debug \
+        --registry "ghr://linyows/dewy-testapp" \
+        -- $PWD/current/dewy-testapp
+    test: status == -1
+    outputs:
+      pid: res.pid
+      log: res.log
+    echo: |
+      PID: {{ res.pid }}
+      Log: {{ res.log }}
+  - name: Stop dewy for Github releases registry
+    wait: 3m
+    uses: shell
+    with: # Use Process Group ID
+      cmd: "kill -TERM -{{ outputs.ghr.pid }}"
+    test: status == 0
+  - name: Verify no error
+    uses: shell
+    with:
+      cmd: "grep -i err {{ outputs.ghr.log }}"
+    test: status == 1
+  - name: Verify starting two version
+    uses: shell
+    with:
+      cmd: |
+        grep 'starting version' {{ outputs.ghr.log }} | \
+          awk '{print $6}' | wc -l | awk '{print $1}'
+    test: res.stdout == "2\n"
+  - name: Verify starting new version
+    uses: shell
+    with:
+      cmd: |
+        grep 'starting version' {{ outputs.ghr.log }} | \
+          awk '{print $6}' | \
+          grep {{ replace(outputs.release.version, 'v', '') }}
+    test: status == 0
+
+- name: Use AWS S3 registry
+  needs: [build]
+  steps:
+  - name: Start dewy for AWS S3 registry
+    id: s3
+    uses: shell
+    with:
+      workdir: ./testdata/s3
+      background: true
+      env:
+        AWS_ACCESS_KEY_ID: "{{ vars.aws_access_key_id }}"
+        AWS_SECRET_ACCESS_KEY: "{{ vars.aws_secret_access_key }}"
+      cmd: |
+        ./dewy server -p 8001 -l debug \
+        --registry "s3://ap-northeast-3/dewy-testapp?pre-release=true" \
+        -- $PWD/current/dewy-testapp
+    test: status == -1
+    outputs:
+      pid: res.pid
+      log: res.log
+    echo: |
+      PID: {{res.pid}}
+      Log: {{ res.log }}
+  - name: Stop dewy for AWS S3 registry
+    wait: 5m
+    uses: shell
+    with: # Use Process Group ID
+      cmd: "kill -TERM -{{ outputs.s3.pid }}"
+    test: status == 0
+  - name: Verify no error
+    uses: shell
+    with:
+      cmd: "grep -i err {{ outputs.s3.log }}"
+    test: status == 1
+  - name: Verify starting two version
+    uses: shell
+    with:
+      cmd: |
+        grep 'starting version' {{ outputs.s3.log }} | \
+          awk '{print $6}' | wc -l | awk '{print $1}'
+    test: res.stdout == "2\n"
+  - name: Verify starting new version
+    uses: shell
+    with:
+      cmd: |
+        grep 'starting version' {{ outputs.s3.log }} | \
+          awk '{print $6}' | \
+          grep {{ replace(outputs.release.version, 'v', '') }}
+    test: status == 0
+
+- name: Use GCloud storage registry
+  needs: [build]
+  steps:
+  - name: Start dewy for GCloud storage registry
+    id: gs
+    uses: shell
+    with:
+      workdir: ./testdata/gs
+      background: true
+      env:
+        GOOGLE_APPLICATION_CREDENTIALS: "{{ vars.google_application_credentials }}"
+      cmd: |
+        ./dewy server -p 8002 -l debug \
+        --registry "gs://dewy-testapp?pre-release=true" \
+        -- $PWD/current/dewy-testapp
+    test: status == -1
+    outputs:
+      pid: res.pid
+      log: res.log
+    echo: |
+      PID: {{res.pid}}
+      Log: {{ res.log }}
+  - name: Stop dewy for GCloud storage registry
+    wait: 5m
+    uses: shell
+    with: # Use Process Group ID
+      cmd: "kill -TERM -{{ outputs.gs.pid }}"
+    test: status == 0
+  - name: Verify no error
+    uses: shell
+    with:
+      cmd: "grep -i err {{ outputs.gs.log }}"
+    test: status == 1
+  - name: Verify starting two version
+    uses: shell
+    with:
+      cmd: |
+        grep 'starting version' {{ outputs.gs.log }} | \
+          awk '{print $6}' | wc -l | awk '{print $1}'
+    test: res.stdout == "2\n"
+  - name: Verify starting new version
+    uses: shell
+    with:
+      cmd: |
+        grep 'starting version' {{ outputs.gs.log }} | \
+          awk '{print $6}' | \
+          grep {{ replace(outputs.release.version, 'v', '') }}
+    test: status == 0
