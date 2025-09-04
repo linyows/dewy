@@ -15,6 +15,9 @@ jobs:
     - uses: actions/setup-go@v5
       with:
         go-version-file: go.mod
+    # It takes time to download the module, so build it in advance
+    - name: Go build
+      run: go build ./cmd/dewy
     - name: Authenticate to Google Cloud
       uses: google-github-actions/auth@v2
       with:
