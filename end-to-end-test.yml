@@ -107,6 +107,11 @@ jobs:
           awk '{print $6}' | \
           grep {{ replace(outputs.release.version, 'v', '') }}
     test: status == 0
+  - name: Cat log
+    uses: shell
+    with:
+      cmd: "cat {{ outputs.ghr.log }}"
+    echo: "{{ res.stdout }}"
 
 - name: Use AWS S3 registry
   needs: [build]
@@ -157,6 +162,11 @@ jobs:
           awk '{print $6}' | \
           grep {{ replace(outputs.release.version, 'v', '') }}
     test: status == 0
+  - name: Cat log
+    uses: shell
+    with:
+      cmd: "cat {{ outputs.s3.log }}"
+    echo: "{{ res.stdout }}"
 
 - name: Use GCloud storage registry
   needs: [build]
@@ -206,3 +216,8 @@ jobs:
           awk '{print $6}' | \
           grep {{ replace(outputs.release.version, 'v', '') }}
     test: status == 0
+  - name: Cat log
+    uses: shell
+    with:
+      cmd: "cat {{ outputs.gs.log }}"
+    echo: "{{ res.stdout }}"
