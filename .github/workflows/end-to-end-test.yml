@@ -26,6 +26,6 @@ jobs:
         version: v0.22.0
       env:
         GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GH_TOKEN: ${{ secrets.GH_TOKEN }}
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
