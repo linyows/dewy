@@ -1,8 +1,10 @@
 name: End-to-end Testing
 
 on:
-  pull_request:
   workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main]
 
 jobs:
   test:
@@ -21,6 +23,7 @@ jobs:
       uses: linyows/probe-action@v1
       with:
         path: end-to-end-test.yml
+        version: v0.22.0
       env:
         GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
