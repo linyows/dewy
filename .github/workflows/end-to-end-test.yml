@@ -25,7 +25,7 @@ jobs:
     - name: Run probe
       uses: linyows/probe-action@v1
       with:
-        path: end-to-end-test.yml
+        path: testdata/e2e-test.yml
         version: v0.22.0
       env:
         GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}

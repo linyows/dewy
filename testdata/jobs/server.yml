@@ -1,0 +1,71 @@
+name: Server Test
+
+steps:
+- name: Start dewy
+  id: server
+  uses: shell
+  with:
+    workdir: ./testdata/{{ vars.registry }}
+    background: true
+    env:
+      GITHUB_TOKEN: "{{ vars.github_token }}"
+      AWS_ACCESS_KEY_ID: "{{ vars.aws_access_key_id }}"
+      AWS_SECRET_ACCESS_KEY: "{{ vars.aws_secret_access_key }}"
+      GOOGLE_APPLICATION_CREDENTIALS: "{{ vars.google_application_credentials }}"
+    cmd: |
+      ./dewy server -p {{ vars.port }} -l {{ vars.log_level }} \
+      --registry "{{ vars.registry_url }}" \
+      -- $PWD/current/dewy-testapp
+  test: status == -1
+  outputs:
+    pid: res.pid
+    log: res.log
+  echo: |
+    PID: {{ res.pid }}
+    Log: {{ res.log }}
+
+- name: Stop dewy
+  wait: 5m
+  uses: shell
+  with: # Use Process Group ID
+    cmd: "kill -TERM -{{ outputs.server.pid }}"
+  test: status == 0
+
+- name: Verify no error
+  id: noerr
+  uses: shell
+  with:
+    cmd: "grep -i err {{ outputs.server.log }}"
+  test: status == 1
+  outputs:
+    ok: status == 1
+
+- name: Verify starting two version
+  id: twover
+  uses: shell
+  with:
+    cmd: |
+      grep 'starting version' {{ outputs.server.log }} | \
+        awk '{print $6}' | wc -l | awk '{print $1}'
+  test: res.stdout == "2\n"
+  outputs:
+    ok: res.stdout == "2\n"
+
+- name: Verify starting new version
+  id: newver
+  uses: shell
+  with:
+    cmd: |
+      grep 'starting version' {{ outputs.server.log }} | \
+        awk '{print $6}' | \
+        grep {{ replace(vars.new_version, 'v', '') }}
+  test: status == 0
+  outputs:
+    ok: status == 0
+
+- name: Show log
+  skipif: outputs.noerr.ok && outputs.twover.ok && outputs.newver.ok
+  uses: shell
+  with:
+    cmd: "cat {{ outputs.server.log }}"
+  echo: "{{ res.stdout }}"

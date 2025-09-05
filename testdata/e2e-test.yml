@@ -1,0 +1,125 @@
+name: Deploy Testing
+description: Verify that the deployment is correct
+
+vars:
+  github_token: "{{ GITHUB_TOKEN ?? '' }}"
+  aws_access_key_id: "{{ AWS_ACCESS_KEY_ID ?? '' }}"
+  aws_secret_access_key: "{{ AWS_SECRET_ACCESS_KEY ?? '' }}"
+  google_application_credentials: "{{ GOOGLE_APPLICATION_CREDENTIALS ?? '' }}"
+
+jobs:
+- name: Check credentials
+  id: check
+  steps:
+  - name: GITHUB_TOKEN is not empty
+    uses: hello
+    test: vars.github_token != ''
+  - name: AWS_ACCESS_KEY_ID is not empty
+    uses: hello
+    test: vars.aws_access_key_id != ''
+  - name: AWS_SECRET_ACCESS_KEY is not empty
+    uses: hello
+    test: vars.aws_secret_access_key != ''
+  - name: GOOGLE_APPLICATION_CREDENTIALS is not empty
+    uses: hello
+    test: vars.google_application_credentials != ''
+
+- name: Build dewy
+  id: build
+  needs: [check]
+  steps:
+  - name: Go build for Github releases registry
+    uses: shell
+    with:
+      cmd: go build -o ./testdata/ghr/dewy ./cmd/dewy
+    test: status == 0
+  - name: Go build for AWS S3 registry
+    uses: shell
+    with:
+      cmd: go build -o ./testdata/s3/dewy ./cmd/dewy
+    test: status == 0
+  - name: Go build for Google cloud storage registry
+    uses: shell
+    with:
+      cmd: go build -o ./testdata/gs/dewy ./cmd/dewy
+    test: status == 0
+
+- name: Create new version
+  needs: [build]
+  steps:
+  - name: Create release
+    id: release
+    uses: shell
+    wait: 15s
+    with:
+      env:
+        GH_TOKEN: "{{ vars.github_token }}"
+      cmd: |
+        gh release create {{ vars.version }} \
+          --repo linyows/dewy-testapp \
+          --title {{ vars.version }} \
+          --notes "End-to-end Testing by Probe"
+    vars:
+      version: v3.0.0-{{ unixtime() }}
+    test: status == 0
+    outputs:
+      version: vars.version
+    echo: |
+      {{res.stdout}}
+
+- name: Use Github releases registry
+  needs: [build]
+  steps:
+  - name: Server test
+    uses: embedded
+    with:
+      path: ./testdata/jobs/server.yml
+      vars:
+        github_token: "{{ vars.github_token }}"
+        aws_access_key_id: "{{ vars.aws_access_key_id }}"
+        aws_secret_access_key: "{{ vars.aws_secret_access_key }}"
+        google_application_credentials: "{{ vars.google_application_credentials }}"
+        registry: ghr
+        registry_url: ghr://linyows/dewy-testapp
+        port: 8000
+        log_level: debug
+        new_version: "{{ outputs.release.version }}"
+    test: res.code == 0
+
+- name: Use AWS S3 registry
+  needs: [build]
+  steps:
+  - name: Server test
+    uses: embedded
+    with:
+      path: ./testdata/jobs/server.yml
+      vars:
+        github_token: "{{ vars.github_token }}"
+        aws_access_key_id: "{{ vars.aws_access_key_id }}"
+        aws_secret_access_key: "{{ vars.aws_secret_access_key }}"
+        google_application_credentials: "{{ vars.google_application_credentials }}"
+        registry: s3
+        registry_url: s3://ap-northeast-3/dewy-testapp?pre-release=true
+        port: 8001
+        log_level: debug
+        new_version: "{{ outputs.release.version }}"
+    test: res.code == 0
+
+- name: Use GCloud storage registry
+  needs: [build]
+  steps:
+  - name: Server test
+    uses: embedded
+    with:
+      path: ./testdata/jobs/server.yml
+      vars:
+        github_token: "{{ vars.github_token }}"
+        aws_access_key_id: "{{ vars.aws_access_key_id }}"
+        aws_secret_access_key: "{{ vars.aws_secret_access_key }}"
+        google_application_credentials: "{{ vars.google_application_credentials }}"
+        registry: gs
+        registry_url: gs://dewy-testapp?pre-release=true
+        port: 8002
+        log_level: debug
+        new_version: "{{ outputs.release.version }}"
+    test: res.code == 0
