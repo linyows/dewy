@@ -165,25 +165,52 @@ func (g *GHR) Current(ctx context.Context) (*CurrentResponse, error) {
 }
 
 func (g *GHR) latest(ctx context.Context) (*github.RepositoryRelease, error) {
-	var r *github.RepositoryRelease
-	if g.PreRelease {
-		opt := &github.ListOptions{Page: 1}
-		rr, _, err := g.cl.Repositories.ListReleases(ctx, g.Owner, g.Repo, opt)
+	// Get all non-draft releases and find the latest based on semantic versioning
+	var allReleases []*github.RepositoryRelease
+	page := 1
+	
+	for {
+		opt := &github.ListOptions{Page: page, PerPage: 100}
+		releases, res, err := g.cl.Repositories.ListReleases(ctx, g.Owner, g.Repo, opt)
 		if err != nil {
 			return nil, fmt.Errorf("failed github.Repositories.ListReleases: %w", err)
 		}
-		for _, v := range rr {
-			if *v.Draft {
-				continue
+		
+		for _, release := range releases {
+			if !*release.Draft {
+				allReleases = append(allReleases, release)
 			}
-			return v, nil
 		}
+		
+		if res.NextPage == 0 {
+			break
+		}
+		page = res.NextPage
 	}
-	r, _, err := g.cl.Repositories.GetLatestRelease(ctx, g.Owner, g.Repo)
+	
+	if len(allReleases) == 0 {
+		return nil, fmt.Errorf("no non-draft releases found")
+	}
+	
+	// Extract tag names for semver comparison
+	var tagNames []string
+	releaseMap := make(map[string]*github.RepositoryRelease)
+	
+	for _, release := range allReleases {
+		tagName := release.GetTagName()
+		tagNames = append(tagNames, tagName)
+		releaseMap[tagName] = release
+	}
+	
+	// Use semver to find the latest version
+	latestVersion, latestTag, err := FindLatestSemVer(tagNames, g.PreRelease)
 	if err != nil {
-		return nil, fmt.Errorf("failed github.Repositories.GetLatestRelease: %w", err)
+		return nil, fmt.Errorf("failed to find latest semantic version: %w", err)
 	}
-	return r, nil
+	
+	g.logger.Debug("Selected release based on semver", slog.String("tag", latestTag), slog.Any("version", latestVersion))
+	
+	return releaseMap[latestTag], nil
 }
 
 // Report report shipping.
