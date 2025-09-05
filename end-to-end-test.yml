@@ -96,18 +96,25 @@ jobs:
       cmd: "kill -TERM -{{ outputs.ghr.pid }}"
     test: status == 0
   - name: Verify no error
+    id: ghr-no-error
     uses: shell
     with:
       cmd: "grep -i err {{ outputs.ghr.log }}"
     test: status == 1
+    outputs:
+      ok: status == 1
   - name: Verify starting two version
+    id: ghr-two-version
     uses: shell
     with:
       cmd: |
         grep 'starting version' {{ outputs.ghr.log }} | \
           awk '{print $6}' | wc -l | awk '{print $1}'
     test: res.stdout == "2\n"
+    outputs:
+      ok: res.stdout == "2\n"
   - name: Verify starting new version
+    id: ghr-new-version
     uses: shell
     with:
       cmd: |
@@ -115,7 +122,10 @@ jobs:
           awk '{print $6}' | \
           grep {{ replace(outputs.release.version, 'v', '') }}
     test: status == 0
-  - name: Cat log
+    outputs:
+      ok: status == 0
+  - name: Show log
+    skipif: outputs.ghr-no-error.ok && outputs.ghr-two-version.ok && outputs.ghr-new-version.ok
     uses: shell
     with:
       cmd: "cat {{ outputs.ghr.log }}"
