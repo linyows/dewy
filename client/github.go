@@ -13,9 +13,10 @@ import (
 
 // NewGitHub creates a new GitHub client with authentication.
 func NewGitHub() (*github.Client, error) {
-	token := os.Getenv("GITHUB_TOKEN")
+	// Check GH_TOKEN first to avoid GitHub Actions auto-override of GITHUB_TOKEN
+	token := os.Getenv("GH_TOKEN")
 	if token == "" {
-		token = os.Getenv("GH_TOKEN")
+		token = os.Getenv("GITHUB_TOKEN")
 	}
 
 	if token == "" {
@@ -37,6 +38,12 @@ func NewGitHub() (*github.Client, error) {
 		baseURL, err := url.Parse(apiURL)
 		if err != nil {
 			return nil, fmt.Errorf("invalid API URL: %w", err)
+		}
+		// Ensure the URL has a trailing slash as required by go-github
+		if baseURL.Path == "" {
+			baseURL.Path = "/"
+		} else if baseURL.Path[len(baseURL.Path)-1] != '/' {
+			baseURL.Path += "/"
 		}
 		client.BaseURL = baseURL
 	}

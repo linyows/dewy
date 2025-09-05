@@ -1,0 +1,33 @@
+name: End-to-end Testing
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v5
+    - uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+    # It takes time to download the module, so build it in advance
+    - name: Go build
+      run: go build ./cmd/dewy
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+    - name: Run probe
+      uses: linyows/probe-action@v1
+      with:
+        path: testdata/e2e-test.yml
+        version: v0.23.0
+      env:
+        GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+        GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
