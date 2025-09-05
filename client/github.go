@@ -38,6 +38,12 @@ func NewGitHub() (*github.Client, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid API URL: %w", err)
 		}
+		// Ensure the URL has a trailing slash as required by go-github
+		if baseURL.Path == "" {
+			baseURL.Path = "/"
+		} else if baseURL.Path[len(baseURL.Path)-1] != '/' {
+			baseURL.Path += "/"
+		}
 		client.BaseURL = baseURL
 	}
 
