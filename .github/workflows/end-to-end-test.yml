@@ -25,7 +25,7 @@ jobs:
       uses: linyows/probe-action@v1
       with:
         path: testdata/e2e-test.yml
-        version: v0.22.0
+        version: v0.23.0
       env:
         GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         GH_TOKEN: ${{ secrets.GH_TOKEN }}
