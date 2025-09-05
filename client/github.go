@@ -14,9 +14,10 @@ import (
 
 // NewGitHub creates a new GitHub client with authentication.
 func NewGitHub() (*github.Client, error) {
-	token := os.Getenv("GITHUB_TOKEN")
+	// Check GH_TOKEN first to avoid GitHub Actions auto-override of GITHUB_TOKEN
+	token := os.Getenv("GH_TOKEN")
 	if token == "" {
-		token = os.Getenv("GH_TOKEN")
+		token = os.Getenv("GITHUB_TOKEN")
 	}
 
 	if token == "" {
