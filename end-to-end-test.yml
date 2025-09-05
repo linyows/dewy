@@ -129,7 +129,11 @@ jobs:
     uses: shell
     with:
       cmd: "cat {{ outputs.ghr.log }}"
-    echo: "{{ res.stdout }}"
+    echo: |
+      {{ outputs.ghr-no-error.ok }}
+      {{ outputs.ghr-two-version.ok }}
+      {{ outputs.ghr-new-version.ok }}
+      {{ res.stdout }}
 
 - name: Use AWS S3 registry
   needs: [build]
