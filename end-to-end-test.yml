@@ -125,15 +125,11 @@ jobs:
     outputs:
       ok: status == 0
   - name: Show log
-    skipif: outputs.ghr-no-error.ok && outputs.ghr-two-version.ok && outputs.ghr-new-version.ok
+    skipif: outputs['ghr-no-error'].ok && outputs['ghr-two-version'].ok && outputs['ghr-new-version'].ok
     uses: shell
     with:
       cmd: "cat {{ outputs.ghr.log }}"
-    echo: |
-      {{ outputs.ghr-no-error.ok }}
-      {{ outputs.ghr-two-version.ok }}
-      {{ outputs.ghr-new-version.ok }}
-      {{ res.stdout }}
+    echo: "{{ res.stdout }}"
 
 - name: Use AWS S3 registry
   needs: [build]
