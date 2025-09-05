@@ -80,7 +80,7 @@ jobs:
         aws_secret_access_key: "{{ vars.aws_secret_access_key }}"
         google_application_credentials: "{{ vars.google_application_credentials }}"
         registry: ghr
-        registry_url: ghr://linyows/dewy-testapp
+        registry_url: ghr://linyows/dewy-testapp?pre-release=true
         port: 8000
         log_level: debug
         new_version: "{{ outputs.release.version }}"
