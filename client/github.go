@@ -3,7 +3,6 @@ package client
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -23,15 +22,6 @@ func NewGitHub() (*github.Client, error) {
 	if token == "" {
 		return nil, fmt.Errorf("no GitHub token found in GITHUB_TOKEN or GH_TOKEN environment variables")
 	}
-
-	// Debug: Log first 15 characters of the token for debugging
-	tokenPrefix := ""
-	if len(token) >= 15 {
-		tokenPrefix = token[:15]
-	} else {
-		tokenPrefix = token
-	}
-	log.Printf("DEBUG: Using GitHub token prefix: %s", tokenPrefix)
 
 	ctx := context.Background()
 	ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
