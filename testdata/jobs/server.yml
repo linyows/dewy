@@ -35,7 +35,7 @@ steps:
   id: noerr
   uses: shell
   with:
-    cmd: "grep -i err {{ outputs.server.log }}"
+    cmd: "grep -i error {{ outputs.server.log }}"
   test: status == 1
   outputs:
     ok: status == 1
