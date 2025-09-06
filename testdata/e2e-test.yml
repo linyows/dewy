@@ -64,7 +64,7 @@ jobs:
     echo: |
       {{res.stdout}}
 
-- name: Use Github releases registry
+- name: Run server by Github-Releases registry
   needs: [build]
   steps:
   - name: Server test
@@ -83,7 +83,7 @@ jobs:
         new_version: "{{ outputs.release.version }}"
     test: res.code == 0
 
-- name: Use AWS S3 registry
+- name: Run server by AWS S3 registry
   needs: [build]
   steps:
   - name: Server test
@@ -102,7 +102,7 @@ jobs:
         new_version: "{{ outputs.release.version }}"
     test: res.code == 0
 
-- name: Use GCloud storage registry
+- name: Run server by GCloud Storage registry
   needs: [build]
   steps:
   - name: Server test
