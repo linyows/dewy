@@ -5,7 +5,7 @@ steps:
   id: server
   uses: shell
   with:
-    workdir: ./testdata/{{ vars.registry }}
+    workdir: ./testdata/server/{{ vars.registry }}
     background: true
     env:
       GITHUB_TOKEN: "{{ vars.github_token }}"
