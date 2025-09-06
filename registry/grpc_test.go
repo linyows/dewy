@@ -76,9 +76,10 @@ func TestReport(t *testing.T) {
 		t.Fatal(err)
 	}
 	req := &ReportRequest{
-		ID:  "1234567890",
-		Tag: "v1.0.0",
-		Err: errors.New("something error"),
+		ID:      "1234567890",
+		Tag:     "v1.0.0",
+		Command: "server",
+		Err:     errors.New("something error"),
 	}
 	if err := g.Report(ctx, req); err != nil {
 		t.Fatal(err)
@@ -89,9 +90,10 @@ func TestReport(t *testing.T) {
 			t.Errorf("got %v, want %v", len(ts.Requests()), want)
 		}
 		want := grpcstub.Message{
-			"id":  "1234567890",
-			"tag": "v1.0.0",
-			"err": "something error",
+			"id":      "1234567890",
+			"tag":     "v1.0.0",
+			"command": "server",
+			"err":     "something error",
 		}
 		if diff := cmp.Diff(ts.Requests()[0].Message, want); diff != "" {
 			t.Error(diff)

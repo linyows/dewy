@@ -44,6 +44,8 @@ type ReportRequest struct {
 	ID string
 	// Tag is the current tag of deployed artifact.
 	Tag string
+	// Command is the command that was used for deployment (server or assets).
+	Command string
 	// Err is the error that occurred during deployment. If Err is nil, the deployment is considered successful.
 	Err error
 }

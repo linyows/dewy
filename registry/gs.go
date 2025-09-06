@@ -155,7 +155,7 @@ func (g *GS) Report(ctx context.Context, req *ReportRequest) error {
 
 	now := time.Now().UTC().Format(ISO8601)
 	hostname, _ := os.Hostname()
-	info := fmt.Sprintf("shipped to %s at %s", strings.ToLower(hostname), now)
+	info := fmt.Sprintf("shipped to %s %s at %s", strings.ToLower(hostname), req.Command, now)
 	filename := fmt.Sprintf("%s.txt", strings.ReplaceAll(info, " ", "_"))
 	key := fmt.Sprintf("%s%s/%s", g.Prefix, req.Tag, filename)
 	err := g.putTextObject(ctx, key, "")

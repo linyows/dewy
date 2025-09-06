@@ -90,9 +90,10 @@ func (c *GRPC) Report(ctx context.Context, req *ReportRequest) error {
 		perr = &serr
 	}
 	creq := &pb.ReportRequest{
-		Id:  req.ID,
-		Tag: req.Tag,
-		Err: perr,
+		Id:      req.ID,
+		Tag:     req.Tag,
+		Command: req.Command,
+		Err:     perr,
 	}
 	if _, err := c.cl.Report(ctx, creq); err != nil {
 		return err
