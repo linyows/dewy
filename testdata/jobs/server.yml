@@ -75,7 +75,7 @@ steps:
     ok: status == 0
 
 - name: Show log
-  skipif: outputs.noerr.ok && outputs.twover.ok && outputs.newver.ok
+  skipif: outputs.noerr.ok && outputs.twosyml.ok && outputs.twover.ok && outputs.newver.ok
   uses: shell
   with:
     cmd: "cat {{ outputs.server.log }}"
