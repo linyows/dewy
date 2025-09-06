@@ -1,11 +1,11 @@
-name: Server Test
+name: Assets Test
 
 steps:
 - name: Start dewy
   id: server
   uses: shell
   with:
-    workdir: ./testdata/server/{{ vars.registry }}
+    workdir: ./testdata/assets/{{ vars.registry }}
     background: true
     env:
       GITHUB_TOKEN: "{{ vars.github_token }}"
@@ -13,9 +13,8 @@ steps:
       AWS_SECRET_ACCESS_KEY: "{{ vars.aws_secret_access_key }}"
       GOOGLE_APPLICATION_CREDENTIALS: "{{ vars.google_application_credentials }}"
     cmd: |
-      ./dewy server -p {{ vars.port }} -l {{ vars.log_level }} \
-      --registry "{{ vars.registry_url }}" \
-      -- $PWD/current/dewy-testapp
+      rm -rf .dewy;
+      ./dewy assets -l {{ vars.log_level }} --registry "{{ vars.registry_url }}"
   test: status == -1
   outputs:
     pid: res.pid
@@ -56,18 +55,18 @@ steps:
   uses: shell
   with:
     cmd: |
-      grep 'starting version' {{ outputs.server.log }} | \
+      grep 'Download notification' {{ outputs.server.log }} | \
         awk '{print $6}' | wc -l | awk '{printf $1}'
-  test: res.stdout == "2" || res.stdout == "3"
+  test: res.stdout == "2"
   outputs:
-    ok: res.stdout == "2" || res.stdout == "3"
+    ok: res.stdout == "2"
 
 - name: Verify starting new version
   id: newver
   uses: shell
   with:
     cmd: |
-      grep 'starting version' {{ outputs.server.log }} | \
+      grep 'Download notification' {{ outputs.server.log }} | \
         awk '{print $6}' | \
         grep {{ replace(vars.new_version, 'v', '') }}
   test: status == 0

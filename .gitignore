@@ -6,6 +6,5 @@
 dist/
 /website/public
 .dewy/
-/testdata/ghr
-/testdata/s3
-/testdata/gs
+/testdata/server
+/testdata/assets
