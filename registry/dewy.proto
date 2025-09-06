@@ -31,5 +31,6 @@ message CurrentResponse {
 message ReportRequest {
 	string id = 1;           // id is the ID of the response.
   string tag = 2;          // tag is the current tag of deployed artifact.
-  optional string err = 3; // err is the error that occurred during deployment. If Err is nil, the deployment is considered successful.
+  string command = 3;      // command is the command that was used for deployment (server or assets).
+  optional string err = 4; // err is the error that occurred during deployment. If Err is nil, the deployment is considered successful.
 }

@@ -220,7 +220,7 @@ func (g *GHR) Report(ctx context.Context, req *ReportRequest) error {
 	}
 	now := time.Now().UTC().Format(ISO8601)
 	hostname, _ := os.Hostname()
-	info := fmt.Sprintf("shipped to %s at %s", strings.ToLower(hostname), now)
+	info := fmt.Sprintf("shipped to %s %s at %s", strings.ToLower(hostname), req.Command, now)
 
 	page := 1
 	for {

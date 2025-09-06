@@ -276,8 +276,9 @@ func (d *Dewy) Run() error {
 	if !d.disableReport {
 		d.logger.Debug("Report shipping")
 		err := d.registry.Report(ctx, &registry.ReportRequest{
-			ID:  res.ID,
-			Tag: res.Tag,
+			ID:      res.ID,
+			Tag:     res.Tag,
+			Command: d.config.Command.String(),
 		})
 		if err != nil {
 			d.logger.Error("Report shipping failure", slog.String("error", err.Error()))
