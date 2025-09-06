@@ -40,6 +40,17 @@ steps:
   outputs:
     ok: status == 1
 
+- name: Verify two symlinks creates
+  id: twosyml
+  uses: shell
+  with:
+    cmd: |
+      grep 'Create symlink' {{ outputs.server.log }} | \
+        wc -l | awk '{printf $1}'
+  test: res.stdout == "2"
+  outputs:
+    ok: res.stdout == "2"
+
 - name: Verify starting two version
   id: twover
   uses: shell
