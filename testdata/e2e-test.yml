@@ -120,3 +120,60 @@ jobs:
         log_level: debug
         new_version: "{{ outputs.release.version }}"
     test: res.code == 0
+
+- name: Run assets by Github-Releases registry
+  needs: [build]
+  steps:
+  - name: Assets test
+    uses: embedded
+    with:
+      path: ./testdata/jobs/assets.yml
+      vars:
+        github_token: "{{ vars.github_token }}"
+        aws_access_key_id: "{{ vars.aws_access_key_id }}"
+        aws_secret_access_key: "{{ vars.aws_secret_access_key }}"
+        google_application_credentials: "{{ vars.google_application_credentials }}"
+        registry: ghr
+        registry_url: ghr://linyows/dewy-testapp?pre-release=true
+        port: 9000
+        log_level: debug
+        new_version: "{{ outputs.release.version }}"
+    test: res.code == 0
+
+- name: Run assets by AWS S3 registry
+  needs: [build]
+  steps:
+  - name: Assets test
+    uses: embedded
+    with:
+      path: ./testdata/jobs/assets.yml
+      vars:
+        github_token: "{{ vars.github_token }}"
+        aws_access_key_id: "{{ vars.aws_access_key_id }}"
+        aws_secret_access_key: "{{ vars.aws_secret_access_key }}"
+        google_application_credentials: "{{ vars.google_application_credentials }}"
+        registry: s3
+        registry_url: s3://ap-northeast-3/dewy-testapp?pre-release=true
+        port: 9001
+        log_level: debug
+        new_version: "{{ outputs.release.version }}"
+    test: res.code == 0
+
+- name: Run assets by GCloud Storage registry
+  needs: [build]
+  steps:
+  - name: Assets test
+    uses: embedded
+    with:
+      path: ./testdata/jobs/assets.yml
+      vars:
+        github_token: "{{ vars.github_token }}"
+        aws_access_key_id: "{{ vars.aws_access_key_id }}"
+        aws_secret_access_key: "{{ vars.aws_secret_access_key }}"
+        google_application_credentials: "{{ vars.google_application_credentials }}"
+        registry: gs
+        registry_url: gs://dewy-testapp?pre-release=true
+        port: 9002
+        log_level: debug
+        new_version: "{{ outputs.release.version }}"
+    test: res.code == 0

@@ -1,0 +1,81 @@
+name: Assets Test
+
+steps:
+- name: Start dewy
+  id: server
+  uses: shell
+  with:
+    workdir: ./testdata/assets/{{ vars.registry }}
+    background: true
+    env:
+      GITHUB_TOKEN: "{{ vars.github_token }}"
+      AWS_ACCESS_KEY_ID: "{{ vars.aws_access_key_id }}"
+      AWS_SECRET_ACCESS_KEY: "{{ vars.aws_secret_access_key }}"
+      GOOGLE_APPLICATION_CREDENTIALS: "{{ vars.google_application_credentials }}"
+    cmd: |
+      rm -rf .dewy;
+      ./dewy assets -l {{ vars.log_level }} --registry "{{ vars.registry_url }}"
+  test: status == -1
+  outputs:
+    pid: res.pid
+    log: res.log
+  echo: |
+    PID: {{ res.pid }}
+    Log: {{ res.log }}
+
+- name: Stop dewy
+  wait: 5m
+  uses: shell
+  with: # Use Process Group ID
+    cmd: "kill -TERM -{{ outputs.server.pid }}"
+  test: status == 0
+
+- name: Verify no error
+  id: noerr
+  uses: shell
+  with:
+    cmd: "grep -i error {{ outputs.server.log }}"
+  test: status == 1
+  outputs:
+    ok: status == 1
+
+- name: Verify two symlinks creates
+  id: twosyml
+  uses: shell
+  with:
+    cmd: |
+      grep 'Create symlink' {{ outputs.server.log }} | \
+        wc -l | awk '{printf $1}'
+  test: res.stdout == "2"
+  outputs:
+    ok: res.stdout == "2"
+
+- name: Verify starting two version
+  id: twover
+  uses: shell
+  with:
+    cmd: |
+      grep 'Download notification' {{ outputs.server.log }} | \
+        awk '{print $6}' | wc -l | awk '{printf $1}'
+  test: res.stdout == "2"
+  outputs:
+    ok: res.stdout == "2"
+
+- name: Verify starting new version
+  id: newver
+  uses: shell
+  with:
+    cmd: |
+      grep 'Download notification' {{ outputs.server.log }} | \
+        awk '{print $6}' | \
+        grep {{ replace(vars.new_version, 'v', '') }}
+  test: status == 0
+  outputs:
+    ok: status == 0
+
+- name: Show log
+  skipif: outputs.noerr.ok && outputs.twosyml.ok && outputs.twover.ok && outputs.newver.ok
+  uses: shell
+  with:
+    cmd: "cat {{ outputs.server.log }}"
+  echo: "{{ res.stdout }}"
