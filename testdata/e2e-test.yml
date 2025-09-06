@@ -28,21 +28,18 @@ jobs:
   id: build
   needs: [check]
   steps:
-  - name: Go build for Github releases registry
+  - name: Go build for {{ vars.command }}-{{ vars.registry }}
     uses: shell
     with:
-      cmd: go build -o ./testdata/ghr/dewy ./cmd/dewy
+      cmd: go build -o ./testdata/{{ vars.command }}/{{ vars.registry }}/dewy ./cmd/dewy
     test: status == 0
-  - name: Go build for AWS S3 registry
-    uses: shell
-    with:
-      cmd: go build -o ./testdata/s3/dewy ./cmd/dewy
-    test: status == 0
-  - name: Go build for Google cloud storage registry
-    uses: shell
-    with:
-      cmd: go build -o ./testdata/gs/dewy ./cmd/dewy
-    test: status == 0
+    iteration:
+    - { command: 'server', registry: 'ghr' }
+    - { command: 'server', registry: 's3' }
+    - { command: 'server', registry: 'gs' }
+    - { command: 'assets', registry: 'ghr' }
+    - { command: 'assets', registry: 's3' }
+    - { command: 'assets', registry: 'gs' }
 
 - name: Create new version
   needs: [build]
