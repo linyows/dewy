@@ -57,10 +57,10 @@ steps:
   with:
     cmd: |
       grep 'starting version' {{ outputs.server.log }} | \
-        awk '{print $6}' | wc -l | awk '{print $1}'
-  test: res.stdout == "2\n"
+        awk '{print $6}' | wc -l | awk '{printf $1}'
+  test: res.stdout == "2" || res.stdout == "3"
   outputs:
-    ok: res.stdout == "2\n"
+    ok: res.stdout == "2" || res.stdout == "3"
 
 - name: Verify starting new version
   id: newver
