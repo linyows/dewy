@@ -1,0 +1,65 @@
+:root {
+  --top-nav-height: 6rem;
+  --border-color: #dce6e9;
+  --text-color: rgba(60, 66, 87, 1);
+  --text-dim-color: rgba(60, 66, 87, 0.5);
+  --anchor-color: rgba(75, 85, 99, 1);
+  --primary-color: rgb(230,100,105);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif,
+    'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+  color: rgba(60, 66, 87, 1);
+  margin: 0;
+}
+
+p {
+  line-height: 1.8;
+}
+
+ul, ol {
+  padding-left: 1.5rem;
+}
+
+li {
+  padding: 0.25rem 0;
+}
+
+
+h1 {
+  font-size: 2.5rem;
+  margin: 2rem 0 1rem;
+}
+h2 {
+  margin: 3rem 0 1rem;
+  font-size: 1.8rem;
+}
+h3 {
+  margin: 2.4rem 0 .8rem;
+  font-size: 1.4rem;
+  font-weight: normal;
+}
+
+a {
+  color: rgba(75, 85, 99, 1);
+}
+
+.code {
+  margin: 2rem 0;
+}
+.code pre {
+  max-width: 100%;
+  overflow: scroll;
+  border-radius: 10px;
+  font-size: .8rem;
+  padding: 2rem;
+  border: 1px solid var(--text-color);
+}
