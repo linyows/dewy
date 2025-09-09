@@ -5,8 +5,6 @@ on:
   push:
     branches:
       - main
-  schedule:
-    - cron: 0 0 * * *
 
 concurrency:
   group: "pages"
@@ -20,12 +18,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: website/package-lock.json
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: 1.2.0
       - name: Setup pages
         uses: actions/configure-pages@v5
         with:
@@ -34,30 +30,20 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            website/.next/cache
-          key: |
-            ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json', '**/yarn.lock') }}-${{ hashFiles('**.[jt]s', '**.[jt]sx') }}
-          restore-keys: |
-            ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json', '**/yarn.lock') }}-
-      - name: Restore rotion cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            website/.cache
-            website/public/images
-          key: rotion
-          restore-keys: rotion
+            docs/.next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('**/bun.lock') }}-${{ hashFiles('**.[jt]s', '**.[jt]sx') }}
+          restore-keys: ${{ runner.os }}-nextjs-${{ hashFiles('**/bun.lock') }}-
       - name: Install dependencies
-        working-directory: website
-        run: npm ci
+        working-directory: docs
+        run: bun install
       - name: Build and Export
-        working-directory: website
+        working-directory: docs
         run: |
-          npm run build
+          bun run build
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./website/out
+          path: ./docs/out
 
   deploy:
     environment:
