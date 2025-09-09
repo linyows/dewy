@@ -8,15 +8,15 @@ Dewyを使って実際にアプリケーションをデプロイしてみまし�
 
 ## 前提条件
 
-- Dewyがインストールされていること（[インストールガイド](./installation.md)参照）
+- Dewyがインストールされていること（[インストールガイド](/ja/installation)参照）
 - デプロイしたいGoアプリケーションがGitHub Releasesで公開されていること
 - 必要な環境変数が設定されていること
 
 ## 基本的な使い方
 
-### 1. サーバーアプリケーションのデプロイ
+### サーバーアプリケーションのデプロイ
 
-GitHub Releasesからアプリケーションを自動デプロイする例：
+GitHub Releasesからサーバープリケーションを自動デプロイする例：
 
 ```bash
 # 環境変数を設定
@@ -31,7 +31,7 @@ dewy server --registry ghr://owner/repo --port 8000 -- /opt/myapp/current/myapp
 - `--port 8000`: アプリケーションが使用するポート
 - `/opt/myapp/current/myapp`: 実行するアプリケーションのパス
 
-### 2. 静的アセットのデプロイ
+### 静的アセットのデプロイ
 
 HTMLやCSS、JavaScriptファイルなどの静的ファイルをデプロイする場合：
 

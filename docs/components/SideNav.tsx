@@ -101,7 +101,7 @@ export function SideNav({ className }) {
             top: var(--top-nav-height);
             max-height: var(--top-nav-height);
             flex: 0 0 auto;
-            padding: 3rem 2.5rem 2.5rem 3.2rem;
+            padding: 3rem 2.5rem 2.5rem var(--side-width);
           }
           span {
             font-weight: bold;

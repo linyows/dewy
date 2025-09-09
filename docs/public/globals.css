@@ -1,5 +1,6 @@
 :root {
   --top-nav-height: 6rem;
+  --side-width: 3.2rem;
   --border-color: #dce6e9;
   --text-color: rgba(60, 66, 87, 1);
   --text-dim-color: rgba(60, 66, 87, 0.5);
@@ -25,8 +26,12 @@ p {
   line-height: 1.8;
 }
 
-ul, ol {
+ul {
   padding-left: 1.5rem;
+}
+ol {
+  padding-left: 1.5rem;
+  text-indent: .5rem;
 }
 
 li {
@@ -34,32 +39,26 @@ li {
 }
 
 
-h1 {
+article h1 {
   font-size: 2.5rem;
-  margin: 2rem 0 1rem;
+  margin: 2.4rem 0 1rem;
 }
-h2 {
+article h2 {
   margin: 3rem 0 1rem;
   font-size: 1.8rem;
 }
-h3 {
+article h3 {
   margin: 2.4rem 0 .8rem;
   font-size: 1.4rem;
   font-weight: normal;
 }
 
-a {
-  color: rgba(75, 85, 99, 1);
+:where(article h1, article h2, article h3, article h4, article h5, article h6) {
+  scroll-margin-top: calc(var(--top-nav-height) + 2.5rem);
 }
 
-.code {
-  margin: 2rem 0;
-}
-.code pre {
-  max-width: 100%;
-  overflow: scroll;
-  border-radius: 10px;
-  font-size: .8rem;
-  padding: 2rem;
-  border: 1px solid var(--text-color);
+html { scroll-behavior: smooth; }
+
+a {
+  color: rgba(75, 85, 99, 1);
 }

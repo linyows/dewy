@@ -106,11 +106,11 @@ export default function MyApp({ Component, pageProps }: AppProps<MyAppProps>) {
             flex-grow: 1;
           }
           .main-and-toc {
-            max-width: 1400px;
+            max-width: 1800px;
             margin: 0 auto;
             flex-grow: 1;
             display: grid;
-            grid-template-columns: 1fr 300px;
+            grid-template-columns: 1fr 400px;
             gap: 2rem;
           }
           main {
