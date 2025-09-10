@@ -30,7 +30,7 @@ export function CodeBlock({children, 'data-language': language}) {
           /* Override Prism styles */
           .code-block :global(pre[class*='language-']) {
             text-shadow: none;
-            border-radius: 10px;
+            border-radius: 4px;
             font-size: .85rem;
             padding: 1.2rem 1.5rem;
             width: 100%;

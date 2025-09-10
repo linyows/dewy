@@ -7,7 +7,8 @@
   --text-dim-color: rgba(60, 66, 87, 0.5);
   --anchor-color: rgba(75, 85, 99, 1);
   --primary-color: rgb(230,100,105);
-  --secondary-color: rgb(250, 218, 94);
+  --secondary-color: rgb(250, 218, 221);
+  --accent-color: rgb(250, 218, 94);
 
   /* Callout colors */
   --note-color: #73C2FB;
@@ -64,7 +65,7 @@ article h3 {
 
 code {
   border: 1px solid var(--text-dim-color);
-  background-color: var(--secondary-color);
+  background-color: var(--accent-color);
   padding: 1px 4px;
   margin: 0 1px;
   border-radius: 4px;
