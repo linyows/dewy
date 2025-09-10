@@ -13,15 +13,13 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-    - name: Setup Bun
-      uses: oven-sh/setup-bun@v2
-      with:
-        bun-version: 1.2.0
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.0
       - name: Setup pages
         uses: actions/configure-pages@v5
         with:
@@ -29,8 +27,7 @@ jobs:
       - name: Restore next cache
         uses: actions/cache@v4
         with:
-          path: |
-            docs/.next/cache
+          path: docs/.next/cache
           key: ${{ runner.os }}-nextjs-${{ hashFiles('**/bun.lock') }}-${{ hashFiles('**.[jt]s', '**.[jt]sx') }}
           restore-keys: ${{ runner.os }}-nextjs-${{ hashFiles('**/bun.lock') }}-
       - name: Install dependencies
@@ -38,8 +35,7 @@ jobs:
         run: bun install
       - name: Build and Export
         working-directory: docs
-        run: |
-          bun run build
+        run: bun run build
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
