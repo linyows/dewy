@@ -110,13 +110,24 @@ export default function MyApp({ Component, pageProps }: AppProps<MyAppProps>) {
             margin: 0 auto;
             flex-grow: 1;
             display: grid;
-            grid-template-columns: 1fr 400px;
+            grid-template-columns: minmax(0, 1fr) 400px;
             gap: 2rem;
+          }
+          main:before {
+            content: "┌─────────\A│\A│\A│\A│\A│\A│\A│";
+            white-space: pre-wrap;
+            line-height: 1;
+            position: absolute;
+            display: inline-block;
+            top: calc(var(--top-nav-height) - 1.7rem);
+            left: -3rem;
+            padding: 1rem;
           }
           main {
             flex-grow: 1;
             font-size: 16px;
             padding: var(--top-nav-height) 2rem 2rem;
+            position: relative;
           }
           footer {
             text-align: center;

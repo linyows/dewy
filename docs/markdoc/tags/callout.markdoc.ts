@@ -7,7 +7,7 @@ export const callout = {
     type: {
       type: String,
       default: 'note',
-      matches: ['caution', 'check', 'note', 'warning'],
+      matches: ['tip', 'note', 'important', 'warning', 'caution'],
       errorLevel: 'critical'
     },
     title: {

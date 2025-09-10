@@ -166,7 +166,7 @@ dewy server --registry ghr://owner/repo \
   --notifier "mail://smtp.gmail.com:587/admin@example.com?subject=MyApp+Deploy"
 ```
 
-{% callout type="warning" %}
+{% callout type="important" %}
 Gmailを使用する場合は、2要素認証を有効にしてアプリパスワードを生成する必要があります。
 通常のGoogleアカウントパスワードでは認証できません。
 {% /callout %}

@@ -41,7 +41,7 @@ const renderItems = (items) => (
       {`
         ul {
           margin: 0;
-          padding: .25rem var(--side-width) .25rem 2rem;
+          padding: .25rem 0 .25rem 2rem;
           font-size: 0.9rem;
         }
         li :global(a) {
@@ -98,7 +98,7 @@ export function TableOfContents({ toc }) {
             flex: 0 0 auto;
             align-self: flex-start;
             margin-bottom: 1rem;
-            padding: 1rem 0 0;
+            padding: 1rem var(--side-width) 0 0;
           }
           .toc-title {
             font-weight: bold;

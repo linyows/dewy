@@ -81,7 +81,7 @@ dewy server --registry "ghr://linyows/myapp?pre-release=true&artifact=myapp-serv
 
 例：Linux amd64環境では `myapp_linux_amd64.tar.gz` が自動選択されます。
 
-{% callout type="warning" %}
+{% callout type="important" %}
 新しく作成されたリリースについては、CI/CDでのアーティファクトビルド時間を考慮して30分間のグレースピリオドがあります。
 この間は「アーティファクトが見つからない」エラーが発生しても通知されません。
 {% /callout %}
