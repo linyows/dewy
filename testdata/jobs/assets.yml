@@ -55,8 +55,7 @@ steps:
   uses: shell
   with:
     cmd: |
-      grep 'Download notification' {{ outputs.server.log }} | \
-        awk '{print $6}' | wc -l | awk '{printf $1}'
+      grep -c 'Download notification' {{ outputs.server.log }}
   test: res.stdout == "2"
   outputs:
     ok: res.stdout == "2"
