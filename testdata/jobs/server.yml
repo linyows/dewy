@@ -45,8 +45,7 @@ steps:
   uses: shell
   with:
     cmd: |
-      grep 'Create symlink' {{ outputs.server.log }} | \
-        wc -l | awk '{printf $1}'
+      grep -c 'Create symlink' {{ outputs.server.log }} | tr -d '\n'
   test: res.stdout == "2"
   outputs:
     ok: res.stdout == "2"
