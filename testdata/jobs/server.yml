@@ -56,7 +56,7 @@ steps:
   uses: shell
   with:
     cmd: |
-      grep -c 'starting version' {{ outputs.server.log }}
+      grep -c 'starting version' {{ outputs.server.log }} | tr -d '\n'
   test: res.stdout == "2" || res.stdout == "3"
   outputs:
     ok: res.stdout == "2" || res.stdout == "3"
