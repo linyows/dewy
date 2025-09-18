@@ -171,7 +171,7 @@ export function TopNav({ className }) {
             align-items: center;
             gap: 1rem;
             padding: 1.5rem 2.5rem;
-            background: #fff;
+            backdrop-filter: blur(5px);
           }
           nav :global(a) {
             text-decoration: none;

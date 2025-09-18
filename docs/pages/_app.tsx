@@ -114,14 +114,17 @@ export default function MyApp({ Component, pageProps }: AppProps<MyAppProps>) {
             gap: 2rem;
           }
           main:before {
-            content: "┌─────────\A│\A│\A│\A│\A│\A│\A│";
-            white-space: pre-wrap;
-            line-height: 1;
+            content: "";
             position: absolute;
-            display: inline-block;
-            top: calc(var(--top-nav-height) - 1.7rem);
-            left: -3rem;
+            top: var(--top-nav-height);
+            left: -1rem;
             padding: 1rem;
+            border-top: 1px solid var(--text-color);
+            border-left: 1px solid var(--text-color);
+            display: block;
+            width: 50px;
+            height: 50px;
+            z-index: -1;
           }
           main {
             flex-grow: 1;
