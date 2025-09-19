@@ -1,13 +1,15 @@
-name: Pages
+name: Pages Production
 
 on:
   workflow_dispatch:
   push:
     branches:
       - main
+    paths:
+      - 'docs/**'
 
 concurrency:
-  group: "pages"
+  group: "pages-production"
   cancel-in-progress: true
 
 jobs:
@@ -36,6 +38,8 @@ jobs:
       - name: Build and Export
         working-directory: docs
         run: bun run build
+      - name: Add CNAME
+        run: echo "dewy.linyo.ws" > docs/out/CNAME
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
@@ -44,7 +48,7 @@ jobs:
   deploy:
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: https://dewy.linyo.ws
     runs-on: ubuntu-latest
     needs: build
     permissions:

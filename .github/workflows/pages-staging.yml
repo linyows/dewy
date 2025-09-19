@@ -1,0 +1,71 @@
+name: Pages Staging
+
+on:
+  workflow_dispatch:
+  push:
+    branches-ignore:
+      - main
+    paths:
+      - 'docs/**'
+
+concurrency:
+  group: "pages-staging-${{ github.ref_name }}"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.0
+      - name: Restore next cache
+        uses: actions/cache@v4
+        with:
+          path: docs/.next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('**/bun.lock') }}-${{ hashFiles('**.[jt]s', '**.[jt]sx') }}
+          restore-keys: ${{ runner.os }}-nextjs-${{ hashFiles('**/bun.lock') }}-
+      - name: Install dependencies
+        working-directory: docs
+        run: bun install
+      - name: Build and Export
+        working-directory: docs
+        run: bun run build
+      - name: Deploy to GitHub Pages (Staging)
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs/out
+          destination_dir: staging/${{ github.ref_name }}
+          keep_files: true
+
+  comment:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push'
+    steps:
+      - name: Find existing comment
+        uses: peter-evans/find-comment@v3
+        id: fc
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: 'github-actions[bot]'
+          body-includes: 'Staging deployment'
+
+      - name: Create or update comment
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          comment-id: ${{ steps.fc.outputs.comment-id }}
+          issue-number: ${{ github.event.pull_request.number }}
+          body: |
+            ## 🚀 Staging deployment
+
+            Branch `${{ github.ref_name }}` has been deployed to staging:
+
+            **Preview URL:** https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/staging/${{ github.ref_name }}/
+
+            _Deployment completed at ${{ github.event.head_commit.timestamp }}_
+          edit-mode: replace
