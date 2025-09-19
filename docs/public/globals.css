@@ -1,0 +1,86 @@
+:root {
+  --top-nav-height: 6rem;
+  --side-width: 3.2rem;
+  --min-width: 320px;
+  --border-color: #dce6e9;
+  --text-color: rgba(60, 66, 87, 1);
+  --text-dim-color: rgba(60, 66, 87, 0.5);
+  --anchor-color: rgba(75, 85, 99, 1);
+  --primary-color: rgb(230,100,105);
+  --secondary-color: rgb(250, 218, 221);
+  --accent-color: rgb(250, 218, 94);
+
+  /* Callout colors */
+  --note-color: #73C2FB;
+  --tip-color: #00A86B;
+  --important-color: var(--primary-color);
+  --warning-color: #D2B55B;
+  --caution-color: #990000;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif,
+    'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+  color: rgba(60, 66, 87, 1);
+  margin: 0;
+}
+
+p {
+  line-height: 1.8;
+}
+
+ul {
+  padding-left: 1.5rem;
+}
+ol {
+  padding-left: 1.5rem;
+  text-indent: .5rem;
+}
+
+li {
+  padding: 0.25rem 0;
+}
+
+
+article h1 {
+  font-size: 2.5rem;
+  margin: 2.4rem 0 1rem;
+}
+article h2 {
+  margin: 3rem 0 1rem;
+  font-size: 1.8rem;
+}
+article h3 {
+  margin: 2.4rem 0 .8rem;
+  font-size: 1.4rem;
+  font-weight: normal;
+}
+
+code {
+  border: 1px solid var(--text-dim-color);
+  background-color: var(--accent-color);
+  padding: 1px 4px;
+  margin: 0 1px;
+  border-radius: 4px;
+}
+pre code {
+  border: none;
+  padding: 0;
+}
+
+:where(article h1, article h2, article h3, article h4, article h5, article h6) {
+  scroll-margin-top: calc(var(--top-nav-height) + 2.5rem);
+}
+
+html { scroll-behavior: smooth; }
+
+a {
+  color: rgba(75, 85, 99, 1);
+}
