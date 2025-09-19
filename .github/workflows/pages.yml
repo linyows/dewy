@@ -39,7 +39,9 @@ jobs:
         working-directory: docs
         run: bun run build
       - name: Add CNAME
-        run: echo "dewy.linyo.ws" > docs/out/CNAME
+        run: |
+          mkdir -p docs/out
+          echo "dewy.linyo.ws" > docs/out/CNAME
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
