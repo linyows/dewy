@@ -26,7 +26,7 @@ steps:
 - name: Wait for new version download
   uses: shell
   retry:
-    count: 60
+    max_attempts: 60
     interval: 5s
   with:
     cmd: |

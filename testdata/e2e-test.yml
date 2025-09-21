@@ -48,7 +48,7 @@ jobs:
     id: release
     uses: shell
     retry:
-      count: 5
+      max_attempts: 5
       interval: 3s
     with:
       env:
@@ -68,7 +68,7 @@ jobs:
   - name: Verify release exists
     uses: shell
     retry:
-      count: 10
+      max_attempts: 10
       interval: 2s
     with:
       env:
