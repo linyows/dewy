@@ -23,8 +23,29 @@ steps:
     PID: {{ res.pid }}
     Log: {{ res.log }}
 
+- name: Wait for new version download
+  uses: shell
+  retry:
+    max_attempts: 60
+    interval: 5s
+  with:
+    cmd: |
+      if [ -f "{{ outputs.server.log }}" ]; then
+        grep "Download notification" "{{ outputs.server.log }}" | \
+          awk '{print $6}' | \
+          grep -q "{{ replace(vars.new_version, 'v', '') }}" && exit 0
+      fi
+      exit 1
+  test: status == 0
+
+- name: Wait for stabilization
+  wait: 30s
+  uses: shell
+  with:
+    cmd: "echo 'Waiting for system stabilization after new version detection'"
+  test: status == 0
+
 - name: Stop dewy
-  wait: 5m
   uses: shell
   with: # Use Process Group ID
     cmd: "kill -TERM -{{ outputs.server.pid }}"
