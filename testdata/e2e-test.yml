@@ -47,7 +47,9 @@ jobs:
   - name: Create release
     id: release
     uses: shell
-    wait: 15s
+    retry:
+      count: 5
+      interval: 3s
     with:
       env:
         GH_TOKEN: "{{ vars.github_token }}"
@@ -63,6 +65,18 @@ jobs:
       version: vars.version
     echo: |
       {{res.stdout}}
+  - name: Verify release exists
+    uses: shell
+    retry:
+      count: 10
+      interval: 2s
+    with:
+      env:
+        GH_TOKEN: "{{ vars.github_token }}"
+      cmd: |
+        gh release view {{ outputs.release.version }} \
+          --repo linyows/dewy-testapp
+    test: status == 0
 
 - name: Run server by Github-Releases registry
   needs: [build]
