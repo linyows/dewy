@@ -47,9 +47,6 @@ jobs:
   - name: Create release
     id: release
     uses: shell
-    retry:
-      max_attempts: 5
-      interval: 3s
     with:
       env:
         GH_TOKEN: "{{ vars.github_token }}"
