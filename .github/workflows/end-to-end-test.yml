@@ -3,7 +3,7 @@ name: End-to-end Testing
 on:
   workflow_dispatch:
   push:
-    branches: [main, optimize-e2e-test-retry]
+    branches: [main]
 
 jobs:
   test:
