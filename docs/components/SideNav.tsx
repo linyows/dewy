@@ -43,7 +43,7 @@ const enItems = [
     links: [
       { href: '/introduction', children: 'Introduction' },
       { href: '/getting-started', children: 'Getting Started' },
-      { href: '/architecture', children: 'Architecture' },
+      { href: '/installation', children: 'Installation' },
       { href: '/faq', children: 'FAQ' },
       { href: '/contributing', children: 'Contributing' },
     ],

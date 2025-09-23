@@ -1,6 +1,7 @@
 export * from './Callout';
 export * from './CodeBlock';
 export * from './Heading';
+export * from './LanguageContext';
 export * from './Mermaid';
 export * from './SideNav';
 export * from './TableOfContents';
