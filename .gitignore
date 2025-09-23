@@ -4,7 +4,7 @@
 /dist
 /coverage.out
 dist/
-/website/public
+/docs/out
 .dewy/
 /testdata/server
 /testdata/assets
