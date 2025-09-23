@@ -107,7 +107,7 @@ dewy server --registry ghr://owner/repo -- ./current/myapp
 systemdでDewyを管理する場合は、`DEWY_CACHEDIR`で専用のキャッシュディレクトリを指定することを推奨します。
 {% /callout %}
 
-```ini
+```systemd
 # /etc/systemd/system/dewy.service
 [Unit]
 Description=Dewy Application Deployment Service

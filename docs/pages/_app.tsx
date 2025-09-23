@@ -4,6 +4,7 @@ import { Inter, Zen_Kaku_Gothic_New } from "next/font/google";
 import { useRouter } from 'next/router';
 import { SideNav, TableOfContents, TopNav } from '../components';
 import MarkdocTemplate from '../components/MarkdocTemplate';
+import { LanguageProvider } from '../components/LanguageContext';
 
 import 'prismjs';
 // Import other Prism themes here
@@ -76,7 +77,7 @@ export default function MyApp({ Component, pageProps }: AppProps<MyAppProps>) {
   const filePath = `docs/pages${pathname === '/' ? '/index' : pathname}.md`;
 
   return (
-    <>
+    <LanguageProvider>
       <Head>
         <title>{title}</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -97,7 +98,7 @@ export default function MyApp({ Component, pageProps }: AppProps<MyAppProps>) {
         </div>
       </div>
       <footer>
-        <p>© 2018-{new Date().getFullYear()} linyows</p>
+        <p>© 2018-{new Date().getFullYear()} <a href="https://github.com/linyows" target="_blank" rel="noopener noreferrer">linyows</a></p>
       </footer>
       <style jsx>
         {`
@@ -142,6 +143,6 @@ export default function MyApp({ Component, pageProps }: AppProps<MyAppProps>) {
           }
         `}
       </style>
-    </>
+    </LanguageProvider>
   );
 }

@@ -4,37 +4,38 @@ description: Dewy enables declarative deployment of applications in non-Kubernet
 layout: landing
 ---
 
-Dewy is software primarily designed to declaratively deploy applications written in Go in non-container environments.
-Dewy acts as a supervisor for applications, running as the main process while launching the application as a child process.
-Its scheduler polls specified registries and, upon detecting the latest version (using semantic versioning), deploys from the designated artifact store.
-This enables Dewy to perform pull-based deployments.
-Dewy's architecture is composed of abstracted components: registries, artifact stores, cache stores, and notification channels.
-Below are diagrams illustrating Dewy's deployment process and architecture.
+# What is Dewy?
 
-# Full Next.js example
+Dewy is software for declaratively deploying applications primarily built with Go in non-container environments.
+It ensures that applications and data on servers are always up-to-date.
+
+## Key Features
+
+- Declarative pull-based deployment
+- Graceful restarts
+- Selectable registry and artifact stores
+- Deployment status notifications
+- Structured logging with JSON format support
+- Audit logs
+
+## Use Cases Where Dewy is Helpful
+
+Dewy is optimal for keeping the latest version of applications running in mutable server environments such as hypervisor-type virtual servers and physical servers.
+
+## Quick Start
+
+```bash
+# Install Dewy
+curl -L https://github.com/linyows/dewy/releases/latest/download/dewy_linux_amd64.tar.gz | tar xz
+
+# Start deployment
+dewy server --registry ghr://owner/repo --port 8080 -- /opt/app/current/app
+```
+
+## Architecture
+
+Dewy acts as a supervisor for applications, serving as the main process and launching applications as child processes. It's composed of four interfaces as pluggable abstractions: Registry, Artifact, Cache, and Notifier.
 
 {% callout %}
-This is a full-featured boilerplate for a creating a documentation website using Markdoc and Next.js.
+Ready to get started? Check out our [Installation Guide](/installation) or explore the [Architecture](/architecture) to understand how Dewy works.
 {% /callout %}
-
-## Setup
-
-First, clone this repo and install the dependencies required:
-
-```bash
-npm install
-# or
-yarn install
-```
-
-Then, run the development server:
-
-```bash
-npm run dev
-# or
-yarn dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `index.md`. The page auto-updates as you edit the file.

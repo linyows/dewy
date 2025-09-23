@@ -231,7 +231,7 @@ dewy server --registry "ghr://owner/repo?pre-release=true" \
 
 ### systemdでの環境設定
 
-```ini
+```systemd
 # /etc/systemd/system/dewy-myapp-prod.service
 [Unit]
 Description=Dewy - MyApp Production
