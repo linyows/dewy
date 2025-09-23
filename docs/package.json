@@ -8,6 +8,7 @@
   "dependencies": {
     "@markdoc/markdoc": "latest",
     "@markdoc/next.js": "latest",
+    "mermaid": "^11.12.0",
     "next": "latest",
     "prismjs": "latest",
     "react": "latest",

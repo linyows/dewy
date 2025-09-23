@@ -1,5 +1,8 @@
 import Prism from 'prismjs';
 import * as React from 'react';
+import dynamic from 'next/dynamic';
+
+const Mermaid = dynamic(() => import('./Mermaid'), { ssr: false });
 
 export function CodeBlock({children, 'data-language': language}) {
   const ref = React.useRef(null);
@@ -7,6 +10,10 @@ export function CodeBlock({children, 'data-language': language}) {
   React.useEffect(() => {
     if (ref.current) Prism.highlightElement(ref.current, false);
   }, [children]);
+
+  if (language === 'mermaid') {
+    return <Mermaid>{children}</Mermaid>;
+  }
 
   return (
     <div className="code-block" aria-live="polite">
