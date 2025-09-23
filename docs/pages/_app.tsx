@@ -8,6 +8,8 @@ import MarkdocTemplate from '../components/MarkdocTemplate';
 import 'prismjs';
 // Import other Prism themes here
 import 'prismjs/components/prism-bash.min';
+import 'prismjs/components/prism-go.min';
+import 'prismjs/components/prism-systemd.min';
 import 'prismjs/themes/prism.css';
 
 import '../public/globals.css'
