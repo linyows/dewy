@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {useRouter} from 'next/router';
 import Link from 'next/link';
 import { icons } from './Icons';
@@ -77,10 +77,48 @@ export function SideNav({ className }) {
   const router = useRouter();
   const { pathname } = router;
   const items = pathname.startsWith('/ja') ? jaItems : enItems;
+  const [isOpen, setIsOpen] = useState(false);
+  const navRef = useRef(null);
+
+  const toggleNav = () => {
+    setIsOpen(!isOpen);
+  };
+
+  const closeNav = () => {
+    setIsOpen(false);
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (navRef.current && !navRef.current.contains(event.target) && !event.target.closest('.toggler')) {
+        closeNav();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    const handleRouteChange = () => {
+      closeNav();
+    };
+
+    router.events.on('routeChangeStart', handleRouteChange);
+
+    return () => {
+      router.events.off('routeChangeStart', handleRouteChange);
+    };
+  }, [router]);
 
   return (
     <div>
-      <nav className={`sidenav ${className}`}>
+      <nav ref={navRef} className={`sidenav ${className} ${isOpen ? 'open' : ''}`}>
         {items.map((item) => (
           <div key={item.title}>
             <span>{item.title}</span>
@@ -97,7 +135,7 @@ export function SideNav({ className }) {
           </div>
         ))}
       </nav>
-      <div className="toggler">
+      <div className="toggler" onClick={toggleNav}>
         {icons('sidebar')}
       </div>
       <style jsx>
@@ -151,21 +189,43 @@ export function SideNav({ className }) {
             position: fixed;
             left: 1.5rem;
             bottom: 1.5rem;
-            border: 1px solid var(--border-color);
+            border: 1px solid var(--text-color);
             padding: .3rem 1rem;
             border-radius: 30px;
-            z-index: 10;
+            z-index: 20;
             display: none;
             backdrop-filter: blur(5px);
+            cursor: pointer;
+          }
+          .toggler:hover {
+            border: 1px solid var(--primary-color);
           }
           .toggler :global(svg) {
             width: 30px;
             height: 30px;
             vertical-align: middle;
+            fill: var(--text-color);
+          }
+          .toggler:hover :global(svg) {
+            fill: var(--primary-color);
           }
           @media (max-width: 1240px) {
             nav {
-              display: none;
+              position: fixed;
+              top: 0;
+              left: 0;
+              height: 100vh;
+              width: 300px;
+              max-height: none;
+              backdrop-filter: blur(14px);
+              z-index: 10;
+              transform: translateX(-100%);
+              transition: transform 0.3s ease-in-out;
+              overflow-y: auto;
+              padding: 7rem 3rem 2rem;
+            }
+            nav.open {
+              transform: translateX(0);
             }
             .toggler {
               display: block;
