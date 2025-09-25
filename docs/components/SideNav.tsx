@@ -1,6 +1,7 @@
 import React from 'react';
 import {useRouter} from 'next/router';
 import Link from 'next/link';
+import { icons } from './Icons';
 
 const jaItems = [
   {
@@ -97,7 +98,7 @@ export function SideNav({ className }) {
         ))}
       </nav>
       <div className="toggler">
-        Sidebar
+        {icons('sidebar')}
       </div>
       <style jsx>
         {`
@@ -107,6 +108,7 @@ export function SideNav({ className }) {
             max-height: var(--top-nav-height);
             flex: 0 0 auto;
             padding: 3rem 2.5rem 2.5rem var(--side-width);
+            white-space: nowrap;
           }
           span {
             font-weight: bold;
@@ -145,21 +147,29 @@ export function SideNav({ className }) {
           li.active :global(a) {
             text-decoration: underline;
           }
+          .toggler {
+            position: fixed;
+            left: 1.5rem;
+            bottom: 1.5rem;
+            border: 1px solid var(--border-color);
+            padding: .3rem 1rem;
+            border-radius: 30px;
+            z-index: 10;
+            display: none;
+            backdrop-filter: blur(5px);
+          }
+          .toggler :global(svg) {
+            width: 30px;
+            height: 30px;
+            vertical-align: middle;
+          }
           @media (max-width: 1240px) {
             nav {
               display: none;
             }
-          }
-          .toggler {
-            position: fixed;
-            right: 2rem;
-            bottom: 2rem;
-            border: 1px solid var(--border-color);
-            padding: .3rem 1rem;
-            border-radius: 4px;
-            background: #fff;
-            z-index: 10;
-            box-shadow: 5px 5px 1px rgba(0, 0, 0, 0.15);
+            .toggler {
+              display: block;
+            }
           }
         `}
       </style>

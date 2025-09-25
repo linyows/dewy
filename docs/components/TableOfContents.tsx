@@ -1,6 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import { icons } from './Icons';
 
 // Function to build a nested structure from flat items
 const buildNestedItems = (items) => {
@@ -71,21 +72,7 @@ export function TableOfContents({ toc }) {
   return (
     <nav className="toc">
       <div className="toc-title">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="20"
-          height="20"
-          viewBox="0 0 20 20"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M17 6.1H3"></path>
-          <path d="M21 12.1H3"></path>
-          <path d="M15.1 18H3"></path>
-        </svg>
+        {icons('hamburger-left')}
         {title}
       </div>
       {renderItems(nestedItems)}
@@ -105,10 +92,12 @@ export function TableOfContents({ toc }) {
             font-size: 1.1rem;
             margin-bottom: 1rem;
           }
-          .toc-title svg {
-            vertical-align: top;
+          .toc-title :global(svg) {
+            vertical-align: middle;
             margin-right: .5rem;
-            margin-top: 1px;
+            margin-top: -8px;
+            width: 20px;
+            height: 20px;
           }
           @media (max-width: 1400px) {
             nav {
