@@ -21,7 +21,9 @@ export function TopNav({ className }) {
   const { pathname } = router;
   const { language, setLanguage } = useLanguage();
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
+  const [isNavMenuOpen, setIsNavMenuOpen] = useState(false);
   const languageMenuRef = useRef<HTMLDivElement>(null);
+  const navMenuRef = useRef<HTMLElement>(null);
 
   const nav = pathname.startsWith('/ja') ? jaNav : enNav;
   const currentLangLabel = language === 'ja' ? '日本語' : 'English';
@@ -32,6 +34,9 @@ export function TopNav({ className }) {
       if (languageMenuRef.current && !languageMenuRef.current.contains(event.target as Node)) {
         setIsLanguageMenuOpen(false);
       }
+      if (navMenuRef.current && !navMenuRef.current.contains(event.target as Node) && !(event.target as Element).closest('.hamburger-menu')) {
+        setIsNavMenuOpen(false);
+      }
     }
 
     document.addEventListener('mousedown', handleClickOutside);
@@ -40,9 +45,30 @@ export function TopNav({ className }) {
     };
   }, []);
 
+  // Close nav menu on route change
+  useEffect(() => {
+    const handleRouteChange = () => {
+      closeNavMenu();
+    };
+
+    router.events.on('routeChangeStart', handleRouteChange);
+
+    return () => {
+      router.events.off('routeChangeStart', handleRouteChange);
+    };
+  }, [router]);
+
   const handleLanguageChange = (lang: 'ja' | 'en') => {
     setLanguage(lang);
     setIsLanguageMenuOpen(false);
+  };
+
+  const toggleNavMenu = () => {
+    setIsNavMenuOpen(!isNavMenuOpen);
+  };
+
+  const closeNavMenu = () => {
+    setIsNavMenuOpen(false);
   };
 
   return (
@@ -101,7 +127,40 @@ export function TopNav({ className }) {
           )}
         </div>
       </section>
-      <div className="hamburger-menu">
+
+      <section ref={navMenuRef} className={`mobile-nav ${isNavMenuOpen ? 'open' : ''}`}>
+        {Object.entries(nav).map(([key, { label, href }]) => (
+          <div key={key}>
+            <Link key={href} href={href} className="mobile-nav-link" onClick={closeNavMenu}>
+              <span className="nav-link-icon">
+                {icons(key)}
+              </span>
+              {label}
+            </Link>
+          </div>
+        ))}
+
+        <a className="github-mobile" href="https://github.com/linyows/dewy" target="_blank" rel="noopener noreferrer" aria-label="GitHub">
+          {icons('github')}
+          <span>GitHub</span>
+        </a>
+
+        <div className="language-selector-mobile">
+          {language === 'ja' ? (
+            <button className="language-option-mobile" onClick={() => handleLanguageChange('en')} >
+              {icons('lang')}
+              <span>English</span>
+            </button>
+          ) : (
+            <button className="language-option-mobile" onClick={() => handleLanguageChange('ja')} >
+              {icons('lang')}
+              <span>日本語</span>
+            </button>
+          )}
+        </div>
+      </section>
+
+      <div className="hamburger-menu" onClick={toggleNavMenu}>
         {icons('hamburger')}
       </div>
       <style jsx>
@@ -240,6 +299,72 @@ export function TopNav({ className }) {
             display: none;
             width: 26px;
             height: 26px;
+            cursor: pointer;
+            z-index: 110;
+          }
+          .mobile-nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background: var(--bg-color, #fff);
+            border-bottom: 1px solid var(--border-color);
+            z-index: -1;
+            padding: 8rem 2rem 2rem;
+            transform: translateY(-100%);
+            transition: transform 0.3s ease-in-out;
+            display: none;
+            flex-direction: column;
+            gap: 1.5rem;
+          }
+          .mobile-nav.open {
+            transform: translateY(0);
+          }
+          .mobile-nav-link {
+            display: flex;
+            align-items: center;
+            padding: 1rem 0;
+            font-size: 1.1rem;
+            font-weight: 500;
+            border-bottom: 1px solid rgba(0,0,0,0.1);
+          }
+          .mobile-nav-link .nav-link-icon {
+            margin-right: 1rem;
+          }
+          .github-mobile {
+            display: flex;
+            align-items: center;
+            padding: 1rem 0;
+            font-size: 1.1rem;
+            font-weight: 500;
+            border-bottom: 1px solid rgba(0,0,0,0.1);
+          }
+          .github-mobile :global(svg) {
+            width: 1.6rem;
+            height: 1.6rem;
+            fill: var(--text-color);
+            margin-right: 1rem;
+          }
+          .language-selector-mobile {
+            margin-top: 1rem;
+          }
+          .language-option-mobile {
+            display: flex;
+            align-items: center;
+            padding: 1rem 0;
+            font-size: 1.1rem;
+            font-weight: 500;
+            background: none;
+            border: none;
+            cursor: pointer;
+            width: 100%;
+            text-align: left;
+          }
+          .language-option-mobile :global(svg) {
+            width: 1.4rem;
+            height: 1.4rem;
+            fill: var(--primary-color);
+            margin-right: 1rem;
           }
           @media (max-width: 1200px) {
             nav {
@@ -249,12 +374,35 @@ export function TopNav({ className }) {
             }
           }
           @media (max-width: 900px) {
-            section {
+            section:first-of-type {
               display: none;
             }
             .hamburger-menu {
               display: block;
             }
+            .mobile-nav {
+              display: flex;
+            }
+          }
+          @media (max-width: 460px) {
+            .logo-icon {
+              width: 32px;
+              height: 32px;
+              padding: 6px;
+            }
+            .logo-font {
+              width: 80px;
+              height: 32px;
+              margin-left: 14px;
+              margin-top: 0px;
+            }
+            .hamburger-menu {
+              top: 1.8rem;
+              right: 1.8rem;
+              width: 24px;
+              height: 24px;
+            }
+          }
         `}
       </style>
     </nav>
