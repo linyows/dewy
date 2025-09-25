@@ -9,7 +9,7 @@ export default function MarkdocTemplate({ content, filePath }: MarkdocTemplatePr
   const githubEditUrl = `https://github.com/linyows/dewy/edit/main/${filePath}`;
 
   return (
-    <article>
+    <div>
       {content}
       <div className="edit-link">
         <a href={githubEditUrl} target="_blank" rel="noopener noreferrer">
@@ -30,6 +30,6 @@ export default function MarkdocTemplate({ content, filePath }: MarkdocTemplatePr
           }
         `}
       </style>
-    </article>
+    </div>
   );
 }

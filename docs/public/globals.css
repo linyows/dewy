@@ -16,6 +16,11 @@
   --important-color: var(--primary-color);
   --warning-color: #D2B55B;
   --caution-color: #990000;
+
+  /* Responsive */
+  --hide-top-nav-width: 900px;
+  --hide-side-nav-width: 1240px;
+  --hide-table-of-contents-width: 1400px;
 }
 
 *,

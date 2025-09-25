@@ -141,6 +141,25 @@ export default function MyApp({ Component, pageProps }: AppProps<MyAppProps>) {
             font-size: 0.9rem;
             color: var(--text-dim-color);
           }
+          @media (max-width: 1400px) {
+            .main-and-toc {
+              display: block;
+              padding-right: 2rem;
+            }
+          }
+          @media (max-width: 1240px) {
+            .main-and-toc {
+              padding-right: 0;
+              width: 100%;
+            }
+            main:before {
+              display: none;
+            }
+            main {
+              display: block;
+              position: relative;
+            }
+          }
         `}
       </style>
     </LanguageProvider>

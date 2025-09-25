@@ -110,6 +110,11 @@ export function TableOfContents({ toc }) {
             margin-right: .5rem;
             margin-top: 1px;
           }
+          @media (max-width: 1400px) {
+            nav {
+              display: none;
+            }
+          }
         `}
       </style>
     </nav>

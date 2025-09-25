@@ -78,22 +78,27 @@ export function SideNav({ className }) {
   const items = pathname.startsWith('/ja') ? jaItems : enItems;
 
   return (
-    <nav className={`sidenav ${className}`}>
-      {items.map((item) => (
-        <div key={item.title}>
-          <span>{item.title}</span>
-          <ul className="flex column">
-            {item.links.map((link) => {
-              const active = router.pathname === link.href;
-              return (
-                <li key={link.href} className={active ? 'active' : ''}>
-                  <Link {...link} />
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      ))}
+    <div>
+      <nav className={`sidenav ${className}`}>
+        {items.map((item) => (
+          <div key={item.title}>
+            <span>{item.title}</span>
+            <ul className="flex column">
+              {item.links.map((link) => {
+                const active = router.pathname === link.href;
+                return (
+                  <li key={link.href} className={active ? 'active' : ''}>
+                    <Link {...link} />
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
+      </nav>
+      <div className="toggler">
+        Sidebar
+      </div>
       <style jsx>
         {`
           nav {
@@ -140,8 +145,24 @@ export function SideNav({ className }) {
           li.active :global(a) {
             text-decoration: underline;
           }
+          @media (max-width: 1240px) {
+            nav {
+              display: none;
+            }
+          }
+          .toggler {
+            position: fixed;
+            right: 2rem;
+            bottom: 2rem;
+            border: 1px solid var(--border-color);
+            padding: .3rem 1rem;
+            border-radius: 4px;
+            background: #fff;
+            z-index: 10;
+            box-shadow: 5px 5px 1px rgba(0, 0, 0, 0.15);
+          }
         `}
       </style>
-    </nav>
+    </div>
   );
 }

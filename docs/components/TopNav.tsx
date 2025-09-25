@@ -208,12 +208,17 @@ export function TopNav({ className }) {
             fill: var(--primary-color);
             margin-top: 2px;
           }
+          .logo {
+            flex-shrink: 0;
+          }
           nav {
             top: 0;
             position: fixed;
+            display: grid;
+            grid-template-columns: 220px minmax(0, 1fr);
+            gap: 2rem;
             width: 100%;
             z-index: 100;
-            display: flex;
             align-items: center;
             gap: 1rem;
             padding: 1.5rem 2.5rem;
@@ -222,20 +227,15 @@ export function TopNav({ className }) {
           nav :global(a) {
             text-decoration: none;
           }
-          .logo {
-            flex-shrink: 0;
-            margin-right: 5rem;
-          }
           section {
             display: flex;
             gap: 2rem;
-            padding: 0 1rem 0 0;
+            padding: 0;
             flex-grow: 1;
             justify-content: flex-end;
           }
           .language-selector {
             position: relative;
-            margin-left: 1rem;
             margin-top: -0.2rem;
           }
           .language-button {
@@ -260,11 +260,10 @@ export function TopNav({ className }) {
             top: 100%;
             right: 0;
             margin-top: 0.5rem;
-            background: white;
-            border: 1px solid rgba(23, 23, 22, 0.2);
-            border-radius: 6px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            min-width: 120px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            box-shadow: 5px 5px 1px rgba(0, 0, 0, 0.15);
+            min-width: 110px;
             z-index: 1000;
           }
           .language-option {
@@ -275,10 +274,10 @@ export function TopNav({ className }) {
             cursor: pointer;
             display: flex;
             align-items: center;
-            font-size: 0.875rem;
+            font-size: 0.85rem;
             text-align: left;
             border-radius: 4px;
-            margin: 0.25rem;
+            margin: 0 0.25rem;
             width: calc(100% - 0.5rem);
           }
           .language-option:hover {
@@ -316,6 +315,17 @@ export function TopNav({ className }) {
           }
           .nav-link a {
             color: var(--primary-color);
+          }
+          @media (max-width: 1200px) {
+            nav {
+              padding-left: 2rem;
+              padding-right: 2rem;
+            }
+          }
+          @media (max-width: 900px) {
+            section {
+              display: none;
+            }
           }
         `}
       </style>
