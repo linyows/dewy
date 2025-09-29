@@ -159,6 +159,7 @@ export function TableOfContents({ toc }) {
             height: 25px;
             vertical-align: middle;
             fill: var(--text-color);
+            margin-top: -5px;
           }
           .toggler:hover {
             border: 1px solid var(--primary-color);

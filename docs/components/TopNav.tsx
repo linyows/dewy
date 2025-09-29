@@ -310,7 +310,7 @@ export function TopNav({ className }) {
             background: var(--bg-color, #fff);
             border-bottom: 1px solid var(--border-color);
             z-index: -1;
-            padding: 8rem 2rem 2rem;
+            padding: calc(var(--top-nav-height) + 2rem) 2rem 2rem;
             transform: translateY(-100%);
             transition: transform 0.3s ease-in-out;
             display: none;
@@ -337,6 +337,7 @@ export function TopNav({ className }) {
             padding: 1rem 0;
             font-size: 1.1rem;
             font-weight: 500;
+            border-top: 1px solid rgba(0,0,0,0.1);
             border-bottom: 1px solid rgba(0,0,0,0.1);
           }
           .github-mobile :global(svg) {
@@ -351,7 +352,7 @@ export function TopNav({ className }) {
           .language-option-mobile {
             display: flex;
             align-items: center;
-            padding: 1rem 0;
+            padding: 0;
             font-size: 1.1rem;
             font-weight: 500;
             background: none;
@@ -359,6 +360,10 @@ export function TopNav({ className }) {
             cursor: pointer;
             width: 100%;
             text-align: left;
+            margin-top: -1.2rem;
+          }
+          .language-selector-mobile span {
+            color: var(--text-color);
           }
           .language-option-mobile :global(svg) {
             width: 1.4rem;

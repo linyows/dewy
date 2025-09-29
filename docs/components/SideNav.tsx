@@ -120,7 +120,7 @@ export function SideNav({ className }) {
     <div>
       <nav ref={navRef} className={`sidenav ${className} ${isOpen ? 'open' : ''}`}>
         {items.map((item) => (
-          <div key={item.title}>
+          <div className="itemdiv" key={item.title}>
             <span>{item.title}</span>
             <ul className="flex column">
               {item.links.map((link) => {
@@ -148,17 +148,22 @@ export function SideNav({ className }) {
             padding: 3rem 2.5rem 2.5rem var(--side-width);
             white-space: nowrap;
           }
+          .itemdiv {
+            position: relative;
+          }
           span {
             font-weight: bold;
             padding: 0.5rem 0 0.5rem 1.6rem;
             poisition: relative;
           }
           span:before {
-            content: '⏺';
+            content: '⚫︎';
             display: block;
             position: absolute;
-            font-size: 1.4rem;
-            line-height: 1.4rem;
+            top: .2rem;
+            left: -0.2rem;
+            font-size: 1.2rem;
+            line-height: 1.2rem;
             color: var(--primary-color);
           }
           ul {
@@ -229,6 +234,14 @@ export function SideNav({ className }) {
             }
             .toggler {
               display: block;
+            }
+          }
+          @media (max-width: 900px) {
+            span:before {
+              top: 0;
+              left: 0;
+              font-size: 1.4rem;
+              line-height: 1.4rem;
             }
           }
         `}
