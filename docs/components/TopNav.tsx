@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useLanguage } from './LanguageContext';
 import { icons } from './Icons';
+import Search from './Search';
 
 const jaNav = {
   "guide": { href: "/ja/introduction/", label: "ガイド" },
@@ -95,6 +96,10 @@ export function TopNav({ className }) {
           {icons('github')}
         </a>
 
+        <div className="search-box">
+          <Search />
+        </div>
+
         <div className="language-selector" ref={languageMenuRef}>
           <button
             className="language-button"
@@ -145,6 +150,10 @@ export function TopNav({ className }) {
           <span>GitHub</span>
         </a>
 
+        <div className="search-box">
+          <Search />
+        </div>
+
         <div className="language-selector-mobile">
           {language === 'ja' ? (
             <button className="language-option-mobile" onClick={() => handleLanguageChange('en')} >
@@ -191,7 +200,7 @@ export function TopNav({ className }) {
             top: 0;
             position: fixed;
             display: grid;
-            grid-template-columns: 220px minmax(0, 1fr);
+            grid-template-columns: 210px minmax(0, 1fr);
             gap: 2rem;
             width: 100%;
             z-index: 100;
@@ -209,6 +218,33 @@ export function TopNav({ className }) {
             padding: 0;
             flex-grow: 1;
             justify-content: flex-end;
+          }
+          nav :global(.DocSearch-Button) {
+            margin-top: -3px;
+            width: 14px;
+            height: 31px;
+            border-radius: 4px;
+            border: 1px solid rgba(23, 23, 22, 0.4);
+            outline: 2px solid transparent;
+            outline-offset: 2px;
+            box-shadow: 0 0 #0000, 0 0 #0000, 0 0 #0000;
+            background-image: linear-gradient(to bottom, #fff, #f9f9f9);
+          }
+          nav :global(.DocSearch-Button:hover) {
+            box-shadow: none;
+            background: inherit;
+          }
+          :global(.dark) nav :global(.DocSearch-Button:hover) {
+            background: #424248;
+          }
+          nav :global(.DocSearch-Search-Icon) {
+            color: var(--text-color);
+            width: 17px;
+            margin-left: -2px;
+          }
+          nav :global(.DocSearch-Button-Placeholder),
+          nav :global(.DocSearch-Button-Keys) {
+            display: none;
           }
           .language-selector {
             position: relative;
@@ -278,7 +314,6 @@ export function TopNav({ className }) {
             width: 1.6rem;
             height: 1.6rem;
             fill: var(--text-color);
-            margin-left: 1rem;
             cursor: pointer;
           }
           .nav-link-icon {
@@ -386,6 +421,24 @@ export function TopNav({ className }) {
               display: block;
             }
             .mobile-nav {
+              display: flex;
+            }
+            nav :global(.DocSearch-Button) {
+              margin-top: 0;
+              width: calc(100% - 16px - 2px);
+              height: 40px;
+              outline: none;
+              outline-offset: 0;
+              box-shadow: none;
+              background-image: none;
+            }
+            nav :global(.DocSearch-Search-Icon) {
+              color: var(--text-color);
+              width: auto;
+              margin-left: 0;
+            }
+            nav :global(.DocSearch-Button-Placeholder),
+            nav :global(.DocSearch-Button-Keys) {
               display: flex;
             }
           }
