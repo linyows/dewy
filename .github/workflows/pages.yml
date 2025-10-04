@@ -1,4 +1,4 @@
-name: Pages Production
+name: Github Pages
 
 on:
   workflow_dispatch:
@@ -9,7 +9,7 @@ on:
       - 'docs/**'
 
 concurrency:
-  group: "pages-production"
+  group: github-pages
   cancel-in-progress: true
 
 jobs:
