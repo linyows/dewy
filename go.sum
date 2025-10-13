@@ -999,8 +999,8 @@ github.com/nishanths/predeclared v0.2.2 h1:V2EPdZPliZymNAn79T8RkNApBjMmVKh5XRpLm
 github.com/nishanths/predeclared v0.2.2/go.mod h1:RROzoN6TnGQupbC+lqggsOlcgysk3LMK/HI84Mp280c=
 github.com/nunnatsa/ginkgolinter v0.19.1 h1:mjwbOlDQxZi9Cal+KfbEJTCz327OLNfwNvoZ70NJ+c4=
 github.com/nunnatsa/ginkgolinter v0.19.1/go.mod h1:jkQ3naZDmxaZMXPWaS9rblH+i+GWXQCaS/JFIWcOH2s=
-github.com/nwaples/rardecode/v2 v2.1.1 h1:OJaYalXdliBUXPmC8CZGQ7oZDxzX1/5mQmgn0/GASew=
-github.com/nwaples/rardecode/v2 v2.1.1/go.mod h1:7uz379lSxPe6j9nvzxUZ+n7mnJNgjsRNb6IbvGVHRmw=
+github.com/nwaples/rardecode/v2 v2.2.0 h1:4ufPGHiNe1rYJxYfehALLjup4Ls3ck42CWwjKiOqu0A=
+github.com/nwaples/rardecode/v2 v2.2.0/go.mod h1:7uz379lSxPe6j9nvzxUZ+n7mnJNgjsRNb6IbvGVHRmw=
 github.com/oklog/ulid v1.3.1 h1:EGfNDEx6MqHz8B3uNV6QAib1UR2Lm97sHi3ocA6ESJ4=
 github.com/oklog/ulid v1.3.1/go.mod h1:CirwcVhetQ6Lv90oh/F+FBtV6XMibvdAFo93nm5qn4U=
 github.com/olekukonko/tablewriter v0.0.5 h1:P2Ga83D34wi1o9J6Wh1mRuqd4mF/x/lgBS7N7AbDhec=
