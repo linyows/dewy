@@ -22,7 +22,7 @@ require (
 	github.com/linyows/server-starter v0.1.0
 	github.com/mholt/archives v0.1.5
 	github.com/migueleliasweb/go-github-mock v1.4.0
-	golang.org/x/oauth2 v0.31.0
+	golang.org/x/oauth2 v0.32.0
 	google.golang.org/api v0.252.0
 	google.golang.org/grpc v1.76.0
 	google.golang.org/protobuf v1.36.10
