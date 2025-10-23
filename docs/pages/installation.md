@@ -37,23 +37,22 @@ Latest releases can be downloaded from [GitHub Releases](https://github.com/liny
 LATEST_VERSION=$(curl -s https://api.github.com/repos/linyows/dewy/releases/latest | grep '"tag_name"' | cut -d '"' -f 4)
 
 # Download binary for your architecture (Linux amd64 example)
-wget https://github.com/linyows/dewy/releases/download/${LATEST_VERSION}/dewy_linux_amd64.tar.gz
+wget https://github.com/linyows/dewy/releases/download/${LATEST_VERSION}/dewy_linux_x86_64.tar.gz
 
 # Extract and install
-tar -xzf dewy_linux_amd64.tar.gz
+tar -xzf dewy_linux_x86_64.tar.gz
 sudo mv dewy /usr/local/bin/
 chmod +x /usr/local/bin/dewy
 ```
 
 #### Platform-Specific Binaries
 
-| OS | Architecture | Filename |
-|---|---|---|
-| Linux | amd64 | `dewy_linux_amd64.tar.gz` |
-| Linux | arm64 | `dewy_linux_arm64.tar.gz` |
-| macOS | amd64 | `dewy_darwin_amd64.tar.gz` |
-| macOS | arm64 (Apple Silicon) | `dewy_darwin_arm64.tar.gz` |
-| Windows | amd64 | `dewy_windows_amd64.zip` |
+ | OS    | Architecture | Filename                    |
+ | ---   | ---          | ---                         |
+ | Linux | amd64        | `dewy_linux_x86_64.tar.gz`  |
+ | Linux | arm64        | `dewy_linux_arm64.tar.gz`   |
+ | macOS | amd64        | `dewy_darwin_x86_64.tar.gz` |
+ | macOS | arm64        | `dewy_darwin_arm64.tar.gz`  |
 
 ### 2. Build from Source
 
