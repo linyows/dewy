@@ -17,3 +17,11 @@ Audit logs are saved as text file names where artifacts are hosted. Currently th
 ## How can I handle registry rate limits caused by polling from multiple Dewy instances?
 
 Using HashiCorp Consul or Redis for cache components allows multiple Dewy instances to share cache, which should reduce the total number of requests to the registry. In that case, it would be good to set the registry TTL to an appropriate time. Note that you can specify longer polling intervals using command options.
+
+## Next Steps
+
+For more information and detailed documentation, refer to the following resources:
+
+- [Getting Started](../getting-started/)
+- [Architecture](../architecture/)
+- [Contributing](../contributing/)

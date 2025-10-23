@@ -59,3 +59,11 @@ dewy server \
   --log-level info \
   -- /opt/myapp/current/myapp
 ```
+
+## Next Steps
+
+For more information, refer to the following documentation:
+
+- [Architecture](../architecture/)
+- [Dewy CLI Reference](../reference/)
+- [FAQ](../faq/)

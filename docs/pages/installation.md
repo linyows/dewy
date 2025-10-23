@@ -178,9 +178,9 @@ dewy server --registry ghr://linyows/dewy --help
 
 After installation is complete, refer to the following documentation to begin configuration:
 
-- [Getting Started](./getting-started.md)
-- [Architecture](./architecture.md)
-- [FAQ](./faq.md)
+- [Getting Started](../getting-started/)
+- [Architecture](../architecture/)
+- [FAQ](../faq/)
 
 ## Troubleshooting
 
