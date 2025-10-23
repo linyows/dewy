@@ -18,19 +18,19 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v5
-    - uses: actions/setup-go@v6
+    - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+    - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
       with:
         go-version-file: go.mod
     # It takes time to download the module, so build it in advance
     - name: Go build
       run: go build ./cmd/dewy
     - name: Authenticate to Google Cloud
-      uses: google-github-actions/auth@v2
+      uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
       with:
         credentials_json: ${{ secrets.GCP_SA_KEY }}
     - name: Run probe
-      uses: linyows/probe-action@v1
+      uses: linyows/probe-action@0164e23555aacbaaea03169102262dafeb1ff631 # v1
       with:
         path: testdata/e2e-test.yml
         version: v0.23.0
