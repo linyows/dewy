@@ -24,3 +24,11 @@ Go can compile code into a single binary tailored to each environment. In distri
 ## Use Cases Where Dewy is Helpful
 
 Dewy is optimal for keeping the latest version of applications running in mutable server environments such as hypervisor-type virtual servers and physical servers.
+
+## Next Steps
+
+To start using Dewy, refer to the following documentation:
+
+- [Installation](../installation/)
+- [Getting Started](../getting-started/)
+- [Architecture](../architecture/)
