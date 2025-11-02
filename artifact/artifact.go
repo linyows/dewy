@@ -9,9 +9,11 @@ import (
 )
 
 const (
-	ghrScheme = "ghr"
-	s3Scheme  = "s3"
-	gsScheme  = "gs"
+	ghrScheme    = "ghr"
+	s3Scheme     = "s3"
+	gsScheme     = "gs"
+	dockerScheme = "docker"
+	ociScheme    = "oci"
 )
 
 // Fetcher is the interface that wraps the Fetch method.
@@ -32,6 +34,9 @@ func New(ctx context.Context, url string, logger *slog.Logger) (Artifact, error)
 
 	case gsScheme:
 		return NewGS(ctx, url, logger)
+
+	case dockerScheme, ociScheme:
+		return NewOCI(ctx, url, logger)
 	}
 
 	return nil, fmt.Errorf("unsupported scheme: %s", url)
