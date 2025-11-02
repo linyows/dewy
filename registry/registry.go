@@ -11,11 +11,13 @@ import (
 )
 
 var (
-	decoder    = schema.NewDecoder()
-	s3Scheme   = "s3"
-	ghrScheme  = "ghr"
-	grpcScheme = "grpc"
-	gsScheme   = "gs"
+	decoder      = schema.NewDecoder()
+	s3Scheme     = "s3"
+	ghrScheme    = "ghr"
+	grpcScheme   = "grpc"
+	gsScheme     = "gs"
+	dockerScheme = "docker"
+	ociScheme    = "oci"
 )
 
 type Registry interface {
@@ -65,6 +67,9 @@ func New(ctx context.Context, url string, log *logging.Logger) (Registry, error)
 
 	case grpcScheme:
 		return NewGRPC(ctx, url)
+
+	case dockerScheme, ociScheme:
+		return NewOCI(ctx, url, log)
 	}
 
 	return nil, fmt.Errorf("unsupported registry: %s", url)
