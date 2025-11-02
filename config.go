@@ -1,6 +1,8 @@
 package dewy
 
 import (
+	"time"
+
 	starter "github.com/linyows/server-starter"
 )
 
@@ -12,6 +14,8 @@ const (
 	SERVER Command = iota
 	// ASSETS command.
 	ASSETS
+	// CONTAINER command.
+	CONTAINER
 )
 
 // String to string for Command.
@@ -21,6 +25,8 @@ func (c Command) String() string {
 		return "server"
 	case ASSETS:
 		return "assets"
+	case CONTAINER:
+		return "container"
 	default:
 		return "unknown"
 	}
@@ -54,6 +60,20 @@ type CacheConfig struct {
 	Expiration int
 }
 
+// ContainerConfig struct for container command.
+type ContainerConfig struct {
+	Name          string
+	Network       string
+	NetworkAlias  string
+	ContainerPort int
+	Env           []string
+	Volumes       []string
+	HealthPath    string
+	HealthTimeout time.Duration
+	DrainTime     time.Duration
+	Runtime       string // "docker" or "podman"
+}
+
 // Config struct.
 type Config struct {
 	Command          Command
@@ -61,6 +81,7 @@ type Config struct {
 	Notifier         string
 	Cache            CacheConfig
 	Starter          starter.Config
+	Container        *ContainerConfig
 	BeforeDeployHook string
 	AfterDeployHook  string
 	*Info

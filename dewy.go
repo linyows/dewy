@@ -20,6 +20,7 @@ import (
 	"github.com/carlescere/scheduler"
 	"github.com/cli/safeexec"
 	"github.com/linyows/dewy/artifact"
+	"github.com/linyows/dewy/container"
 	"github.com/linyows/dewy/kvs"
 	"github.com/linyows/dewy/logging"
 	"github.com/linyows/dewy/notifier"
@@ -107,7 +108,12 @@ func (d *Dewy) Start(i int) {
 	d.notifier.Send(ctx, msg)
 
 	d.job, err = scheduler.Every(i).Seconds().Run(func() {
-		e := d.Run()
+		var e error
+		if d.config.Command == CONTAINER {
+			e = d.RunContainer()
+		} else {
+			e = d.Run()
+		}
 		if e != nil {
 			d.logger.Error("Dewy run failure", slog.String("error", e.Error()))
 			d.notifier.SendError(context.Background(), e)
@@ -488,4 +494,169 @@ func (d *Dewy) execHook(cmd string) (*notifier.HookResult, error) {
 		slog.Duration("duration", result.Duration))
 
 	return result, nil
+}
+
+// RunContainer runs the container deployment process.
+func (d *Dewy) RunContainer() error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Get current image information from registry
+	res, err := d.registry.Current(ctx)
+	if err != nil {
+		d.logger.Error("Failed to get current image", slog.String("error", err.Error()))
+		return err
+	}
+
+	d.logger.Info("Found latest image",
+		slog.String("tag", res.Tag),
+		slog.String("digest", res.ID),
+		slog.String("url", res.ArtifactURL))
+
+	// Check cache to see if this version is already deployed
+	cachekeyName := fmt.Sprintf("%s--%s", res.Tag, res.ID)
+	currentkeyValue, _ := d.cache.Read(currentkeyName)
+
+	if string(currentkeyValue) == cachekeyName {
+		d.logger.Debug("Container already deployed, skipping", slog.String("version", res.Tag))
+		return nil
+	}
+
+	// Pull the image (this will be cached by Docker itself)
+	if d.artifact == nil {
+		d.artifact, err = artifact.New(ctx, res.ArtifactURL, d.logger.Logger)
+		if err != nil {
+			return fmt.Errorf("failed artifact.New: %w", err)
+		}
+	}
+
+	buf := new(bytes.Buffer)
+	err = d.artifact.Download(ctx, buf)
+	d.artifact = nil
+	if err != nil {
+		return fmt.Errorf("failed to pull image: %w", err)
+	}
+
+	msg := fmt.Sprintf("Pulled image for `%s`", res.Tag)
+	d.logger.Info("Pull notification", slog.String("message", msg))
+	d.notifier.Send(ctx, msg)
+
+	// Execute before deploy hook
+	beforeResult, beforeErr := d.execHook(d.config.BeforeDeployHook)
+	if beforeResult != nil {
+		d.notifier.SendHookResult(ctx, "Before Deploy", beforeResult)
+	}
+	if beforeErr != nil {
+		d.logger.Error("Before deploy hook failure", slog.String("error", beforeErr.Error()))
+	}
+
+	// Perform Blue-Green deployment
+	if err := d.deployContainer(ctx, res); err != nil {
+		d.logger.Error("Container deployment failed", slog.String("error", err.Error()))
+		return err
+	}
+
+	// Execute after deploy hook
+	afterResult, afterErr := d.execHook(d.config.AfterDeployHook)
+	if afterResult != nil {
+		d.notifier.SendHookResult(ctx, "After Deploy", afterResult)
+	}
+	if afterErr != nil {
+		d.logger.Error("After deploy hook failure", slog.String("error", afterErr.Error()))
+	}
+
+	// Update cache
+	if err := d.cache.Write(currentkeyName, []byte(cachekeyName)); err != nil {
+		return fmt.Errorf("failed to write cache: %w", err)
+	}
+
+	// Report deployment
+	if !d.disableReport {
+		d.logger.Debug("Report shipping")
+		err := d.registry.Report(ctx, &registry.ReportRequest{
+			ID:      res.ID,
+			Tag:     res.Tag,
+			Command: d.config.Command.String(),
+		})
+		if err != nil {
+			d.logger.Error("Report shipping failure", slog.String("error", err.Error()))
+		}
+	}
+
+	msg = fmt.Sprintf("Container deployed successfully for `%s`", res.Tag)
+	d.logger.Info("Deployment notification", slog.String("message", msg))
+	d.notifier.Send(ctx, msg)
+
+	return nil
+}
+
+// deployContainer performs the actual container deployment using Blue-Green strategy.
+func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentResponse) error {
+	if d.config.Container == nil {
+		return fmt.Errorf("container config is nil")
+	}
+
+	// Create container runtime
+	var runtime container.Runtime
+	var err error
+
+	switch d.config.Container.Runtime {
+	case "docker":
+		runtime, err = container.NewDocker(d.logger.Logger, d.config.Container.DrainTime)
+	case "podman":
+		// TODO: Phase 2 - Podman support
+		return fmt.Errorf("podman runtime not yet supported")
+	default:
+		return fmt.Errorf("unsupported runtime: %s", d.config.Container.Runtime)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to create container runtime: %w", err)
+	}
+
+	// Extract image reference from artifact URL
+	// Format: docker://registry/repo:tag
+	imageRef := strings.TrimPrefix(res.ArtifactURL, "docker://")
+	imageRef = strings.TrimPrefix(imageRef, "oci://")
+
+	// Determine app name from config or image
+	appName := d.config.Container.Name
+	if appName == "" {
+		// Use repository name as app name
+		parts := strings.Split(imageRef, "/")
+		if len(parts) > 0 {
+			lastPart := parts[len(parts)-1]
+			appName = strings.Split(lastPart, ":")[0]
+		}
+	}
+
+	// Create health check function
+	var healthCheck container.HealthCheckFunc
+	if d.config.Container.HealthPath != "" {
+		// Use container name for health check (internal Docker network)
+		greenName := fmt.Sprintf("%s-green-%d", appName, time.Now().Unix())
+		healthURL := fmt.Sprintf("http://%s:%d%s",
+			greenName,
+			d.config.Container.ContainerPort,
+			d.config.Container.HealthPath)
+		healthCheck = container.WaitForHTTP(d.logger.Logger, healthURL, d.config.Container.HealthTimeout, 5)
+	}
+
+	// Deploy using Blue-Green strategy
+	dockerRuntime, ok := runtime.(*container.Docker)
+	if !ok {
+		return fmt.Errorf("runtime is not Docker")
+	}
+
+	deployOpts := container.DeployOptions{
+		ImageRef:     imageRef,
+		AppName:      appName,
+		Network:      d.config.Container.Network,
+		NetworkAlias: d.config.Container.NetworkAlias,
+		Env:          d.config.Container.Env,
+		Volumes:      d.config.Container.Volumes,
+		HealthCheck:  healthCheck,
+	}
+
+	return dockerRuntime.DeployContainer(ctx, deployOpts)
 }
