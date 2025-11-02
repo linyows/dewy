@@ -23,7 +23,7 @@ func mockRegistryServer(t *testing.T) *httptest.Server {
 	mux.HandleFunc("/v2/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{}`))
+		_, _ = w.Write([]byte(`{}`))
 	})
 
 	// GET /v2/<name>/tags/list - List tags
@@ -42,7 +42,7 @@ func mockRegistryServer(t *testing.T) *httptest.Server {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	})
 
 	// GET /v2/<name>/manifests/<reference> - Get manifest
@@ -61,7 +61,7 @@ func mockRegistryServer(t *testing.T) *httptest.Server {
 			},
 		}
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(manifest)
+		_ = json.NewEncoder(w).Encode(manifest)
 	})
 
 	return httptest.NewServer(mux)

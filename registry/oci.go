@@ -225,7 +225,8 @@ func (o *OCI) getImageDigest(ctx context.Context, tag string) (string, *time.Tim
 
 	body, err := io.ReadAll(resp.Body)
 	if err == nil {
-		json.Unmarshal(body, &manifest)
+		// Ignore unmarshal error as manifest parsing is optional
+		_ = json.Unmarshal(body, &manifest)
 	}
 
 	// For now, use current time as created time

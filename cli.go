@@ -245,7 +245,8 @@ func (c *cli) run() int {
 	conf.BeforeDeployHook = c.BeforeDeployHook
 	conf.AfterDeployHook = c.AfterDeployHook
 
-	if c.command == "server" {
+	switch c.command {
+	case "server":
 		conf.Command = SERVER
 		parsedPorts, err := parsePorts(c.Ports)
 		if err != nil {
@@ -266,7 +267,7 @@ func (c *cli) run() int {
 			args:      cmdArgs,
 			logformat: c.LogFormat,
 		}
-	} else if c.command == "container" {
+	case "container":
 		conf.Command = CONTAINER
 
 		// Validate required options
@@ -307,7 +308,7 @@ func (c *cli) run() int {
 			DrainTime:     time.Duration(c.DrainTime) * time.Second,
 			Runtime:       c.ContainerRuntime,
 		}
-	} else {
+	default:
 		conf.Command = ASSETS
 	}
 

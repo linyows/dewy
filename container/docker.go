@@ -21,7 +21,7 @@ type Docker struct {
 func NewDocker(logger *slog.Logger, drainTime time.Duration) (*Docker, error) {
 	cmd := "docker"
 	if _, err := exec.LookPath(cmd); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrRuntimeNotFound, err)
+		return nil, fmt.Errorf("%w: %w", ErrRuntimeNotFound, err)
 	}
 
 	return &Docker{
@@ -33,6 +33,7 @@ func NewDocker(logger *slog.Logger, drainTime time.Duration) (*Docker, error) {
 
 // execCommand executes a docker command without returning output.
 func (d *Docker) execCommand(ctx context.Context, args ...string) error {
+	// #nosec G204 - args are constructed internally from validated inputs
 	cmd := exec.CommandContext(ctx, d.cmd, args...)
 	d.logger.Debug("Executing docker command",
 		slog.String("cmd", d.cmd),
@@ -54,6 +55,7 @@ func (d *Docker) execCommand(ctx context.Context, args ...string) error {
 
 // execCommandOutput executes a docker command and returns the output.
 func (d *Docker) execCommandOutput(ctx context.Context, args ...string) (string, error) {
+	// #nosec G204 - args are constructed internally from validated inputs
 	cmd := exec.CommandContext(ctx, d.cmd, args...)
 	d.logger.Debug("Executing docker command",
 		slog.String("cmd", d.cmd),
@@ -61,7 +63,8 @@ func (d *Docker) execCommandOutput(ctx context.Context, args ...string) (string,
 
 	output, err := cmd.Output()
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
 			d.logger.Error("Docker command failed",
 				slog.String("cmd", d.cmd),
 				slog.Any("args", args),
@@ -322,7 +325,9 @@ func (d *Docker) DeployContainer(ctx context.Context, opts DeployOptions) error 
 	if currentID != "" {
 		d.logger.Info("Connecting green container to network for health check")
 		if err := d.NetworkConnect(ctx, opts.Network, greenID, ""); err != nil {
-			d.Remove(ctx, greenID)
+			if removeErr := d.Remove(ctx, greenID); removeErr != nil {
+				d.logger.Error("Failed to remove container during cleanup", slog.String("error", removeErr.Error()))
+			}
 			return fmt.Errorf("network connect failed: %w", err)
 		}
 	}
@@ -339,10 +344,16 @@ func (d *Docker) DeployContainer(ctx context.Context, opts DeployOptions) error 
 		if err := opts.HealthCheck(ctx, greenID); err != nil {
 			d.logger.Error("Health check failed, rolling back")
 			if currentID != "" {
-				d.NetworkDisconnect(ctx, opts.Network, greenID)
+				if disconnectErr := d.NetworkDisconnect(ctx, opts.Network, greenID); disconnectErr != nil {
+					d.logger.Error("Failed to disconnect network during rollback", slog.String("error", disconnectErr.Error()))
+				}
 			}
-			d.Stop(ctx, greenID, 5*time.Second)
-			d.Remove(ctx, greenID)
+			if stopErr := d.Stop(ctx, greenID, 5*time.Second); stopErr != nil {
+				d.logger.Error("Failed to stop container during rollback", slog.String("error", stopErr.Error()))
+			}
+			if removeErr := d.Remove(ctx, greenID); removeErr != nil {
+				d.logger.Error("Failed to remove container during rollback", slog.String("error", removeErr.Error()))
+			}
 			return fmt.Errorf("health check failed: %w", err)
 		}
 	}
@@ -352,11 +363,17 @@ func (d *Docker) DeployContainer(ctx context.Context, opts DeployOptions) error 
 	if currentID != "" {
 		d.logger.Info("Adding network alias to green container")
 		// Disconnect and reconnect with alias
-		d.NetworkDisconnect(ctx, opts.Network, greenID)
+		if disconnectErr := d.NetworkDisconnect(ctx, opts.Network, greenID); disconnectErr != nil {
+			d.logger.Error("Failed to disconnect network", slog.String("error", disconnectErr.Error()))
+		}
 		if err := d.NetworkConnect(ctx, opts.Network, greenID, opts.NetworkAlias); err != nil {
 			// Rollback
-			d.Stop(ctx, greenID, 5*time.Second)
-			d.Remove(ctx, greenID)
+			if stopErr := d.Stop(ctx, greenID, 5*time.Second); stopErr != nil {
+				d.logger.Error("Failed to stop container during rollback", slog.String("error", stopErr.Error()))
+			}
+			if removeErr := d.Remove(ctx, greenID); removeErr != nil {
+				d.logger.Error("Failed to remove container during rollback", slog.String("error", removeErr.Error()))
+			}
 			return fmt.Errorf("network alias failed: %w", err)
 		}
 	}
@@ -364,7 +381,9 @@ func (d *Docker) DeployContainer(ctx context.Context, opts DeployOptions) error 
 	// 7. Remove blue from network (no new requests will come)
 	if currentID != "" {
 		d.logger.Info("Removing old container from network")
-		d.NetworkDisconnect(ctx, opts.Network, currentID)
+		if disconnectErr := d.NetworkDisconnect(ctx, opts.Network, currentID); disconnectErr != nil {
+			d.logger.Error("Failed to disconnect old container from network", slog.String("error", disconnectErr.Error()))
+		}
 	}
 
 	// 8. Drain period: wait for existing connections to complete
@@ -377,13 +396,19 @@ func (d *Docker) DeployContainer(ctx context.Context, opts DeployOptions) error 
 	}
 
 	// 9. Update green label to "current"
-	d.UpdateLabel(ctx, greenID, "dewy.role", "current")
+	if updateErr := d.UpdateLabel(ctx, greenID, "dewy.role", "current"); updateErr != nil {
+		d.logger.Error("Failed to update label", slog.String("error", updateErr.Error()))
+	}
 
 	// 10. Stop and remove old container gracefully
 	if currentID != "" {
 		d.logger.Info("Stopping old container gracefully")
-		d.Stop(ctx, currentID, 30*time.Second)
-		d.Remove(ctx, currentID)
+		if stopErr := d.Stop(ctx, currentID, 30*time.Second); stopErr != nil {
+			d.logger.Error("Failed to stop old container", slog.String("error", stopErr.Error()))
+		}
+		if removeErr := d.Remove(ctx, currentID); removeErr != nil {
+			d.logger.Error("Failed to remove old container", slog.String("error", removeErr.Error()))
+		}
 	}
 
 	d.logger.Info("Deployment completed successfully", slog.String("container", greenID))

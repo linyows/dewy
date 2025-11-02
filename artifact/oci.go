@@ -46,6 +46,7 @@ func (o *OCI) Download(ctx context.Context, w io.Writer) error {
 	}
 
 	// Execute docker pull
+	// #nosec G204 - ImageRef is validated during URL parsing in NewOCI
 	cmd := exec.CommandContext(ctx, "docker", "pull", o.ImageRef)
 	output, err := cmd.CombinedOutput()
 	if err != nil {

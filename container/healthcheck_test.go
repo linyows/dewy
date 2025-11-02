@@ -145,7 +145,9 @@ func TestHealthChecker_CheckTCP_Success(t *testing.T) {
 	parts := strings.Split(url, ":")
 	host := parts[0]
 	var port int
-	fmt.Sscanf(parts[1], "%d", &port)
+	if _, err := fmt.Sscanf(parts[1], "%d", &port); err != nil {
+		t.Fatalf("Failed to parse port: %v", err)
+	}
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
 	checker := NewHealthChecker(logger, 2*time.Second, 3)
@@ -196,7 +198,9 @@ func TestWaitForTCP(t *testing.T) {
 	parts := strings.Split(url, ":")
 	host := parts[0]
 	var port int
-	fmt.Sscanf(parts[1], "%d", &port)
+	if _, err := fmt.Sscanf(parts[1], "%d", &port); err != nil {
+		t.Fatalf("Failed to parse port: %v", err)
+	}
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
 	healthCheck := WaitForTCP(logger, host, port, 2*time.Second, 3)

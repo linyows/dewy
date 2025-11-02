@@ -2,6 +2,7 @@ package container
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"testing"
@@ -17,7 +18,7 @@ func TestNewDocker(t *testing.T) {
 	// This test may fail if docker is not installed
 	// In CI environments without docker, this is expected
 	if err != nil {
-		if err == ErrRuntimeNotFound {
+		if errors.Is(err, ErrRuntimeNotFound) {
 			t.Skip("Docker not found, skipping test")
 		}
 		t.Fatalf("Failed to create Docker runtime: %v", err)
