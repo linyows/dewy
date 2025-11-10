@@ -9,11 +9,11 @@ description: Dewy CLIコマンドとオプションの完全なリファレン�
 
 ## 基本コマンド
 
-Dewyは主に2つのコマンドを提供します：`server`と`assets`です。これらのコマンドを使用して、アプリケーションのデプロイメントと管理を行います。
+Dewyは主に3つのコマンドを提供します：`server`、`assets`、`image`です。これらのコマンドを使用して、異なる環境でアプリケーションのデプロイメントと管理を行います。
 
 ### server コマンド
 
-`dewy server`コマンドは、Dewyのメインプロセスを起動し、アプリケーションのデプロイメントと監視を行います。このコマンドがDewyの中核機能を提供します。
+`dewy server`コマンドは、Dewyのメインプロセスを起動し、バイナリアプリケーションのデプロイメントと監視を行います。このコマンドは非コンテナデプロイメントの中核機能を提供します。
 
 ```bash
 dewy server [オプション] -- [アプリケーションコマンド]
@@ -25,6 +25,14 @@ dewy server [オプション] -- [アプリケーションコマンド]
 
 ```bash
 dewy assets [オプション]
+```
+
+### image コマンド
+
+`dewy image`コマンドは、ゼロダウンタイムのBlue-Greenデプロイメント戦略でコンテナイメージのデプロイメントを処理します。OCIレジストリを監視して新しいイメージバージョンを検出し、自動的にデプロイします。
+
+```bash
+dewy image [オプション]
 ```
 
 ## コマンドラインオプション
@@ -142,6 +150,87 @@ dewy --version
 ```bash
 dewy --help
 dewy server --help
+dewy image --help
+```
+
+## imageコマンドオプション
+
+`dewy image`コマンドには、コンテナデプロイメント管理用の固有のオプションがあります。
+
+### --network
+
+コンテナデプロイメント用のDockerネットワーク名を指定します。デフォルトは `dewy-net` です。
+
+```bash
+dewy image --registry oci://ghcr.io/owner/app --network myapp-network
+```
+
+### --network-alias
+
+現在のコンテナ用のネットワークエイリアスを指定します。このエイリアスはBlue-Greenデプロイメントでのトラフィックルーティングに使用されます。デフォルトは `dewy-current` です。
+
+```bash
+dewy image --registry oci://ghcr.io/owner/app --network-alias app-current
+```
+
+### --container-port
+
+コンテナがリッスンするポートを指定します。デフォルトは8080です。ヘルスチェックとトラフィックルーティングに使用されます。
+
+```bash
+dewy image --registry oci://ghcr.io/owner/app --container-port 3000
+```
+
+### --health-path
+
+ヘルスチェック用のHTTPパスを指定します。指定すると、Dewyはトラフィックを切り替える前にこのエンドポイントが成功レスポンスを返すまで待機します。オプションです。
+
+```bash
+dewy image --registry oci://ghcr.io/owner/app --health-path /health
+```
+
+### --health-timeout
+
+ヘルスチェックのタイムアウトを秒単位で指定します。デフォルトは30秒です。
+
+```bash
+dewy image --registry oci://ghcr.io/owner/app --health-timeout 60
+```
+
+### --drain-time
+
+トラフィック切り替え後のドレイン時間を秒単位で指定します。古いコンテナはこの期間、実行中のリクエストを完了するために稼働し続けます。デフォルトは30秒です。
+
+```bash
+dewy image --registry oci://ghcr.io/owner/app --drain-time 60
+```
+
+### --runtime
+
+使用するコンテナランタイムを指定します。`docker`または`podman`をサポートします。デフォルトは`docker`です。
+
+```bash
+dewy image --registry oci://ghcr.io/owner/app --runtime podman
+```
+
+### --env (-e)
+
+コンテナに渡す環境変数を指定します。複数回指定可能です。
+
+```bash
+dewy image --registry oci://ghcr.io/owner/app \
+  --env API_KEY=secret \
+  --env DATABASE_URL=postgres://localhost/db
+```
+
+### --volume
+
+コンテナのボリュームマウントを指定します。形式は`host:container`または読み取り専用の場合は`host:container:ro`です。複数回指定可能です。
+
+```bash
+dewy image --registry oci://ghcr.io/owner/app \
+  --volume /data:/app/data \
+  --volume /config:/app/config:ro
 ```
 
 ## 環境変数
@@ -418,4 +507,39 @@ dewy server \
   --port 8080 \
   --verbose \
   -- /opt/app/dev/myapp --env development
+```
+
+### コンテナイメージデプロイメントの例
+
+Blue-Greenデプロイメント戦略でコンテナイメージをデプロイする例です。OCIレジストリを監視して新しいバージョンを検出します。
+
+```bash
+# プライベートレジストリの認証情報を設定
+export DOCKER_USERNAME=myusername
+export DOCKER_PASSWORD=mypassword
+
+# ヘルスチェック付きでデプロイ
+dewy image \
+  --registry oci://ghcr.io/mycompany/myapp \
+  --container-port 8080 \
+  --health-path /health \
+  --health-timeout 30 \
+  --drain-time 30 \
+  --env DATABASE_URL=postgres://db:5432/mydb \
+  --volume /data:/app/data \
+  --log-level info
+```
+
+### カスタムネットワークを使用したコンテナデプロイメント
+
+カスタムDockerネットワークとネットワークエイリアスを使用したサービスディスカバリーの例です。
+
+```bash
+dewy image \
+  --registry oci://ghcr.io/mycompany/api \
+  --network production-net \
+  --network-alias api-service \
+  --container-port 3000 \
+  --interval 300 \
+  --log-level info
 ```

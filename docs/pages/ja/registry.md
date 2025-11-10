@@ -16,6 +16,7 @@ Dewyは以下のレジストリタイプに対応しています。
 - **GitHub Releases** (`ghr://`): GitHubのリリース機能
 - **AWS S3** (`s3://`): Amazon S3ストレージ
 - **Google Cloud Storage** (`gs://`): Google Cloudストレージ
+- **OCIレジストリ** (`oci://`): OCI準拠のコンテナレジストリ（Docker Hub、GHCR、GCR、ECRなど）
 - **gRPC** (`grpc://`): カスタムgRPCサーバー
 
 ## 共通オプション
@@ -171,6 +172,186 @@ myapp/v1.2.4/myapp_linux_amd64.tar.gz
 myapp/v1.2.4/myapp_darwin_arm64.tar.gz
 myapp/v1.2.3/myapp_linux_amd64.tar.gz
 ```
+
+## OCIレジストリ
+
+OCI準拠のコンテナレジストリは、`dewy image`コマンドでコンテナイメージのデプロイメントに使用できます。
+
+### 対応レジストリ
+
+DewyはOCI Distribution Specification準拠のすべてのレジストリをサポートしています：
+
+- **GitHub Container Registry** (ghcr.io)
+- **Docker Hub** (docker.io)
+- **Google Artifact Registry** (gcr.io, us-docker.pkg.dev)
+- **Amazon Elastic Container Registry** (ECR)
+- **Azure Container Registry** (azurecr.io)
+- **プライベート/セルフホスト型レジストリ** (Harbor、Nexusなど)
+
+### 基本設定
+
+```bash
+# GitHub Container Registry
+oci://ghcr.io/<owner>/<repository>
+
+# Docker Hub
+oci://docker.io/<owner>/<repository>
+# または短縮形式
+oci://<owner>/<repository>
+
+# Google Artifact Registry
+oci://gcr.io/<project-id>/<repository>
+
+# プライベートレジストリ
+oci://registry.example.com/<repository>
+```
+
+### 認証
+
+#### 環境変数
+
+```bash
+# ユーザー名とパスワードを使用
+export DOCKER_USERNAME=myusername
+export DOCKER_PASSWORD=mypassword
+
+# またはDocker設定ファイルを使用（存在する場合自動的に使用されます）
+# ~/.docker/config.json
+```
+
+#### Docker設定ファイル
+
+Dewyは既存のDocker認証が設定されている場合、自動的に使用します：
+
+```bash
+# レジストリにログイン（認証情報は~/.docker/config.jsonに保存されます）
+docker login ghcr.io
+docker login docker.io
+
+# Dewyは自動的にこれらの認証情報を使用します
+dewy image --registry oci://ghcr.io/myorg/myapp
+```
+
+### オプション付きの例
+
+```bash
+# 基本的な使用法
+dewy image --registry oci://ghcr.io/myorg/myapp
+
+# プレリリースバージョンを含める
+dewy image --registry "oci://ghcr.io/myorg/myapp?pre-release=true"
+
+# コンテナオプション付き
+dewy image --registry oci://ghcr.io/myorg/myapp \
+  --container-port 8080 \
+  --health-path /health
+```
+
+### レジストリ別の例
+
+#### GitHub Container Registry (GHCR)
+
+```bash
+# パブリックイメージ
+dewy image --registry oci://ghcr.io/owner/app
+
+# プライベートイメージ（認証が必要）
+export DOCKER_USERNAME=github-username
+export DOCKER_PASSWORD=ghp_personal_access_token
+dewy image --registry oci://ghcr.io/owner/private-app
+```
+
+#### Docker Hub
+
+```bash
+# 公式イメージ（libraryネームスペース）
+dewy image --registry oci://docker.io/library/nginx
+
+# ユーザーイメージ
+dewy image --registry oci://docker.io/myuser/myapp
+
+# 短縮形式（docker.ioはデフォルト）
+dewy image --registry oci://myuser/myapp
+```
+
+#### Google Artifact Registry
+
+```bash
+# gcloudで認証
+gcloud auth configure-docker gcr.io
+
+# イメージをデプロイ
+dewy image --registry oci://gcr.io/my-project/myapp
+```
+
+#### AWS ECR
+
+```bash
+# ECRにログイン
+aws ecr get-login-password --region ap-northeast-1 | \
+  docker login --username AWS --password-stdin \
+  123456789.dkr.ecr.ap-northeast-1.amazonaws.com
+
+# イメージをデプロイ
+dewy image --registry oci://123456789.dkr.ecr.ap-northeast-1.amazonaws.com/myapp
+```
+
+### タグとバージョン選択
+
+Dewyはセマンティックバージョニングに基づいてコンテナイメージタグを自動的に選択します：
+
+```bash
+# レジストリ内のタグ:
+# - v1.2.3
+# - v1.2.2
+# - v1.2.3-beta.1
+# - latest
+
+# 本番環境（安定版のみ、v1.2.3を選択）
+dewy image --registry oci://ghcr.io/myorg/myapp
+
+# ステージング環境（プレリリースを含む、新しい場合はv1.2.3-beta.1を選択）
+dewy image --registry "oci://ghcr.io/myorg/myapp?pre-release=true"
+```
+
+### マルチアーキテクチャサポート
+
+DewyはOCI Image Index（マニフェストリスト）を使用して、適切なアーキテクチャを自動的に選択します：
+
+```bash
+# ホストシステムに基づいてamd64、arm64、または他のアーキテクチャを自動的にプル
+dewy image --registry oci://ghcr.io/myorg/myapp
+```
+
+### Blue-Greenデプロイメントワークフロー
+
+OCIレジストリを`dewy image`コマンドと使用する場合：
+
+1. Dewyは指定された間隔でレジストリの新しいタグをポーリングします
+2. セマンティックバージョニング準拠の新しいタグが自動的に検出されます
+3. 新しいコンテナイメージがプルされます
+4. 新しいコンテナのヘルスチェックが実行されます（設定されている場合）
+5. ネットワークエイリアス経由でトラフィックが新しいコンテナに切り替えられます
+6. 古いコンテナはドレインされて削除されます
+
+```bash
+# すべての機能を使用した完全な例
+dewy image \
+  --registry oci://ghcr.io/myorg/myapp \
+  --interval 300 \
+  --container-port 8080 \
+  --health-path /health \
+  --health-timeout 30 \
+  --drain-time 30 \
+  --network production \
+  --network-alias myapp-current \
+  --log-level info
+```
+
+{% callout type="important" %}
+OCIレジストリは、コンテナデプロイメント用の`dewy image`コマンドでのみ使用されます。
+バイナリデプロイメントには、GitHub Releases、S3、またはGCSレジストリを使用してください。
+{% /callout %}
 
 ## gRPC
 

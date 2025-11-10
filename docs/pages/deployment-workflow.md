@@ -255,3 +255,269 @@ Major log entries include timestamps, log levels, messages, and related metadata
 ```
 
 Log information is utilized for real-time monitoring, trend analysis, performance optimization, and satisfying audit requirements, forming an important foundation for dewy operations.
+
+## Container Deployment Workflow
+
+When operating in container mode (`dewy container`), the deployment workflow differs significantly from binary deployments. Container deployments use a Blue-Green deployment strategy with Docker network aliases to achieve zero-downtime updates.
+
+### Container Deployment Sequence
+
+The following sequence diagram shows the container deployment workflow using the network-alias strategy:
+
+```mermaid
+sequenceDiagram
+    participant D as Dewy
+    participant R as OCI Registry
+    participant RT as Container Runtime
+    participant N as Docker Network
+    participant C as Current Container (Blue)
+    participant G as New Container (Green)
+    participant HC as Health Checker
+    participant NO as Notifier
+
+    loop Periodic execution (default 30-second intervals)
+        D->>R: Get latest image tags (OCI API)
+        R->>D: Image tag list (semantic versioning)
+        D->>D: Compare with current version
+
+        alt New version available
+            D->>RT: Pull new image (docker pull)
+            RT->>R: Download image layers
+            R->>RT: Image layers (cached if exists)
+            RT->>D: Pull complete
+            D->>NO: Image pull notification
+
+            Note over D: Prepare Blue-Green deployment
+
+            D->>RT: Start Green container
+            RT->>G: Create and start container
+            G->>D: Container started (without network alias)
+
+            D->>HC: HTTP/TCP health check (internal network)
+            HC->>G: Check health endpoint
+
+            alt Health check fails
+                G-->>HC: Unhealthy response
+                HC->>D: Health check failed
+                D->>RT: Remove Green container (rollback)
+                RT->>G: Stop and remove
+                D->>NO: Deployment failed notification
+            else Health check succeeds
+                G-->>HC: Healthy response (200 OK)
+                HC->>D: Health check passed
+
+                Note over D,N: Traffic switching phase
+                D->>N: Add network alias to Green
+                N->>G: Attach alias (e.g., "myapp-current")
+                Note over G: New traffic → Green
+
+                alt Blue container exists
+                    D->>N: Remove network alias from Blue
+                    N->>C: Detach alias
+                    Note over C: Only existing connections
+
+                    Note over D: Drain period (default 30s)
+                    D->>D: Wait for drain time
+                    Note over C: Existing connections complete
+
+                    D->>RT: Stop Blue container gracefully
+                    RT->>C: Send SIGTERM (30s grace period)
+                    C->>RT: Graceful shutdown
+                    D->>RT: Remove Blue container
+                    RT->>C: Remove container
+                end
+
+                D->>RT: Update Green label to "current"
+                RT->>G: Label update
+                D->>NO: Deployment success notification
+                Note over D,G: Deployment completed
+            end
+        else Same version
+            note over D: Skip deployment
+        end
+    end
+```
+
+### Container Deployment Phases
+
+#### 1. Image Check Phase
+
+In the container deployment workflow, the check phase queries the OCI/Docker registry using the Distribution API (v2). Unlike binary deployments that check GitHub Releases or S3, container deployments:
+
+- Fetch image tags using `GET /v2/<name>/tags/list`
+- Filter tags using Semantic Versioning rules
+- Support pre-release tags with query parameters
+- Authenticate using Docker config.json or environment variables
+
+```bash
+# Example registry URLs
+oci://ghcr.io/linyows/myapp
+oci://us-central1-docker.pkg.dev/project-id/myapp-repo/myapp
+docker://docker.io/library/nginx
+```
+
+#### 2. Image Pull Phase
+
+When a new version is detected, dewy instructs the container runtime to pull the image:
+
+```bash
+# Log example during image pull
+INFO: Pulling new image image="ghcr.io/linyows/myapp:v1.2.3"
+INFO: Image pull complete digest="sha256:abc123..."
+INFO: Image pull notification message="Pulled image v1.2.3"
+```
+
+Container images are composed of multiple layers, which are cached by the container runtime. Only changed layers are downloaded, significantly reducing deployment time for incremental updates.
+
+#### 3. Blue-Green Deployment Phase
+
+Container deployments use a Blue-Green strategy with Docker network aliases for zero-downtime updates. This phase consists of several critical steps:
+
+**Step 1: Start Green Container**
+
+The new version container (Green) is started on the Docker network without the network alias:
+
+```bash
+# Log example
+INFO: Starting new container name="myapp-green-1234567890" image="myapp:v1.2.3"
+```
+
+**Step 2: Health Check**
+
+Dewy performs health checks against the Green container using the internal Docker network:
+
+```bash
+# HTTP health check via internal network
+INFO: Health checking new container url="http://myapp-green-1234567890:8080/health"
+INFO: Health check passed status=200 duration="50ms"
+```
+
+If health checks fail, the Green container is immediately removed (rollback), and the Blue container continues serving traffic.
+
+**Step 3: Traffic Switching**
+
+Once health checks pass, dewy performs atomic traffic switching using Docker network aliases:
+
+```bash
+# Add alias to Green (new traffic goes here)
+$ docker network connect --alias myapp-current myapp-net green-container-id
+
+# Remove network from Blue (no new traffic)
+$ docker network disconnect myapp-net blue-container-id
+```
+
+This operation is atomic from the network perspective. New connections immediately route to the Green container, while existing connections to Blue continue unaffected.
+
+**Step 4: Drain Period**
+
+After traffic switching, dewy waits for a configurable drain period (default 30 seconds) to allow existing connections to the Blue container to complete:
+
+```bash
+# Log example
+INFO: Waiting for drain period duration=30s
+```
+
+During this period:
+- Blue container continues processing existing requests
+- Green container handles all new requests
+- No traffic interruption occurs
+
+**Step 5: Blue Container Removal**
+
+After the drain period, the Blue container is gracefully stopped and removed:
+
+```bash
+# Send SIGTERM with 30-second grace period
+INFO: Stopping old container gracefully container="myapp-blue-1234567880"
+INFO: Deployment completed successfully container="myapp-green-1234567890"
+```
+
+### Container Deployment vs Binary Deployment
+
+Key differences between container and binary deployment workflows:
+
+| Aspect | Binary Deployment | Container Deployment |
+|--------|------------------|---------------------|
+| **Artifact Source** | GitHub Releases, S3, GCS | OCI Registry (Docker Hub, GHCR, etc.) |
+| **Artifact Format** | tar.gz, zip archives | OCI Image (multi-layer) |
+| **Deployment Strategy** | In-place update + SIGHUP | Blue-Green with network alias |
+| **Downtime** | Minimal (restart time) | Zero (seamless switch) |
+| **Rollback** | Previous release directory | Keep Blue container |
+| **Health Check** | Process-based | HTTP/TCP endpoint |
+| **Traffic Management** | server-starter (port handoff) | Docker network alias |
+
+### Network Architecture
+
+Container deployments require a Docker network and reverse proxy setup:
+
+```
+[External Client]
+       ↓
+   [nginx:80]  ← Host port binding
+       ↓
+   myapp-current (network alias)  ← Docker internal DNS
+       ↓
+   [myapp-green-xxxxx:8080]  ← Actual container
+```
+
+The reverse proxy (nginx, HAProxy, etc.) always connects to the network alias, which seamlessly points to the latest healthy container version.
+
+### Container Deployment Error Handling
+
+Container deployments include specific error handling mechanisms:
+
+#### Health Check Failures
+
+When Green container health checks fail, automatic rollback occurs:
+
+```bash
+ERROR: Health check failed error="connection refused" attempts=5
+INFO: Rolling back deployment
+INFO: Removing failed container container="myapp-green-1234567890"
+```
+
+The Blue container remains operational, ensuring service continuity.
+
+#### Image Pull Failures
+
+If image pulling fails due to network issues or authentication problems:
+
+```bash
+ERROR: Image pull failed error="authentication required" image="ghcr.io/linyows/myapp:v1.2.3"
+```
+
+The system retries on the next polling interval. The current container continues running unchanged.
+
+#### Container Startup Failures
+
+If the Green container fails to start (invalid configuration, missing dependencies):
+
+```bash
+ERROR: Container start failed error="port already in use: 8080"
+INFO: Removing failed container
+```
+
+Dewy removes the failed container and maintains the current version in production.
+
+### Container Deployment Notifications
+
+Container-specific notifications include additional information:
+
+```bash
+# Pull notification
+"Pulled image ghcr.io/linyows/myapp:v1.2.3 (digest: sha256:abc123...)"
+
+# Deployment start
+"Starting Blue-Green deployment: v1.2.2 → v1.2.3"
+
+# Health check success
+"Health check passed for new container (200 OK, 45ms)"
+
+# Traffic switch
+"Switched traffic to new container (Green)"
+
+# Deployment complete
+"Deployment completed successfully (total: 45s, drain: 30s)"
+```
+
+These notifications provide detailed visibility into the container deployment process, enabling operations teams to track deployment progress and diagnose issues quickly.

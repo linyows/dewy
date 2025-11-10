@@ -9,11 +9,11 @@ This page provides detailed information about Dewy CLI commands, options, enviro
 
 ## Basic Commands
 
-Dewy provides two main commands: `server` and `assets`. These commands are used to deploy and manage applications.
+Dewy provides three main commands: `server`, `assets`, and `image`. These commands are used to deploy and manage applications in different environments.
 
 ### server Command
 
-The `dewy server` command starts the main Dewy process and handles application deployment and monitoring. This command provides the core functionality of Dewy.
+The `dewy server` command starts the main Dewy process and handles binary application deployment and monitoring. This command provides the core functionality for non-container deployments.
 
 ```bash
 dewy server [options] -- [application command]
@@ -25,6 +25,14 @@ The `dewy assets` command displays detailed information about the current artifa
 
 ```bash
 dewy assets [options]
+```
+
+### image Command
+
+The `dewy image` command handles container image deployment with zero-downtime Blue-Green deployment strategy. It monitors OCI registries for new image versions and automatically deploys them.
+
+```bash
+dewy image [options]
 ```
 
 ## Command Line Options
@@ -142,6 +150,87 @@ Displays help for available commands and options.
 ```bash
 dewy --help
 dewy server --help
+dewy image --help
+```
+
+## Image Command Options
+
+The `dewy image` command has specific options for container deployment management.
+
+### --network
+
+Specifies the Docker network name for container deployment. Default is `dewy-net`.
+
+```bash
+dewy image --registry oci://ghcr.io/owner/app --network myapp-network
+```
+
+### --network-alias
+
+Specifies the network alias for the current container. This alias is used for traffic routing in Blue-Green deployment. Default is `dewy-current`.
+
+```bash
+dewy image --registry oci://ghcr.io/owner/app --network-alias app-current
+```
+
+### --container-port
+
+Specifies the port that the container listens on. Default is 8080. This is used for health checks and traffic routing.
+
+```bash
+dewy image --registry oci://ghcr.io/owner/app --container-port 3000
+```
+
+### --health-path
+
+Specifies the HTTP path for health checks. If specified, Dewy will wait for this endpoint to return a successful response before switching traffic. Optional.
+
+```bash
+dewy image --registry oci://ghcr.io/owner/app --health-path /health
+```
+
+### --health-timeout
+
+Specifies the timeout in seconds for health checks. Default is 30 seconds.
+
+```bash
+dewy image --registry oci://ghcr.io/owner/app --health-timeout 60
+```
+
+### --drain-time
+
+Specifies the drain time in seconds after traffic switch. The old container remains running during this period to complete in-flight requests. Default is 30 seconds.
+
+```bash
+dewy image --registry oci://ghcr.io/owner/app --drain-time 60
+```
+
+### --runtime
+
+Specifies the container runtime to use. Supports `docker` or `podman`. Default is `docker`.
+
+```bash
+dewy image --registry oci://ghcr.io/owner/app --runtime podman
+```
+
+### --env (-e)
+
+Specifies environment variables to pass to the container. Can be specified multiple times.
+
+```bash
+dewy image --registry oci://ghcr.io/owner/app \
+  --env API_KEY=secret \
+  --env DATABASE_URL=postgres://localhost/db
+```
+
+### --volume
+
+Specifies volume mounts for the container. Format is `host:container` or `host:container:ro` for read-only. Can be specified multiple times.
+
+```bash
+dewy image --registry oci://ghcr.io/owner/app \
+  --volume /data:/app/data \
+  --volume /config:/app/config:ro
 ```
 
 ## Environment Variables
@@ -418,4 +507,39 @@ dewy server \
   --port 8080 \
   --verbose \
   -- /opt/app/dev/myapp --env development
+```
+
+### Container Image Deployment Example
+
+Example deploying container images with Blue-Green deployment strategy. Monitors OCI registry for new versions.
+
+```bash
+# Set credentials for private registry
+export DOCKER_USERNAME=myusername
+export DOCKER_PASSWORD=mypassword
+
+# Deploy with health checks
+dewy image \
+  --registry oci://ghcr.io/mycompany/myapp \
+  --container-port 8080 \
+  --health-path /health \
+  --health-timeout 30 \
+  --drain-time 30 \
+  --env DATABASE_URL=postgres://db:5432/mydb \
+  --volume /data:/app/data \
+  --log-level info
+```
+
+### Container Deployment with Custom Network
+
+Example using custom Docker network and network alias for service discovery.
+
+```bash
+dewy image \
+  --registry oci://ghcr.io/mycompany/api \
+  --network production-net \
+  --network-alias api-service \
+  --container-port 3000 \
+  --interval 300 \
+  --log-level info
 ```

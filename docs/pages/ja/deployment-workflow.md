@@ -255,3 +255,269 @@ dewyは構造化ログを使用して、デプロイフローの各段階で詳�
 ```
 
 ログ情報は、リアルタイム監視、トレンド分析、パフォーマンス最適化、および監査要件の満足に活用され、dewyの運用における重要な基盤となります。
+
+## コンテナデプロイフロー
+
+コンテナモード（`dewy container`）で動作する場合、デプロイフローはバイナリデプロイメントとは大きく異なります。コンテナデプロイメントは、Dockerネットワークエイリアスを使用したBlue-Greenデプロイメント戦略により、ゼロダウンタイムの更新を実現します。
+
+### コンテナデプロイシーケンス
+
+以下のシーケンス図は、ネットワークエイリアス戦略を使用したコンテナデプロイフローを示しています：
+
+```mermaid
+sequenceDiagram
+    participant D as Dewy
+    participant R as OCI Registry
+    participant RT as Container Runtime
+    participant N as Docker Network
+    participant C as Current Container (Blue)
+    participant G as New Container (Green)
+    participant HC as Health Checker
+    participant NO as Notifier
+
+    loop 定期実行（デフォルト30秒間隔）
+        D->>R: 最新イメージタグを取得 (OCI API)
+        R->>D: イメージタグ一覧 (semantic versioning)
+        D->>D: 現在バージョンと比較
+
+        alt 新バージョンあり
+            D->>RT: 新しいイメージをpull (docker pull)
+            RT->>R: イメージレイヤーをダウンロード
+            R->>RT: イメージレイヤー (キャッシュがあれば再利用)
+            RT->>D: Pull完了
+            D->>NO: イメージpull通知
+
+            Note over D: Blue-Greenデプロイ準備
+
+            D->>RT: Greenコンテナを起動
+            RT->>G: コンテナ作成・起動
+            G->>D: コンテナ起動完了 (ネットワークエイリアスなし)
+
+            D->>HC: HTTP/TCPヘルスチェック (内部ネットワーク)
+            HC->>G: ヘルスエンドポイントを確認
+
+            alt ヘルスチェック失敗
+                G-->>HC: 異常レスポンス
+                HC->>D: ヘルスチェック失敗
+                D->>RT: Greenコンテナを削除 (ロールバック)
+                RT->>G: 停止・削除
+                D->>NO: デプロイ失敗通知
+            else ヘルスチェック成功
+                G-->>HC: 正常レスポンス (200 OK)
+                HC->>D: ヘルスチェック成功
+
+                Note over D,N: トラフィック切り替えフェーズ
+                D->>N: Greenにネットワークエイリアスを追加
+                N->>G: エイリアス付与 (例: "myapp-current")
+                Note over G: 新規トラフィック → Green
+
+                alt Blueコンテナ存在
+                    D->>N: Blueからネットワークエイリアスを削除
+                    N->>C: エイリアス解除
+                    Note over C: 既存接続のみ
+
+                    Note over D: Drain期間 (デフォルト30秒)
+                    D->>D: Drain時間を待機
+                    Note over C: 既存接続の完了を待つ
+
+                    D->>RT: Blueコンテナをグレースフル停止
+                    RT->>C: SIGTERM送信 (30秒猶予期間)
+                    C->>RT: グレースフルシャットダウン
+                    D->>RT: Blueコンテナを削除
+                    RT->>C: コンテナ削除
+                end
+
+                D->>RT: Greenのラベルを"current"に更新
+                RT->>G: ラベル更新
+                D->>NO: デプロイ成功通知
+                Note over D,G: デプロイ完了
+            end
+        else 同一バージョン
+            note over D: デプロイスキップ
+        end
+    end
+```
+
+### コンテナデプロイフェーズ
+
+#### 1. イメージチェックフェーズ
+
+コンテナデプロイフローでは、チェックフェーズでOCI/Docker RegistryにDistribution API (v2)を使用してクエリを実行します。GitHub ReleasesやS3をチェックするバイナリデプロイメントとは異なり、コンテナデプロイメントは：
+
+- `GET /v2/<name>/tags/list`を使用してイメージタグを取得
+- Semantic Versioningルールでタグをフィルタリング
+- クエリパラメータでプレリリースタグをサポート
+- Docker config.jsonまたは環境変数で認証
+
+```bash
+# レジストリURLの例
+oci://ghcr.io/linyows/myapp
+oci://us-central1-docker.pkg.dev/project-id/myapp-repo/myapp
+docker://docker.io/library/nginx
+```
+
+#### 2. イメージPullフェーズ
+
+新しいバージョンが検出されると、dewyはコンテナランタイムにイメージのpullを指示します：
+
+```bash
+# イメージpull時のログ例
+INFO: Pulling new image image="ghcr.io/linyows/myapp:v1.2.3"
+INFO: Image pull complete digest="sha256:abc123..."
+INFO: Image pull notification message="Pulled image v1.2.3"
+```
+
+コンテナイメージは複数のレイヤーで構成されており、コンテナランタイムによってキャッシュされます。変更されたレイヤーのみがダウンロードされるため、インクリメンタルな更新ではデプロイ時間が大幅に短縮されます。
+
+#### 3. Blue-Greenデプロイフェーズ
+
+コンテナデプロイメントは、ゼロダウンタイム更新のためにDockerネットワークエイリアスを使用したBlue-Green戦略を採用しています。このフェーズは複数の重要なステップで構成されています：
+
+**ステップ1: Greenコンテナ起動**
+
+新バージョンのコンテナ（Green）は、ネットワークエイリアスなしでDockerネットワーク上に起動されます：
+
+```bash
+# ログ例
+INFO: Starting new container name="myapp-green-1234567890" image="myapp:v1.2.3"
+```
+
+**ステップ2: ヘルスチェック**
+
+DewyはDocker内部ネットワークを使用してGreenコンテナに対してヘルスチェックを実行します：
+
+```bash
+# 内部ネットワーク経由のHTTPヘルスチェック
+INFO: Health checking new container url="http://myapp-green-1234567890:8080/health"
+INFO: Health check passed status=200 duration="50ms"
+```
+
+ヘルスチェックが失敗した場合、Greenコンテナは即座に削除され（ロールバック）、Blueコンテナがトラフィックを処理し続けます。
+
+**ステップ3: トラフィック切り替え**
+
+ヘルスチェックが成功すると、dewyはDockerネットワークエイリアスを使用してアトミックなトラフィック切り替えを実行します：
+
+```bash
+# Greenにエイリアスを追加（新規トラフィックはここへ）
+$ docker network connect --alias myapp-current myapp-net green-container-id
+
+# Blueからネットワークを切断（新規トラフィックなし）
+$ docker network disconnect myapp-net blue-container-id
+```
+
+この操作はネットワークの観点からアトミックです。新しい接続は即座にGreenコンテナにルーティングされ、Blueへの既存接続は影響を受けません。
+
+**ステップ4: Drain期間**
+
+トラフィック切り替え後、dewyは設定可能なdrain期間（デフォルト30秒）を待機し、Blueコンテナへの既存接続が完了するのを待ちます：
+
+```bash
+# ログ例
+INFO: Waiting for drain period duration=30s
+```
+
+この期間中：
+- Blueコンテナは既存のリクエストを処理し続ける
+- Greenコンテナはすべての新規リクエストを処理する
+- トラフィックの中断は発生しない
+
+**ステップ5: Blueコンテナ削除**
+
+Drain期間後、Blueコンテナはグレースフルに停止・削除されます：
+
+```bash
+# 30秒の猶予期間付きでSIGTERMを送信
+INFO: Stopping old container gracefully container="myapp-blue-1234567880"
+INFO: Deployment completed successfully container="myapp-green-1234567890"
+```
+
+### コンテナデプロイ vs バイナリデプロイ
+
+コンテナデプロイメントとバイナリデプロイメントフローの主な違い：
+
+| 項目 | バイナリデプロイメント | コンテナデプロイメント |
+|------|---------------------|---------------------|
+| **アーティファクトソース** | GitHub Releases, S3, GCS | OCIレジストリ (Docker Hub, GHCR等) |
+| **アーティファクト形式** | tar.gz, zipアーカイブ | OCIイメージ (マルチレイヤー) |
+| **デプロイ戦略** | インプレース更新 + SIGHUP | Blue-Green with ネットワークエイリアス |
+| **ダウンタイム** | 最小限 (再起動時間) | ゼロ (シームレス切り替え) |
+| **ロールバック** | 前のリリースディレクトリ | Blueコンテナを保持 |
+| **ヘルスチェック** | プロセスベース | HTTP/TCPエンドポイント |
+| **トラフィック管理** | server-starter (ポート引き継ぎ) | Dockerネットワークエイリアス |
+
+### ネットワークアーキテクチャ
+
+コンテナデプロイメントにはDockerネットワークとリバースプロキシのセットアップが必要です：
+
+```
+[外部クライアント]
+       ↓
+   [nginx:80]  ← ホストポートバインディング
+       ↓
+   myapp-current (ネットワークエイリアス)  ← Docker内部DNS
+       ↓
+   [myapp-green-xxxxx:8080]  ← 実際のコンテナ
+```
+
+リバースプロキシ（nginx、HAProxyなど）は常にネットワークエイリアスに接続し、これが最新の正常なコンテナバージョンをシームレスに指し示します。
+
+### コンテナデプロイのエラーハンドリング
+
+コンテナデプロイメントには特定のエラーハンドリングメカニズムが含まれています：
+
+#### ヘルスチェック失敗
+
+Greenコンテナのヘルスチェックが失敗すると、自動ロールバックが発生します：
+
+```bash
+ERROR: Health check failed error="connection refused" attempts=5
+INFO: Rolling back deployment
+INFO: Removing failed container container="myapp-green-1234567890"
+```
+
+Blueコンテナは動作を継続し、サービスの継続性を保証します。
+
+#### イメージPull失敗
+
+ネットワーク問題や認証問題でイメージのpullが失敗した場合：
+
+```bash
+ERROR: Image pull failed error="authentication required" image="ghcr.io/linyows/myapp:v1.2.3"
+```
+
+システムは次のポーリング間隔で再試行します。現在のコンテナは変更なく動作し続けます。
+
+#### コンテナ起動失敗
+
+Greenコンテナの起動が失敗した場合（無効な設定、依存関係の欠落など）：
+
+```bash
+ERROR: Container start failed error="port already in use: 8080"
+INFO: Removing failed container
+```
+
+Dewyは失敗したコンテナを削除し、現在のバージョンを本番環境で維持します。
+
+### コンテナデプロイの通知
+
+コンテナ固有の通知には追加情報が含まれます：
+
+```bash
+# Pull通知
+"Pulled image ghcr.io/linyows/myapp:v1.2.3 (digest: sha256:abc123...)"
+
+# デプロイ開始
+"Starting Blue-Green deployment: v1.2.2 → v1.2.3"
+
+# ヘルスチェック成功
+"Health check passed for new container (200 OK, 45ms)"
+
+# トラフィック切り替え
+"Switched traffic to new container (Green)"
+
+# デプロイ完了
+"Deployment completed successfully (total: 45s, drain: 30s)"
+```
+
+これらの通知により、コンテナデプロイメントプロセスの詳細な可視性が提供され、運用チームがデプロイの進行状況を追跡し、問題を迅速に診断できるようになります。
