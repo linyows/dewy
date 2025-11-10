@@ -37,11 +37,11 @@ type cli struct {
 	BeforeDeployHook string   `long:"before-deploy-hook" description:"Shell command to execute before deployment begins"`
 	AfterDeployHook  string   `long:"after-deploy-hook" description:"Shell command to execute after successful deployment"`
 	// Container-specific options
-	Network          string   `long:"network" description:"Docker network name for container command (required for container)"`
-	NetworkAlias     string   `long:"network-alias" description:"Network alias for container (required for container)"`
-	ContainerPort    int      `long:"container-port" description:"Container port (default: 8080 for container command)"`
-	HealthPath       string   `long:"health-path" description:"Health check path (default: /health for container command)"`
-	HealthTimeout    int      `long:"health-timeout" description:"Health check timeout in seconds (default: 30 for container command)"`
+	Network          string   `long:"network" description:"Docker network name for image command (default: dewy-net)"`
+	NetworkAlias     string   `long:"network-alias" description:"Network alias for container (default: dewy-current)"`
+	ContainerPort    int      `long:"container-port" description:"Container port (default: 8080)"`
+	HealthPath       string   `long:"health-path" description:"Health check path (optional, e.g., /health)"`
+	HealthTimeout    int      `long:"health-timeout" description:"Health check timeout in seconds (default: 30)"`
 	DrainTime        int      `long:"drain-time" description:"Drain time in seconds after traffic switch (default: 30 for container command)"`
 	ContainerRuntime string   `long:"runtime" description:"Container runtime (docker or podman, default: docker)"`
 	Env              []string `long:"env" short:"e" description:"Environment variables for container (format: KEY=VALUE)"`
@@ -160,7 +160,7 @@ func (c *cli) showHelp() {
 Commands:
   server     Keep the app server up to date
   assets     Keep assets up to date
-  container  Keep containers up to date with zero-downtime deployment
+  image      Keep container images up to date with zero-downtime deployment
 
 General Options:
 %s
@@ -168,7 +168,7 @@ General Options:
 Server Command Options:
 %s
 
-Container Command Options:
+Image Command Options:
 %s
 `
 	Banner(c.env.Out)
@@ -200,7 +200,7 @@ func (c *cli) run() int {
 		return ExitOK
 	}
 
-	if len(args) == 0 || (args[0] != "server" && args[0] != "assets" && args[0] != "container") {
+	if len(args) == 0 || (args[0] != "server" && args[0] != "assets" && args[0] != "image") {
 		fmt.Fprintf(c.env.Err, "Error: command is not available\n")
 		c.showHelp()
 		return ExitErr
@@ -267,26 +267,20 @@ func (c *cli) run() int {
 			args:      cmdArgs,
 			logformat: c.LogFormat,
 		}
-	case "container":
-		conf.Command = CONTAINER
-
-		// Validate required options
-		if c.Network == "" {
-			fmt.Fprintf(c.env.Err, "Error: --network is required for container command\n")
-			return ExitErr
-		}
-		if c.NetworkAlias == "" {
-			fmt.Fprintf(c.env.Err, "Error: --network-alias is required for container command\n")
-			return ExitErr
-		}
+	case "image":
+		conf.Command = IMAGE
 
 		// Set defaults
+		if c.Network == "" {
+			c.Network = "dewy-net"
+		}
+		if c.NetworkAlias == "" {
+			c.NetworkAlias = "dewy-current"
+		}
 		if c.ContainerPort == 0 {
 			c.ContainerPort = 8080
 		}
-		if c.HealthPath == "" {
-			c.HealthPath = "/health"
-		}
+		// HealthPath is optional - if not specified, health check will be skipped
 		if c.HealthTimeout == 0 {
 			c.HealthTimeout = 30
 		}

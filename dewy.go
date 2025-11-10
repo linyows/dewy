@@ -109,7 +109,7 @@ func (d *Dewy) Start(i int) {
 
 	d.job, err = scheduler.Every(i).Seconds().Run(func() {
 		var e error
-		if d.config.Command == CONTAINER {
+		if d.config.Command == IMAGE {
 			e = d.RunContainer()
 		} else {
 			e = d.Run()
@@ -513,12 +513,24 @@ func (d *Dewy) RunContainer() error {
 		slog.String("digest", res.ID),
 		slog.String("url", res.ArtifactURL))
 
-	// Check cache to see if this version is already deployed
-	cachekeyName := fmt.Sprintf("%s--%s", res.Tag, res.ID)
-	currentkeyValue, _ := d.cache.Read(currentkeyName)
+	// Extract image reference from artifact URL
+	imageRef := strings.TrimPrefix(res.ArtifactURL, "docker://")
+	imageRef = strings.TrimPrefix(imageRef, "oci://")
 
-	if string(currentkeyValue) == cachekeyName {
-		d.logger.Debug("Container already deployed, skipping", slog.String("version", res.Tag))
+	// Check if this version is already running
+	dockerRuntime, err := container.NewDocker(d.logger.Logger, d.config.Container.DrainTime)
+	if err != nil {
+		return fmt.Errorf("failed to create Docker runtime: %w", err)
+	}
+
+	runningID, err := dockerRuntime.GetRunningContainerWithImage(ctx, imageRef, d.config.Container.NetworkAlias)
+	if err != nil {
+		d.logger.Warn("Failed to check running containers", slog.String("error", err.Error()))
+		// Continue with deployment even if check fails
+	} else if runningID != "" {
+		d.logger.Info("Container with this image is already running, skipping deployment",
+			slog.String("version", res.Tag),
+			slog.String("container", runningID))
 		return nil
 	}
 
@@ -563,11 +575,6 @@ func (d *Dewy) RunContainer() error {
 	}
 	if afterErr != nil {
 		d.logger.Error("After deploy hook failure", slog.String("error", afterErr.Error()))
-	}
-
-	// Update cache
-	if err := d.cache.Write(currentkeyName, []byte(cachekeyName)); err != nil {
-		return fmt.Errorf("failed to write cache: %w", err)
 	}
 
 	// Report deployment
@@ -630,22 +637,28 @@ func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentRespons
 		}
 	}
 
-	// Create health check function
-	var healthCheck container.HealthCheckFunc
-	if d.config.Container.HealthPath != "" {
-		// Use container name for health check (internal Docker network)
-		greenName := fmt.Sprintf("%s-green-%d", appName, time.Now().Unix())
-		healthURL := fmt.Sprintf("http://%s:%d%s",
-			greenName,
-			d.config.Container.ContainerPort,
-			d.config.Container.HealthPath)
-		healthCheck = container.WaitForHTTP(d.logger.Logger, healthURL, d.config.Container.HealthTimeout, 5)
-	}
-
 	// Deploy using Blue-Green strategy
 	dockerRuntime, ok := runtime.(*container.Docker)
 	if !ok {
 		return fmt.Errorf("runtime is not Docker")
+	}
+
+	// Create health check function
+	var healthCheck container.HealthCheckFunc
+	if d.config.Container.HealthPath != "" {
+		// Use docker exec for health check to work on all platforms (Linux, macOS, Windows)
+		// This avoids the issue where Docker Desktop on macOS doesn't allow direct network access from host
+		healthCheck = container.WaitForHTTPviaNetwork(
+			d.logger.Logger,
+			dockerRuntime,
+			d.config.Container.Network,
+			d.config.Container.HealthPath,
+			d.config.Container.ContainerPort,
+			d.config.Container.HealthTimeout,
+			5, // retries
+		)
+	} else {
+		d.logger.Info("Health check disabled - container will start without health verification")
 	}
 
 	deployOpts := container.DeployOptions{
