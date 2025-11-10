@@ -148,8 +148,10 @@ func TestOCI_findLatestTag(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			logger := logging.SetupLogger("INFO", "text", os.Stderr)
 			oci := &OCI{
 				PreRelease: tt.preRelease,
+				logger:     logger,
 			}
 
 			latestTag, err := oci.findLatestTag(tt.tags)
