@@ -24,6 +24,7 @@ type OCI struct {
 	Constraint   string `schema:"constraint"` // Semver constraint (e.g., "~1.0", "^2.0")
 	username     string
 	password     string
+	token        string // Bearer token for authentication
 	client       *http.Client
 	logger       *logging.Logger
 }
@@ -127,6 +128,88 @@ func (o *OCI) getScheme() string {
 	return "https"
 }
 
+// getBearerToken retrieves a bearer token from the registry's auth endpoint.
+func (o *OCI) getBearerToken(ctx context.Context, authHeader string) error {
+	// Parse WWW-Authenticate header
+	// Format: Bearer realm="https://...",service="...",scope="..."
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		return fmt.Errorf("unsupported auth scheme: %s", authHeader)
+	}
+
+	params := make(map[string]string)
+	parts := strings.Split(strings.TrimPrefix(authHeader, "Bearer "), ",")
+	for _, part := range parts {
+		kv := strings.SplitN(strings.TrimSpace(part), "=", 2)
+		if len(kv) == 2 {
+			key := kv[0]
+			value := strings.Trim(kv[1], "\"")
+			params[key] = value
+		}
+	}
+
+	realm, ok := params["realm"]
+	if !ok {
+		return fmt.Errorf("no realm in auth header")
+	}
+
+	// Build token request URL
+	tokenURL, err := url.Parse(realm)
+	if err != nil {
+		return fmt.Errorf("invalid realm URL: %w", err)
+	}
+
+	q := tokenURL.Query()
+	if service, ok := params["service"]; ok {
+		q.Set("service", service)
+	}
+	if scope, ok := params["scope"]; ok {
+		q.Set("scope", scope)
+	}
+	tokenURL.RawQuery = q.Encode()
+
+	// Request token
+	req, err := http.NewRequestWithContext(ctx, "GET", tokenURL.String(), nil)
+	if err != nil {
+		return err
+	}
+
+	// Add basic auth if credentials are available
+	if o.username != "" && o.password != "" {
+		req.SetBasicAuth(o.username, o.password)
+	}
+
+	resp, err := o.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to get token: status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result struct {
+		Token       string `json:"token"`
+		AccessToken string `json:"access_token"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return err
+	}
+
+	// Use either token or access_token field
+	if result.Token != "" {
+		o.token = result.Token
+	} else if result.AccessToken != "" {
+		o.token = result.AccessToken
+	} else {
+		return fmt.Errorf("no token in response")
+	}
+
+	return nil
+}
+
 // listTags retrieves the list of tags from the registry.
 func (o *OCI) listTags(ctx context.Context) ([]string, error) {
 	// Docker Registry HTTP API V2: GET /v2/<name>/tags/list
@@ -139,7 +222,9 @@ func (o *OCI) listTags(ctx context.Context) ([]string, error) {
 	}
 
 	// Add authentication if available
-	if o.username != "" && o.password != "" {
+	if o.token != "" {
+		req.Header.Set("Authorization", "Bearer "+o.token)
+	} else if o.username != "" && o.password != "" {
 		auth := base64.StdEncoding.EncodeToString([]byte(o.username + ":" + o.password))
 		req.Header.Set("Authorization", "Basic "+auth)
 	}
@@ -149,6 +234,29 @@ func (o *OCI) listTags(ctx context.Context) ([]string, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
+
+	// Handle 401 Unauthorized - need to get bearer token
+	if resp.StatusCode == http.StatusUnauthorized {
+		authHeader := resp.Header.Get("WWW-Authenticate")
+		if authHeader != "" {
+			if err := o.getBearerToken(ctx, authHeader); err != nil {
+				return nil, fmt.Errorf("failed to get bearer token: %w", err)
+			}
+
+			// Retry with bearer token
+			req, err = http.NewRequestWithContext(ctx, "GET", apiURL, nil)
+			if err != nil {
+				return nil, err
+			}
+			req.Header.Set("Authorization", "Bearer "+o.token)
+
+			resp, err = o.client.Do(req)
+			if err != nil {
+				return nil, err
+			}
+			defer resp.Body.Close()
+		}
+	}
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -164,6 +272,8 @@ func (o *OCI) listTags(ctx context.Context) ([]string, error) {
 		return nil, err
 	}
 
+	o.logger.Debug("Retrieved tags from registry", "registry", o.Registry, "repository", o.Repository, "tags", result.Tags, "count", len(result.Tags))
+
 	return result.Tags, nil
 }
 
@@ -173,9 +283,11 @@ func (o *OCI) findLatestTag(tags []string) (string, error) {
 	// For Phase 1, use the existing FindLatestSemVer function
 	_, latestTag, err := FindLatestSemVer(tags, o.PreRelease)
 	if err != nil {
-		return "", err
+		o.logger.Warn("Failed to find semantic versioned tag", "error", err, "tags", tags, "pre-release", o.PreRelease)
+		return "", fmt.Errorf("%w (available tags: %v)", err, tags)
 	}
 
+	o.logger.Debug("Found latest tag", "tag", latestTag, "pre-release", o.PreRelease)
 	return latestTag, nil
 }
 
@@ -191,19 +303,56 @@ func (o *OCI) getImageDigest(ctx context.Context, tag string) (string, *time.Tim
 	}
 
 	// Add authentication if available
-	if o.username != "" && o.password != "" {
+	if o.token != "" {
+		req.Header.Set("Authorization", "Bearer "+o.token)
+	} else if o.username != "" && o.password != "" {
 		auth := base64.StdEncoding.EncodeToString([]byte(o.username + ":" + o.password))
 		req.Header.Set("Authorization", "Basic "+auth)
 	}
 
-	// Request Docker manifest schema v2
-	req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v2+json")
+	// Request Docker manifest schema v2 and OCI manifest/index
+	// Support both single-platform and multi-platform images
+	req.Header.Set("Accept", strings.Join([]string{
+		"application/vnd.oci.image.index.v1+json",                  // OCI Index (multi-platform)
+		"application/vnd.oci.image.manifest.v1+json",               // OCI Manifest
+		"application/vnd.docker.distribution.manifest.list.v2+json", // Docker Manifest List (multi-platform)
+		"application/vnd.docker.distribution.manifest.v2+json",      // Docker Manifest v2
+	}, ", "))
 
 	resp, err := o.client.Do(req)
 	if err != nil {
 		return "", nil, err
 	}
 	defer resp.Body.Close()
+
+	// Handle 401 Unauthorized - need to get bearer token
+	if resp.StatusCode == http.StatusUnauthorized {
+		authHeader := resp.Header.Get("WWW-Authenticate")
+		if authHeader != "" && o.token == "" {
+			if err := o.getBearerToken(ctx, authHeader); err != nil {
+				return "", nil, fmt.Errorf("failed to get bearer token: %w", err)
+			}
+
+			// Retry with bearer token
+			req, err = http.NewRequestWithContext(ctx, "GET", apiURL, nil)
+			if err != nil {
+				return "", nil, err
+			}
+			req.Header.Set("Authorization", "Bearer "+o.token)
+			req.Header.Set("Accept", strings.Join([]string{
+				"application/vnd.oci.image.index.v1+json",
+				"application/vnd.oci.image.manifest.v1+json",
+				"application/vnd.docker.distribution.manifest.list.v2+json",
+				"application/vnd.docker.distribution.manifest.v2+json",
+			}, ", "))
+
+			resp, err = o.client.Do(req)
+			if err != nil {
+				return "", nil, err
+			}
+			defer resp.Body.Close()
+		}
+	}
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -215,6 +364,10 @@ func (o *OCI) getImageDigest(ctx context.Context, tag string) (string, *time.Tim
 	if digest == "" {
 		return "", nil, fmt.Errorf("no digest found in response")
 	}
+
+	// Log the manifest type for debugging
+	contentType := resp.Header.Get("Content-Type")
+	o.logger.Debug("Retrieved manifest", "tag", tag, "digest", digest, "content-type", contentType)
 
 	// Parse created time from manifest (optional)
 	var manifest struct {
