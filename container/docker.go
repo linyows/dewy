@@ -258,8 +258,32 @@ func (d *Docker) UpdateLabel(ctx context.Context, containerID, key, value string
 	return nil
 }
 
+// EnsureNetwork ensures a Docker network exists, creating it if necessary.
+func (d *Docker) EnsureNetwork(ctx context.Context, network string) error {
+	// Check if network exists
+	_, err := d.execCommandOutput(ctx, "network", "inspect", network)
+	if err == nil {
+		// Network already exists
+		d.logger.Debug("Network already exists", slog.String("network", network))
+		return nil
+	}
+
+	// Create network
+	d.logger.Info("Creating Docker network", slog.String("network", network))
+	if err := d.execCommand(ctx, "network", "create", network); err != nil {
+		return fmt.Errorf("failed to create network: %w", err)
+	}
+
+	return nil
+}
+
 // DeployContainer performs Blue-Green deployment.
 func (d *Docker) DeployContainer(ctx context.Context, opts DeployOptions) error {
+	// 0. Ensure network exists
+	if err := d.EnsureNetwork(ctx, opts.Network); err != nil {
+		return fmt.Errorf("network setup failed: %w", err)
+	}
+
 	// 1. Pull new image
 	d.logger.Info("Pulling new image", slog.String("image", opts.ImageRef))
 	if err := d.Pull(ctx, opts.ImageRef); err != nil {
@@ -413,4 +437,56 @@ func (d *Docker) DeployContainer(ctx context.Context, opts DeployOptions) error 
 
 	d.logger.Info("Deployment completed successfully", slog.String("container", greenID))
 	return nil
+}
+
+// GetRunningContainerWithImage checks if a container is running with the specified image and network alias.
+// It returns the container ID if found, or an empty string if not found.
+func (d *Docker) GetRunningContainerWithImage(ctx context.Context, imageRef, networkAlias string) (string, error) {
+	// Get list of running containers with the specified ancestor (image)
+	// Format: docker ps --filter ancestor=<image> --filter status=running --format "{{.ID}}"
+	output, err := d.execCommandOutput(ctx, "ps",
+		"--filter", fmt.Sprintf("ancestor=%s", imageRef),
+		"--filter", "status=running",
+		"--format", "{{.ID}}")
+
+	if err != nil {
+		return "", fmt.Errorf("failed to list running containers: %w", err)
+	}
+
+	if output == "" {
+		d.logger.Debug("No running container found with image", slog.String("image", imageRef))
+		return "", nil
+	}
+
+	// If multiple containers are found, take the first one
+	containerIDs := strings.Split(output, "\n")
+	containerID := strings.TrimSpace(containerIDs[0])
+
+	// Verify the container has the expected network alias
+	if networkAlias != "" {
+		// Get network aliases for the container
+		aliasOutput, err := d.execCommandOutput(ctx, "inspect",
+			"--format", "{{range .NetworkSettings.Networks}}{{range .Aliases}}{{.}} {{end}}{{end}}",
+			containerID)
+
+		if err != nil {
+			d.logger.Debug("Failed to inspect container network aliases",
+				slog.String("container", containerID),
+				slog.String("error", err.Error()))
+			return "", nil
+		}
+
+		if !strings.Contains(aliasOutput, networkAlias) {
+			d.logger.Debug("Container found but does not have expected network alias",
+				slog.String("container", containerID),
+				slog.String("expected_alias", networkAlias),
+				slog.String("actual_aliases", aliasOutput))
+			return "", nil
+		}
+	}
+
+	d.logger.Debug("Found running container with image",
+		slog.String("image", imageRef),
+		slog.String("container", containerID))
+	return containerID, nil
 }
