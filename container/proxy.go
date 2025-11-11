@@ -2,6 +2,7 @@ package container
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -60,7 +61,7 @@ func (d *Docker) FindProxyContainer(ctx context.Context) (string, error) {
 		"dewy.role": "proxy",
 	})
 	if err != nil {
-		if err == ErrContainerNotFound {
+		if errors.Is(err, ErrContainerNotFound) {
 			return "", nil // No proxy container found (not an error)
 		}
 		return "", err
