@@ -305,8 +305,9 @@ func (d *Docker) DeployContainer(ctx context.Context, opts DeployOptions) error 
 	// Since Docker doesn't support updating labels after creation,
 	// we set role="current" from the start. The old container will be removed.
 	labels := map[string]string{
-		"dewy.role": "current",
-		"dewy.app":  opts.AppName,
+		"dewy.role":    "current",
+		"dewy.app":     opts.AppName,
+		"dewy.managed": "true",
 	}
 
 	// Add version label if we can extract it from image ref
