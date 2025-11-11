@@ -521,3 +521,199 @@ Container-specific notifications include additional information:
 ```
 
 These notifications provide detailed visibility into the container deployment process, enabling operations teams to track deployment progress and diagnose issues quickly.
+
+## Reverse Proxy with Caddy
+
+Dewy supports automatic reverse proxy setup using [Caddy](https://caddyserver.com/) for container deployments. When enabled, dewy manages both the proxy container and application containers, providing a clean separation between external traffic and internal application traffic.
+
+### Proxy Architecture
+
+```mermaid
+graph LR
+    Client[External Client] -->|HTTP :8000| Proxy[Caddy Proxy Container]
+    Proxy -->|Internal Network| Alias[dewy-current:3333]
+    Alias -.->|DNS Resolution| App1[App Container v1.2.3]
+
+    style Proxy fill:#f9f,stroke:#333,stroke-width:2px
+    style Alias fill:#bbf,stroke:#333,stroke-width:2px
+    style App1 fill:#bfb,stroke:#333,stroke-width:2px
+```
+
+Key components:
+
+- **Caddy Proxy Container**: Handles external HTTP traffic on the specified port
+- **Docker Network**: Internal network (`dewy-net` by default) for container communication
+- **Network Alias**: DNS alias (`dewy-current` by default) that points to the current app container
+- **App Container**: Application container with no external port mapping (internal only)
+
+### Enabling Reverse Proxy
+
+To enable the reverse proxy feature, use the `--proxy` flag:
+
+```bash
+dewy image \
+  --registry "oci://ghcr.io/linyows/myapp" \
+  --container-port 3333 \
+  --health-path /health \
+  --proxy \
+  --proxy-port 8000 \
+  --proxy-image caddy:2-alpine
+```
+
+**Options:**
+
+- `--proxy`: Enable reverse proxy (boolean flag)
+- `--proxy-port`: External port for the proxy to listen on (default: `80`)
+- `--proxy-image`: Caddy container image to use (default: `caddy:2-alpine`)
+
+### How It Works
+
+When `--proxy` is enabled, dewy performs the following additional steps:
+
+#### 1. Proxy Container Startup
+
+On dewy startup, before the first deployment:
+
+```bash
+# Check for existing proxy container
+INFO: Checking for existing proxy container
+INFO: Starting reverse proxy container name="app-proxy" port=8000
+
+# Proxy starts successfully
+INFO: Proxy started successfully container=abc123... proxy_port=8000 upstream=dewy-current:3333
+```
+
+If a proxy container already exists, dewy exits with an error to prevent conflicts.
+
+#### 2. Application Deployment Without External Ports
+
+When proxy is enabled, application containers are started without port mappings:
+
+```bash
+# Without proxy (normal mode)
+docker run -d -p 3333:3333 --name myapp-123 myapp:v1.2.3
+
+# With proxy enabled (no -p flag)
+docker run -d --name myapp-123 --network dewy-net --network-alias dewy-current myapp:v1.2.3
+```
+
+External traffic can only reach the application through the Caddy proxy.
+
+#### 3. Blue-Green Deployment with Proxy
+
+During Blue-Green deployment, the proxy automatically routes to the new container via the network alias:
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Proxy as Caddy Proxy
+    participant Alias as dewy-current
+    participant Blue as Blue Container (old)
+    participant Green as Green Container (new)
+
+    Note over Client,Blue: Before deployment
+    Client->>Proxy: HTTP request
+    Proxy->>Alias: Forward to dewy-current:3333
+    Alias->>Blue: Route to Blue
+    Blue->>Proxy: Response
+    Proxy->>Client: Response
+
+    Note over Green: New container starts & passes health check
+
+    Note over Alias,Green: Network alias switched
+    Alias-.->Green: Now points to Green
+
+    Note over Client,Green: After deployment
+    Client->>Proxy: HTTP request
+    Proxy->>Alias: Forward to dewy-current:3333
+    Alias->>Green: Route to Green
+    Green->>Proxy: Response
+    Proxy->>Client: Response
+
+    Note over Blue: Blue container removed
+```
+
+The proxy container continues running throughout the deployment, providing uninterrupted service.
+
+#### 4. Cleanup on Shutdown
+
+When dewy receives `SIGINT`, `SIGTERM`, or `SIGQUIT`, it automatically cleans up all managed containers:
+
+```bash
+INFO: Cleaning up managed containers
+INFO: Stopping managed container container=app-proxy
+INFO: Removing managed container container=app-proxy
+INFO: Stopping managed container container=myapp-123
+INFO: Removing managed container container=myapp-123
+INFO: Cleanup completed containers_cleaned=2
+```
+
+All containers labeled with `dewy.managed=true` are stopped and removed.
+
+### Proxy Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> Checking: dewy starts with --proxy
+    Checking --> Error: Proxy already exists
+    Error --> [*]
+
+    Checking --> Starting: No proxy found
+    Starting --> Running: Proxy started
+    Running --> Running: App deployments
+    Running --> Cleanup: SIGINT/SIGTERM
+    Cleanup --> [*]: All containers removed
+```
+
+### Use Cases
+
+The reverse proxy feature is useful for:
+
+1. **Single Entry Point**: All traffic goes through one port, simplifying firewall rules
+2. **TLS Termination**: Use Caddy's automatic HTTPS in production (requires domain configuration)
+3. **Load Balancing**: Future support for running multiple app instances
+4. **Request Logging**: Centralized logging at the proxy level
+5. **Security**: Application containers are not directly exposed to external networks
+
+### Limitations
+
+Current limitations of the reverse proxy feature:
+
+- HTTP only (HTTPS/TLS termination not yet supported)
+- Single application per dewy instance
+- Caddy configuration is managed automatically (no custom Caddyfile support)
+- Proxy container name is fixed to `app-proxy`
+
+### Example: Complete Setup
+
+```bash
+# Start dewy with reverse proxy
+dewy image \
+  --registry "oci://ghcr.io/linyows/myapp?pre-release=true" \
+  --container-port 3333 \
+  --health-path /health \
+  --health-timeout 30 \
+  --proxy \
+  --proxy-port 8000 \
+  --log-level info
+
+# Output:
+# INFO: Dewy started version=v1.0.0
+# INFO: Starting reverse proxy container name=app-proxy port=8000
+# INFO: Proxy started successfully
+# INFO: Pulling image ghcr.io/linyows/myapp:v1.2.3
+# INFO: Starting container name=myapp-1234567890
+# INFO: Health check passed
+# INFO: Deployment completed successfully
+
+# Access the application through the proxy
+curl http://localhost:8000/
+
+# View container logs (proxy)
+docker logs -f app-proxy
+
+# View container logs (app)
+docker logs -f $(docker ps -q --filter "label=dewy.role=current")
+```
+
+The reverse proxy feature simplifies container deployment by managing network traffic and providing a consistent access point for your applications.

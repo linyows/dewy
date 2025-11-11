@@ -233,6 +233,42 @@ dewy image --registry oci://ghcr.io/owner/app \
   --volume /config:/app/config:ro
 ```
 
+### --proxy
+
+Enables automatic reverse proxy setup using Caddy. When enabled, dewy manages both the proxy container and application containers, providing a clean separation between external traffic and internal application traffic.
+
+```bash
+dewy image --registry oci://ghcr.io/owner/app --proxy
+```
+
+**Features:**
+- Automatic Caddy proxy container management
+- Application containers have no external port mapping (internal network only)
+- Automatic cleanup on shutdown
+- Zero-downtime Blue-Green deployment support
+
+See [Reverse Proxy with Caddy](/deployment-workflow#reverse-proxy-with-caddy) for detailed information.
+
+### --proxy-port
+
+Specifies the external port for the proxy to listen on. Only effective when `--proxy` is enabled. Default is 80.
+
+```bash
+dewy image --registry oci://ghcr.io/owner/app \
+  --proxy \
+  --proxy-port 8000
+```
+
+### --proxy-image
+
+Specifies the Caddy container image to use for the proxy. Only effective when `--proxy` is enabled. Default is `caddy:2-alpine`.
+
+```bash
+dewy image --registry oci://ghcr.io/owner/app \
+  --proxy \
+  --proxy-image caddy:2.7-alpine
+```
+
 ## Environment Variables
 
 Dewy can use the following environment variables to customize behavior. Environment variables have lower priority than command line options.
@@ -543,3 +579,25 @@ dewy image \
   --interval 300 \
   --log-level info
 ```
+
+### Container Deployment with Reverse Proxy
+
+Example using Caddy reverse proxy for container deployment. The proxy handles external traffic while application containers remain on the internal network only.
+
+```bash
+dewy image \
+  --registry oci://ghcr.io/mycompany/webapp \
+  --container-port 3333 \
+  --health-path /health \
+  --proxy \
+  --proxy-port 8000 \
+  --env API_KEY=secret \
+  --log-level info
+```
+
+In this setup:
+- External clients access the application through `http://localhost:8000`
+- Caddy proxy forwards requests to `dewy-current:3333` (internal network)
+- Application container port 3333 is not exposed externally
+- Both proxy and application containers are managed by dewy
+- All containers are cleaned up automatically on shutdown
