@@ -107,6 +107,12 @@ func (d *Dewy) Start(i int) {
 	d.logger.Info("Dewy start notification", slog.String("message", msg))
 	d.notifier.Send(ctx, msg)
 
+	if d.config.Command == IMAGE {
+		runtime := d.config.Container.Runtime
+		msg := "Container logs are not displayed in dewy output, To view application logs."
+		d.logger.Info(fmt.Sprintf("%s Use: %s logs -f $(%s ps -q --filter \"label=dewy.role=current\")", msg, runtime, runtime))
+	}
+
 	d.job, err = scheduler.Every(i).Seconds().Run(func() {
 		var e error
 		if d.config.Command == IMAGE {
@@ -508,7 +514,7 @@ func (d *Dewy) RunContainer() error {
 		return err
 	}
 
-	d.logger.Info("Found latest image",
+	d.logger.Debug("Found latest image",
 		slog.String("tag", res.Tag),
 		slog.String("digest", res.ID),
 		slog.String("url", res.ArtifactURL))
@@ -528,7 +534,7 @@ func (d *Dewy) RunContainer() error {
 		d.logger.Warn("Failed to check running containers", slog.String("error", err.Error()))
 		// Continue with deployment even if check fails
 	} else if runningID != "" {
-		d.logger.Info("Container with this image is already running, skipping deployment",
+		d.logger.Debug("Container with this image is already running, skipping deployment",
 			slog.String("version", res.Tag),
 			slog.String("container", runningID))
 		return nil
