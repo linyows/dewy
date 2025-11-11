@@ -46,6 +46,9 @@ type cli struct {
 	ContainerRuntime string   `long:"runtime" description:"Container runtime (docker or podman, default: docker)"`
 	Env              []string `long:"env" short:"e" description:"Environment variables for container (format: KEY=VALUE)"`
 	Volumes          []string `long:"volume" description:"Volume mounts for container (format: host:container or host:container:ro)"`
+	Proxy            bool     `long:"proxy" description:"Enable reverse proxy with Caddy"`
+	ProxyPort        int      `long:"proxy-port" description:"Proxy port (default: 80)"`
+	ProxyImage       string   `long:"proxy-image" description:"Proxy container image (default: caddy:2-alpine)"`
 	Help             bool     `long:"help" short:"h" description:"show this help message and exit"`
 	Version          bool     `long:"version" short:"v" description:"prints the version number"`
 }
@@ -153,6 +156,9 @@ func (c *cli) showHelp() {
 		"HealthTimeout",
 		"DrainTime",
 		"ContainerRuntime",
+		"Proxy",
+		"ProxyPort",
+		"ProxyImage",
 	}), "\n")
 
 	help := `Usage: dewy [--version] [--help] command <options>
@@ -290,6 +296,12 @@ func (c *cli) run() int {
 		if c.ContainerRuntime == "" {
 			c.ContainerRuntime = "docker"
 		}
+		if c.ProxyPort == 0 {
+			c.ProxyPort = 80
+		}
+		if c.ProxyImage == "" {
+			c.ProxyImage = "caddy:2-alpine"
+		}
 
 		conf.Container = &ContainerConfig{
 			Network:       c.Network,
@@ -301,6 +313,9 @@ func (c *cli) run() int {
 			HealthTimeout: time.Duration(c.HealthTimeout) * time.Second,
 			DrainTime:     time.Duration(c.DrainTime) * time.Second,
 			Runtime:       c.ContainerRuntime,
+			Proxy:         c.Proxy,
+			ProxyPort:     c.ProxyPort,
+			ProxyImage:    c.ProxyImage,
 		}
 	default:
 		conf.Command = ASSETS

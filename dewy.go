@@ -111,6 +111,15 @@ func (d *Dewy) Start(i int) {
 		runtime := d.config.Container.Runtime
 		msg := "Container logs are not displayed in dewy output, To view application logs."
 		d.logger.Info(fmt.Sprintf("%s Use: %s logs -f $(%s ps -q --filter \"label=dewy.role=current\")", msg, runtime, runtime))
+
+		// Start proxy if enabled
+		if d.config.Container.Proxy {
+			if err := d.startProxy(ctx); err != nil {
+				d.logger.Error("Proxy startup failed", slog.String("error", err.Error()))
+				d.notifier.SendError(ctx, err)
+				return
+			}
+		}
 	}
 
 	d.job, err = scheduler.Every(i).Seconds().Run(func() {
@@ -156,6 +165,20 @@ func (d *Dewy) waitSigs(ctx context.Context) {
 
 		case syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:
 			d.job.Quit <- true
+
+			// Cleanup managed containers if in IMAGE mode with proxy enabled
+			if d.config.Command == IMAGE && d.config.Container.Proxy {
+				d.logger.Info("Cleaning up managed containers")
+				dockerRuntime, err := container.NewDocker(d.logger.Logger, d.config.Container.DrainTime)
+				if err != nil {
+					d.logger.Error("Failed to create Docker runtime for cleanup", slog.String("error", err.Error()))
+				} else {
+					if err := dockerRuntime.CleanupManagedContainers(ctx); err != nil {
+						d.logger.Error("Failed to cleanup managed containers", slog.String("error", err.Error()))
+					}
+				}
+			}
+
 			msg := fmt.Sprintf("Stop receiving by `%s` signal", sig)
 			d.logger.Info("Shutdown notification", slog.String("message", msg))
 			d.notifier.Send(ctx, msg)
@@ -667,6 +690,15 @@ func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentRespons
 		d.logger.Info("Health check disabled - container will start without health verification")
 	}
 
+	// If proxy is enabled, don't expose app ports directly
+	// The proxy container will handle external traffic
+	var ports []string
+	if !d.config.Container.Proxy {
+		// No proxy - expose container port directly
+		// Format: "host_port:container_port"
+		ports = []string{fmt.Sprintf("%d:%d", d.config.Container.ContainerPort, d.config.Container.ContainerPort)}
+	}
+
 	deployOpts := container.DeployOptions{
 		ImageRef:     imageRef,
 		AppName:      appName,
@@ -674,8 +706,61 @@ func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentRespons
 		NetworkAlias: d.config.Container.NetworkAlias,
 		Env:          d.config.Container.Env,
 		Volumes:      d.config.Container.Volumes,
+		Ports:        ports,
 		HealthCheck:  healthCheck,
 	}
 
 	return dockerRuntime.DeployContainer(ctx, deployOpts)
+}
+
+// startProxy starts the reverse proxy container.
+func (d *Dewy) startProxy(ctx context.Context) error {
+	// Create Docker runtime
+	dockerRuntime, err := container.NewDocker(d.logger.Logger, d.config.Container.DrainTime)
+	if err != nil {
+		return fmt.Errorf("failed to create Docker runtime: %w", err)
+	}
+
+	// Check if proxy container already exists
+	existingProxyID, err := dockerRuntime.FindProxyContainer(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to check for existing proxy: %w", err)
+	}
+
+	if existingProxyID != "" {
+		return fmt.Errorf("proxy container already running (container ID: %s). Please stop it first: docker stop %s && docker rm %s",
+			existingProxyID, existingProxyID, existingProxyID)
+	}
+
+	// Ensure network exists
+	if err := dockerRuntime.EnsureNetwork(ctx, d.config.Container.Network); err != nil {
+		return fmt.Errorf("failed to ensure network: %w", err)
+	}
+
+	// Determine app name for proxy container name
+	// For now, we'll use a simple "app" name, but this could be enhanced later
+	appName := "app"
+	proxyName := fmt.Sprintf("%s-proxy", appName)
+
+	// Start proxy container
+	proxyOpts := container.ProxyOptions{
+		Image:        d.config.Container.ProxyImage,
+		Name:         proxyName,
+		Network:      d.config.Container.Network,
+		ProxyPort:    d.config.Container.ProxyPort,
+		UpstreamHost: d.config.Container.NetworkAlias,
+		UpstreamPort: d.config.Container.ContainerPort,
+	}
+
+	proxyID, err := dockerRuntime.StartProxy(ctx, proxyOpts)
+	if err != nil {
+		return err
+	}
+
+	d.logger.Info("Proxy started successfully",
+		slog.String("container", proxyID),
+		slog.String("proxy_port", fmt.Sprintf("%d", d.config.Container.ProxyPort)),
+		slog.String("upstream", fmt.Sprintf("%s:%d", d.config.Container.NetworkAlias, d.config.Container.ContainerPort)))
+
+	return nil
 }

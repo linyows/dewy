@@ -72,6 +72,9 @@ type ContainerConfig struct {
 	HealthTimeout time.Duration
 	DrainTime     time.Duration
 	Runtime       string // "docker" or "podman"
+	Proxy         bool   // Enable reverse proxy
+	ProxyPort     int    // Proxy port (default: 80)
+	ProxyImage    string // Proxy image (default: "caddy:2-alpine")
 }
 
 // Config struct.
