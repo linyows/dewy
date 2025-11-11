@@ -15,32 +15,20 @@ func TestNewOCI(t *testing.T) {
 		expectError      bool
 	}{
 		{
-			name:             "docker scheme with registry and tag",
-			url:              "docker://ghcr.io/linyows/myapp:v1.0.0",
+			name:             "container scheme with registry and tag",
+			url:              "container://ghcr.io/linyows/myapp:v1.0.0",
 			expectedImageRef: "ghcr.io/linyows/myapp:v1.0.0",
 			expectError:      false,
 		},
 		{
-			name:             "oci scheme with registry and tag",
-			url:              "oci://registry.example.com/myapp:v2.0.0",
-			expectedImageRef: "registry.example.com/myapp:v2.0.0",
-			expectError:      false,
-		},
-		{
-			name:             "docker hub official image",
-			url:              "docker://docker.io/library/nginx:latest",
-			expectedImageRef: "docker.io/library/nginx:latest",
-			expectError:      false,
-		},
-		{
 			name:             "with port number",
-			url:              "docker://localhost:5000/testapp:v1",
+			url:              "container://localhost:5000/testapp:v1",
 			expectedImageRef: "localhost:5000/testapp:v1",
 			expectError:      false,
 		},
 		{
 			name:             "nested repository path",
-			url:              "docker://ghcr.io/org/team/project:tag",
+			url:              "container://ghcr.io/org/team/project:tag",
 			expectedImageRef: "ghcr.io/org/team/project:tag",
 			expectError:      false,
 		},
@@ -82,18 +70,18 @@ func TestOCI_ImageRefParsing(t *testing.T) {
 		expected string
 	}{
 		{
-			name:     "docker hub official image",
-			url:      "docker://docker.io/library/nginx:latest",
+			name:     "container hub official image",
+			url:      "container://docker.io/library/nginx:latest",
 			expected: "docker.io/library/nginx:latest",
 		},
 		{
 			name:     "ghcr with org and repo",
-			url:      "docker://ghcr.io/linyows/dewy:v1.0.0",
+			url:      "container://ghcr.io/linyows/dewy:v1.0.0",
 			expected: "ghcr.io/linyows/dewy:v1.0.0",
 		},
 		{
 			name:     "local registry",
-			url:      "docker://localhost:5555/testapp:v2",
+			url:      "container://localhost:5555/testapp:v2",
 			expected: "localhost:5555/testapp:v2",
 		},
 	}

@@ -50,11 +50,11 @@ export DOCKER_USERNAME=your_username
 export DOCKER_PASSWORD=your_password
 
 # Deploy container image from OCI registry
-dewy image --registry oci://ghcr.io/owner/app --container-port 8080
+dewy image --registry container://ghcr.io/owner/app --container-port 8080
 ```
 
 In this example:
-- `oci://ghcr.io/owner/app`: OCI registry URL (supports Docker Hub, GHCR, GCR, ECR, etc.)
+- `container://ghcr.io/owner/app`: OCI registry URL (supports Docker Hub, GHCR, GCR, ECR, etc.)
 - `--container-port 8080`: Port the container listens on
 - Health check path can be specified with `--health-path /health` (optional)
 
@@ -97,7 +97,7 @@ docker info
 
 # Deploy container image with Blue-Green deployment
 dewy image \
-  --registry oci://ghcr.io/myorg/myapp \
+  --registry container://ghcr.io/myorg/myapp \
   --container-port 3000 \
   --health-path /health \
   --health-timeout 30 \

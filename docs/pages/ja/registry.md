@@ -16,7 +16,7 @@ Dewyは以下のレジストリタイプに対応しています。
 - **GitHub Releases** (`ghr://`): GitHubのリリース機能
 - **AWS S3** (`s3://`): Amazon S3ストレージ
 - **Google Cloud Storage** (`gs://`): Google Cloudストレージ
-- **OCIレジストリ** (`oci://`): OCI準拠のコンテナレジストリ（Docker Hub、GHCR、GCR、ECRなど）
+- **OCIレジストリ** (`container://`): OCI準拠のコンテナレジストリ（Docker Hub、GHCR、GCR、ECRなど）
 - **gRPC** (`grpc://`): カスタムgRPCサーバー
 
 ## 共通オプション
@@ -192,18 +192,18 @@ DewyはOCI Distribution Specification準拠のすべてのレジストリをサ�
 
 ```bash
 # GitHub Container Registry
-oci://ghcr.io/<owner>/<repository>
+container://ghcr.io/<owner>/<repository>
 
 # Docker Hub
-oci://docker.io/<owner>/<repository>
+container://docker.io/<owner>/<repository>
 # または短縮形式
-oci://<owner>/<repository>
+container://<owner>/<repository>
 
 # Google Artifact Registry
-oci://gcr.io/<project-id>/<repository>
+container://gcr.io/<project-id>/<repository>
 
 # プライベートレジストリ
-oci://registry.example.com/<repository>
+container://registry.example.com/<repository>
 ```
 
 ### 認証
@@ -229,20 +229,20 @@ docker login ghcr.io
 docker login docker.io
 
 # Dewyは自動的にこれらの認証情報を使用します
-dewy image --registry oci://ghcr.io/myorg/myapp
+dewy image --registry container://ghcr.io/myorg/myapp
 ```
 
 ### オプション付きの例
 
 ```bash
 # 基本的な使用法
-dewy image --registry oci://ghcr.io/myorg/myapp
+dewy image --registry container://ghcr.io/myorg/myapp
 
 # プレリリースバージョンを含める
-dewy image --registry "oci://ghcr.io/myorg/myapp?pre-release=true"
+dewy image --registry "container://ghcr.io/myorg/myapp?pre-release=true"
 
 # コンテナオプション付き
-dewy image --registry oci://ghcr.io/myorg/myapp \
+dewy image --registry container://ghcr.io/myorg/myapp \
   --container-port 8080 \
   --health-path /health
 ```
@@ -253,25 +253,25 @@ dewy image --registry oci://ghcr.io/myorg/myapp \
 
 ```bash
 # パブリックイメージ
-dewy image --registry oci://ghcr.io/owner/app
+dewy image --registry container://ghcr.io/owner/app
 
 # プライベートイメージ（認証が必要）
 export DOCKER_USERNAME=github-username
 export DOCKER_PASSWORD=ghp_personal_access_token
-dewy image --registry oci://ghcr.io/owner/private-app
+dewy image --registry container://ghcr.io/owner/private-app
 ```
 
 #### Docker Hub
 
 ```bash
 # 公式イメージ（libraryネームスペース）
-dewy image --registry oci://docker.io/library/nginx
+dewy image --registry container://docker.io/library/nginx
 
 # ユーザーイメージ
-dewy image --registry oci://docker.io/myuser/myapp
+dewy image --registry container://docker.io/myuser/myapp
 
 # 短縮形式（docker.ioはデフォルト）
-dewy image --registry oci://myuser/myapp
+dewy image --registry container://myuser/myapp
 ```
 
 #### Google Artifact Registry
@@ -281,7 +281,7 @@ dewy image --registry oci://myuser/myapp
 gcloud auth configure-docker gcr.io
 
 # イメージをデプロイ
-dewy image --registry oci://gcr.io/my-project/myapp
+dewy image --registry container://gcr.io/my-project/myapp
 ```
 
 #### AWS ECR
@@ -293,7 +293,7 @@ aws ecr get-login-password --region ap-northeast-1 | \
   123456789.dkr.ecr.ap-northeast-1.amazonaws.com
 
 # イメージをデプロイ
-dewy image --registry oci://123456789.dkr.ecr.ap-northeast-1.amazonaws.com/myapp
+dewy image --registry container://123456789.dkr.ecr.ap-northeast-1.amazonaws.com/myapp
 ```
 
 ### タグとバージョン選択
@@ -308,10 +308,10 @@ Dewyはセマンティックバージョニングに基づいてコンテナイ�
 # - latest
 
 # 本番環境（安定版のみ、v1.2.3を選択）
-dewy image --registry oci://ghcr.io/myorg/myapp
+dewy image --registry container://ghcr.io/myorg/myapp
 
 # ステージング環境（プレリリースを含む、新しい場合はv1.2.3-beta.1を選択）
-dewy image --registry "oci://ghcr.io/myorg/myapp?pre-release=true"
+dewy image --registry "container://ghcr.io/myorg/myapp?pre-release=true"
 ```
 
 ### マルチアーキテクチャサポート
@@ -320,7 +320,7 @@ DewyはOCI Image Index（マニフェストリスト）を使用して、適切�
 
 ```bash
 # ホストシステムに基づいてamd64、arm64、または他のアーキテクチャを自動的にプル
-dewy image --registry oci://ghcr.io/myorg/myapp
+dewy image --registry container://ghcr.io/myorg/myapp
 ```
 
 ### Blue-Greenデプロイメントワークフロー
@@ -337,7 +337,7 @@ OCIレジストリを`dewy image`コマンドと使用する場合：
 ```bash
 # すべての機能を使用した完全な例
 dewy image \
-  --registry oci://ghcr.io/myorg/myapp \
+  --registry container://ghcr.io/myorg/myapp \
   --interval 300 \
   --container-port 8080 \
   --health-path /health \

@@ -106,7 +106,7 @@ func (o *OCI) Current(ctx context.Context) (*CurrentResponse, error) {
 	return &CurrentResponse{
 		ID:          digest,
 		Tag:         latestTag,
-		ArtifactURL: fmt.Sprintf("docker://%s", imageRef),
+		ArtifactURL: fmt.Sprintf("container://%s", imageRef),
 		CreatedAt:   createdAt,
 	}, nil
 }

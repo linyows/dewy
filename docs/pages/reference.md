@@ -162,7 +162,7 @@ The `dewy image` command has specific options for container deployment managemen
 Specifies the Docker network name for container deployment. Default is `dewy-net`.
 
 ```bash
-dewy image --registry oci://ghcr.io/owner/app --network myapp-network
+dewy image --registry container://ghcr.io/owner/app --network myapp-network
 ```
 
 ### --network-alias
@@ -170,7 +170,7 @@ dewy image --registry oci://ghcr.io/owner/app --network myapp-network
 Specifies the network alias for the current container. This alias is used for traffic routing in Blue-Green deployment. Default is `dewy-current`.
 
 ```bash
-dewy image --registry oci://ghcr.io/owner/app --network-alias app-current
+dewy image --registry container://ghcr.io/owner/app --network-alias app-current
 ```
 
 ### --container-port
@@ -178,7 +178,7 @@ dewy image --registry oci://ghcr.io/owner/app --network-alias app-current
 Specifies the port that the container listens on. Default is 8080. This is used for health checks and traffic routing.
 
 ```bash
-dewy image --registry oci://ghcr.io/owner/app --container-port 3000
+dewy image --registry container://ghcr.io/owner/app --container-port 3000
 ```
 
 ### --health-path
@@ -186,7 +186,7 @@ dewy image --registry oci://ghcr.io/owner/app --container-port 3000
 Specifies the HTTP path for health checks. If specified, Dewy will wait for this endpoint to return a successful response before switching traffic. Optional.
 
 ```bash
-dewy image --registry oci://ghcr.io/owner/app --health-path /health
+dewy image --registry container://ghcr.io/owner/app --health-path /health
 ```
 
 ### --health-timeout
@@ -194,7 +194,7 @@ dewy image --registry oci://ghcr.io/owner/app --health-path /health
 Specifies the timeout in seconds for health checks. Default is 30 seconds.
 
 ```bash
-dewy image --registry oci://ghcr.io/owner/app --health-timeout 60
+dewy image --registry container://ghcr.io/owner/app --health-timeout 60
 ```
 
 ### --drain-time
@@ -202,7 +202,7 @@ dewy image --registry oci://ghcr.io/owner/app --health-timeout 60
 Specifies the drain time in seconds after traffic switch. The old container remains running during this period to complete in-flight requests. Default is 30 seconds.
 
 ```bash
-dewy image --registry oci://ghcr.io/owner/app --drain-time 60
+dewy image --registry container://ghcr.io/owner/app --drain-time 60
 ```
 
 ### --runtime
@@ -210,7 +210,7 @@ dewy image --registry oci://ghcr.io/owner/app --drain-time 60
 Specifies the container runtime to use. Supports `docker` or `podman`. Default is `docker`.
 
 ```bash
-dewy image --registry oci://ghcr.io/owner/app --runtime podman
+dewy image --registry container://ghcr.io/owner/app --runtime podman
 ```
 
 ### --env (-e)
@@ -218,7 +218,7 @@ dewy image --registry oci://ghcr.io/owner/app --runtime podman
 Specifies environment variables to pass to the container. Can be specified multiple times.
 
 ```bash
-dewy image --registry oci://ghcr.io/owner/app \
+dewy image --registry container://ghcr.io/owner/app \
   --env API_KEY=secret \
   --env DATABASE_URL=postgres://localhost/db
 ```
@@ -228,7 +228,7 @@ dewy image --registry oci://ghcr.io/owner/app \
 Specifies volume mounts for the container. Format is `host:container` or `host:container:ro` for read-only. Can be specified multiple times.
 
 ```bash
-dewy image --registry oci://ghcr.io/owner/app \
+dewy image --registry container://ghcr.io/owner/app \
   --volume /data:/app/data \
   --volume /config:/app/config:ro
 ```
@@ -238,7 +238,7 @@ dewy image --registry oci://ghcr.io/owner/app \
 Enables automatic reverse proxy setup using Caddy. When enabled, dewy manages both the proxy container and application containers, providing a clean separation between external traffic and internal application traffic.
 
 ```bash
-dewy image --registry oci://ghcr.io/owner/app --proxy
+dewy image --registry container://ghcr.io/owner/app --proxy
 ```
 
 **Features:**
@@ -254,7 +254,7 @@ See [Reverse Proxy with Caddy](/deployment-workflow#reverse-proxy-with-caddy) fo
 Specifies the external port for the proxy to listen on. Only effective when `--proxy` is enabled. Default is 80.
 
 ```bash
-dewy image --registry oci://ghcr.io/owner/app \
+dewy image --registry container://ghcr.io/owner/app \
   --proxy \
   --proxy-port 8000
 ```
@@ -264,7 +264,7 @@ dewy image --registry oci://ghcr.io/owner/app \
 Specifies the Caddy container image to use for the proxy. Only effective when `--proxy` is enabled. Default is `caddy:2-alpine`.
 
 ```bash
-dewy image --registry oci://ghcr.io/owner/app \
+dewy image --registry container://ghcr.io/owner/app \
   --proxy \
   --proxy-image caddy:2.7-alpine
 ```
@@ -556,7 +556,7 @@ export DOCKER_PASSWORD=mypassword
 
 # Deploy with health checks
 dewy image \
-  --registry oci://ghcr.io/mycompany/myapp \
+  --registry container://ghcr.io/mycompany/myapp \
   --container-port 8080 \
   --health-path /health \
   --health-timeout 30 \
@@ -572,7 +572,7 @@ Example using custom Docker network and network alias for service discovery.
 
 ```bash
 dewy image \
-  --registry oci://ghcr.io/mycompany/api \
+  --registry container://ghcr.io/mycompany/api \
   --network production-net \
   --network-alias api-service \
   --container-port 3000 \
@@ -586,7 +586,7 @@ Example using Caddy reverse proxy for container deployment. The proxy handles ex
 
 ```bash
 dewy image \
-  --registry oci://ghcr.io/mycompany/webapp \
+  --registry container://ghcr.io/mycompany/webapp \
   --container-port 3333 \
   --health-path /health \
   --proxy \

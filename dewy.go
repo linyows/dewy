@@ -543,8 +543,7 @@ func (d *Dewy) RunContainer() error {
 		slog.String("url", res.ArtifactURL))
 
 	// Extract image reference from artifact URL
-	imageRef := strings.TrimPrefix(res.ArtifactURL, "docker://")
-	imageRef = strings.TrimPrefix(imageRef, "oci://")
+	imageRef := strings.TrimPrefix(res.ArtifactURL, "container://")
 
 	// Check if this version is already running
 	dockerRuntime, err := container.NewDocker(d.logger.Logger, d.config.Container.DrainTime)
@@ -651,9 +650,8 @@ func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentRespons
 	}
 
 	// Extract image reference from artifact URL
-	// Format: docker://registry/repo:tag
-	imageRef := strings.TrimPrefix(res.ArtifactURL, "docker://")
-	imageRef = strings.TrimPrefix(imageRef, "oci://")
+	// Format: container://registry/repo:tag
+	imageRef := strings.TrimPrefix(res.ArtifactURL, "container://")
 
 	// Determine app name from config or image
 	appName := d.config.Container.Name

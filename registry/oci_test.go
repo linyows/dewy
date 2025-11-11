@@ -251,8 +251,8 @@ func TestOCI_Current(t *testing.T) {
 				t.Errorf("Expected tag %s, got %s", tt.expectedTag, res.Tag)
 			}
 
-			if !strings.HasPrefix(res.ArtifactURL, "docker://") {
-				t.Errorf("Expected ArtifactURL to start with 'docker://', got %s", res.ArtifactURL)
+			if !strings.HasPrefix(res.ArtifactURL, "container://") {
+				t.Errorf("Expected ArtifactURL to start with 'container://', got %s", res.ArtifactURL)
 			}
 
 			expectedImageRef := registryHost + "/testapp:" + tt.expectedTag

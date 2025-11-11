@@ -162,7 +162,7 @@ dewy image --help
 コンテナデプロイメント用のDockerネットワーク名を指定します。デフォルトは `dewy-net` です。
 
 ```bash
-dewy image --registry oci://ghcr.io/owner/app --network myapp-network
+dewy image --registry container://ghcr.io/owner/app --network myapp-network
 ```
 
 ### --network-alias
@@ -170,7 +170,7 @@ dewy image --registry oci://ghcr.io/owner/app --network myapp-network
 現在のコンテナ用のネットワークエイリアスを指定します。このエイリアスはBlue-Greenデプロイメントでのトラフィックルーティングに使用されます。デフォルトは `dewy-current` です。
 
 ```bash
-dewy image --registry oci://ghcr.io/owner/app --network-alias app-current
+dewy image --registry container://ghcr.io/owner/app --network-alias app-current
 ```
 
 ### --container-port
@@ -178,7 +178,7 @@ dewy image --registry oci://ghcr.io/owner/app --network-alias app-current
 コンテナがリッスンするポートを指定します。デフォルトは8080です。ヘルスチェックとトラフィックルーティングに使用されます。
 
 ```bash
-dewy image --registry oci://ghcr.io/owner/app --container-port 3000
+dewy image --registry container://ghcr.io/owner/app --container-port 3000
 ```
 
 ### --health-path
@@ -186,7 +186,7 @@ dewy image --registry oci://ghcr.io/owner/app --container-port 3000
 ヘルスチェック用のHTTPパスを指定します。指定すると、Dewyはトラフィックを切り替える前にこのエンドポイントが成功レスポンスを返すまで待機します。オプションです。
 
 ```bash
-dewy image --registry oci://ghcr.io/owner/app --health-path /health
+dewy image --registry container://ghcr.io/owner/app --health-path /health
 ```
 
 ### --health-timeout
@@ -194,7 +194,7 @@ dewy image --registry oci://ghcr.io/owner/app --health-path /health
 ヘルスチェックのタイムアウトを秒単位で指定します。デフォルトは30秒です。
 
 ```bash
-dewy image --registry oci://ghcr.io/owner/app --health-timeout 60
+dewy image --registry container://ghcr.io/owner/app --health-timeout 60
 ```
 
 ### --drain-time
@@ -202,7 +202,7 @@ dewy image --registry oci://ghcr.io/owner/app --health-timeout 60
 トラフィック切り替え後のドレイン時間を秒単位で指定します。古いコンテナはこの期間、実行中のリクエストを完了するために稼働し続けます。デフォルトは30秒です。
 
 ```bash
-dewy image --registry oci://ghcr.io/owner/app --drain-time 60
+dewy image --registry container://ghcr.io/owner/app --drain-time 60
 ```
 
 ### --runtime
@@ -210,7 +210,7 @@ dewy image --registry oci://ghcr.io/owner/app --drain-time 60
 使用するコンテナランタイムを指定します。`docker`または`podman`をサポートします。デフォルトは`docker`です。
 
 ```bash
-dewy image --registry oci://ghcr.io/owner/app --runtime podman
+dewy image --registry container://ghcr.io/owner/app --runtime podman
 ```
 
 ### --env (-e)
@@ -218,7 +218,7 @@ dewy image --registry oci://ghcr.io/owner/app --runtime podman
 コンテナに渡す環境変数を指定します。複数回指定可能です。
 
 ```bash
-dewy image --registry oci://ghcr.io/owner/app \
+dewy image --registry container://ghcr.io/owner/app \
   --env API_KEY=secret \
   --env DATABASE_URL=postgres://localhost/db
 ```
@@ -228,7 +228,7 @@ dewy image --registry oci://ghcr.io/owner/app \
 コンテナのボリュームマウントを指定します。形式は`host:container`または読み取り専用の場合は`host:container:ro`です。複数回指定可能です。
 
 ```bash
-dewy image --registry oci://ghcr.io/owner/app \
+dewy image --registry container://ghcr.io/owner/app \
   --volume /data:/app/data \
   --volume /config:/app/config:ro
 ```
@@ -520,7 +520,7 @@ export DOCKER_PASSWORD=mypassword
 
 # ヘルスチェック付きでデプロイ
 dewy image \
-  --registry oci://ghcr.io/mycompany/myapp \
+  --registry container://ghcr.io/mycompany/myapp \
   --container-port 8080 \
   --health-path /health \
   --health-timeout 30 \
@@ -536,7 +536,7 @@ dewy image \
 
 ```bash
 dewy image \
-  --registry oci://ghcr.io/mycompany/api \
+  --registry container://ghcr.io/mycompany/api \
   --network production-net \
   --network-alias api-service \
   --container-port 3000 \

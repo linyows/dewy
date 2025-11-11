@@ -18,7 +18,7 @@ type OCI struct {
 
 // NewOCI creates a new OCI artifact.
 func NewOCI(ctx context.Context, u string, logger *slog.Logger) (*OCI, error) {
-	// Parse URL: docker://registry/repo:tag
+	// Parse URL: container://registry/repo:tag
 	ur, err := url.Parse(u)
 	if err != nil {
 		return nil, err

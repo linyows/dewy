@@ -351,9 +351,9 @@ sequenceDiagram
 
 ```bash
 # レジストリURLの例
-oci://ghcr.io/linyows/myapp
-oci://us-central1-docker.pkg.dev/project-id/myapp-repo/myapp
-docker://docker.io/library/nginx
+container://ghcr.io/linyows/myapp
+container://us-central1-docker.pkg.dev/project-id/myapp-repo/myapp
+container://docker.io/library/nginx
 ```
 
 #### 2. イメージPullフェーズ
