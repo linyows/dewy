@@ -17,16 +17,16 @@ import (
 
 // OCI implements Registry interface for OCI/Docker registries.
 type OCI struct {
-	Registry     string `schema:"-"`
-	Repository   string `schema:"-"`
-	Tag          string `schema:"-"` // Optional: specific tag to track
-	PreRelease   bool   `schema:"pre-release"`
-	Constraint   string `schema:"constraint"` // Semver constraint (e.g., "~1.0", "^2.0")
-	username     string
-	password     string
-	token        string // Bearer token for authentication
-	client       *http.Client
-	logger       *logging.Logger
+	Registry   string `schema:"-"`
+	Repository string `schema:"-"`
+	Tag        string `schema:"-"` // Optional: specific tag to track
+	PreRelease bool   `schema:"pre-release"`
+	Constraint string `schema:"constraint"` // Semver constraint (e.g., "~1.0", "^2.0")
+	username   string
+	password   string
+	token      string // Bearer token for authentication
+	client     *http.Client
+	logger     *logging.Logger
 }
 
 // NewOCI creates a new OCI registry.
@@ -313,8 +313,8 @@ func (o *OCI) getImageDigest(ctx context.Context, tag string) (string, *time.Tim
 	// Request Docker manifest schema v2 and OCI manifest/index
 	// Support both single-platform and multi-platform images
 	req.Header.Set("Accept", strings.Join([]string{
-		"application/vnd.oci.image.index.v1+json",                  // OCI Index (multi-platform)
-		"application/vnd.oci.image.manifest.v1+json",               // OCI Manifest
+		"application/vnd.oci.image.index.v1+json",                   // OCI Index (multi-platform)
+		"application/vnd.oci.image.manifest.v1+json",                // OCI Manifest
 		"application/vnd.docker.distribution.manifest.list.v2+json", // Docker Manifest List (multi-platform)
 		"application/vnd.docker.distribution.manifest.v2+json",      // Docker Manifest v2
 	}, ", "))

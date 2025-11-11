@@ -125,8 +125,8 @@ func (g *GHR) Current(ctx context.Context) (*CurrentResponse, error) {
 				// GitHub Actions typically creates releases on tag creation, then uploads artifacts later.
 				// PublishedAt reflects the actual release publication time, while CreatedAt
 				// may be much older (when the release object was first created).
-				ReleaseTime:  release.PublishedAt.GetTime(),
-				Message:      fmt.Sprintf("artifact not found: %s", artifactName),
+				ReleaseTime: release.PublishedAt.GetTime(),
+				Message:     fmt.Sprintf("artifact not found: %s", artifactName),
 			}
 		}
 	} else {
@@ -145,8 +145,8 @@ func (g *GHR) Current(ctx context.Context) (*CurrentResponse, error) {
 				// GitHub Actions typically creates releases on tag creation, then uploads artifacts later.
 				// PublishedAt reflects the actual release publication time, while CreatedAt
 				// may be much older (when the release object was first created).
-				ReleaseTime:  release.PublishedAt.GetTime(),
-				Message:      fmt.Sprintf("artifact not found: %s", artifactName),
+				ReleaseTime: release.PublishedAt.GetTime(),
+				Message:     fmt.Sprintf("artifact not found: %s", artifactName),
 			}
 		}
 
@@ -168,48 +168,48 @@ func (g *GHR) latest(ctx context.Context) (*github.RepositoryRelease, error) {
 	// Get all non-draft releases and find the latest based on semantic versioning
 	var allReleases []*github.RepositoryRelease
 	page := 1
-	
+
 	for {
 		opt := &github.ListOptions{Page: page, PerPage: 100}
 		releases, res, err := g.cl.Repositories.ListReleases(ctx, g.Owner, g.Repo, opt)
 		if err != nil {
 			return nil, fmt.Errorf("failed github.Repositories.ListReleases: %w", err)
 		}
-		
+
 		for _, release := range releases {
 			if !*release.Draft {
 				allReleases = append(allReleases, release)
 			}
 		}
-		
+
 		if res.NextPage == 0 {
 			break
 		}
 		page = res.NextPage
 	}
-	
+
 	if len(allReleases) == 0 {
 		return nil, fmt.Errorf("no non-draft releases found")
 	}
-	
+
 	// Extract tag names for semver comparison
 	var tagNames []string
 	releaseMap := make(map[string]*github.RepositoryRelease)
-	
+
 	for _, release := range allReleases {
 		tagName := release.GetTagName()
 		tagNames = append(tagNames, tagName)
 		releaseMap[tagName] = release
 	}
-	
+
 	// Use semver to find the latest version
 	latestVersion, latestTag, err := FindLatestSemVer(tagNames, g.PreRelease)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find latest semantic version: %w", err)
 	}
-	
+
 	g.logger.Debug("Selected release based on semver", slog.String("tag", latestTag), slog.Any("version", latestVersion))
-	
+
 	return releaseMap[latestTag], nil
 }
 

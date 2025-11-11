@@ -269,13 +269,13 @@ func TestOCI_Current(t *testing.T) {
 
 func TestOCI_loadCredentials(t *testing.T) {
 	tests := []struct {
-		name               string
-		registry           string
-		envUsername        string
-		envPassword        string
-		envGitHubToken     string
-		expectedUsername   string
-		expectedPassword   string
+		name             string
+		registry         string
+		envUsername      string
+		envPassword      string
+		envGitHubToken   string
+		expectedUsername string
+		expectedPassword string
 	}{
 		{
 			name:             "generic docker credentials",

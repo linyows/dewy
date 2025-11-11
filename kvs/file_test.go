@@ -250,17 +250,17 @@ func TestCreatePersistentCacheDir(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Save original environment
 			originalDewyCacheDir := os.Getenv("DEWY_CACHEDIR")
-			
+
 			// Set test environment
 			if tt.dewyCacheDir != "" {
 				os.Setenv("DEWY_CACHEDIR", tt.dewyCacheDir)
 			} else {
 				os.Unsetenv("DEWY_CACHEDIR")
 			}
-			
+
 			// Test the function
 			result := createPersistentCacheDir()
-			
+
 			// Verify result
 			if tt.expectedPath != nil {
 				expected := tt.expectedPath()
@@ -272,17 +272,17 @@ func TestCreatePersistentCacheDir(t *testing.T) {
 					t.Errorf("createPersistentCacheDir() = %v, should contain %v", result, tt.shouldContain)
 				}
 			}
-			
+
 			// Verify directory exists
 			if _, err := os.Stat(result); os.IsNotExist(err) {
 				t.Errorf("Created directory does not exist: %v", result)
 			}
-			
+
 			// Clean up created directory for custom cache dir test
 			if tt.dewyCacheDir != "" && strings.HasPrefix(tt.dewyCacheDir, "/tmp/") {
 				os.RemoveAll(tt.dewyCacheDir)
 			}
-			
+
 			// Restore original environment
 			if originalDewyCacheDir != "" {
 				os.Setenv("DEWY_CACHEDIR", originalDewyCacheDir)
