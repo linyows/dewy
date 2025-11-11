@@ -3,7 +3,7 @@
   "workspaces": {
     "": {
       "dependencies": {
-        "@docsearch/css": "^4.2.0",
+        "@docsearch/css": "^4.3.2",
         "@docsearch/react": "^4.3.1",
         "@markdoc/markdoc": "^0.5.4",
         "@markdoc/next.js": "^0.5.0",
@@ -82,7 +82,7 @@
 
     "@docsearch/core": ["@docsearch/core@4.3.1", "", { "peerDependencies": { "@types/react": ">= 16.8.0 < 20.0.0", "react": ">= 16.8.0 < 20.0.0", "react-dom": ">= 16.8.0 < 20.0.0" }, "optionalPeers": ["@types/react", "react", "react-dom"] }, "sha512-ktVbkePE+2h9RwqCUMbWXOoebFyDOxHqImAqfs+lC8yOU+XwEW4jgvHGJK079deTeHtdhUNj0PXHSnhJINvHzQ=="],
 
-    "@docsearch/css": ["@docsearch/css@4.2.0", "", {}, "sha512-65KU9Fw5fGsPPPlgIghonMcndyx1bszzrDQYLfierN+Ha29yotMHzVS94bPkZS6On9LS8dE4qmW4P/fGjtCf/g=="],
+    "@docsearch/css": ["@docsearch/css@4.3.2", "", {}, "sha512-K3Yhay9MgkBjJJ0WEL5MxnACModX9xuNt3UlQQkDEDZJZ0+aeWKtOkxHNndMRkMBnHdYvQjxkm6mdlneOtU1IQ=="],
 
     "@docsearch/react": ["@docsearch/react@4.3.1", "", { "dependencies": { "@ai-sdk/react": "^2.0.30", "@algolia/autocomplete-core": "1.19.2", "@docsearch/core": "4.3.1", "@docsearch/css": "4.3.1", "ai": "^5.0.30", "algoliasearch": "^5.28.0", "marked": "^16.3.0", "zod": "^4.1.8" }, "peerDependencies": { "@types/react": ">= 16.8.0 < 20.0.0", "react": ">= 16.8.0 < 20.0.0", "react-dom": ">= 16.8.0 < 20.0.0", "search-insights": ">= 1 < 3" }, "optionalPeers": ["@types/react", "react", "react-dom", "search-insights"] }, "sha512-vbKwgDuHi/YA0CiicXhJm4DSfOIOccl3FJlkdVmeZ5d61wNbPdAnAy71i7FF0JzO6noCQScidBBguOCaNfauEw=="],
 
