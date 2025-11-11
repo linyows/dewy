@@ -299,8 +299,8 @@ func (d *Docker) DeployContainer(ctx context.Context, opts DeployOptions) error 
 		return err
 	}
 
-	// 3. Start new container (Green)
-	greenName := fmt.Sprintf("%s-green-%d", opts.AppName, time.Now().Unix())
+	// 3. Start new container
+	newName := fmt.Sprintf("%s-%d", opts.AppName, time.Now().Unix())
 	// Start with base labels
 	// Since Docker doesn't support updating labels after creation,
 	// we set role="current" from the start. The old container will be removed.
@@ -330,9 +330,9 @@ func (d *Docker) DeployContainer(ctx context.Context, opts DeployOptions) error 
 		ports = nil
 	}
 
-	greenID, err := d.Run(ctx, RunOptions{
+	newID, err := d.Run(ctx, RunOptions{
 		Image:        opts.ImageRef,
-		Name:         greenName,
+		Name:         newName,
 		Network:      network,
 		NetworkAlias: networkAlias,
 		Env:          opts.Env,
@@ -342,14 +342,14 @@ func (d *Docker) DeployContainer(ctx context.Context, opts DeployOptions) error 
 		Detach:       true,
 	})
 	if err != nil {
-		return fmt.Errorf("start green container failed: %w", err)
+		return fmt.Errorf("start new container failed: %w", err)
 	}
 
 	// 4. For Blue-Green deployment, connect to network first (without alias) for health checking
 	if currentID != "" {
-		d.logger.Info("Connecting green container to network for health check")
-		if err := d.NetworkConnect(ctx, opts.Network, greenID, ""); err != nil {
-			if removeErr := d.Remove(ctx, greenID); removeErr != nil {
+		d.logger.Info("Connecting new container to network for health check")
+		if err := d.NetworkConnect(ctx, opts.Network, newID, ""); err != nil {
+			if removeErr := d.Remove(ctx, newID); removeErr != nil {
 				d.logger.Error("Failed to remove container during cleanup", slog.String("error", removeErr.Error()))
 			}
 			return fmt.Errorf("network connect failed: %w", err)
@@ -365,17 +365,17 @@ func (d *Docker) DeployContainer(ctx context.Context, opts DeployOptions) error 
 		time.Sleep(3 * time.Second)
 
 		d.logger.Info("Health checking new container")
-		if err := opts.HealthCheck(ctx, greenID); err != nil {
+		if err := opts.HealthCheck(ctx, newID); err != nil {
 			d.logger.Error("Health check failed, rolling back")
 			if currentID != "" {
-				if disconnectErr := d.NetworkDisconnect(ctx, opts.Network, greenID); disconnectErr != nil {
+				if disconnectErr := d.NetworkDisconnect(ctx, opts.Network, newID); disconnectErr != nil {
 					d.logger.Error("Failed to disconnect network during rollback", slog.String("error", disconnectErr.Error()))
 				}
 			}
-			if stopErr := d.Stop(ctx, greenID, 5*time.Second); stopErr != nil {
+			if stopErr := d.Stop(ctx, newID, 5*time.Second); stopErr != nil {
 				d.logger.Error("Failed to stop container during rollback", slog.String("error", stopErr.Error()))
 			}
-			if removeErr := d.Remove(ctx, greenID); removeErr != nil {
+			if removeErr := d.Remove(ctx, newID); removeErr != nil {
 				d.logger.Error("Failed to remove container during rollback", slog.String("error", removeErr.Error()))
 			}
 			return fmt.Errorf("health check failed: %w", err)
@@ -385,17 +385,17 @@ func (d *Docker) DeployContainer(ctx context.Context, opts DeployOptions) error 
 	// 6. For Blue-Green deployment, add network alias after health check
 	// For initial deployment, alias was already set during Run
 	if currentID != "" {
-		d.logger.Info("Adding network alias to green container")
+		d.logger.Info("Adding network alias to new container")
 		// Disconnect and reconnect with alias
-		if disconnectErr := d.NetworkDisconnect(ctx, opts.Network, greenID); disconnectErr != nil {
+		if disconnectErr := d.NetworkDisconnect(ctx, opts.Network, newID); disconnectErr != nil {
 			d.logger.Error("Failed to disconnect network", slog.String("error", disconnectErr.Error()))
 		}
-		if err := d.NetworkConnect(ctx, opts.Network, greenID, opts.NetworkAlias); err != nil {
+		if err := d.NetworkConnect(ctx, opts.Network, newID, opts.NetworkAlias); err != nil {
 			// Rollback
-			if stopErr := d.Stop(ctx, greenID, 5*time.Second); stopErr != nil {
+			if stopErr := d.Stop(ctx, newID, 5*time.Second); stopErr != nil {
 				d.logger.Error("Failed to stop container during rollback", slog.String("error", stopErr.Error()))
 			}
-			if removeErr := d.Remove(ctx, greenID); removeErr != nil {
+			if removeErr := d.Remove(ctx, newID); removeErr != nil {
 				d.logger.Error("Failed to remove container during rollback", slog.String("error", removeErr.Error()))
 			}
 			return fmt.Errorf("network alias failed: %w", err)
@@ -419,8 +419,8 @@ func (d *Docker) DeployContainer(ctx context.Context, opts DeployOptions) error 
 		return ctx.Err()
 	}
 
-	// 9. Update green label to "current"
-	if updateErr := d.UpdateLabel(ctx, greenID, "dewy.role", "current"); updateErr != nil {
+	// 9. Update label to "current"
+	if updateErr := d.UpdateLabel(ctx, newID, "dewy.role", "current"); updateErr != nil {
 		d.logger.Error("Failed to update label", slog.String("error", updateErr.Error()))
 	}
 
@@ -435,7 +435,7 @@ func (d *Docker) DeployContainer(ctx context.Context, opts DeployOptions) error 
 		}
 	}
 
-	d.logger.Info("Deployment completed successfully", slog.String("container", greenID))
+	d.logger.Info("Deployment completed successfully", slog.String("container", newID))
 	return nil
 }
 
