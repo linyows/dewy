@@ -18,6 +18,7 @@ var (
 	gsScheme     = "gs"
 	dockerScheme = "docker"
 	ociScheme    = "oci"
+	imgScheme    = "img"
 )
 
 type Registry interface {
@@ -68,7 +69,7 @@ func New(ctx context.Context, url string, log *logging.Logger) (Registry, error)
 	case grpcScheme:
 		return NewGRPC(ctx, url)
 
-	case dockerScheme, ociScheme:
+	case dockerScheme, ociScheme, imgScheme:
 		return NewOCI(ctx, url, log)
 	}
 

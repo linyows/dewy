@@ -14,6 +14,7 @@ const (
 	gsScheme     = "gs"
 	dockerScheme = "docker"
 	ociScheme    = "oci"
+	imgScheme    = "img"
 )
 
 // Fetcher is the interface that wraps the Fetch method.
@@ -35,7 +36,7 @@ func New(ctx context.Context, url string, logger *slog.Logger) (Artifact, error)
 	case gsScheme:
 		return NewGS(ctx, url, logger)
 
-	case dockerScheme, ociScheme:
+	case dockerScheme, ociScheme, imgScheme:
 		return NewOCI(ctx, url, logger)
 	}
 
