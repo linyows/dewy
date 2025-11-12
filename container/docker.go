@@ -316,18 +316,14 @@ func (d *Docker) DeployContainer(ctx context.Context, opts DeployOptions) error 
 		labels["dewy.version"] = parts[len(parts)-1]
 	}
 
-	// For initial deployment, set network and alias at start time
-	// For Blue-Green, don't connect to network yet (will connect after health check)
-	network := ""
-	networkAlias := ""
+	// For both initial and Blue-Green deployment, connect to network with alias from the start
+	// This ensures zero-downtime by allowing both old and new containers to share the alias
+	network := opts.Network
+	networkAlias := opts.NetworkAlias
 	ports := opts.Ports
-	if currentID == "" {
-		// Initial deployment
-		network = opts.Network
-		networkAlias = opts.NetworkAlias
-	} else {
-		// For Blue-Green deployment, don't connect to network or map ports yet
-		// The new container will be connected to network after health check
+
+	// For Blue-Green deployment with proxy, don't expose ports (proxy handles external traffic)
+	if currentID != "" && len(opts.Ports) == 0 {
 		ports = nil
 	}
 
@@ -346,33 +342,22 @@ func (d *Docker) DeployContainer(ctx context.Context, opts DeployOptions) error 
 		return fmt.Errorf("start new container failed: %w", err)
 	}
 
-	// 4. For Blue-Green deployment, connect to network first (without alias) for health checking
+	// 4. Log that both containers now share the alias (for Blue-Green)
 	if currentID != "" {
-		d.logger.Info("Connecting new container to network for health check")
-		if err := d.NetworkConnect(ctx, opts.Network, newID, ""); err != nil {
-			if removeErr := d.Remove(ctx, newID); removeErr != nil {
-				d.logger.Error("Failed to remove container during cleanup", slog.String("error", removeErr.Error()))
-			}
-			return fmt.Errorf("network connect failed: %w", err)
-		}
+		d.logger.Info("New container started with shared network alias",
+			slog.String("alias", opts.NetworkAlias),
+			slog.String("strategy", "zero-downtime DNS round-robin"))
 	}
 
 	// 5. Health check
 	if opts.HealthCheck != nil {
 		// Give the container a moment to fully start up before health checking
-		// This is especially important for Blue-Green deployment where the container
-		// is connected to the network but needs time to start the application
 		d.logger.Info("Waiting for container to start...")
 		time.Sleep(3 * time.Second)
 
 		d.logger.Info("Health checking new container")
 		if err := opts.HealthCheck(ctx, newID); err != nil {
 			d.logger.Error("Health check failed, rolling back")
-			if currentID != "" {
-				if disconnectErr := d.NetworkDisconnect(ctx, opts.Network, newID); disconnectErr != nil {
-					d.logger.Error("Failed to disconnect network during rollback", slog.String("error", disconnectErr.Error()))
-				}
-			}
 			if stopErr := d.Stop(ctx, newID, 5*time.Second); stopErr != nil {
 				d.logger.Error("Failed to stop container during rollback", slog.String("error", stopErr.Error()))
 			}
@@ -383,57 +368,25 @@ func (d *Docker) DeployContainer(ctx context.Context, opts DeployOptions) error 
 		}
 	}
 
-	// 6. For Blue-Green deployment, add network alias after health check
-	// For initial deployment, alias was already set during Run
+	// 6. For Blue-Green deployment, both containers now share the alias
+	// We stop the old container directly without disconnecting from network first
+	// This causes existing connections to fail fast and retry (connecting to new container)
+	// rather than hanging indefinitely
 	if currentID != "" {
-		d.logger.Info("Adding network alias to new container")
-		// Disconnect and reconnect with alias
-		if disconnectErr := d.NetworkDisconnect(ctx, opts.Network, newID); disconnectErr != nil {
-			d.logger.Error("Failed to disconnect network", slog.String("error", disconnectErr.Error()))
-		}
-		if err := d.NetworkConnect(ctx, opts.Network, newID, opts.NetworkAlias); err != nil {
-			// Rollback
-			if stopErr := d.Stop(ctx, newID, 5*time.Second); stopErr != nil {
-				d.logger.Error("Failed to stop container during rollback", slog.String("error", stopErr.Error()))
-			}
-			if removeErr := d.Remove(ctx, newID); removeErr != nil {
-				d.logger.Error("Failed to remove container during rollback", slog.String("error", removeErr.Error()))
-			}
-			return fmt.Errorf("network alias failed: %w", err)
-		}
-	}
-
-	// 7. Remove blue from network (no new requests will come)
-	if currentID != "" {
-		d.logger.Info("Removing old container from network")
-		if disconnectErr := d.NetworkDisconnect(ctx, opts.Network, currentID); disconnectErr != nil {
-			d.logger.Error("Failed to disconnect old container from network", slog.String("error", disconnectErr.Error()))
-		}
-	}
-
-	// 8. Drain period: wait for existing connections to complete
-	d.logger.Info("Waiting for drain period", slog.Duration("duration", d.drainTime))
-	select {
-	case <-time.After(d.drainTime):
-		// Normal completion
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-
-	// 9. Update label to "current"
-	if updateErr := d.UpdateLabel(ctx, newID, "dewy.role", "current"); updateErr != nil {
-		d.logger.Error("Failed to update label", slog.String("error", updateErr.Error()))
-	}
-
-	// 10. Stop and remove old container gracefully
-	if currentID != "" {
-		d.logger.Info("Stopping old container gracefully")
-		if stopErr := d.Stop(ctx, currentID, 30*time.Second); stopErr != nil {
+		d.logger.Info("Stopping old container to complete traffic switch",
+			slog.String("note", "Existing connections will reconnect to new container"))
+		// Stop old container with a short timeout to force connection migration
+		if stopErr := d.Stop(ctx, currentID, 10*time.Second); stopErr != nil {
 			d.logger.Error("Failed to stop old container", slog.String("error", stopErr.Error()))
 		}
 		if removeErr := d.Remove(ctx, currentID); removeErr != nil {
 			d.logger.Error("Failed to remove old container", slog.String("error", removeErr.Error()))
 		}
+	}
+
+	// 7. Update label to "current"
+	if updateErr := d.UpdateLabel(ctx, newID, "dewy.role", "current"); updateErr != nil {
+		d.logger.Error("Failed to update label", slog.String("error", updateErr.Error()))
 	}
 
 	d.logger.Info("Deployment completed successfully", slog.String("container", newID))
