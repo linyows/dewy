@@ -37,7 +37,7 @@ type cli struct {
 	BeforeDeployHook string   `long:"before-deploy-hook" description:"Shell command to execute before deployment begins"`
 	AfterDeployHook  string   `long:"after-deploy-hook" description:"Shell command to execute after successful deployment"`
 	// Container-specific options
-	Network          string   `long:"network" description:"Docker network name for image command (default: dewy-net)"`
+	Network          string   `long:"network" description:"Docker network name for container command (default: dewy-net)"`
 	NetworkAlias     string   `long:"network-alias" description:"Network alias for container (default: dewy-current)"`
 	ContainerPort    int      `long:"container-port" description:"Container port (default: 8080)"`
 	HealthPath       string   `long:"health-path" description:"Health check path (optional, e.g., /health)"`
@@ -174,7 +174,7 @@ General Options:
 Server Command Options:
 %s
 
-Image Command Options:
+Container Command Options:
 %s
 `
 	Banner(c.env.Out)
@@ -206,7 +206,7 @@ func (c *cli) run() int {
 		return ExitOK
 	}
 
-	if len(args) == 0 || (args[0] != "server" && args[0] != "assets" && args[0] != "image") {
+	if len(args) == 0 || (args[0] != "server" && args[0] != "assets" && args[0] != "container") {
 		fmt.Fprintf(c.env.Err, "Error: command is not available\n")
 		c.showHelp()
 		return ExitErr
@@ -273,8 +273,8 @@ func (c *cli) run() int {
 			args:      cmdArgs,
 			logformat: c.LogFormat,
 		}
-	case "image":
-		conf.Command = IMAGE
+	case "container":
+		conf.Command = CONTAINER
 
 		// Set defaults
 		if c.Network == "" {

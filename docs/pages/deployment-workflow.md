@@ -351,9 +351,9 @@ In the container deployment workflow, the check phase queries the OCI/Docker reg
 
 ```bash
 # Example registry URLs
-container://ghcr.io/linyows/myapp
-container://us-central1-docker.pkg.dev/project-id/myapp-repo/myapp
-container://docker.io/library/nginx
+img://ghcr.io/linyows/myapp
+img://us-central1-docker.pkg.dev/project-id/myapp-repo/myapp
+img://docker.io/library/nginx
 ```
 
 #### 2. Image Pull Phase
@@ -551,8 +551,8 @@ Key components:
 To enable the reverse proxy feature, use the `--proxy` flag:
 
 ```bash
-dewy image \
-  --registry "container://ghcr.io/linyows/myapp" \
+dewy container \
+  --registry "img://ghcr.io/linyows/myapp" \
   --container-port 3333 \
   --health-path /health \
   --proxy \
@@ -688,8 +688,8 @@ Current limitations of the reverse proxy feature:
 
 ```bash
 # Start dewy with reverse proxy
-dewy image \
-  --registry "container://ghcr.io/linyows/myapp?pre-release=true" \
+dewy container \
+  --registry "img://ghcr.io/linyows/myapp?pre-release=true" \
   --container-port 3333 \
   --health-path /health \
   --health-timeout 30 \

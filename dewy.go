@@ -107,7 +107,7 @@ func (d *Dewy) Start(i int) {
 	d.logger.Info("Dewy start notification", slog.String("message", msg))
 	d.notifier.Send(ctx, msg)
 
-	if d.config.Command == IMAGE {
+	if d.config.Command == CONTAINER {
 		runtime := d.config.Container.Runtime
 		msg := "Container logs are not displayed in dewy output, To view application logs."
 		d.logger.Info(fmt.Sprintf("%s Use: %s logs -f $(%s ps -q --filter \"label=dewy.role=current\")", msg, runtime, runtime))
@@ -124,7 +124,7 @@ func (d *Dewy) Start(i int) {
 
 	d.job, err = scheduler.Every(i).Seconds().Run(func() {
 		var e error
-		if d.config.Command == IMAGE {
+		if d.config.Command == CONTAINER {
 			e = d.RunContainer()
 		} else {
 			e = d.Run()
@@ -166,8 +166,8 @@ func (d *Dewy) waitSigs(ctx context.Context) {
 		case syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:
 			d.job.Quit <- true
 
-			// Cleanup managed containers if in IMAGE mode with proxy enabled
-			if d.config.Command == IMAGE && d.config.Container.Proxy {
+			// Cleanup managed containers if in CONTAINER mode with proxy enabled
+			if d.config.Command == CONTAINER && d.config.Container.Proxy {
 				d.logger.Info("Cleaning up managed containers")
 				dockerRuntime, err := container.NewDocker(d.logger.Logger, d.config.Container.DrainTime)
 				if err != nil {
@@ -543,7 +543,7 @@ func (d *Dewy) RunContainer() error {
 		slog.String("url", res.ArtifactURL))
 
 	// Extract image reference from artifact URL
-	imageRef := strings.TrimPrefix(res.ArtifactURL, "container://")
+	imageRef := strings.TrimPrefix(res.ArtifactURL, "img://")
 
 	// Check if this version is already running
 	dockerRuntime, err := container.NewDocker(d.logger.Logger, d.config.Container.DrainTime)
@@ -650,8 +650,8 @@ func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentRespons
 	}
 
 	// Extract image reference from artifact URL
-	// Format: container://registry/repo:tag
-	imageRef := strings.TrimPrefix(res.ArtifactURL, "container://")
+	// Format: img://registry/repo:tag
+	imageRef := strings.TrimPrefix(res.ArtifactURL, "img://")
 
 	// Determine app name from config or image
 	appName := d.config.Container.Name

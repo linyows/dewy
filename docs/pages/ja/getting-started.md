@@ -50,11 +50,11 @@ export DOCKER_USERNAME=your_username
 export DOCKER_PASSWORD=your_password
 
 # OCIレジストリからコンテナイメージをデプロイ
-dewy image --registry container://ghcr.io/owner/app --container-port 8080
+dewy container --registry img://ghcr.io/owner/app --container-port 8080
 ```
 
 この例では：
-- `container://ghcr.io/owner/app`: OCIレジストリURL（Docker Hub、GHCR、GCR、ECRなどに対応）
+- `img://ghcr.io/owner/app`: OCIレジストリURL（Docker Hub、GHCR、GCR、ECRなどに対応）
 - `--container-port 8080`: コンテナがリッスンするポート
 - ヘルスチェックパスは `--health-path /health` で指定可能（オプション）
 
@@ -96,8 +96,8 @@ export DOCKER_PASSWORD=mypassword
 docker info
 
 # Blue-Greenデプロイメントでコンテナイメージをデプロイ
-dewy image \
-  --registry container://ghcr.io/myorg/myapp \
+dewy container \
+  --registry img://ghcr.io/myorg/myapp \
   --container-port 3000 \
   --health-path /health \
   --health-timeout 30 \

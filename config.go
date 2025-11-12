@@ -14,8 +14,8 @@ const (
 	SERVER Command = iota
 	// ASSETS command.
 	ASSETS
-	// IMAGE command.
-	IMAGE
+	// CONTAINER command.
+	CONTAINER
 )
 
 // String to string for Command.
@@ -25,8 +25,8 @@ func (c Command) String() string {
 		return "server"
 	case ASSETS:
 		return "assets"
-	case IMAGE:
-		return "image"
+	case CONTAINER:
+		return "container"
 	default:
 		return "unknown"
 	}

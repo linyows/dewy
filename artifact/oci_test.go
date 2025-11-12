@@ -16,19 +16,19 @@ func TestNewOCI(t *testing.T) {
 	}{
 		{
 			name:             "container scheme with registry and tag",
-			url:              "container://ghcr.io/linyows/myapp:v1.0.0",
+			url:              "img://ghcr.io/linyows/myapp:v1.0.0",
 			expectedImageRef: "ghcr.io/linyows/myapp:v1.0.0",
 			expectError:      false,
 		},
 		{
 			name:             "with port number",
-			url:              "container://localhost:5000/testapp:v1",
+			url:              "img://localhost:5000/testapp:v1",
 			expectedImageRef: "localhost:5000/testapp:v1",
 			expectError:      false,
 		},
 		{
 			name:             "nested repository path",
-			url:              "container://ghcr.io/org/team/project:tag",
+			url:              "img://ghcr.io/org/team/project:tag",
 			expectedImageRef: "ghcr.io/org/team/project:tag",
 			expectError:      false,
 		},
@@ -71,17 +71,17 @@ func TestOCI_ImageRefParsing(t *testing.T) {
 	}{
 		{
 			name:     "container hub official image",
-			url:      "container://docker.io/library/nginx:latest",
+			url:      "img://docker.io/library/nginx:latest",
 			expected: "docker.io/library/nginx:latest",
 		},
 		{
 			name:     "ghcr with org and repo",
-			url:      "container://ghcr.io/linyows/dewy:v1.0.0",
+			url:      "img://ghcr.io/linyows/dewy:v1.0.0",
 			expected: "ghcr.io/linyows/dewy:v1.0.0",
 		},
 		{
 			name:     "local registry",
-			url:      "container://localhost:5555/testapp:v2",
+			url:      "img://localhost:5555/testapp:v2",
 			expected: "localhost:5555/testapp:v2",
 		},
 	}
