@@ -11,7 +11,7 @@ It ensures that applications and data on servers are always up-to-date.
 Dewy supports multiple deployment modes:
 - **Binary deployment**: Deploy Go applications as single binaries (non-container environments)
 - **Asset deployment**: Deploy static files (HTML, CSS, JavaScript, etc.)
-- **Container image deployment**: Deploy container images with zero-downtime Blue-Green deployment
+- **Container image deployment**: Deploy container images with zero-downtime rolling update deployment
 
 ## Background
 
@@ -21,7 +21,7 @@ Go can compile code into a single binary tailored to each environment. In distri
 
 - **Declarative pull-based deployment**: Applications automatically stay up-to-date
 - **Multiple deployment modes**: Binary, assets, and container images
-- **Zero-downtime deployment**: Blue-Green deployment for container images with automatic health checks
+- **Zero-downtime deployment**: Rolling update deployment for container images with automatic health checks
 - **Graceful restarts**: Smooth application updates without dropping connections
 - **Multiple registry support**: GitHub Releases, S3, GCS, Docker Hub, GitHub Container Registry, Google Artifact Registry, AWS ECR
 - **Deployment notifications**: Slack, email, and other notification channels
@@ -39,7 +39,7 @@ Dewy is optimal for keeping the latest version of applications running in variou
 
 ### Container Image Deployment
 - Zero-downtime deployments of containerized applications without Kubernetes
-- Blue-Green deployments on Docker/Podman environments
+- Rolling update deployments on Docker/Podman environments
 - Automatic updates of container images from OCI registries
 - Ideal for single-host Docker environments or simple multi-container setups
 

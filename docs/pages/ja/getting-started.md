@@ -42,7 +42,7 @@ dewy assets --registry ghr://owner/frontend-assets
 
 ### コンテナイメージのデプロイ
 
-ゼロダウンタイムのBlue-Greenデプロイメントでコンテナ化されたアプリケーションをデプロイする場合：
+ゼロダウンタイムのローリングアップデートでコンテナ化されたアプリケーションをデプロイする場合：
 
 ```bash
 # 環境変数を設定（プライベートレジストリの場合）
@@ -60,7 +60,7 @@ dewy container --registry img://ghcr.io/owner/app --container-port 8080
 
 Dewyは自動的に：
 - Dockerネットワークが存在しない場合は作成します（デフォルト: `dewy-net`）
-- ゼロダウンタイムのBlue-Greenデプロイメントを実行します
+- ゼロダウンタイムのローリングアップデートを実行します
 - ヘルスチェックが成功した後、新しいコンテナにトラフィックを切り替えます
 - ドレイン期間後に古いコンテナを削除します
 
@@ -95,7 +95,7 @@ export DOCKER_PASSWORD=mypassword
 # Docker/Podmanが起動していることを確認
 docker info
 
-# Blue-Greenデプロイメントでコンテナイメージをデプロイ
+# ローリングアップデートでコンテナイメージをデプロイ
 dewy container \
   --registry img://ghcr.io/myorg/myapp \
   --container-port 3000 \

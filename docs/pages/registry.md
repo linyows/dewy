@@ -314,7 +314,7 @@ Dewy automatically selects the appropriate architecture using OCI Image Index (m
 dewy container --registry img://ghcr.io/myorg/myapp
 ```
 
-### Blue-Green Deployment Workflow
+### Rolling Update Deployment Workflow
 
 When using OCI registry with `dewy container` command:
 

@@ -323,7 +323,7 @@ DewyはOCI Image Index（マニフェストリスト）を使用して、適切�
 dewy container --registry img://ghcr.io/myorg/myapp
 ```
 
-### Blue-Greenデプロイメントワークフロー
+### ローリングアップデートワークフロー
 
 OCIレジストリを`dewy container`コマンドと使用する場合：
 

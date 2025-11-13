@@ -29,7 +29,7 @@ dewy assets [options]
 
 ### container Command
 
-The `dewy container` command handles container image deployment with zero-downtime Blue-Green deployment strategy. It monitors OCI registries for new image versions and automatically deploys them.
+The `dewy container` command handles container image deployment with zero-downtime rolling update deployment strategy. It monitors OCI registries for new image versions and automatically deploys them.
 
 ```bash
 dewy container [options]
@@ -415,7 +415,7 @@ dewy server \
 
 ### Container Image Deployment Example
 
-Example deploying container images with Blue-Green deployment strategy. Monitors OCI registry for new versions.
+Example deploying container images with rolling update deployment strategy. Monitors OCI registry for new versions.
 
 ```bash
 # Set credentials for private registry

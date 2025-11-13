@@ -42,7 +42,7 @@ dewy assets --registry ghr://owner/frontend-assets
 
 ### Container Image Deployment
 
-For deploying containerized applications with zero-downtime Blue-Green deployment:
+For deploying containerized applications with zero-downtime rolling update deployment:
 
 ```bash
 # Set environment variables (if using private registry)
@@ -60,7 +60,7 @@ In this example:
 
 Dewy automatically:
 - Creates a Docker network if it doesn't exist (default: `dewy-net`)
-- Performs Blue-Green deployment with zero downtime
+- Performs rolling update deployment with zero downtime
 - Switches traffic to the new container after health checks pass
 - Removes the old container after the drain period
 
@@ -95,7 +95,7 @@ export DOCKER_PASSWORD=mypassword
 # Ensure Docker/Podman is running
 docker info
 
-# Deploy container image with Blue-Green deployment
+# Deploy container image with rolling update deployment
 dewy container \
   --registry img://ghcr.io/myorg/myapp \
   --container-port 3000 \

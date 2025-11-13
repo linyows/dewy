@@ -447,11 +447,11 @@ echo "Development validation completed"
 
 ## 高度な活用例 {% #advanced-usage %}
 
-### Blue-Green デプロイメント {% #blue-green %}
+### ローリングアップデート {% #rolling-update %}
 
 **トラフィック切り替えの自動化:**
 ```bash
-# Blue-Green切り替え用のフック設定
+# ローリングアップデート用のフック設定
 dewy server --registry ghr://company/myapp \
   --before-deploy-hook "scripts/prepare-green.sh" \
   --after-deploy-hook "scripts/switch-to-green.sh" \
