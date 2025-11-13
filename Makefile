@@ -24,7 +24,12 @@ test:
 		sed -E 's/^FAIL$$/\x1B[31m✘ Fail\x1B[0m/'
 
 integration:
-	go test -integration $(TEST) $(TESTARGS)
+	@go test -v -tags=integration ./container/... -run Integration
+
+images:
+	@docker build -t dewy-test:v1.0.0 testdata/integration/v1
+	@docker build -t dewy-test:v2.0.0 testdata/integration/v2
+	@docker build -t dewy-test:v1.0.1-unhealthy testdata/integration/unhealthy
 
 lint:
 	go tool golangci-lint run ./...
@@ -42,4 +47,4 @@ clean:
 	git checkout go.*
 	git clean -f
 
-.PHONY: default dist test deps
+.PHONY: default dist test integration images deps

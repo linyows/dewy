@@ -255,3 +255,592 @@ Major log entries include timestamps, log levels, messages, and related metadata
 ```
 
 Log information is utilized for real-time monitoring, trend analysis, performance optimization, and satisfying audit requirements, forming an important foundation for dewy operations.
+
+## Container Deployment Workflow
+
+When operating in container mode (`dewy container`), the deployment workflow differs significantly from binary deployments. Container deployments use a rolling update strategy with localhost-only port mapping and a built-in reverse proxy to achieve zero-downtime updates.
+
+### Container Deployment Sequence
+
+The following sequence diagram shows the container deployment workflow using localhost-only port mapping and built-in reverse proxy:
+
+```mermaid
+sequenceDiagram
+    participant D as Dewy
+    participant P as Built-in Proxy
+    participant R as OCI Registry
+    participant RT as Container Runtime
+    participant C as Current Container
+    participant G as New Container
+    participant HC as Health Checker
+    participant NO as Notifier
+
+    Note over D,P: Dewy starts with built-in HTTP reverse proxy
+
+    loop Periodic execution (default 10-second intervals)
+        D->>R: Get latest image tags (OCI API)
+        R->>D: Image tag list (semantic versioning)
+        D->>D: Compare with current version
+
+        alt New version available
+            D->>RT: Pull new image (docker pull)
+            RT->>R: Download image layers
+            R->>RT: Image layers (cached if exists)
+            RT->>D: Pull complete
+            D->>NO: Image pull notification
+
+            Note over D: Prepare rolling update deployment
+
+            D->>RT: Start Green container (127.0.0.1::containerPort)
+            RT->>G: Create and start container
+            G->>D: Container started on localhost-only port
+
+            D->>RT: Get mapped localhost port
+            RT->>D: Port mapping (e.g., localhost:32768)
+
+            D->>HC: HTTP health check via localhost
+            HC->>G: GET localhost:32768/health
+
+            alt Health check fails
+                G-->>HC: Unhealthy response
+                HC->>D: Health check failed
+                D->>RT: Remove Green container (rollback)
+                RT->>G: Stop and remove
+                D->>NO: Deployment failed notification
+            else Health check succeeds
+                G-->>HC: Healthy response (200 OK)
+                HC->>D: Health check passed
+
+                Note over D,P: Atomic proxy backend switch
+                D->>P: Update backend to localhost:32768
+                P->>P: Atomic backend pointer update
+                Note over P: All new requests → Green
+
+                alt Blue container exists
+                    Note over D: Stop old container
+                    D->>RT: Stop Blue container gracefully
+                    RT->>C: Send SIGTERM (10s timeout)
+                    C->>RT: Graceful shutdown
+                    D->>RT: Remove Blue container
+                    RT->>C: Remove container
+                end
+
+                D->>NO: Deployment success notification
+                D->>RT: Cleanup old images (keep last 7)
+                Note over D,G: Deployment completed
+            end
+        else Same version
+            note over D: Skip deployment
+        end
+    end
+```
+
+### Container Deployment Phases
+
+#### 1. Image Check Phase
+
+In the container deployment workflow, the check phase queries the OCI/Docker registry using the Distribution API (v2). Unlike binary deployments that check GitHub Releases or S3, container deployments:
+
+- Fetch image tags using `GET /v2/<name>/tags/list`
+- Filter tags using Semantic Versioning rules
+- Support pre-release tags with query parameters
+- Authenticate using Docker config.json or environment variables
+
+```bash
+# Example registry URLs
+img://ghcr.io/linyows/myapp
+img://us-central1-docker.pkg.dev/project-id/myapp-repo/myapp
+img://docker.io/library/nginx
+```
+
+#### 2. Image Pull Phase
+
+When a new version is detected, dewy instructs the container runtime to pull the image:
+
+```bash
+# Log example during image pull
+INFO: Pulling new image image="ghcr.io/linyows/myapp:v1.2.3"
+INFO: Image pull complete digest="sha256:abc123..."
+INFO: Image pull notification message="Pulled image v1.2.3"
+```
+
+Container images are composed of multiple layers, which are cached by the container runtime. Only changed layers are downloaded, significantly reducing deployment time for incremental updates.
+
+#### 3. Rolling Update Deployment Phase
+
+Container deployments use a rolling update strategy with localhost-only port mapping and built-in reverse proxy for zero-downtime updates. This phase consists of several critical steps:
+
+**Step 1: Start Green Container with Localhost-Only Port**
+
+The new version container (Green) is started with localhost-only port mapping (`127.0.0.1::containerPort`):
+
+```bash
+# Log example
+INFO: Starting new container name="myapp-1234567890" image="myapp:v1.2.3"
+INFO: Adding localhost-only port mapping mapping="127.0.0.1::8080"
+INFO: Container port mapped container_port=8080 host_port=32768
+```
+
+The `127.0.0.1::8080` format ensures the container is only accessible from localhost, not from external networks, improving security.
+
+**Step 2: Health Check via Localhost**
+
+Dewy performs health checks against the Green container using the mapped localhost port:
+
+```bash
+# HTTP health check via localhost
+INFO: Health checking new container url="http://localhost:32768/health"
+INFO: Health check passed status=200 duration="50ms"
+```
+
+If health checks fail, the Green container is immediately removed (rollback), and the current container continues serving traffic.
+
+**Step 3: Atomic Proxy Backend Switch**
+
+Once health checks pass, dewy performs atomic traffic switching by updating the built-in reverse proxy backend:
+
+```bash
+# Atomic backend pointer update
+INFO: Updating proxy backend to localhost:32768
+INFO: Proxy backend updated backend="http://localhost:32768"
+```
+
+This operation uses Go's `sync.RWMutex` for atomic pointer updates. New HTTP requests immediately route to the Green container through the updated proxy backend.
+
+**Step 4: Old Container Removal**
+
+After traffic switching, the old container is immediately stopped and removed:
+
+```bash
+# Stop old container (10-second grace period)
+INFO: Stopping old container container="myapp-1234567880"
+INFO: Managed container stopped container="myapp-1234567880"
+INFO: Managed container removed container="myapp-1234567880"
+```
+
+There is no drain period needed because the proxy switch is atomic - the old container is stopped immediately after the proxy backend is updated.
+
+**Step 5: Image Cleanup**
+
+Finally, old container images are automatically cleaned up (keeping the last 7 versions):
+
+```bash
+INFO: Keep images count=7
+INFO: Removing old image id="sha256:abc123..." tag="v1.2.1"
+```
+
+### Container Deployment vs Binary Deployment
+
+Key differences between container and binary deployment workflows:
+
+| Aspect | Binary Deployment | Container Deployment |
+|--------|------------------|---------------------|
+| **Artifact Source** | GitHub Releases, S3, GCS | OCI Registry (Docker Hub, GHCR, etc.) |
+| **Artifact Format** | tar.gz, zip archives | OCI Image (multi-layer) |
+| **Deployment Strategy** | In-place update + SIGHUP | Rolling update with proxy |
+| **Downtime** | Minimal (restart time) | Zero (atomic proxy switch) |
+| **Rollback** | Previous release directory | Automatic on health check failure |
+| **Health Check** | Process-based | HTTP/TCP via localhost |
+| **Traffic Management** | server-starter (port handoff) | Built-in reverse proxy |
+| **Network Security** | N/A | Localhost-only (127.0.0.1) |
+
+### Network Architecture
+
+Container deployments use localhost-only port mapping with built-in reverse proxy:
+
+```
+[External Client]
+       ↓
+   [Dewy Built-in Proxy :8000]  ← --port 8000 (external access)
+       ↓ atomic backend switch
+   [localhost:32768]  ← Docker port mapping (127.0.0.1::8080)
+       ↓
+   [Container:8080]  ← App container (--container-port 8080)
+```
+
+Key security features:
+- Containers bind to `127.0.0.1` only (not accessible from external network)
+- Built-in proxy handles all external traffic
+- Atomic backend switching ensures zero-downtime deployments
+
+### Container Deployment Error Handling
+
+Container deployments include specific error handling mechanisms:
+
+#### Health Check Failures
+
+When Green container health checks fail, automatic rollback occurs:
+
+```bash
+ERROR: Health check failed error="connection refused" attempts=5
+INFO: Rolling back deployment
+INFO: Removing failed container container="myapp-green-1234567890"
+```
+
+The Blue container remains operational, ensuring service continuity.
+
+#### Image Pull Failures
+
+If image pulling fails due to network issues or authentication problems:
+
+```bash
+ERROR: Image pull failed error="authentication required" image="ghcr.io/linyows/myapp:v1.2.3"
+```
+
+The system retries on the next polling interval. The current container continues running unchanged.
+
+#### Container Startup Failures
+
+If the Green container fails to start (invalid configuration, missing dependencies):
+
+```bash
+ERROR: Container start failed error="port already in use: 8080"
+INFO: Removing failed container
+```
+
+Dewy removes the failed container and maintains the current version in production.
+
+### Container Deployment Notifications
+
+Container-specific notifications include additional information:
+
+```bash
+# Pull notification
+"Pulled image for v1.2.3"
+
+# Deployment phases
+INFO: Starting container name="myapp-1234567890" image="ghcr.io/linyows/myapp:v1.2.3"
+INFO: Container port mapped container_port=8080 host_port=32768
+INFO: Health check passed url="http://localhost:32768/health" status=200
+
+# Proxy backend switch
+INFO: Proxy backend updated backend="http://localhost:32768"
+
+# Cleanup
+INFO: Stopping old container container="myapp-1234567880"
+INFO: Keep images count=7
+INFO: Removing old image id="sha256:abc123..." tag="v1.2.1"
+
+# Deployment complete
+"Container deployed successfully for v1.2.3"
+```
+
+These notifications provide detailed visibility into the container deployment process, enabling operations teams to track deployment progress and diagnose issues quickly.
+
+## Built-in Reverse Proxy
+
+Dewy includes a built-in HTTP reverse proxy for container deployments. The proxy automatically starts when using `dewy container` and handles all external traffic, providing zero-downtime deployments through atomic backend switching.
+
+### Proxy Architecture
+
+```mermaid
+graph LR
+    Client[External Client] -->|HTTP :8000| Proxy[Dewy Built-in Proxy]
+    Proxy -->|localhost:32768| Docker[Docker Port Mapping]
+    Docker -->|:8080| Container[App Container]
+
+    style Proxy fill:#f9f,stroke:#333,stroke-width:2px
+    style Docker fill:#bbf,stroke:#333,stroke-width:2px
+    style Container fill:#bfb,stroke:#333,stroke-width:2px
+```
+
+Key components:
+
+- **Dewy Built-in Proxy**: Go HTTP reverse proxy running inside the dewy process, listens on external port (e.g., :8000)
+- **Localhost Port Mapping**: Docker maps container port to a random localhost port (127.0.0.1:32768)
+- **Atomic Backend Switch**: Uses `sync.RWMutex` to atomically update the proxy backend during deployments
+- **App Container**: Application container accessible only via localhost, not from external network
+
+### How It Works
+
+The built-in reverse proxy is automatically enabled when you run `dewy container`. Here's how it operates:
+
+#### 1. Proxy Initialization
+
+When dewy starts, the built-in HTTP reverse proxy initializes:
+
+```bash
+INFO: Starting built-in reverse proxy port=8000
+INFO: Reverse proxy started successfully external_port=8000
+```
+
+The proxy runs in a goroutine within the dewy process and listens on the port specified by `--port` (default: 8000).
+
+#### 2. Container Deployment with Localhost-Only Port
+
+Containers are started with localhost-only port mapping for security:
+
+```bash
+# Docker run command executed by dewy
+docker run -d \
+  --name myapp-1234567890 \
+  -p 127.0.0.1::8080 \
+  --label dewy.managed=true \
+  --label dewy.app=myapp \
+  ghcr.io/linyows/myapp:v1.2.3
+
+# Docker assigns random localhost port (e.g., 127.0.0.1:32768)
+INFO: Container started container=abc123... mapped_port=32768
+```
+
+The container port is only accessible via localhost, not from the external network. This provides an additional security layer.
+
+#### 3. Atomic Backend Switch
+
+During rolling update deployment, the proxy atomically switches its backend to the new container:
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Proxy as Built-in Proxy
+    participant Blue as localhost:32768 (old)
+    participant Green as localhost:32770 (new)
+
+    Note over Client,Blue: Before deployment
+    Client->>Proxy: HTTP request
+    Proxy->>Blue: Forward to localhost:32768
+    Blue->>Proxy: Response
+    Proxy->>Client: Response
+
+    Note over Green: New container starts & passes health check
+
+    Note over Proxy: Atomic backend pointer update
+    Proxy-.->Proxy: RWMutex.Lock() → backend = localhost:32770 → RWMutex.Unlock()
+
+    Note over Client,Green: After deployment (immediate)
+    Client->>Proxy: HTTP request
+    Proxy->>Green: Forward to localhost:32770
+    Green->>Proxy: Response
+    Proxy->>Client: Response
+
+    Note over Blue: Old container stopped & removed
+```
+
+The backend switch is atomic and instantaneous - no requests are lost during the transition. The proxy uses Go's `sync.RWMutex` to ensure thread-safe updates.
+
+#### 4. Cleanup on Shutdown
+
+When dewy receives `SIGINT`, `SIGTERM`, or `SIGQUIT`, it automatically cleans up all managed containers:
+
+```bash
+INFO: Shutting down gracefully
+INFO: Stopping reverse proxy
+INFO: Cleaning up managed containers
+INFO: Stopping managed container container=myapp-1234567890
+INFO: Removing managed container container=myapp-1234567890
+INFO: Cleanup completed containers_cleaned=1
+```
+
+All containers labeled with `dewy.managed=true` are stopped and removed. The built-in proxy stops gracefully along with the dewy process.
+
+### Proxy Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> Starting: dewy container starts
+    Starting --> Running: Proxy listening on :8000
+    Running --> Switching: New container deployed
+    Switching --> Running: Backend updated atomically
+    Running --> Shutdown: SIGINT/SIGTERM
+    Shutdown --> Cleanup: Stop proxy & containers
+    Cleanup --> [*]: Process exits
+```
+
+### Use Cases
+
+The built-in reverse proxy provides several benefits:
+
+1. **Zero-Downtime Deployments**: Atomic backend switching ensures no requests are dropped during deployment
+2. **Security**: Containers are only accessible via localhost (127.0.0.1), not from external network
+3. **Simple Configuration**: No external proxy containers or Docker networks required
+4. **Single Entry Point**: All external traffic goes through one port, simplifying firewall rules
+5. **Automatic Port Management**: Docker assigns random localhost ports, avoiding port conflicts
+
+### Technical Details
+
+Implementation details of the built-in proxy:
+
+- **Proxy Type**: `net/http/httputil.ReverseProxy` (Go standard library)
+- **Concurrency**: Thread-safe backend updates using `sync.RWMutex`
+- **Health Checks**: HTTP health checks via localhost before switching backends
+- **Error Handling**: Automatic rollback if health checks fail
+- **Performance**: In-process proxy eliminates container-to-container network overhead
+- **Load Balancing**: Round-robin distribution for multiple container replicas
+
+## Multiple Container Replicas
+
+Dewy supports running multiple container replicas for improved availability and load distribution. The built-in reverse proxy automatically load balances requests across all healthy replicas using a round-robin algorithm.
+
+### Load Balancing
+
+When multiple replicas are configured, the reverse proxy distributes incoming requests evenly:
+
+```
+Request 1 → Container 1 (localhost:32768)
+Request 2 → Container 2 (localhost:32770)
+Request 3 → Container 3 (localhost:32772)
+Request 4 → Container 1 (localhost:32768)  # Round-robin
+...
+```
+
+**Key Features:**
+- Round-robin load balancing for even traffic distribution
+- Each container runs on its own localhost port
+- Automatic health checks for all replicas
+- Failed containers are automatically excluded from rotation
+
+### Rolling Update Deployment
+
+When deploying new versions with multiple replicas, Dewy performs a gradual rolling update:
+
+```mermaid
+sequenceDiagram
+    participant D as Dewy
+    participant P as Built-in Proxy
+    participant Old as Old Replicas (3)
+    participant New as New Replicas (3)
+
+    Note over D,Old: Current state: 3 old replicas running
+
+    D->>New: Start new replica 1
+    New->>D: Health check passed
+    D->>P: Add replica 1 to load balancer
+    Note over P: Traffic to: Old(3) + New(1)
+
+    D->>New: Start new replica 2
+    New->>D: Health check passed
+    D->>P: Add replica 2 to load balancer
+    Note over P: Traffic to: Old(3) + New(2)
+
+    D->>New: Start new replica 3
+    New->>D: Health check passed
+    D->>P: Add replica 3 to load balancer
+    Note over P: Traffic to: Old(3) + New(3)
+
+    D->>P: Remove old replica 1 from load balancer
+    D->>Old: Stop old replica 1
+    Note over P: Traffic to: Old(2) + New(3)
+
+    D->>P: Remove old replica 2 from load balancer
+    D->>Old: Stop old replica 2
+    Note over P: Traffic to: Old(1) + New(3)
+
+    D->>P: Remove old replica 3 from load balancer
+    D->>Old: Stop old replica 3
+    Note over P: Traffic to: New(3)
+
+    Note over D,New: Deployment complete: 3 new replicas
+```
+
+**Rolling Update Process:**
+1. Start new replicas one at a time
+2. Health check each new replica
+3. Add healthy replicas to load balancer
+4. After all new replicas are running, remove old replicas one by one
+5. Gradual transition ensures continuous availability
+
+**Benefits:**
+- Zero downtime during updates
+- Automatic rollback if health checks fail
+- Always maintains capacity during deployment
+- Safe gradual rollout reduces risk
+
+### Example: Multiple Replicas
+
+```bash
+# Run with 3 replicas for high availability
+dewy container \
+  --registry "img://ghcr.io/linyows/myapp?pre-release=true" \
+  --container-port 8080 \
+  --replicas 3 \
+  --health-path /health \
+  --health-timeout 30 \
+  --port 8000 \
+  --log-level info
+
+# Output shows rolling deployment:
+# INFO: Starting container deployment replicas=3
+# INFO: Pulling new image image=ghcr.io/linyows/myapp:v1.2.3
+# INFO: Found existing containers count=0
+# INFO: Starting new container replica=1 total=3
+# INFO: Container started container=abc123... mapped_port=32768
+# INFO: Health check passed url=http://localhost:32768/health
+# INFO: Container added to load balancer backend_count=1
+# INFO: Starting new container replica=2 total=3
+# INFO: Container started container=def456... mapped_port=32770
+# INFO: Health check passed url=http://localhost:32770/health
+# INFO: Container added to load balancer backend_count=2
+# INFO: Starting new container replica=3 total=3
+# INFO: Container started container=ghi789... mapped_port=32772
+# INFO: Health check passed url=http://localhost:32772/health
+# INFO: Container added to load balancer backend_count=3
+# INFO: Container deployment completed new_containers=3
+
+# All replicas handle traffic via round-robin
+curl http://localhost:8000/  # → Container 1
+curl http://localhost:8000/  # → Container 2
+curl http://localhost:8000/  # → Container 3
+curl http://localhost:8000/  # → Container 1 (round-robin)
+```
+
+### Use Cases for Multiple Replicas
+
+**High Availability:**
+- If one replica crashes, others continue serving traffic
+- No single point of failure
+- Improved resilience
+
+**Load Distribution:**
+- CPU-intensive workloads benefit from parallel processing
+- Better resource utilization
+- Handles traffic spikes more effectively
+
+**Zero-Downtime Updates:**
+- Rolling updates ensure continuous service
+- Gradual rollout reduces deployment risk
+- Always maintains minimum capacity
+
+**Recommended Configuration:**
+- **Production**: 3-5 replicas for high availability
+- **Development**: 1 replica to save resources
+- **Staging**: 2 replicas to test multi-instance scenarios
+
+### Example: Complete Setup
+
+```bash
+# Start dewy with built-in reverse proxy
+dewy container \
+  --registry "img://ghcr.io/linyows/myapp?pre-release=true" \
+  --container-port 8080 \
+  --health-path /health \
+  --health-timeout 30 \
+  --port 8000 \
+  --log-level info
+
+# Output:
+# INFO: Dewy started version=v1.0.0
+# INFO: Starting built-in reverse proxy port=8000
+# INFO: Reverse proxy started successfully external_port=8000
+# INFO: Pulling image ghcr.io/linyows/myapp:v1.2.3
+# INFO: Starting container name=myapp-1234567890 port_mapping=127.0.0.1::8080
+# INFO: Container started mapped_port=32768
+# INFO: Health check passed url=http://localhost:32768/health
+# INFO: Proxy backend updated backend=http://localhost:32768
+# INFO: Deployment completed successfully
+
+# Access the application through the built-in proxy
+curl http://localhost:8000/
+
+# View container logs
+docker logs -f $(docker ps -q --filter "label=dewy.managed=true" --filter "label=dewy.app=myapp")
+```
+
+**CLI Options:**
+
+- `--port 8000`: External port for the built-in proxy to listen on (default: 8000)
+- `--container-port 8080`: Application port inside the container (will be mapped to localhost)
+- `--replicas 3`: Number of container replicas to run (default: 1)
+- `--health-path /health`: HTTP path for health checks
+- `--health-timeout 30`: Health check timeout in seconds
+
+The built-in reverse proxy provides zero-downtime deployments with enhanced security through localhost-only container access. Multiple replicas enable high availability and load distribution.

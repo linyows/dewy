@@ -9,11 +9,11 @@ This page provides detailed information about Dewy CLI commands, options, enviro
 
 ## Basic Commands
 
-Dewy provides two main commands: `server` and `assets`. These commands are used to deploy and manage applications.
+Dewy provides three main commands: `server`, `assets`, and `image`. These commands are used to deploy and manage applications in different environments.
 
 ### server Command
 
-The `dewy server` command starts the main Dewy process and handles application deployment and monitoring. This command provides the core functionality of Dewy.
+The `dewy server` command starts the main Dewy process and handles binary application deployment and monitoring. This command provides the core functionality for non-container deployments.
 
 ```bash
 dewy server [options] -- [application command]
@@ -25,6 +25,14 @@ The `dewy assets` command displays detailed information about the current artifa
 
 ```bash
 dewy assets [options]
+```
+
+### container Command
+
+The `dewy container` command handles container image deployment with zero-downtime rolling update deployment strategy. It monitors OCI registries for new image versions and automatically deploys them.
+
+```bash
+dewy container [options]
 ```
 
 ## Command Line Options
@@ -79,46 +87,6 @@ Specifies the interval in seconds to check the registry. Default is 600 seconds 
 dewy server --interval 300 -- /opt/app/current/app
 ```
 
-### --keeptime (-k)
-
-Specifies the time in seconds to retain artifacts. Old artifacts are automatically deleted.
-
-```bash
-dewy server --keeptime 86400 -- /opt/app/current/app
-```
-
-### --timezone (-t)
-
-Specifies the timezone used for logs and scheduling. Default is UTC.
-
-```bash
-dewy server --timezone Asia/Tokyo -- /opt/app/current/app
-```
-
-### --user (-u)
-
-Specifies the user to run the application. Running with a dedicated user is recommended for security reasons.
-
-```bash
-dewy server --user app-user -- /opt/app/current/app
-```
-
-### --group (-g)
-
-Specifies the group to run the application. Use in combination with the user option.
-
-```bash
-dewy server --user app-user --group app-group -- /opt/app/current/app
-```
-
-### --workdir (-w)
-
-Specifies the working directory for the application. This becomes the base directory when the application reads and writes files.
-
-```bash
-dewy server --workdir /opt/app/data -- /opt/app/current/app
-```
-
 ### --verbose (-v)
 
 Enables verbose log output. Useful for debugging and troubleshooting.
@@ -142,6 +110,71 @@ Displays help for available commands and options.
 ```bash
 dewy --help
 dewy server --help
+dewy container --help
+```
+
+## Image Command Options
+
+The `dewy container` command has specific options for container deployment management.
+
+### --container-port
+
+Specifies the port that the container listens on. Default is 8080. This is used for health checks and traffic routing.
+
+```bash
+dewy container --registry img://ghcr.io/owner/app --container-port 3000
+```
+
+### --health-path
+
+Specifies the HTTP path for health checks. If specified, Dewy will wait for this endpoint to return a successful response before switching traffic. Optional.
+
+```bash
+dewy container --registry img://ghcr.io/owner/app --health-path /health
+```
+
+### --health-timeout
+
+Specifies the timeout in seconds for health checks. Default is 30 seconds.
+
+```bash
+dewy container --registry img://ghcr.io/owner/app --health-timeout 60
+```
+
+### --drain-time
+
+Specifies the drain time in seconds after traffic switch. The old container remains running during this period to complete in-flight requests. Default is 30 seconds.
+
+```bash
+dewy container --registry img://ghcr.io/owner/app --drain-time 60
+```
+
+### --runtime
+
+Specifies the container runtime to use. Supports `docker` or `podman`. Default is `docker`.
+
+```bash
+dewy container --registry img://ghcr.io/owner/app --runtime podman
+```
+
+### --env (-e)
+
+Specifies environment variables to pass to the container. Can be specified multiple times.
+
+```bash
+dewy container --registry img://ghcr.io/owner/app \
+  --env API_KEY=secret \
+  --env DATABASE_URL=postgres://localhost/db
+```
+
+### --volume
+
+Specifies volume mounts for the container. Format is `host:container` or `host:container:ro` for read-only. Can be specified multiple times.
+
+```bash
+dewy container --registry img://ghcr.io/owner/app \
+  --volume /data:/app/data \
+  --volume /config:/app/config:ro
 ```
 
 ## Environment Variables
@@ -194,46 +227,6 @@ Sets the registry check interval. Has the same effect as the `--interval` option
 
 ```bash
 export DEWY_INTERVAL=600
-```
-
-### DEWY_KEEPTIME
-
-Sets the artifact retention time. Has the same effect as the `--keeptime` option.
-
-```bash
-export DEWY_KEEPTIME=86400
-```
-
-### DEWY_TIMEZONE
-
-Sets the timezone. Has the same effect as the `--timezone` option.
-
-```bash
-export DEWY_TIMEZONE=Asia/Tokyo
-```
-
-### DEWY_USER
-
-Sets the execution user. Has the same effect as the `--user` option.
-
-```bash
-export DEWY_USER=app-user
-```
-
-### DEWY_GROUP
-
-Sets the execution group. Has the same effect as the `--group` option.
-
-```bash
-export DEWY_GROUP=app-group
-```
-
-### DEWY_WORKDIR
-
-Sets the working directory. Has the same effect as the `--workdir` option.
-
-```bash
-export DEWY_WORKDIR=/opt/app/data
 ```
 
 ## Registry URL Formats
@@ -419,3 +412,60 @@ dewy server \
   --verbose \
   -- /opt/app/dev/myapp --env development
 ```
+
+### Container Image Deployment Example
+
+Example deploying container images with rolling update deployment strategy. Monitors OCI registry for new versions.
+
+```bash
+# Set credentials for private registry
+export DOCKER_USERNAME=myusername
+export DOCKER_PASSWORD=mypassword
+
+# Deploy with health checks
+dewy container \
+  --registry img://ghcr.io/mycompany/myapp \
+  --container-port 8080 \
+  --health-path /health \
+  --health-timeout 30 \
+  --drain-time 30 \
+  --env DATABASE_URL=postgres://db:5432/mydb \
+  --volume /data:/app/data \
+  --log-level info
+```
+
+### Container Deployment with Custom Network
+
+Example using custom Docker network and network alias for service discovery.
+
+```bash
+dewy container \
+  --registry img://ghcr.io/mycompany/api \
+  --network production-net \
+  --network-alias api-service \
+  --container-port 3000 \
+  --interval 300 \
+  --log-level info
+```
+
+### Container Deployment with Reverse Proxy
+
+Example using Caddy reverse proxy for container deployment. The proxy handles external traffic while application containers remain on the internal network only.
+
+```bash
+dewy container \
+  --registry img://ghcr.io/mycompany/webapp \
+  --container-port 3333 \
+  --health-path /health \
+  --proxy \
+  --proxy-port 8000 \
+  --env API_KEY=secret \
+  --log-level info
+```
+
+In this setup:
+- External clients access the application through `http://localhost:8000`
+- Caddy proxy forwards requests to `dewy-current:3333` (internal network)
+- Application container port 3333 is not exposed externally
+- Both proxy and application containers are managed by dewy
+- All containers are cleaned up automatically on shutdown

@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/fatih/color"
 	flags "github.com/jessevdk/go-flags"
@@ -30,12 +31,21 @@ type cli struct {
 	LogFormat        string   `long:"log-format" short:"f" arg:"(text|json)" description:"Set log format for output (default: text)"`
 	Interval         int      `long:"interval" arg:"seconds" short:"i" description:"Polling interval in seconds for checking registry updates (default: 10)"`
 	Ports            []string `long:"port" short:"p" description:"TCP ports for server command to listen on (comma-separated, ranges, or multiple flags)"`
-	Registry         string   `long:"registry" description:"Registry URL (e.g., ghr://owner/repo, s3://region/bucket/prefix)"`
+	Registry         string   `long:"registry" description:"Registry URL (e.g., ghr://owner/repo, s3://region/bucket/prefix, docker://registry/repo)"`
 	Notify           string   `long:"notify" description:"[DEPRECATED] Use --notifier instead"`
 	Notifier         string   `long:"notifier" description:"Notifier URL for deployment notifications (e.g., slack://channel, mail://smtp:port/recipient)"`
 	BeforeDeployHook string   `long:"before-deploy-hook" description:"Shell command to execute before deployment begins"`
 	AfterDeployHook  string   `long:"after-deploy-hook" description:"Shell command to execute after successful deployment"`
-	Help             bool     `long:"help" short:"h" description:"show this help message and exit"`
+	// Container-specific options
+	ContainerPort    int      `long:"container-port" description:"Container port (default: 8080)"`
+	Replicas         int      `long:"replicas" description:"Number of container replicas to run (default: 1)"`
+	HealthPath       string   `long:"health-path" description:"Health check path (optional, e.g., /health)"`
+	HealthTimeout    int      `long:"health-timeout" description:"Health check timeout in seconds (default: 30)"`
+	DrainTime        int      `long:"drain-time" description:"Drain time in seconds after traffic switch (default: 30 for container command)"`
+	ContainerRuntime string   `long:"runtime" description:"Container runtime (docker or podman, default: docker)"`
+	Env     []string `long:"env" short:"e" description:"Environment variables for container (format: KEY=VALUE)"`
+	Volumes []string `long:"volume" description:"Volume mounts for container (format: host:container or host:container:ro)"`
+	Help    bool     `long:"help" short:"h" description:"show this help message and exit"`
 	Version          bool     `long:"version" short:"v" description:"prints the version number"`
 }
 
@@ -118,30 +128,49 @@ func (c *cli) buildHelp(names []string) []string {
 }
 
 func (c *cli) showHelp() {
-	opts := strings.Join(c.buildHelp([]string{
-		"Config",
+	generalOpts := strings.Join(c.buildHelp([]string{
 		"Interval",
 		"Registry",
-		"Notify",
 		"Notifier",
-		"Ports",
 		"LogLevel",
 		"LogFormat",
 		"BeforeDeployHook",
 		"AfterDeployHook",
 	}), "\n")
 
+	serverOpts := strings.Join(c.buildHelp([]string{
+		"Ports",
+	}), "\n")
+
+	containerOpts := strings.Join(c.buildHelp([]string{
+		"ContainerPort",
+		"Replicas",
+		"Env",
+		"Volumes",
+		"HealthPath",
+		"HealthTimeout",
+		"DrainTime",
+		"ContainerRuntime",
+	}), "\n")
+
 	help := `Usage: dewy [--version] [--help] command <options>
 
 Commands:
-  server   Keep the app server up to date
-  assets   Keep assets up to date
+  server     Keep the app server up to date
+  assets     Keep assets up to date
+  image      Keep container images up to date with zero-downtime deployment
 
-Options:
+General Options:
+%s
+
+Server Command Options:
+%s
+
+Container Command Options:
 %s
 `
 	Banner(c.env.Out)
-	fmt.Fprintf(c.env.Out, help, opts)
+	fmt.Fprintf(c.env.Out, help, generalOpts, serverOpts, containerOpts)
 }
 
 func (c *cli) run() int {
@@ -169,7 +198,7 @@ func (c *cli) run() int {
 		return ExitOK
 	}
 
-	if len(args) == 0 || (args[0] != "server" && args[0] != "assets") {
+	if len(args) == 0 || (args[0] != "server" && args[0] != "assets" && args[0] != "container") {
 		fmt.Fprintf(c.env.Err, "Error: command is not available\n")
 		c.showHelp()
 		return ExitErr
@@ -214,8 +243,16 @@ func (c *cli) run() int {
 	conf.BeforeDeployHook = c.BeforeDeployHook
 	conf.AfterDeployHook = c.AfterDeployHook
 
-	if c.command == "server" {
+	switch c.command {
+	case "server":
 		conf.Command = SERVER
+
+		// Port is required for server command
+		if len(c.Ports) == 0 {
+			fmt.Fprintf(c.env.Err, "Error: --port option is required for server command\n")
+			return ExitErr
+		}
+
 		parsedPorts, err := parsePorts(c.Ports)
 		if err != nil {
 			fmt.Fprintf(c.env.Err, "Error: invalid port specification: %s\n", err)
@@ -235,7 +272,58 @@ func (c *cli) run() int {
 			args:      cmdArgs,
 			logformat: c.LogFormat,
 		}
-	} else {
+	case "container":
+		conf.Command = CONTAINER
+
+		// Port is required for container command
+		if len(c.Ports) == 0 {
+			fmt.Fprintf(c.env.Err, "Error: --port option is required for container command\n")
+			return ExitErr
+		}
+
+		// Parse port for reverse proxy (use first port from --port flag)
+		parsedPorts, err := parsePorts(c.Ports)
+		if err != nil {
+			fmt.Fprintf(c.env.Err, "Error: failed to parse port: %v\n", err)
+			return ExitErr
+		}
+		if len(parsedPorts) == 0 {
+			fmt.Fprintf(c.env.Err, "Error: no valid port specified\n")
+			return ExitErr
+		}
+		portNum, err := strconv.Atoi(parsedPorts[0])
+		if err != nil {
+			fmt.Fprintf(c.env.Err, "Error: invalid port number: %v\n", err)
+			return ExitErr
+		}
+		conf.Port = portNum
+
+		// Set defaults
+		if c.ContainerPort == 0 {
+			c.ContainerPort = 8080
+		}
+		// HealthPath is optional - if not specified, health check will be skipped
+		if c.HealthTimeout == 0 {
+			c.HealthTimeout = 30
+		}
+		if c.DrainTime == 0 {
+			c.DrainTime = 30
+		}
+		if c.ContainerRuntime == "" {
+			c.ContainerRuntime = "docker"
+		}
+
+		conf.Container = &ContainerConfig{
+			ContainerPort: c.ContainerPort,
+			Replicas:      c.Replicas,
+			Env:           c.Env,
+			Volumes:       c.Volumes,
+			HealthPath:    c.HealthPath,
+			HealthTimeout: time.Duration(c.HealthTimeout) * time.Second,
+			DrainTime:     time.Duration(c.DrainTime) * time.Second,
+			Runtime:       c.ContainerRuntime,
+		}
+	default:
 		conf.Command = ASSETS
 	}
 

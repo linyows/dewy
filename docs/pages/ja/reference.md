@@ -9,11 +9,11 @@ description: Dewy CLIコマンドとオプションの完全なリファレン�
 
 ## 基本コマンド
 
-Dewyは主に2つのコマンドを提供します：`server`と`assets`です。これらのコマンドを使用して、アプリケーションのデプロイメントと管理を行います。
+Dewyは主に3つのコマンドを提供します：`server`、`assets`、`image`です。これらのコマンドを使用して、異なる環境でアプリケーションのデプロイメントと管理を行います。
 
 ### server コマンド
 
-`dewy server`コマンドは、Dewyのメインプロセスを起動し、アプリケーションのデプロイメントと監視を行います。このコマンドがDewyの中核機能を提供します。
+`dewy server`コマンドは、Dewyのメインプロセスを起動し、バイナリアプリケーションのデプロイメントと監視を行います。このコマンドは非コンテナデプロイメントの中核機能を提供します。
 
 ```bash
 dewy server [オプション] -- [アプリケーションコマンド]
@@ -25,6 +25,14 @@ dewy server [オプション] -- [アプリケーションコマンド]
 
 ```bash
 dewy assets [オプション]
+```
+
+### container コマンド
+
+`dewy container`コマンドは、ゼロダウンタイムのローリングアップデート戦略でコンテナイメージのデプロイメントを処理します。OCIレジストリを監視して新しいイメージバージョンを検出し、自動的にデプロイします。
+
+```bash
+dewy container [オプション]
 ```
 
 ## コマンドラインオプション
@@ -79,46 +87,6 @@ dewy server --port 9090 -- /opt/app/current/app
 dewy server --interval 300 -- /opt/app/current/app
 ```
 
-### --keeptime (-k)
-
-アーティファクトを保持する時間を秒単位で指定します。古いアーティファクトは自動的に削除されます。
-
-```bash
-dewy server --keeptime 86400 -- /opt/app/current/app
-```
-
-### --timezone (-t)
-
-ログやスケジュールで使用するタイムゾーンを指定します。デフォルトはUTCです。
-
-```bash
-dewy server --timezone Asia/Tokyo -- /opt/app/current/app
-```
-
-### --user (-u)
-
-アプリケーションを実行するユーザーを指定します。セキュリティ上の理由から、専用ユーザーでの実行を推奨します。
-
-```bash
-dewy server --user app-user -- /opt/app/current/app
-```
-
-### --group (-g)
-
-アプリケーションを実行するグループを指定します。ユーザーオプションと組み合わせて使用します。
-
-```bash
-dewy server --user app-user --group app-group -- /opt/app/current/app
-```
-
-### --workdir (-w)
-
-アプリケーションの作業ディレクトリを指定します。アプリケーションがファイルの読み書きを行う際の基準ディレクトリになります。
-
-```bash
-dewy server --workdir /opt/app/data -- /opt/app/current/app
-```
-
 ### --verbose (-v)
 
 詳細なログ出力を有効にします。デバッグやトラブルシューティングに有用です。
@@ -142,6 +110,71 @@ dewy --version
 ```bash
 dewy --help
 dewy server --help
+dewy container --help
+```
+
+## containerコマンドオプション
+
+`dewy container`コマンドには、コンテナデプロイメント管理用の固有のオプションがあります。
+
+### --container-port
+
+コンテナがリッスンするポートを指定します。デフォルトは8080です。ヘルスチェックとトラフィックルーティングに使用されます。
+
+```bash
+dewy container --registry img://ghcr.io/owner/app --container-port 3000
+```
+
+### --health-path
+
+ヘルスチェック用のHTTPパスを指定します。指定すると、Dewyはトラフィックを切り替える前にこのエンドポイントが成功レスポンスを返すまで待機します。オプションです。
+
+```bash
+dewy container --registry img://ghcr.io/owner/app --health-path /health
+```
+
+### --health-timeout
+
+ヘルスチェックのタイムアウトを秒単位で指定します。デフォルトは30秒です。
+
+```bash
+dewy container --registry img://ghcr.io/owner/app --health-timeout 60
+```
+
+### --drain-time
+
+トラフィック切り替え後のドレイン時間を秒単位で指定します。古いコンテナはこの期間、実行中のリクエストを完了するために稼働し続けます。デフォルトは30秒です。
+
+```bash
+dewy container --registry img://ghcr.io/owner/app --drain-time 60
+```
+
+### --runtime
+
+使用するコンテナランタイムを指定します。`docker`または`podman`をサポートします。デフォルトは`docker`です。
+
+```bash
+dewy container --registry img://ghcr.io/owner/app --runtime podman
+```
+
+### --env (-e)
+
+コンテナに渡す環境変数を指定します。複数回指定可能です。
+
+```bash
+dewy container --registry img://ghcr.io/owner/app \
+  --env API_KEY=secret \
+  --env DATABASE_URL=postgres://localhost/db
+```
+
+### --volume
+
+コンテナのボリュームマウントを指定します。形式は`host:container`または読み取り専用の場合は`host:container:ro`です。複数回指定可能です。
+
+```bash
+dewy container --registry img://ghcr.io/owner/app \
+  --volume /data:/app/data \
+  --volume /config:/app/config:ro
 ```
 
 ## 環境変数
@@ -194,46 +227,6 @@ export DEWY_PORT=8080
 
 ```bash
 export DEWY_INTERVAL=600
-```
-
-### DEWY_KEEPTIME
-
-アーティファクト保持時間を設定します。`--keeptime`オプションと同じ効果があります。
-
-```bash
-export DEWY_KEEPTIME=86400
-```
-
-### DEWY_TIMEZONE
-
-タイムゾーンを設定します。`--timezone`オプションと同じ効果があります。
-
-```bash
-export DEWY_TIMEZONE=Asia/Tokyo
-```
-
-### DEWY_USER
-
-実行ユーザーを設定します。`--user`オプションと同じ効果があります。
-
-```bash
-export DEWY_USER=app-user
-```
-
-### DEWY_GROUP
-
-実行グループを設定します。`--group`オプションと同じ効果があります。
-
-```bash
-export DEWY_GROUP=app-group
-```
-
-### DEWY_WORKDIR
-
-作業ディレクトリを設定します。`--workdir`オプションと同じ効果があります。
-
-```bash
-export DEWY_WORKDIR=/opt/app/data
 ```
 
 ## レジストリーURL形式
@@ -418,4 +411,39 @@ dewy server \
   --port 8080 \
   --verbose \
   -- /opt/app/dev/myapp --env development
+```
+
+### コンテナイメージデプロイメントの例
+
+ローリングアップデート戦略でコンテナイメージをデプロイする例です。OCIレジストリを監視して新しいバージョンを検出します。
+
+```bash
+# プライベートレジストリの認証情報を設定
+export DOCKER_USERNAME=myusername
+export DOCKER_PASSWORD=mypassword
+
+# ヘルスチェック付きでデプロイ
+dewy container \
+  --registry img://ghcr.io/mycompany/myapp \
+  --container-port 8080 \
+  --health-path /health \
+  --health-timeout 30 \
+  --drain-time 30 \
+  --env DATABASE_URL=postgres://db:5432/mydb \
+  --volume /data:/app/data \
+  --log-level info
+```
+
+### カスタムネットワークを使用したコンテナデプロイメント
+
+カスタムDockerネットワークとネットワークエイリアスを使用したサービスディスカバリーの例です。
+
+```bash
+dewy container \
+  --registry img://ghcr.io/mycompany/api \
+  --network production-net \
+  --network-alias api-service \
+  --container-port 3000 \
+  --interval 300 \
+  --log-level info
 ```

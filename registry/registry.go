@@ -16,6 +16,7 @@ var (
 	ghrScheme  = "ghr"
 	grpcScheme = "grpc"
 	gsScheme   = "gs"
+	imgScheme  = "img"
 )
 
 type Registry interface {
@@ -65,6 +66,9 @@ func New(ctx context.Context, url string, log *logging.Logger) (Registry, error)
 
 	case grpcScheme:
 		return NewGRPC(ctx, url)
+
+	case imgScheme:
+		return NewOCI(ctx, url, log)
 	}
 
 	return nil, fmt.Errorf("unsupported registry: %s", url)

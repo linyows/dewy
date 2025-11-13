@@ -16,6 +16,7 @@ Dewy supports the following registry types:
 - **GitHub Releases** (`ghr://`): GitHub release functionality
 - **AWS S3** (`s3://`): Amazon S3 storage
 - **Google Cloud Storage** (`gs://`): Google Cloud storage
+- **OCI Registry** (`img://`): OCI-compliant container registries (Docker Hub, GHCR, GCR, ECR, etc.)
 - **gRPC** (`grpc://`): Custom gRPC server
 
 ## Common Options
@@ -161,6 +162,187 @@ myapp/v1.2.4/myapp_linux_amd64.tar.gz
 myapp/v1.2.4/myapp_darwin_arm64.tar.gz
 myapp/v1.2.3/myapp_linux_amd64.tar.gz
 ```
+
+## OCI Registry
+
+OCI-compliant container registries can be used for container image deployment with the `dewy container` command.
+
+### Supported Registries
+
+Dewy supports all OCI Distribution Specification-compliant registries:
+
+- **GitHub Container Registry** (ghcr.io)
+- **Docker Hub** (docker.io)
+- **Google Artifact Registry** (gcr.io, us-docker.pkg.dev)
+- **Amazon Elastic Container Registry** (ECR)
+- **Azure Container Registry** (azurecr.io)
+- **Private/self-hosted registries** (Harbor, Nexus, etc.)
+
+### Basic Configuration
+
+```bash
+# GitHub Container Registry
+img://ghcr.io/<owner>/<repository>
+
+# Docker Hub
+img://docker.io/<owner>/<repository>
+# or shorter format
+img://<owner>/<repository>
+
+# Google Artifact Registry
+img://gcr.io/<project-id>/<repository>
+
+# Private registry
+img://registry.example.com/<repository>
+```
+
+### Authentication
+
+#### Environment Variables
+
+```bash
+# Using username and password
+export DOCKER_USERNAME=myusername
+export DOCKER_PASSWORD=mypassword
+
+# Or using Docker config file (automatically used if present)
+# ~/.docker/config.json
+```
+
+#### Docker Config File
+
+Dewy automatically uses existing Docker authentication if configured:
+
+```bash
+# Login to registry (credentials saved to ~/.docker/config.json)
+docker login ghcr.io
+docker login docker.io
+
+# Dewy will automatically use these credentials
+dewy container --registry img://ghcr.io/myorg/myapp
+```
+
+### Examples with Options
+
+```bash
+# Basic usage
+dewy container --registry img://ghcr.io/myorg/myapp
+
+# Include pre-release versions
+dewy container --registry "img://ghcr.io/myorg/myapp?pre-release=true"
+
+# With container options
+dewy container --registry img://ghcr.io/myorg/myapp \
+  --container-port 8080 \
+  --health-path /health
+```
+
+### Registry-Specific Examples
+
+#### GitHub Container Registry (GHCR)
+
+```bash
+# Public image
+dewy container --registry img://ghcr.io/owner/app
+
+# Private image (requires authentication)
+export DOCKER_USERNAME=github-username
+export DOCKER_PASSWORD=ghp_personal_access_token
+dewy container --registry img://ghcr.io/owner/private-app
+```
+
+#### Docker Hub
+
+```bash
+# Official image (library namespace)
+dewy container --registry img://docker.io/library/nginx
+
+# User image
+dewy container --registry img://docker.io/myuser/myapp
+
+# Shorter format (docker.io is default)
+dewy container --registry img://myuser/myapp
+```
+
+#### Google Artifact Registry
+
+```bash
+# Authenticate with gcloud
+gcloud auth configure-docker gcr.io
+
+# Deploy image
+dewy container --registry img://gcr.io/my-project/myapp
+```
+
+#### AWS ECR
+
+```bash
+# Login to ECR
+aws ecr get-login-password --region ap-northeast-1 | \
+  docker login --username AWS --password-stdin \
+  123456789.dkr.ecr.ap-northeast-1.amazonaws.com
+
+# Deploy image
+dewy container --registry img://123456789.dkr.ecr.ap-northeast-1.amazonaws.com/myapp
+```
+
+### Tag and Version Selection
+
+Dewy automatically selects container image tags based on semantic versioning:
+
+```bash
+# Tags in registry:
+# - v1.2.3
+# - v1.2.2
+# - v1.2.3-beta.1
+# - latest
+
+# Production (stable versions only, selects v1.2.3)
+dewy container --registry img://ghcr.io/myorg/myapp
+
+# Staging (including pre-release, selects v1.2.3-beta.1 if newer)
+dewy container --registry "img://ghcr.io/myorg/myapp?pre-release=true"
+```
+
+### Multi-Architecture Support
+
+Dewy automatically selects the appropriate architecture using OCI Image Index (manifest list):
+
+```bash
+# Automatically pulls amd64, arm64, or other architectures
+# based on the host system
+dewy container --registry img://ghcr.io/myorg/myapp
+```
+
+### Rolling Update Deployment Workflow
+
+When using OCI registry with `dewy container` command:
+
+1. Dewy polls the registry for new tags at the specified interval
+2. New semver-compliant tags are detected automatically
+3. New container image is pulled
+4. Health check is performed on new container (if configured)
+5. Traffic is switched to new container via network alias
+6. Old container is drained and removed
+
+```bash
+# Complete example with all features
+dewy container \
+  --registry img://ghcr.io/myorg/myapp \
+  --interval 300 \
+  --container-port 8080 \
+  --health-path /health \
+  --health-timeout 30 \
+  --drain-time 30 \
+  --network production \
+  --network-alias myapp-current \
+  --log-level info
+```
+
+{% callout type="important" %}
+OCI registries are only used with the `dewy container` command for container deployments.
+For binary deployments, use GitHub Releases, S3, or GCS registries.
+{% /callout %}
 
 ## gRPC
 
