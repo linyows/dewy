@@ -1136,40 +1136,63 @@ func (d *Dewy) stopManagedContainers(ctx context.Context) error {
 
 	d.logger.Info("Stopping managed containers")
 
+	// Type assert to get access to FindContainersByLabel
+	dockerRuntime, ok := d.containerRuntime.(*container.Docker)
+	if !ok {
+		return fmt.Errorf("runtime is not Docker")
+	}
+
 	// Find all containers with dewy.managed=true label
-	containerID, err := d.containerRuntime.FindContainerByLabel(ctx, map[string]string{
+	containerIDs, err := dockerRuntime.FindContainersByLabel(ctx, map[string]string{
 		"dewy.managed": "true",
 	})
 	if err != nil {
-		if err.Error() == "container not found" {
-			d.logger.Debug("No managed containers found to stop")
-			return nil
-		}
 		return fmt.Errorf("failed to find managed containers: %w", err)
 	}
 
-	// Stop the container with graceful timeout
+	if len(containerIDs) == 0 {
+		d.logger.Debug("No managed containers found to stop")
+		return nil
+	}
+
+	d.logger.Info("Found managed containers to stop", slog.Int("count", len(containerIDs)))
+
+	// Stop and remove all containers
 	timeout := 10 * time.Second
-	if err := d.containerRuntime.Stop(ctx, containerID, timeout); err != nil {
-		d.logger.Error("Failed to stop container",
-			slog.String("container", containerID),
-			slog.String("error", err.Error()))
-		return fmt.Errorf("failed to stop container: %w", err)
-	}
+	stoppedCount := 0
+	removedCount := 0
 
-	d.logger.Info("Managed container stopped",
-		slog.String("container", containerID))
+	for _, containerID := range containerIDs {
+		// Stop the container with graceful timeout
+		if err := d.containerRuntime.Stop(ctx, containerID, timeout); err != nil {
+			d.logger.Error("Failed to stop container",
+				slog.String("container", containerID),
+				slog.String("error", err.Error()))
+			// Continue to try stopping other containers
+			continue
+		}
 
-	// Remove the container
-	if err := d.containerRuntime.Remove(ctx, containerID); err != nil {
-		d.logger.Warn("Failed to remove container",
-			slog.String("container", containerID),
-			slog.String("error", err.Error()))
-		// Don't return error as the important part (stopping) succeeded
-	} else {
-		d.logger.Info("Managed container removed",
+		d.logger.Info("Managed container stopped",
 			slog.String("container", containerID))
+		stoppedCount++
+
+		// Remove the container
+		if err := d.containerRuntime.Remove(ctx, containerID); err != nil {
+			d.logger.Warn("Failed to remove container",
+				slog.String("container", containerID),
+				slog.String("error", err.Error()))
+			// Don't return error as the important part (stopping) succeeded
+		} else {
+			d.logger.Info("Managed container removed",
+				slog.String("container", containerID))
+			removedCount++
+		}
 	}
+
+	d.logger.Info("Cleanup completed",
+		slog.Int("stopped", stoppedCount),
+		slog.Int("removed", removedCount),
+		slog.Int("total", len(containerIDs)))
 
 	return nil
 }
