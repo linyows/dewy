@@ -258,43 +258,46 @@ dewyは構造化ログを使用して、デプロイフローの各段階で詳�
 
 ## コンテナデプロイフロー
 
-コンテナモード（`dewy container`）で動作する場合、デプロイフローはバイナリデプロイメントとは大きく異なります。コンテナデプロイメントは、Dockerネットワークエイリアスを使用したBlue-Greenデプロイメント戦略により、ゼロダウンタイムの更新を実現します。
+コンテナモード（`dewy container`）で動作する場合、デプロイフローはバイナリデプロイメントとは大きく異なります。コンテナデプロイメントは、localhost専用ポートマッピングとビルトインリバースプロキシを使用したBlue-Greenデプロイメント戦略により、ゼロダウンタイムの更新を実現します。
 
 ### コンテナデプロイシーケンス
 
-以下のシーケンス図は、ネットワークエイリアス戦略を使用したコンテナデプロイフローを示しています：
+以下のシーケンス図は、ビルトインプロキシとlocalhost専用ポートマッピングを使用したコンテナデプロイフローを示しています：
 
 ```mermaid
 sequenceDiagram
     participant D as Dewy
+    participant P as ビルトインプロキシ
     participant R as OCI Registry
     participant RT as Container Runtime
-    participant N as Docker Network
-    participant C as Current Container (Blue)
-    participant G as New Container (Green)
+    participant C as 現在のコンテナ (Blue)
+    participant G as 新しいコンテナ (Green)
     participant HC as Health Checker
     participant NO as Notifier
 
-    loop 定期実行（デフォルト30秒間隔）
+    Note over D,P: DewyはビルトインHTTPリバースプロキシと共に起動
+
+    loop 定期実行（デフォルト10秒間隔）
         D->>R: 最新イメージタグを取得 (OCI API)
         R->>D: イメージタグ一覧 (semantic versioning)
         D->>D: 現在バージョンと比較
 
         alt 新バージョンあり
-            D->>RT: 新しいイメージをpull (docker pull)
+            D->>RT: 新しいイメージをpull
             RT->>R: イメージレイヤーをダウンロード
-            R->>RT: イメージレイヤー (キャッシュがあれば再利用)
+            R->>RT: イメージレイヤー
             RT->>D: Pull完了
             D->>NO: イメージpull通知
 
-            Note over D: Blue-Greenデプロイ準備
-
-            D->>RT: Greenコンテナを起動
+            D->>RT: Greenコンテナを起動 (127.0.0.1::containerPort)
             RT->>G: コンテナ作成・起動
-            G->>D: コンテナ起動完了 (ネットワークエイリアスなし)
+            G->>D: コンテナ起動完了
 
-            D->>HC: HTTP/TCPヘルスチェック (内部ネットワーク)
-            HC->>G: ヘルスエンドポイントを確認
+            D->>RT: マッピングされたlocalhostポートを取得
+            RT->>D: localhost:32768
+
+            D->>HC: localhostポート経由でHTTPヘルスチェック
+            HC->>G: ヘルスエンドポイントを確認 (http://localhost:32768/health)
 
             alt ヘルスチェック失敗
                 G-->>HC: 異常レスポンス
@@ -306,29 +309,21 @@ sequenceDiagram
                 G-->>HC: 正常レスポンス (200 OK)
                 HC->>D: ヘルスチェック成功
 
-                Note over D,N: トラフィック切り替えフェーズ
-                D->>N: Greenにネットワークエイリアスを追加
-                N->>G: エイリアス付与 (例: "myapp-current")
-                Note over G: 新規トラフィック → Green
+                Note over D,P: トラフィック切り替えフェーズ
+                D->>P: バックエンドをlocalhost:32768に更新
+                P->>P: アトミックなバックエンドポインタ更新
+                Note over P: 新規リクエスト → Green
 
                 alt Blueコンテナ存在
-                    D->>N: Blueからネットワークエイリアスを削除
-                    N->>C: エイリアス解除
-                    Note over C: 既存接続のみ
-
-                    Note over D: Drain期間 (デフォルト30秒)
-                    D->>D: Drain時間を待機
-                    Note over C: 既存接続の完了を待つ
-
                     D->>RT: Blueコンテナをグレースフル停止
-                    RT->>C: SIGTERM送信 (30秒猶予期間)
+                    RT->>C: SIGTERM送信
                     C->>RT: グレースフルシャットダウン
                     D->>RT: Blueコンテナを削除
                     RT->>C: コンテナ削除
                 end
 
-                D->>RT: Greenのラベルを"current"に更新
-                RT->>G: ラベル更新
+                D->>RT: 古いイメージをクリーンアップ (最新7バージョンを保持)
+                RT->>D: クリーンアップ完了
                 D->>NO: デプロイ成功通知
                 Note over D,G: デプロイ完了
             end
@@ -371,65 +366,61 @@ INFO: Image pull notification message="Pulled image v1.2.3"
 
 #### 3. Blue-Greenデプロイフェーズ
 
-コンテナデプロイメントは、ゼロダウンタイム更新のためにDockerネットワークエイリアスを使用したBlue-Green戦略を採用しています。このフェーズは複数の重要なステップで構成されています：
+コンテナデプロイメントは、ゼロダウンタイム更新のためにlocalhost専用ポートマッピングとビルトインプロキシを使用したBlue-Green戦略を採用しています。このフェーズは以下のステップで構成されています：
 
-**ステップ1: Greenコンテナ起動**
+**ステップ1: localhost専用ポートでGreenコンテナ起動**
 
-新バージョンのコンテナ（Green）は、ネットワークエイリアスなしでDockerネットワーク上に起動されます：
+新バージョンのコンテナ（Green）は、localhost専用ポートマッピング（`127.0.0.1::containerPort`）で起動されます：
 
 ```bash
 # ログ例
-INFO: Starting new container name="myapp-green-1234567890" image="myapp:v1.2.3"
+INFO: Starting new container name="myapp-1234567890" port_mapping="127.0.0.1::8080"
+INFO: Container started mapped_port=32768
 ```
 
-**ステップ2: ヘルスチェック**
+Dockerはランダムなlocalhostポート（例: 32768）を割り当て、コンテナは外部ネットワークから直接アクセスできません。
 
-DewyはDocker内部ネットワークを使用してGreenコンテナに対してヘルスチェックを実行します：
+**ステップ2: localhost経由でヘルスチェック**
+
+Dewyはマッピングされたlocalhostポートを使用してGreenコンテナに対してヘルスチェックを実行します：
 
 ```bash
-# 内部ネットワーク経由のHTTPヘルスチェック
-INFO: Health checking new container url="http://myapp-green-1234567890:8080/health"
+# localhost経由のHTTPヘルスチェック
+INFO: Health checking new container url="http://localhost:32768/health"
 INFO: Health check passed status=200 duration="50ms"
 ```
 
 ヘルスチェックが失敗した場合、Greenコンテナは即座に削除され（ロールバック）、Blueコンテナがトラフィックを処理し続けます。
 
-**ステップ3: トラフィック切り替え**
+**ステップ3: プロキシバックエンドのアトミック切り替え**
 
-ヘルスチェックが成功すると、dewyはDockerネットワークエイリアスを使用してアトミックなトラフィック切り替えを実行します：
+ヘルスチェックが成功すると、dewyはビルトインプロキシのバックエンドをアトミックに更新します：
 
 ```bash
-# Greenにエイリアスを追加（新規トラフィックはここへ）
-$ docker network connect --alias myapp-current myapp-net green-container-id
-
-# Blueからネットワークを切断（新規トラフィックなし）
-$ docker network disconnect myapp-net blue-container-id
+INFO: Updating proxy backend new_backend="http://localhost:32768"
+INFO: Proxy backend updated successfully
 ```
 
-この操作はネットワークの観点からアトミックです。新しい接続は即座にGreenコンテナにルーティングされ、Blueへの既存接続は影響を受けません。
+この操作はGoの`sync.RWMutex`を使用してアトミックに実行され、リクエストのロスなしに瞬時に切り替わります。
 
-**ステップ4: Drain期間**
+**ステップ4: 旧コンテナの即時削除**
 
-トラフィック切り替え後、dewyは設定可能なdrain期間（デフォルト30秒）を待機し、Blueコンテナへの既存接続が完了するのを待ちます：
+バックエンド切り替え後、Blueコンテナは即座にグレースフル停止・削除されます：
 
 ```bash
-# ログ例
-INFO: Waiting for drain period duration=30s
+INFO: Stopping old container gracefully container="myapp-1234567880"
+INFO: Deployment completed successfully container="myapp-1234567890"
 ```
 
-この期間中：
-- Blueコンテナは既存のリクエストを処理し続ける
-- Greenコンテナはすべての新規リクエストを処理する
-- トラフィックの中断は発生しない
+Drain期間は不要です。プロキシのアトミック切り替えにより、すべての新規リクエストは即座に新しいコンテナに向かいます。
 
-**ステップ5: Blueコンテナ削除**
+**ステップ5: イメージクリーンアップ**
 
-Drain期間後、Blueコンテナはグレースフルに停止・削除されます：
+古いコンテナイメージは自動的にクリーンアップされます（最新7バージョンを保持）：
 
 ```bash
-# 30秒の猶予期間付きでSIGTERMを送信
-INFO: Stopping old container gracefully container="myapp-blue-1234567880"
-INFO: Deployment completed successfully container="myapp-green-1234567890"
+INFO: Cleaning up old images repository="ghcr.io/linyows/myapp"
+INFO: Removed 3 old images kept=7
 ```
 
 ### コンテナデプロイ vs バイナリデプロイ
@@ -440,27 +431,31 @@ INFO: Deployment completed successfully container="myapp-green-1234567890"
 |------|---------------------|---------------------|
 | **アーティファクトソース** | GitHub Releases, S3, GCS | OCIレジストリ (Docker Hub, GHCR等) |
 | **アーティファクト形式** | tar.gz, zipアーカイブ | OCIイメージ (マルチレイヤー) |
-| **デプロイ戦略** | インプレース更新 + SIGHUP | Blue-Green with ネットワークエイリアス |
+| **デプロイ戦略** | インプレース更新 + SIGHUP | Blue-Greenとプロキシ切り替え |
 | **ダウンタイム** | 最小限 (再起動時間) | ゼロ (シームレス切り替え) |
-| **ロールバック** | 前のリリースディレクトリ | Blueコンテナを保持 |
+| **ロールバック** | 前のリリースディレクトリ | 自動ロールバック（ヘルスチェック失敗時） |
 | **ヘルスチェック** | プロセスベース | HTTP/TCPエンドポイント |
-| **トラフィック管理** | server-starter (ポート引き継ぎ) | Dockerネットワークエイリアス |
+| **トラフィック管理** | server-starter (ポート引き継ぎ) | ビルトインリバースプロキシ |
+| **ネットワークセキュリティ** | N/A | localhost専用 (127.0.0.1) |
 
 ### ネットワークアーキテクチャ
 
-コンテナデプロイメントにはDockerネットワークとリバースプロキシのセットアップが必要です：
+コンテナデプロイメントはビルトインリバースプロキシとlocalhost専用ポートマッピングを使用します：
 
 ```
 [外部クライアント]
        ↓
-   [nginx:80]  ← ホストポートバインディング
+   [Dewy ビルトインプロキシ :8000]  ← --port 8000 (外部アクセス)
+       ↓ アトミックなバックエンド切り替え
+   [localhost:32768]  ← Dockerポートマッピング (127.0.0.1::8080)
        ↓
-   myapp-current (ネットワークエイリアス)  ← Docker内部DNS
-       ↓
-   [myapp-green-xxxxx:8080]  ← 実際のコンテナ
+   [コンテナ:8080]  ← アプリコンテナ (--container-port 8080)
 ```
 
-リバースプロキシ（nginx、HAProxyなど）は常にネットワークエイリアスに接続し、これが最新の正常なコンテナバージョンをシームレスに指し示します。
+**セキュリティ上の利点：**
+- コンテナは外部ネットワークから直接アクセスできません
+- localhostポートのみで公開されます
+- すべての外部トラフィックはDewyのビルトインプロキシを経由します
 
 ### コンテナデプロイのエラーハンドリング
 
@@ -510,14 +505,20 @@ Dewyは失敗したコンテナを削除し、現在のバージョンを本番�
 # デプロイ開始
 "Starting Blue-Green deployment: v1.2.2 → v1.2.3"
 
+# コンテナ起動
+"Container started with localhost-only port mapping (127.0.0.1:32768)"
+
 # ヘルスチェック成功
 "Health check passed for new container (200 OK, 45ms)"
 
-# トラフィック切り替え
-"Switched traffic to new container (Green)"
+# プロキシバックエンド更新
+"Proxy backend updated to http://localhost:32768"
+
+# イメージクリーンアップ
+"Cleaned up 3 old images (kept last 7 versions)"
 
 # デプロイ完了
-"Deployment completed successfully (total: 45s, drain: 30s)"
+"Deployment completed successfully (total: 15s)"
 ```
 
 これらの通知により、コンテナデプロイメントプロセスの詳細な可視性が提供され、運用チームがデプロイの進行状況を追跡し、問題を迅速に診断できるようになります。

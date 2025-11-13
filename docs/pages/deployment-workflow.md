@@ -258,24 +258,26 @@ Log information is utilized for real-time monitoring, trend analysis, performanc
 
 ## Container Deployment Workflow
 
-When operating in container mode (`dewy container`), the deployment workflow differs significantly from binary deployments. Container deployments use a Blue-Green deployment strategy with Docker network aliases to achieve zero-downtime updates.
+When operating in container mode (`dewy container`), the deployment workflow differs significantly from binary deployments. Container deployments use a Blue-Green deployment strategy with localhost-only port mapping and a built-in reverse proxy to achieve zero-downtime updates.
 
 ### Container Deployment Sequence
 
-The following sequence diagram shows the container deployment workflow using the network-alias strategy:
+The following sequence diagram shows the container deployment workflow using localhost-only port mapping and built-in reverse proxy:
 
 ```mermaid
 sequenceDiagram
     participant D as Dewy
+    participant P as Built-in Proxy
     participant R as OCI Registry
     participant RT as Container Runtime
-    participant N as Docker Network
-    participant C as Current Container (Blue)
-    participant G as New Container (Green)
+    participant C as Current Container
+    participant G as New Container
     participant HC as Health Checker
     participant NO as Notifier
 
-    loop Periodic execution (default 30-second intervals)
+    Note over D,P: Dewy starts with built-in HTTP reverse proxy
+
+    loop Periodic execution (default 10-second intervals)
         D->>R: Get latest image tags (OCI API)
         R->>D: Image tag list (semantic versioning)
         D->>D: Compare with current version
@@ -289,12 +291,15 @@ sequenceDiagram
 
             Note over D: Prepare Blue-Green deployment
 
-            D->>RT: Start Green container
+            D->>RT: Start Green container (127.0.0.1::containerPort)
             RT->>G: Create and start container
-            G->>D: Container started (without network alias)
+            G->>D: Container started on localhost-only port
 
-            D->>HC: HTTP/TCP health check (internal network)
-            HC->>G: Check health endpoint
+            D->>RT: Get mapped localhost port
+            RT->>D: Port mapping (e.g., localhost:32768)
+
+            D->>HC: HTTP health check via localhost
+            HC->>G: GET localhost:32768/health
 
             alt Health check fails
                 G-->>HC: Unhealthy response
@@ -306,30 +311,22 @@ sequenceDiagram
                 G-->>HC: Healthy response (200 OK)
                 HC->>D: Health check passed
 
-                Note over D,N: Traffic switching phase
-                D->>N: Add network alias to Green
-                N->>G: Attach alias (e.g., "myapp-current")
-                Note over G: New traffic → Green
+                Note over D,P: Atomic proxy backend switch
+                D->>P: Update backend to localhost:32768
+                P->>P: Atomic backend pointer update
+                Note over P: All new requests → Green
 
                 alt Blue container exists
-                    D->>N: Remove network alias from Blue
-                    N->>C: Detach alias
-                    Note over C: Only existing connections
-
-                    Note over D: Drain period (default 30s)
-                    D->>D: Wait for drain time
-                    Note over C: Existing connections complete
-
+                    Note over D: Stop old container
                     D->>RT: Stop Blue container gracefully
-                    RT->>C: Send SIGTERM (30s grace period)
+                    RT->>C: Send SIGTERM (10s timeout)
                     C->>RT: Graceful shutdown
                     D->>RT: Remove Blue container
                     RT->>C: Remove container
                 end
 
-                D->>RT: Update Green label to "current"
-                RT->>G: Label update
                 D->>NO: Deployment success notification
+                D->>RT: Cleanup old images (keep last 7)
                 Note over D,G: Deployment completed
             end
         else Same version
@@ -371,65 +368,65 @@ Container images are composed of multiple layers, which are cached by the contai
 
 #### 3. Blue-Green Deployment Phase
 
-Container deployments use a Blue-Green strategy with Docker network aliases for zero-downtime updates. This phase consists of several critical steps:
+Container deployments use a Blue-Green strategy with localhost-only port mapping and built-in reverse proxy for zero-downtime updates. This phase consists of several critical steps:
 
-**Step 1: Start Green Container**
+**Step 1: Start Green Container with Localhost-Only Port**
 
-The new version container (Green) is started on the Docker network without the network alias:
+The new version container (Green) is started with localhost-only port mapping (`127.0.0.1::containerPort`):
 
 ```bash
 # Log example
-INFO: Starting new container name="myapp-green-1234567890" image="myapp:v1.2.3"
+INFO: Starting new container name="myapp-1234567890" image="myapp:v1.2.3"
+INFO: Adding localhost-only port mapping mapping="127.0.0.1::8080"
+INFO: Container port mapped container_port=8080 host_port=32768
 ```
 
-**Step 2: Health Check**
+The `127.0.0.1::8080` format ensures the container is only accessible from localhost, not from external networks, improving security.
 
-Dewy performs health checks against the Green container using the internal Docker network:
+**Step 2: Health Check via Localhost**
+
+Dewy performs health checks against the Green container using the mapped localhost port:
 
 ```bash
-# HTTP health check via internal network
-INFO: Health checking new container url="http://myapp-green-1234567890:8080/health"
+# HTTP health check via localhost
+INFO: Health checking new container url="http://localhost:32768/health"
 INFO: Health check passed status=200 duration="50ms"
 ```
 
-If health checks fail, the Green container is immediately removed (rollback), and the Blue container continues serving traffic.
+If health checks fail, the Green container is immediately removed (rollback), and the current container continues serving traffic.
 
-**Step 3: Traffic Switching**
+**Step 3: Atomic Proxy Backend Switch**
 
-Once health checks pass, dewy performs atomic traffic switching using Docker network aliases:
+Once health checks pass, dewy performs atomic traffic switching by updating the built-in reverse proxy backend:
 
 ```bash
-# Add alias to Green (new traffic goes here)
-$ docker network connect --alias myapp-current myapp-net green-container-id
-
-# Remove network from Blue (no new traffic)
-$ docker network disconnect myapp-net blue-container-id
+# Atomic backend pointer update
+INFO: Updating proxy backend to localhost:32768
+INFO: Proxy backend updated backend="http://localhost:32768"
 ```
 
-This operation is atomic from the network perspective. New connections immediately route to the Green container, while existing connections to Blue continue unaffected.
+This operation uses Go's `sync.RWMutex` for atomic pointer updates. New HTTP requests immediately route to the Green container through the updated proxy backend.
 
-**Step 4: Drain Period**
+**Step 4: Old Container Removal**
 
-After traffic switching, dewy waits for a configurable drain period (default 30 seconds) to allow existing connections to the Blue container to complete:
+After traffic switching, the old container is immediately stopped and removed:
 
 ```bash
-# Log example
-INFO: Waiting for drain period duration=30s
+# Stop old container (10-second grace period)
+INFO: Stopping old container container="myapp-1234567880"
+INFO: Managed container stopped container="myapp-1234567880"
+INFO: Managed container removed container="myapp-1234567880"
 ```
 
-During this period:
-- Blue container continues processing existing requests
-- Green container handles all new requests
-- No traffic interruption occurs
+There is no drain period needed because the proxy switch is atomic - the old container is stopped immediately after the proxy backend is updated.
 
-**Step 5: Blue Container Removal**
+**Step 5: Image Cleanup**
 
-After the drain period, the Blue container is gracefully stopped and removed:
+Finally, old container images are automatically cleaned up (keeping the last 7 versions):
 
 ```bash
-# Send SIGTERM with 30-second grace period
-INFO: Stopping old container gracefully container="myapp-blue-1234567880"
-INFO: Deployment completed successfully container="myapp-green-1234567890"
+INFO: Keep images count=7
+INFO: Removing old image id="sha256:abc123..." tag="v1.2.1"
 ```
 
 ### Container Deployment vs Binary Deployment
@@ -440,27 +437,31 @@ Key differences between container and binary deployment workflows:
 |--------|------------------|---------------------|
 | **Artifact Source** | GitHub Releases, S3, GCS | OCI Registry (Docker Hub, GHCR, etc.) |
 | **Artifact Format** | tar.gz, zip archives | OCI Image (multi-layer) |
-| **Deployment Strategy** | In-place update + SIGHUP | Blue-Green with network alias |
-| **Downtime** | Minimal (restart time) | Zero (seamless switch) |
-| **Rollback** | Previous release directory | Keep Blue container |
-| **Health Check** | Process-based | HTTP/TCP endpoint |
-| **Traffic Management** | server-starter (port handoff) | Docker network alias |
+| **Deployment Strategy** | In-place update + SIGHUP | Blue-Green with proxy switch |
+| **Downtime** | Minimal (restart time) | Zero (atomic proxy switch) |
+| **Rollback** | Previous release directory | Automatic on health check failure |
+| **Health Check** | Process-based | HTTP/TCP via localhost |
+| **Traffic Management** | server-starter (port handoff) | Built-in reverse proxy |
+| **Network Security** | N/A | Localhost-only (127.0.0.1) |
 
 ### Network Architecture
 
-Container deployments require a Docker network and reverse proxy setup:
+Container deployments use localhost-only port mapping with built-in reverse proxy:
 
 ```
 [External Client]
        ↓
-   [nginx:80]  ← Host port binding
+   [Dewy Built-in Proxy :8000]  ← --port 8000 (external access)
+       ↓ atomic backend switch
+   [localhost:32768]  ← Docker port mapping (127.0.0.1::8080)
        ↓
-   myapp-current (network alias)  ← Docker internal DNS
-       ↓
-   [myapp-green-xxxxx:8080]  ← Actual container
+   [Container:8080]  ← App container (--container-port 8080)
 ```
 
-The reverse proxy (nginx, HAProxy, etc.) always connects to the network alias, which seamlessly points to the latest healthy container version.
+Key security features:
+- Containers bind to `127.0.0.1` only (not accessible from external network)
+- Built-in proxy handles all external traffic
+- Atomic backend switching ensures zero-downtime deployments
 
 ### Container Deployment Error Handling
 
@@ -505,212 +506,201 @@ Container-specific notifications include additional information:
 
 ```bash
 # Pull notification
-"Pulled image ghcr.io/linyows/myapp:v1.2.3 (digest: sha256:abc123...)"
+"Pulled image for v1.2.3"
 
-# Deployment start
-"Starting Blue-Green deployment: v1.2.2 → v1.2.3"
+# Deployment phases
+INFO: Starting container name="myapp-1234567890" image="ghcr.io/linyows/myapp:v1.2.3"
+INFO: Container port mapped container_port=8080 host_port=32768
+INFO: Health check passed url="http://localhost:32768/health" status=200
 
-# Health check success
-"Health check passed for new container (200 OK, 45ms)"
+# Proxy backend switch
+INFO: Proxy backend updated backend="http://localhost:32768"
 
-# Traffic switch
-"Switched traffic to new container (Green)"
+# Cleanup
+INFO: Stopping old container container="myapp-1234567880"
+INFO: Keep images count=7
+INFO: Removing old image id="sha256:abc123..." tag="v1.2.1"
 
 # Deployment complete
-"Deployment completed successfully (total: 45s, drain: 30s)"
+"Container deployed successfully for v1.2.3"
 ```
 
 These notifications provide detailed visibility into the container deployment process, enabling operations teams to track deployment progress and diagnose issues quickly.
 
-## Reverse Proxy with Caddy
+## Built-in Reverse Proxy
 
-Dewy supports automatic reverse proxy setup using [Caddy](https://caddyserver.com/) for container deployments. When enabled, dewy manages both the proxy container and application containers, providing a clean separation between external traffic and internal application traffic.
+Dewy includes a built-in HTTP reverse proxy for container deployments. The proxy automatically starts when using `dewy container` and handles all external traffic, providing zero-downtime deployments through atomic backend switching.
 
 ### Proxy Architecture
 
 ```mermaid
 graph LR
-    Client[External Client] -->|HTTP :8000| Proxy[Caddy Proxy Container]
-    Proxy -->|Internal Network| Alias[dewy-current:3333]
-    Alias -.->|DNS Resolution| App1[App Container v1.2.3]
+    Client[External Client] -->|HTTP :8000| Proxy[Dewy Built-in Proxy]
+    Proxy -->|localhost:32768| Docker[Docker Port Mapping]
+    Docker -->|:8080| Container[App Container]
 
     style Proxy fill:#f9f,stroke:#333,stroke-width:2px
-    style Alias fill:#bbf,stroke:#333,stroke-width:2px
-    style App1 fill:#bfb,stroke:#333,stroke-width:2px
+    style Docker fill:#bbf,stroke:#333,stroke-width:2px
+    style Container fill:#bfb,stroke:#333,stroke-width:2px
 ```
 
 Key components:
 
-- **Caddy Proxy Container**: Handles external HTTP traffic on the specified port
-- **Docker Network**: Internal network (`dewy-net` by default) for container communication
-- **Network Alias**: DNS alias (`dewy-current` by default) that points to the current app container
-- **App Container**: Application container with no external port mapping (internal only)
-
-### Enabling Reverse Proxy
-
-To enable the reverse proxy feature, use the `--proxy` flag:
-
-```bash
-dewy container \
-  --registry "img://ghcr.io/linyows/myapp" \
-  --container-port 3333 \
-  --health-path /health \
-  --proxy \
-  --proxy-port 8000 \
-  --proxy-image caddy:2-alpine
-```
-
-**Options:**
-
-- `--proxy`: Enable reverse proxy (boolean flag)
-- `--proxy-port`: External port for the proxy to listen on (default: `80`)
-- `--proxy-image`: Caddy container image to use (default: `caddy:2-alpine`)
+- **Dewy Built-in Proxy**: Go HTTP reverse proxy running inside the dewy process, listens on external port (e.g., :8000)
+- **Localhost Port Mapping**: Docker maps container port to a random localhost port (127.0.0.1:32768)
+- **Atomic Backend Switch**: Uses `sync.RWMutex` to atomically update the proxy backend during deployments
+- **App Container**: Application container accessible only via localhost, not from external network
 
 ### How It Works
 
-When `--proxy` is enabled, dewy performs the following additional steps:
+The built-in reverse proxy is automatically enabled when you run `dewy container`. Here's how it operates:
 
-#### 1. Proxy Container Startup
+#### 1. Proxy Initialization
 
-On dewy startup, before the first deployment:
-
-```bash
-# Check for existing proxy container
-INFO: Checking for existing proxy container
-INFO: Starting reverse proxy container name="app-proxy" port=8000
-
-# Proxy starts successfully
-INFO: Proxy started successfully container=abc123... proxy_port=8000 upstream=dewy-current:3333
-```
-
-If a proxy container already exists, dewy exits with an error to prevent conflicts.
-
-#### 2. Application Deployment Without External Ports
-
-When proxy is enabled, application containers are started without port mappings:
+When dewy starts, the built-in HTTP reverse proxy initializes:
 
 ```bash
-# Without proxy (normal mode)
-docker run -d -p 3333:3333 --name myapp-123 myapp:v1.2.3
-
-# With proxy enabled (no -p flag)
-docker run -d --name myapp-123 --network dewy-net --network-alias dewy-current myapp:v1.2.3
+INFO: Starting built-in reverse proxy port=8000
+INFO: Reverse proxy started successfully external_port=8000
 ```
 
-External traffic can only reach the application through the Caddy proxy.
+The proxy runs in a goroutine within the dewy process and listens on the port specified by `--port` (default: 8000).
 
-#### 3. Blue-Green Deployment with Proxy
+#### 2. Container Deployment with Localhost-Only Port
 
-During Blue-Green deployment, the proxy automatically routes to the new container via the network alias:
+Containers are started with localhost-only port mapping for security:
+
+```bash
+# Docker run command executed by dewy
+docker run -d \
+  --name myapp-1234567890 \
+  -p 127.0.0.1::8080 \
+  --label dewy.managed=true \
+  --label dewy.app=myapp \
+  ghcr.io/linyows/myapp:v1.2.3
+
+# Docker assigns random localhost port (e.g., 127.0.0.1:32768)
+INFO: Container started container=abc123... mapped_port=32768
+```
+
+The container port is only accessible via localhost, not from the external network. This provides an additional security layer.
+
+#### 3. Atomic Backend Switch
+
+During Blue-Green deployment, the proxy atomically switches its backend to the new container:
 
 ```mermaid
 sequenceDiagram
     participant Client
-    participant Proxy as Caddy Proxy
-    participant Alias as dewy-current
-    participant Blue as Blue Container (old)
-    participant Green as Green Container (new)
+    participant Proxy as Built-in Proxy
+    participant Blue as localhost:32768 (old)
+    participant Green as localhost:32770 (new)
 
     Note over Client,Blue: Before deployment
     Client->>Proxy: HTTP request
-    Proxy->>Alias: Forward to dewy-current:3333
-    Alias->>Blue: Route to Blue
+    Proxy->>Blue: Forward to localhost:32768
     Blue->>Proxy: Response
     Proxy->>Client: Response
 
     Note over Green: New container starts & passes health check
 
-    Note over Alias,Green: Network alias switched
-    Alias-.->Green: Now points to Green
+    Note over Proxy: Atomic backend pointer update
+    Proxy-.->Proxy: RWMutex.Lock() → backend = localhost:32770 → RWMutex.Unlock()
 
-    Note over Client,Green: After deployment
+    Note over Client,Green: After deployment (immediate)
     Client->>Proxy: HTTP request
-    Proxy->>Alias: Forward to dewy-current:3333
-    Alias->>Green: Route to Green
+    Proxy->>Green: Forward to localhost:32770
     Green->>Proxy: Response
     Proxy->>Client: Response
 
-    Note over Blue: Blue container removed
+    Note over Blue: Old container stopped & removed
 ```
 
-The proxy container continues running throughout the deployment, providing uninterrupted service.
+The backend switch is atomic and instantaneous - no requests are lost during the transition. The proxy uses Go's `sync.RWMutex` to ensure thread-safe updates.
 
 #### 4. Cleanup on Shutdown
 
 When dewy receives `SIGINT`, `SIGTERM`, or `SIGQUIT`, it automatically cleans up all managed containers:
 
 ```bash
+INFO: Shutting down gracefully
+INFO: Stopping reverse proxy
 INFO: Cleaning up managed containers
-INFO: Stopping managed container container=app-proxy
-INFO: Removing managed container container=app-proxy
-INFO: Stopping managed container container=myapp-123
-INFO: Removing managed container container=myapp-123
-INFO: Cleanup completed containers_cleaned=2
+INFO: Stopping managed container container=myapp-1234567890
+INFO: Removing managed container container=myapp-1234567890
+INFO: Cleanup completed containers_cleaned=1
 ```
 
-All containers labeled with `dewy.managed=true` are stopped and removed.
+All containers labeled with `dewy.managed=true` are stopped and removed. The built-in proxy stops gracefully along with the dewy process.
 
 ### Proxy Lifecycle
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Checking: dewy starts with --proxy
-    Checking --> Error: Proxy already exists
-    Error --> [*]
-
-    Checking --> Starting: No proxy found
-    Starting --> Running: Proxy started
-    Running --> Running: App deployments
-    Running --> Cleanup: SIGINT/SIGTERM
-    Cleanup --> [*]: All containers removed
+    [*] --> Starting: dewy container starts
+    Starting --> Running: Proxy listening on :8000
+    Running --> Switching: New container deployed
+    Switching --> Running: Backend updated atomically
+    Running --> Shutdown: SIGINT/SIGTERM
+    Shutdown --> Cleanup: Stop proxy & containers
+    Cleanup --> [*]: Process exits
 ```
 
 ### Use Cases
 
-The reverse proxy feature is useful for:
+The built-in reverse proxy provides several benefits:
 
-1. **Single Entry Point**: All traffic goes through one port, simplifying firewall rules
-2. **TLS Termination**: Use Caddy's automatic HTTPS in production (requires domain configuration)
-3. **Load Balancing**: Future support for running multiple app instances
-4. **Request Logging**: Centralized logging at the proxy level
-5. **Security**: Application containers are not directly exposed to external networks
+1. **Zero-Downtime Deployments**: Atomic backend switching ensures no requests are dropped during deployment
+2. **Security**: Containers are only accessible via localhost (127.0.0.1), not from external network
+3. **Simple Configuration**: No external proxy containers or Docker networks required
+4. **Single Entry Point**: All external traffic goes through one port, simplifying firewall rules
+5. **Automatic Port Management**: Docker assigns random localhost ports, avoiding port conflicts
 
-### Limitations
+### Technical Details
 
-Current limitations of the reverse proxy feature:
+Implementation details of the built-in proxy:
 
-- HTTP only (HTTPS/TLS termination not yet supported)
-- Single application per dewy instance
-- Caddy configuration is managed automatically (no custom Caddyfile support)
-- Proxy container name is fixed to `app-proxy`
+- **Proxy Type**: `net/http/httputil.ReverseProxy` (Go standard library)
+- **Concurrency**: Thread-safe backend updates using `sync.RWMutex`
+- **Health Checks**: HTTP health checks via localhost before switching backends
+- **Error Handling**: Automatic rollback if health checks fail
+- **Performance**: In-process proxy eliminates container-to-container network overhead
 
 ### Example: Complete Setup
 
 ```bash
-# Start dewy with reverse proxy
+# Start dewy with built-in reverse proxy
 dewy container \
   --registry "img://ghcr.io/linyows/myapp?pre-release=true" \
-  --container-port 3333 \
+  --container-port 8080 \
   --health-path /health \
   --health-timeout 30 \
-  --proxy \
-  --proxy-port 8000 \
+  --port 8000 \
   --log-level info
 
 # Output:
 # INFO: Dewy started version=v1.0.0
-# INFO: Starting reverse proxy container name=app-proxy port=8000
-# INFO: Proxy started successfully
+# INFO: Starting built-in reverse proxy port=8000
+# INFO: Reverse proxy started successfully external_port=8000
 # INFO: Pulling image ghcr.io/linyows/myapp:v1.2.3
-# INFO: Starting container name=myapp-1234567890
-# INFO: Health check passed
+# INFO: Starting container name=myapp-1234567890 port_mapping=127.0.0.1::8080
+# INFO: Container started mapped_port=32768
+# INFO: Health check passed url=http://localhost:32768/health
+# INFO: Proxy backend updated backend=http://localhost:32768
 # INFO: Deployment completed successfully
 
-# Access the application through the proxy
+# Access the application through the built-in proxy
 curl http://localhost:8000/
 
-# View container logs (app)
-docker logs -f $(docker ps -q --filter "label=dewy.managed=true")
+# View container logs
+docker logs -f $(docker ps -q --filter "label=dewy.managed=true" --filter "label=dewy.app=myapp")
 ```
 
-The reverse proxy feature simplifies container deployment by managing network traffic and providing a consistent access point for your applications.
+**CLI Options:**
+
+- `--port 8000`: External port for the built-in proxy to listen on (default: 8000)
+- `--container-port 8080`: Application port inside the container (will be mapped to localhost)
+- `--health-path /health`: HTTP path for health checks
+- `--health-timeout 30`: Health check timeout in seconds
+
+The built-in reverse proxy provides zero-downtime deployments with enhanced security through localhost-only container access.
