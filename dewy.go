@@ -893,11 +893,11 @@ func (d *Dewy) startSingleContainer(ctx context.Context, dockerRuntime *containe
 
 	// Start container
 	containerID, err := dockerRuntime.Run(ctx, container.RunOptions{
-		Image:  imageRef,
-		Name:   containerName,
-		Env:    d.config.Container.Env,
+		Image:   imageRef,
+		Name:    containerName,
+		Env:     d.config.Container.Env,
 		Volumes: d.config.Container.Volumes,
-		Ports:  ports,
+		Ports:   ports,
 		Labels: map[string]string{
 			"dewy.managed": "true",
 			"dewy.app":     appName,
@@ -911,8 +911,11 @@ func (d *Dewy) startSingleContainer(ctx context.Context, dockerRuntime *containe
 	// Get mapped port
 	mappedPort, err := dockerRuntime.GetMappedPort(ctx, containerID, d.config.Container.ContainerPort)
 	if err != nil {
-		dockerRuntime.Remove(ctx, containerID)
-		return "", 0, fmt.Errorf("failed to get mapped port: %w", err)
+		rErr := dockerRuntime.Remove(ctx, containerID)
+		return "", 0, errors.Join(
+			fmt.Errorf("failed to get mapped port: %w", err),
+			fmt.Errorf("runtime remove failed: %w", rErr),
+		)
 	}
 
 	d.logger.Info("Container started",
@@ -927,9 +930,13 @@ func (d *Dewy) startSingleContainer(ctx context.Context, dockerRuntime *containe
 
 		d.logger.Info("Performing health check", slog.String("container", containerID))
 		if err := healthCheck(ctx, containerID); err != nil {
-			dockerRuntime.Stop(ctx, containerID, 5*time.Second)
-			dockerRuntime.Remove(ctx, containerID)
-			return "", 0, fmt.Errorf("health check failed: %w", err)
+			sErr := dockerRuntime.Stop(ctx, containerID, 5*time.Second)
+			rErr := dockerRuntime.Remove(ctx, containerID)
+			return "", 0, errors.Join(
+				fmt.Errorf("health check failed: %w", err),
+				fmt.Errorf("runtime stop failed: %w", sErr),
+				fmt.Errorf("runtime remove failed: %w", rErr),
+			)
 		}
 	}
 
@@ -997,8 +1004,9 @@ func (d *Dewy) startProxy(ctx context.Context) error {
 	// Create HTTP server using the configured port
 	addr := fmt.Sprintf(":%d", d.config.Port)
 	d.proxyServer = &http.Server{
-		Addr:    addr,
-		Handler: handler,
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second, // For slowloris attack
 	}
 
 	// Start server in background
@@ -1023,25 +1031,6 @@ func (d *Dewy) startProxy(ctx context.Context) error {
 
 	d.logger.Info("Built-in reverse proxy started successfully",
 		slog.String("listen", addr))
-
-	return nil
-}
-
-// updateProxyBackend atomically updates the reverse proxy backends.
-// This replaces all existing backends with the new one (single backend mode).
-func (d *Dewy) updateProxyBackend(host string, port int) error {
-	backend, err := url.Parse(fmt.Sprintf("http://%s:%d", host, port))
-	if err != nil {
-		return fmt.Errorf("failed to parse backend URL: %w", err)
-	}
-
-	d.proxyMutex.Lock()
-	d.proxyBackends = []*url.URL{backend}
-	d.proxyIndex = 0
-	d.proxyMutex.Unlock()
-
-	d.logger.Info("Proxy backend updated",
-		slog.String("backend", backend.String()))
 
 	return nil
 }
@@ -1090,23 +1079,6 @@ func (d *Dewy) removeProxyBackend(host string, port int) error {
 		slog.Int("remaining_backends", len(d.proxyBackends)))
 
 	return nil
-}
-
-// setProxyBackends atomically replaces all backends with the provided list.
-func (d *Dewy) setProxyBackends(backends []*url.URL) {
-	d.proxyMutex.Lock()
-	d.proxyBackends = backends
-	d.proxyIndex = 0
-	d.proxyMutex.Unlock()
-
-	backendStrs := make([]string, len(backends))
-	for i, b := range backends {
-		backendStrs[i] = b.String()
-	}
-
-	d.logger.Info("Proxy backends updated",
-		slog.Int("count", len(backends)),
-		slog.Any("backends", backendStrs))
 }
 
 // stopProxy gracefully shuts down the reverse proxy server.

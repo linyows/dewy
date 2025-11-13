@@ -391,7 +391,11 @@ func (d *Docker) GetMappedPort(ctx context.Context, containerID string, containe
 	}
 
 	var hostPort int
-	fmt.Sscanf(portStr, "%d", &hostPort)
+	n, err := fmt.Sscanf(portStr, "%d", &hostPort)
+	if err != nil {
+		return 0, fmt.Errorf("fmt.Sscanf failed: n=%d, %w", n, err)
+	}
+
 	return hostPort, nil
 }
 
