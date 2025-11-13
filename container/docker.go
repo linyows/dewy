@@ -190,6 +190,40 @@ func (d *Docker) FindContainerByLabel(ctx context.Context, labels map[string]str
 	return lines[0], nil
 }
 
+// FindContainersByLabel finds all containers matching the given labels.
+func (d *Docker) FindContainersByLabel(ctx context.Context, labels map[string]string) ([]string, error) {
+	args := []string{"ps", "-q"}
+
+	for key, value := range labels {
+		args = append(args, "--filter", fmt.Sprintf("label=%s=%s", key, value))
+	}
+
+	output, err := d.execCommandOutput(ctx, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	if output == "" {
+		return []string{}, nil
+	}
+
+	// Split output by newlines and filter empty strings
+	lines := strings.Split(output, "\n")
+	containers := make([]string, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			containers = append(containers, line)
+		}
+	}
+
+	d.logger.Debug("Found containers by label",
+		slog.Any("labels", labels),
+		slog.Int("count", len(containers)))
+
+	return containers, nil
+}
+
 // UpdateLabel updates a container's label.
 func (d *Docker) UpdateLabel(ctx context.Context, containerID, key, value string) error {
 	d.logger.Debug("Label update skipped (not supported by Docker)",

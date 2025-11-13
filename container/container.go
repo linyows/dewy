@@ -30,6 +30,9 @@ type Runtime interface {
 	// FindContainerByLabel finds a container by labels.
 	FindContainerByLabel(ctx context.Context, labels map[string]string) (string, error)
 
+	// FindContainersByLabel finds all containers matching the given labels.
+	FindContainersByLabel(ctx context.Context, labels map[string]string) ([]string, error)
+
 	// UpdateLabel updates a container's label.
 	UpdateLabel(ctx context.Context, containerID, key, value string) error
 

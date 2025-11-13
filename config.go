@@ -64,6 +64,7 @@ type CacheConfig struct {
 type ContainerConfig struct {
 	Name          string
 	ContainerPort int
+	Replicas      int           // Number of container replicas to run (default: 1)
 	Env           []string
 	Volumes       []string
 	HealthPath    string

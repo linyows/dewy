@@ -57,7 +57,8 @@ type Dewy struct {
 	notifier         notifier.Notifier
 	logger           *logging.Logger
 	proxyServer      *http.Server
-	proxyBackend     *url.URL
+	proxyBackends    []*url.URL // Multiple backends for load balancing
+	proxyIndex       int        // Round-robin counter
 	proxyMutex       sync.RWMutex
 	containerRuntime container.Runtime
 	sync.RWMutex
@@ -697,11 +698,20 @@ func (d *Dewy) RunContainer() error {
 	return nil
 }
 
-// deployContainer performs the actual container deployment using Blue-Green strategy.
+// deployContainer performs the actual container deployment using rolling update strategy.
 func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentResponse) error {
 	if d.config.Container == nil {
 		return fmt.Errorf("container config is nil")
 	}
+
+	// Get replicas count (default: 1)
+	replicas := d.config.Container.Replicas
+	if replicas <= 0 {
+		replicas = 1
+	}
+
+	d.logger.Info("Starting container deployment",
+		slog.Int("replicas", replicas))
 
 	// Create container runtime
 	var runtime container.Runtime
@@ -736,105 +746,221 @@ func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentRespons
 		}
 	}
 
-	// Deploy using Blue-Green strategy
+	// Get Docker runtime
 	dockerRuntime, ok := runtime.(*container.Docker)
 	if !ok {
 		return fmt.Errorf("runtime is not Docker")
 	}
 
-	// Create health check function
-	var healthCheck container.HealthCheckFunc
-	if d.config.Container.HealthPath != "" {
-		// Health check will use the mapped localhost port after deployment
-		// For now, we'll implement a simple HTTP check via localhost
-		healthCheck = func(ctx context.Context, containerID string) error {
-			// Get mapped port
-			mappedPort, err := dockerRuntime.GetMappedPort(ctx, containerID, d.config.Container.ContainerPort)
-			if err != nil {
-				return fmt.Errorf("failed to get mapped port for health check: %w", err)
-			}
-
-			// Check HTTP endpoint on localhost
-			healthURL := fmt.Sprintf("http://localhost:%d%s", mappedPort, d.config.Container.HealthPath)
-			client := &http.Client{Timeout: 5 * time.Second}
-
-			retries := 5
-			for i := 0; i < retries; i++ {
-				resp, err := client.Get(healthURL)
-				if err == nil {
-					resp.Body.Close()
-					if resp.StatusCode >= 200 && resp.StatusCode < 400 {
-						d.logger.Debug("Health check passed",
-							slog.String("url", healthURL),
-							slog.Int("status", resp.StatusCode))
-						return nil
-					}
-				}
-				if i < retries-1 {
-					time.Sleep(2 * time.Second)
-				}
-			}
-			return fmt.Errorf("health check failed after %d retries", retries)
-		}
-	} else {
-		d.logger.Info("Health check disabled - container will start without health verification")
+	// Pull the new image first
+	d.logger.Info("Pulling new image", slog.String("image", imageRef))
+	if err := dockerRuntime.Pull(ctx, imageRef); err != nil {
+		return fmt.Errorf("pull failed: %w", err)
 	}
 
-	// Deploy with localhost-only port mapping (127.0.0.1::containerPort)
-	// Docker will assign a random host port on localhost only for security
-	// The built-in reverse proxy will connect to localhost:mappedPort
-	deployOpts := container.DeployOptions{
-		ImageRef:      imageRef,
-		AppName:       appName,
-		ContainerPort: d.config.Container.ContainerPort,
-		Env:           d.config.Container.Env,
-		Volumes:       d.config.Container.Volumes,
-		Ports:         nil, // No explicit port mapping - using ContainerPort for localhost-only mapping
-		HealthCheck:   healthCheck,
-	}
-
-	// Deploy container with callback to update proxy backend
-	newContainerID, err := dockerRuntime.DeployContainerWithCallback(ctx, deployOpts, func(containerID string) error {
-		// This callback is called after the new container passes health checks
-		// but before the old container is stopped
-
-		// Get the mapped host port
-		mappedPort, err := dockerRuntime.GetMappedPort(ctx, containerID, d.config.Container.ContainerPort)
-		if err != nil {
-			return fmt.Errorf("failed to get mapped port: %w", err)
-		}
-
-		d.logger.Info("Container port mapped",
-			slog.Int("container_port", d.config.Container.ContainerPort),
-			slog.Int("host_port", mappedPort))
-
-		// Atomically update proxy backend to point to the new container
-		if err := d.updateProxyBackend("localhost", mappedPort); err != nil {
-			return fmt.Errorf("failed to update proxy backend: %w", err)
-		}
-
-		return nil
+	// Find existing containers
+	existingContainers, err := dockerRuntime.FindContainersByLabel(ctx, map[string]string{
+		"dewy.managed": "true",
+		"dewy.app":     appName,
 	})
-
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to find existing containers: %w", err)
+	}
+
+	d.logger.Info("Found existing containers",
+		slog.Int("count", len(existingContainers)))
+
+	// Create health check function
+	healthCheck := d.createHealthCheckFunc(dockerRuntime)
+
+	// Rolling update: start new containers one by one
+	newContainers := make([]string, 0, replicas)
+	newBackends := make([]*url.URL, 0, replicas)
+
+	for i := 0; i < replicas; i++ {
+		d.logger.Info("Starting new container",
+			slog.Int("replica", i+1),
+			slog.Int("total", replicas))
+
+		// Start new container
+		containerName := fmt.Sprintf("%s-%d", appName, time.Now().Unix())
+		containerID, mappedPort, err := d.startSingleContainer(ctx, dockerRuntime, imageRef, appName, containerName, healthCheck)
+		if err != nil {
+			// Rollback: remove newly created containers
+			d.logger.Error("Failed to start container, rolling back",
+				slog.Int("replica", i+1),
+				slog.String("error", err.Error()))
+			d.rollbackContainers(ctx, dockerRuntime, newContainers)
+			return err
+		}
+
+		newContainers = append(newContainers, containerID)
+		backend, _ := url.Parse(fmt.Sprintf("http://localhost:%d", mappedPort))
+		newBackends = append(newBackends, backend)
+
+		// Add to proxy backends
+		if err := d.addProxyBackend("localhost", mappedPort); err != nil {
+			d.logger.Error("Failed to add proxy backend",
+				slog.String("error", err.Error()))
+			d.rollbackContainers(ctx, dockerRuntime, newContainers)
+			return err
+		}
+
+		d.logger.Info("Container added to load balancer",
+			slog.String("container", containerID),
+			slog.Int("backend_count", len(newBackends)))
+	}
+
+	// Remove old containers one by one
+	for i, oldContainerID := range existingContainers {
+		d.logger.Info("Removing old container",
+			slog.Int("index", i+1),
+			slog.Int("total", len(existingContainers)),
+			slog.String("container", oldContainerID))
+
+		// Get old container port to remove from proxy
+		oldPort, err := dockerRuntime.GetMappedPort(ctx, oldContainerID, d.config.Container.ContainerPort)
+		if err == nil {
+			// Remove from proxy backends
+			if err := d.removeProxyBackend("localhost", oldPort); err != nil {
+				d.logger.Warn("Failed to remove old backend from proxy",
+					slog.String("error", err.Error()))
+			}
+		}
+
+		// Stop and remove old container
+		if err := dockerRuntime.Stop(ctx, oldContainerID, 10*time.Second); err != nil {
+			d.logger.Error("Failed to stop old container",
+				slog.String("container", oldContainerID),
+				slog.String("error", err.Error()))
+		}
+		if err := dockerRuntime.Remove(ctx, oldContainerID); err != nil {
+			d.logger.Error("Failed to remove old container",
+				slog.String("container", oldContainerID),
+				slog.String("error", err.Error()))
+		}
 	}
 
 	d.logger.Info("Container deployment completed",
-		slog.String("container", newContainerID))
+		slog.Int("new_containers", len(newContainers)),
+		slog.Int("removed_containers", len(existingContainers)))
 
 	return nil
 }
 
+// createHealthCheckFunc creates a health check function based on configuration.
+func (d *Dewy) createHealthCheckFunc(dockerRuntime *container.Docker) container.HealthCheckFunc {
+	if d.config.Container.HealthPath == "" {
+		d.logger.Info("Health check disabled - container will start without health verification")
+		return nil
+	}
+
+	return func(ctx context.Context, containerID string) error {
+		// Get mapped port
+		mappedPort, err := dockerRuntime.GetMappedPort(ctx, containerID, d.config.Container.ContainerPort)
+		if err != nil {
+			return fmt.Errorf("failed to get mapped port for health check: %w", err)
+		}
+
+		// Check HTTP endpoint on localhost
+		healthURL := fmt.Sprintf("http://localhost:%d%s", mappedPort, d.config.Container.HealthPath)
+		client := &http.Client{Timeout: 5 * time.Second}
+
+		retries := 5
+		for i := 0; i < retries; i++ {
+			resp, err := client.Get(healthURL)
+			if err == nil {
+				resp.Body.Close()
+				if resp.StatusCode >= 200 && resp.StatusCode < 400 {
+					d.logger.Debug("Health check passed",
+						slog.String("url", healthURL),
+						slog.Int("status", resp.StatusCode))
+					return nil
+				}
+			}
+			if i < retries-1 {
+				time.Sleep(2 * time.Second)
+			}
+		}
+		return fmt.Errorf("health check failed after %d retries", retries)
+	}
+}
+
+// startSingleContainer starts a single container and returns its ID and mapped port.
+func (d *Dewy) startSingleContainer(ctx context.Context, dockerRuntime *container.Docker, imageRef, appName, containerName string, healthCheck container.HealthCheckFunc) (string, int, error) {
+	// Prepare port mapping for localhost-only access
+	ports := []string{fmt.Sprintf("127.0.0.1::%d", d.config.Container.ContainerPort)}
+
+	// Start container
+	containerID, err := dockerRuntime.Run(ctx, container.RunOptions{
+		Image:  imageRef,
+		Name:   containerName,
+		Env:    d.config.Container.Env,
+		Volumes: d.config.Container.Volumes,
+		Ports:  ports,
+		Labels: map[string]string{
+			"dewy.managed": "true",
+			"dewy.app":     appName,
+		},
+		Detach: true,
+	})
+	if err != nil {
+		return "", 0, fmt.Errorf("failed to start container: %w", err)
+	}
+
+	// Get mapped port
+	mappedPort, err := dockerRuntime.GetMappedPort(ctx, containerID, d.config.Container.ContainerPort)
+	if err != nil {
+		dockerRuntime.Remove(ctx, containerID)
+		return "", 0, fmt.Errorf("failed to get mapped port: %w", err)
+	}
+
+	d.logger.Info("Container started",
+		slog.String("container", containerID),
+		slog.String("name", containerName),
+		slog.Int("mapped_port", mappedPort))
+
+	// Perform health check if configured
+	if healthCheck != nil {
+		// Give the container a moment to start
+		time.Sleep(3 * time.Second)
+
+		d.logger.Info("Performing health check", slog.String("container", containerID))
+		if err := healthCheck(ctx, containerID); err != nil {
+			dockerRuntime.Stop(ctx, containerID, 5*time.Second)
+			dockerRuntime.Remove(ctx, containerID)
+			return "", 0, fmt.Errorf("health check failed: %w", err)
+		}
+	}
+
+	return containerID, mappedPort, nil
+}
+
+// rollbackContainers removes all containers in the list (used for rollback).
+func (d *Dewy) rollbackContainers(ctx context.Context, dockerRuntime *container.Docker, containerIDs []string) {
+	d.logger.Info("Rolling back containers", slog.Int("count", len(containerIDs)))
+	for _, containerID := range containerIDs {
+		if err := dockerRuntime.Stop(ctx, containerID, 5*time.Second); err != nil {
+			d.logger.Error("Failed to stop container during rollback",
+				slog.String("container", containerID),
+				slog.String("error", err.Error()))
+		}
+		if err := dockerRuntime.Remove(ctx, containerID); err != nil {
+			d.logger.Error("Failed to remove container during rollback",
+				slog.String("container", containerID),
+				slog.String("error", err.Error()))
+		}
+	}
+}
+
 // startProxy starts the built-in reverse proxy HTTP server.
 func (d *Dewy) startProxy(ctx context.Context) error {
-	// Create a reverse proxy handler with atomic backend switching
+	// Create a reverse proxy handler with round-robin load balancing
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		d.proxyMutex.RLock()
-		backend := d.proxyBackend
-		d.proxyMutex.RUnlock()
-
-		if backend == nil {
+		d.proxyMutex.Lock()
+		backends := d.proxyBackends
+		if len(backends) == 0 {
+			d.proxyMutex.Unlock()
 			http.Error(w, "Service Unavailable - No backend configured", http.StatusServiceUnavailable)
 			d.logger.Debug("Proxy request rejected - no backend configured",
 				slog.String("method", r.Method),
@@ -842,7 +968,12 @@ func (d *Dewy) startProxy(ctx context.Context) error {
 			return
 		}
 
-		// Create reverse proxy for current backend
+		// Round-robin: select next backend
+		backend := backends[d.proxyIndex%len(backends)]
+		d.proxyIndex++
+		d.proxyMutex.Unlock()
+
+		// Create reverse proxy for selected backend
 		proxy := httputil.NewSingleHostReverseProxy(backend)
 
 		// Custom error handler
@@ -896,7 +1027,8 @@ func (d *Dewy) startProxy(ctx context.Context) error {
 	return nil
 }
 
-// updateProxyBackend atomically updates the reverse proxy backend.
+// updateProxyBackend atomically updates the reverse proxy backends.
+// This replaces all existing backends with the new one (single backend mode).
 func (d *Dewy) updateProxyBackend(host string, port int) error {
 	backend, err := url.Parse(fmt.Sprintf("http://%s:%d", host, port))
 	if err != nil {
@@ -904,13 +1036,77 @@ func (d *Dewy) updateProxyBackend(host string, port int) error {
 	}
 
 	d.proxyMutex.Lock()
-	d.proxyBackend = backend
+	d.proxyBackends = []*url.URL{backend}
+	d.proxyIndex = 0
 	d.proxyMutex.Unlock()
 
 	d.logger.Info("Proxy backend updated",
 		slog.String("backend", backend.String()))
 
 	return nil
+}
+
+// addProxyBackend adds a new backend to the load balancer pool.
+func (d *Dewy) addProxyBackend(host string, port int) error {
+	backend, err := url.Parse(fmt.Sprintf("http://%s:%d", host, port))
+	if err != nil {
+		return fmt.Errorf("failed to parse backend URL: %w", err)
+	}
+
+	d.proxyMutex.Lock()
+	d.proxyBackends = append(d.proxyBackends, backend)
+	d.proxyMutex.Unlock()
+
+	d.logger.Info("Proxy backend added",
+		slog.String("backend", backend.String()),
+		slog.Int("total_backends", len(d.proxyBackends)))
+
+	return nil
+}
+
+// removeProxyBackend removes a backend from the load balancer pool.
+func (d *Dewy) removeProxyBackend(host string, port int) error {
+	targetURL := fmt.Sprintf("http://%s:%d", host, port)
+
+	d.proxyMutex.Lock()
+	defer d.proxyMutex.Unlock()
+
+	newBackends := make([]*url.URL, 0, len(d.proxyBackends))
+	for _, backend := range d.proxyBackends {
+		if backend.String() != targetURL {
+			newBackends = append(newBackends, backend)
+		}
+	}
+
+	if len(newBackends) == len(d.proxyBackends) {
+		return fmt.Errorf("backend not found: %s", targetURL)
+	}
+
+	d.proxyBackends = newBackends
+	d.proxyIndex = 0 // Reset index
+
+	d.logger.Info("Proxy backend removed",
+		slog.String("backend", targetURL),
+		slog.Int("remaining_backends", len(d.proxyBackends)))
+
+	return nil
+}
+
+// setProxyBackends atomically replaces all backends with the provided list.
+func (d *Dewy) setProxyBackends(backends []*url.URL) {
+	d.proxyMutex.Lock()
+	d.proxyBackends = backends
+	d.proxyIndex = 0
+	d.proxyMutex.Unlock()
+
+	backendStrs := make([]string, len(backends))
+	for i, b := range backends {
+		backendStrs[i] = b.String()
+	}
+
+	d.logger.Info("Proxy backends updated",
+		slog.Int("count", len(backends)),
+		slog.Any("backends", backendStrs))
 }
 
 // stopProxy gracefully shuts down the reverse proxy server.

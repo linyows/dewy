@@ -38,6 +38,7 @@ type cli struct {
 	AfterDeployHook  string   `long:"after-deploy-hook" description:"Shell command to execute after successful deployment"`
 	// Container-specific options
 	ContainerPort    int      `long:"container-port" description:"Container port (default: 8080)"`
+	Replicas         int      `long:"replicas" description:"Number of container replicas to run (default: 1)"`
 	HealthPath       string   `long:"health-path" description:"Health check path (optional, e.g., /health)"`
 	HealthTimeout    int      `long:"health-timeout" description:"Health check timeout in seconds (default: 30)"`
 	DrainTime        int      `long:"drain-time" description:"Drain time in seconds after traffic switch (default: 30 for container command)"`
@@ -143,6 +144,7 @@ func (c *cli) showHelp() {
 
 	containerOpts := strings.Join(c.buildHelp([]string{
 		"ContainerPort",
+		"Replicas",
 		"Env",
 		"Volumes",
 		"HealthPath",
@@ -313,6 +315,7 @@ func (c *cli) run() int {
 
 		conf.Container = &ContainerConfig{
 			ContainerPort: c.ContainerPort,
+			Replicas:      c.Replicas,
 			Env:           c.Env,
 			Volumes:       c.Volumes,
 			HealthPath:    c.HealthPath,

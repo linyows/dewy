@@ -53,7 +53,7 @@ func TestNew(t *testing.T) {
 
 	opts := []cmp.Option{
 		cmp.AllowUnexported(Dewy{}, kvs.File{}),
-		cmpopts.IgnoreFields(Dewy{}, "RWMutex", "logger", "proxyServer", "proxyBackend", "proxyMutex", "containerRuntime"),
+		cmpopts.IgnoreFields(Dewy{}, "RWMutex", "logger", "proxyServer", "proxyBackends", "proxyIndex", "proxyMutex", "containerRuntime"),
 		cmpopts.IgnoreFields(kvs.File{}, "mutex", "logger"),
 	}
 	if diff := cmp.Diff(dewy, expect, opts...); diff != "" {
