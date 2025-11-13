@@ -258,7 +258,7 @@ Log information is utilized for real-time monitoring, trend analysis, performanc
 
 ## Container Deployment Workflow
 
-When operating in container mode (`dewy container`), the deployment workflow differs significantly from binary deployments. Container deployments use a Blue-Green deployment strategy with localhost-only port mapping and a built-in reverse proxy to achieve zero-downtime updates.
+When operating in container mode (`dewy container`), the deployment workflow differs significantly from binary deployments. Container deployments use a rolling update strategy with localhost-only port mapping and a built-in reverse proxy to achieve zero-downtime updates.
 
 ### Container Deployment Sequence
 
@@ -289,7 +289,7 @@ sequenceDiagram
             RT->>D: Pull complete
             D->>NO: Image pull notification
 
-            Note over D: Prepare Blue-Green deployment
+            Note over D: Prepare rolling update deployment
 
             D->>RT: Start Green container (127.0.0.1::containerPort)
             RT->>G: Create and start container
@@ -366,9 +366,9 @@ INFO: Image pull notification message="Pulled image v1.2.3"
 
 Container images are composed of multiple layers, which are cached by the container runtime. Only changed layers are downloaded, significantly reducing deployment time for incremental updates.
 
-#### 3. Blue-Green Deployment Phase
+#### 3. Rolling Update Deployment Phase
 
-Container deployments use a Blue-Green strategy with localhost-only port mapping and built-in reverse proxy for zero-downtime updates. This phase consists of several critical steps:
+Container deployments use a rolling update strategy with localhost-only port mapping and built-in reverse proxy for zero-downtime updates. This phase consists of several critical steps:
 
 **Step 1: Start Green Container with Localhost-Only Port**
 
@@ -437,7 +437,7 @@ Key differences between container and binary deployment workflows:
 |--------|------------------|---------------------|
 | **Artifact Source** | GitHub Releases, S3, GCS | OCI Registry (Docker Hub, GHCR, etc.) |
 | **Artifact Format** | tar.gz, zip archives | OCI Image (multi-layer) |
-| **Deployment Strategy** | In-place update + SIGHUP | Blue-Green with proxy switch |
+| **Deployment Strategy** | In-place update + SIGHUP | Rolling update with proxy |
 | **Downtime** | Minimal (restart time) | Zero (atomic proxy switch) |
 | **Rollback** | Previous release directory | Automatic on health check failure |
 | **Health Check** | Process-based | HTTP/TCP via localhost |
@@ -587,7 +587,7 @@ The container port is only accessible via localhost, not from the external netwo
 
 #### 3. Atomic Backend Switch
 
-During Blue-Green deployment, the proxy atomically switches its backend to the new container:
+During rolling update deployment, the proxy atomically switches its backend to the new container:
 
 ```mermaid
 sequenceDiagram
