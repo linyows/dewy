@@ -118,13 +118,6 @@ func (d *Docker) Run(ctx context.Context, opts RunOptions) (string, error) {
 		args = append(args, "--name", opts.Name)
 	}
 
-	if opts.Network != "" {
-		args = append(args, "--network", opts.Network)
-		if opts.NetworkAlias != "" {
-			args = append(args, "--network-alias", opts.NetworkAlias)
-		}
-	}
-
 	// Environment variables
 	for _, env := range opts.Env {
 		args = append(args, "-e", env)
@@ -175,39 +168,6 @@ func (d *Docker) Remove(ctx context.Context, containerID string) error {
 	return d.execCommand(ctx, "rm", containerID)
 }
 
-// NetworkConnect connects a container to a network with an alias.
-func (d *Docker) NetworkConnect(ctx context.Context, network, containerID, alias string) error {
-	args := []string{"network", "connect"}
-
-	if alias != "" {
-		args = append(args, "--alias", alias)
-	}
-
-	args = append(args, network, containerID)
-
-	d.logger.Info("Connecting container to network",
-		slog.String("container", containerID),
-		slog.String("network", network),
-		slog.String("alias", alias))
-
-	return d.execCommand(ctx, args...)
-}
-
-// NetworkDisconnect disconnects a container from a network.
-func (d *Docker) NetworkDisconnect(ctx context.Context, network, containerID string) error {
-	d.logger.Info("Disconnecting container from network",
-		slog.String("container", containerID),
-		slog.String("network", network))
-
-	// Ignore errors (container may already be disconnected)
-	err := d.execCommand(ctx, "network", "disconnect", network, containerID)
-	if err != nil {
-		d.logger.Warn("Failed to disconnect container, may already be disconnected",
-			slog.String("error", err.Error()))
-	}
-	return nil
-}
-
 // FindContainerByLabel finds a container by labels.
 func (d *Docker) FindContainerByLabel(ctx context.Context, labels map[string]string) (string, error) {
 	args := []string{"ps", "-q"}
@@ -230,22 +190,6 @@ func (d *Docker) FindContainerByLabel(ctx context.Context, labels map[string]str
 	return lines[0], nil
 }
 
-// GetContainerIP gets the IP address of a container in a specific network.
-func (d *Docker) GetContainerIP(ctx context.Context, containerID, network string) (string, error) {
-	// Use index function to handle network names with special characters (like hyphens)
-	format := fmt.Sprintf("{{(index .NetworkSettings.Networks \"%s\").IPAddress}}", network)
-	output, err := d.execCommandOutput(ctx, "inspect", "--format", format, containerID)
-	if err != nil {
-		return "", fmt.Errorf("failed to get container IP: %w", err)
-	}
-
-	if output == "" {
-		return "", fmt.Errorf("container not connected to network %s", network)
-	}
-
-	return output, nil
-}
-
 // UpdateLabel updates a container's label.
 func (d *Docker) UpdateLabel(ctx context.Context, containerID, key, value string) error {
 	d.logger.Debug("Label update skipped (not supported by Docker)",
@@ -258,56 +202,42 @@ func (d *Docker) UpdateLabel(ctx context.Context, containerID, key, value string
 	return nil
 }
 
-// EnsureNetwork ensures a Docker network exists, creating it if necessary.
-func (d *Docker) EnsureNetwork(ctx context.Context, network string) error {
-	// Check if network exists
-	_, err := d.execCommandOutput(ctx, "network", "inspect", network)
-	if err == nil {
-		// Network already exists
-		d.logger.Debug("Network already exists", slog.String("network", network))
-		return nil
-	}
+// DeployContainerCallback is called after health check passes but before stopping old container.
+type DeployContainerCallback func(containerID string) error
 
-	// Create network
-	d.logger.Info("Creating Docker network", slog.String("network", network))
-	if err := d.execCommand(ctx, "network", "create", network); err != nil {
-		return fmt.Errorf("failed to create network: %w", err)
-	}
-
-	return nil
+// DeployContainerWithCallback performs Blue-Green deployment with a callback.
+func (d *Docker) DeployContainerWithCallback(ctx context.Context, opts DeployOptions, callback DeployContainerCallback) (string, error) {
+	return d.deployContainerInternal(ctx, opts, callback)
 }
 
 // DeployContainer performs Blue-Green deployment.
 func (d *Docker) DeployContainer(ctx context.Context, opts DeployOptions) error {
-	// 0. Ensure network exists
-	if err := d.EnsureNetwork(ctx, opts.Network); err != nil {
-		return fmt.Errorf("network setup failed: %w", err)
-	}
+	_, err := d.deployContainerInternal(ctx, opts, nil)
+	return err
+}
 
+// deployContainerInternal is the internal implementation of container deployment.
+func (d *Docker) deployContainerInternal(ctx context.Context, opts DeployOptions, callback DeployContainerCallback) (string, error) {
 	// 1. Pull new image
 	d.logger.Info("Pulling new image", slog.String("image", opts.ImageRef))
 	if err := d.Pull(ctx, opts.ImageRef); err != nil {
-		return fmt.Errorf("pull failed: %w", err)
+		return "", fmt.Errorf("pull failed: %w", err)
 	}
 
-	// 2. Find current container (Blue)
+	// 2. Find current container
 	currentID, err := d.FindContainerByLabel(ctx, map[string]string{
-		"dewy.role": "current",
-		"dewy.app":  opts.AppName,
+		"dewy.managed": "true",
+		"dewy.app":     opts.AppName,
 	})
 	if err != nil && !errors.Is(err, ErrContainerNotFound) {
-		return err
+		return "", err
 	}
 
 	// 3. Start new container
 	newName := fmt.Sprintf("%s-%d", opts.AppName, time.Now().Unix())
-	// Start with base labels
-	// Since Docker doesn't support updating labels after creation,
-	// we set role="current" from the start. The old container will be removed.
 	labels := map[string]string{
-		"dewy.role":    "current",
-		"dewy.app":     opts.AppName,
 		"dewy.managed": "true",
+		"dewy.app":     opts.AppName,
 	}
 
 	// Add version label if we can extract it from image ref
@@ -316,37 +246,28 @@ func (d *Docker) DeployContainer(ctx context.Context, opts DeployOptions) error 
 		labels["dewy.version"] = parts[len(parts)-1]
 	}
 
-	// For both initial and Blue-Green deployment, connect to network with alias from the start
-	// This ensures zero-downtime by allowing both old and new containers to share the alias
-	network := opts.Network
-	networkAlias := opts.NetworkAlias
 	ports := opts.Ports
 
-	// For Blue-Green deployment with proxy, don't expose ports (proxy handles external traffic)
-	if currentID != "" && len(opts.Ports) == 0 {
-		ports = nil
+	// If ContainerPort is specified, add localhost-only port mapping
+	// Format: "127.0.0.1::containerPort" - Docker will assign a random host port on localhost only
+	if opts.ContainerPort > 0 {
+		localhostPort := fmt.Sprintf("127.0.0.1::%d", opts.ContainerPort)
+		ports = append(ports, localhostPort)
+		d.logger.Debug("Adding localhost-only port mapping",
+			slog.String("mapping", localhostPort))
 	}
 
 	newID, err := d.Run(ctx, RunOptions{
-		Image:        opts.ImageRef,
-		Name:         newName,
-		Network:      network,
-		NetworkAlias: networkAlias,
-		Env:          opts.Env,
-		Volumes:      opts.Volumes,
-		Ports:        ports,
-		Labels:       labels,
-		Detach:       true,
+		Image:   opts.ImageRef,
+		Name:    newName,
+		Env:     opts.Env,
+		Volumes: opts.Volumes,
+		Ports:   ports,
+		Labels:  labels,
+		Detach:  true,
 	})
 	if err != nil {
-		return fmt.Errorf("start new container failed: %w", err)
-	}
-
-	// 4. Log that both containers now share the alias (for Blue-Green)
-	if currentID != "" {
-		d.logger.Info("New container started with shared network alias",
-			slog.String("alias", opts.NetworkAlias),
-			slog.String("strategy", "zero-downtime DNS round-robin"))
+		return "", fmt.Errorf("start new container failed: %w", err)
 	}
 
 	// 5. Health check
@@ -364,7 +285,22 @@ func (d *Docker) DeployContainer(ctx context.Context, opts DeployOptions) error 
 			if removeErr := d.Remove(ctx, newID); removeErr != nil {
 				d.logger.Error("Failed to remove container during rollback", slog.String("error", removeErr.Error()))
 			}
-			return fmt.Errorf("health check failed: %w", err)
+			return "", fmt.Errorf("health check failed: %w", err)
+		}
+	}
+
+	// 5.5. Execute callback after health check passes but before stopping old container
+	if callback != nil {
+		d.logger.Debug("Executing deployment callback")
+		if err := callback(newID); err != nil {
+			d.logger.Error("Deployment callback failed, rolling back", slog.String("error", err.Error()))
+			if stopErr := d.Stop(ctx, newID, 5*time.Second); stopErr != nil {
+				d.logger.Error("Failed to stop container during rollback", slog.String("error", stopErr.Error()))
+			}
+			if removeErr := d.Remove(ctx, newID); removeErr != nil {
+				d.logger.Error("Failed to remove container during rollback", slog.String("error", removeErr.Error()))
+			}
+			return "", fmt.Errorf("deployment callback failed: %w", err)
 		}
 	}
 
@@ -384,18 +320,50 @@ func (d *Docker) DeployContainer(ctx context.Context, opts DeployOptions) error 
 		}
 	}
 
-	// 7. Update label to "current"
-	if updateErr := d.UpdateLabel(ctx, newID, "dewy.role", "current"); updateErr != nil {
-		d.logger.Error("Failed to update label", slog.String("error", updateErr.Error()))
-	}
-
 	d.logger.Info("Deployment completed successfully", slog.String("container", newID))
-	return nil
+	return newID, nil
 }
 
-// GetRunningContainerWithImage checks if a container is running with the specified image and network alias.
+// GetMappedPort returns the host port mapped to the container port.
+func (d *Docker) GetMappedPort(ctx context.Context, containerID string, containerPort int) (int, error) {
+	portSpec := fmt.Sprintf("%d/tcp", containerPort)
+	output, err := d.execCommandOutput(ctx, "port", containerID, portSpec)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get mapped port: %w", err)
+	}
+
+	if output == "" {
+		return 0, fmt.Errorf("no port mapping found for container port %d", containerPort)
+	}
+
+	// Output format: "0.0.0.0:32768" or "0.0.0.0:32768\n:::32768"
+	// Extract the port number from the first mapping
+	parts := strings.Split(output, "\n")
+	if len(parts) == 0 {
+		return 0, fmt.Errorf("unexpected port output format: %s", output)
+	}
+
+	// Parse "0.0.0.0:32768" to extract "32768"
+	firstMapping := strings.TrimSpace(parts[0])
+	colonIdx := strings.LastIndex(firstMapping, ":")
+	if colonIdx == -1 {
+		return 0, fmt.Errorf("unexpected port format: %s", firstMapping)
+	}
+
+	portStr := firstMapping[colonIdx+1:]
+	port, err := fmt.Sscanf(portStr, "%d", new(int))
+	if err != nil || port != 1 {
+		return 0, fmt.Errorf("failed to parse port number from %s: %w", portStr, err)
+	}
+
+	var hostPort int
+	fmt.Sscanf(portStr, "%d", &hostPort)
+	return hostPort, nil
+}
+
+// GetRunningContainerWithImage checks if a container is running with the specified image.
 // It returns the container ID if found, or an empty string if not found.
-func (d *Docker) GetRunningContainerWithImage(ctx context.Context, imageRef, networkAlias string) (string, error) {
+func (d *Docker) GetRunningContainerWithImage(ctx context.Context, imageRef string) (string, error) {
 	// Get list of running containers with the specified ancestor (image)
 	// Format: docker ps --filter ancestor=<image> --filter status=running --format "{{.ID}}"
 	output, err := d.execCommandOutput(ctx, "ps",
@@ -416,31 +384,84 @@ func (d *Docker) GetRunningContainerWithImage(ctx context.Context, imageRef, net
 	containerIDs := strings.Split(output, "\n")
 	containerID := strings.TrimSpace(containerIDs[0])
 
-	// Verify the container has the expected network alias
-	if networkAlias != "" {
-		// Get network aliases for the container
-		aliasOutput, err := d.execCommandOutput(ctx, "inspect",
-			"--format", "{{range .NetworkSettings.Networks}}{{range .Aliases}}{{.}} {{end}}{{end}}",
-			containerID)
-
-		if err != nil {
-			d.logger.Debug("Failed to inspect container network aliases",
-				slog.String("container", containerID),
-				slog.String("error", err.Error()))
-			return "", nil
-		}
-
-		if !strings.Contains(aliasOutput, networkAlias) {
-			d.logger.Debug("Container found but does not have expected network alias",
-				slog.String("container", containerID),
-				slog.String("expected_alias", networkAlias),
-				slog.String("actual_aliases", aliasOutput))
-			return "", nil
-		}
-	}
-
 	d.logger.Debug("Found running container with image",
 		slog.String("image", imageRef),
 		slog.String("container", containerID))
 	return containerID, nil
+}
+
+// ListImages returns a list of images matching the given repository.
+func (d *Docker) ListImages(ctx context.Context, repository string) ([]ImageInfo, error) {
+	// Format: docker images --format "{{.ID}}|{{.Repository}}|{{.Tag}}|{{.CreatedAt}}|{{.Size}}" <repository>
+	format := "{{.ID}}|{{.Repository}}|{{.Tag}}|{{.CreatedAt}}|{{.Size}}"
+	output, err := d.execCommandOutput(ctx, "images", "--format", format, repository)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list images: %w", err)
+	}
+
+	if output == "" {
+		return []ImageInfo{}, nil
+	}
+
+	lines := strings.Split(output, "\n")
+	images := make([]ImageInfo, 0, len(lines))
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		parts := strings.Split(line, "|")
+		if len(parts) != 5 {
+			d.logger.Warn("Unexpected image format", slog.String("line", line))
+			continue
+		}
+
+		// Parse creation time - Docker returns various formats
+		// Example: "2025-01-13 10:30:45 +0900 JST"
+		var created time.Time
+		createdStr := strings.TrimSpace(parts[3])
+
+		// Try multiple time formats
+		timeFormats := []string{
+			"2006-01-02 15:04:05 -0700 MST",
+			"2006-01-02 15:04:05 -0700",
+			time.RFC3339,
+		}
+
+		for _, format := range timeFormats {
+			if t, err := time.Parse(format, createdStr); err == nil {
+				created = t
+				break
+			}
+		}
+
+		images = append(images, ImageInfo{
+			ID:         strings.TrimSpace(parts[0]),
+			Repository: strings.TrimSpace(parts[1]),
+			Tag:        strings.TrimSpace(parts[2]),
+			Created:    created,
+			Size:       0, // Size parsing is complex, we don't need it for sorting
+		})
+	}
+
+	d.logger.Debug("Listed images",
+		slog.String("repository", repository),
+		slog.Int("count", len(images)))
+
+	return images, nil
+}
+
+// RemoveImage removes an image by ID.
+func (d *Docker) RemoveImage(ctx context.Context, imageID string) error {
+	d.logger.Info("Removing image", slog.String("image", imageID))
+
+	// Use --force to remove even if there are stopped containers using it
+	err := d.execCommand(ctx, "rmi", "--force", imageID)
+	if err != nil {
+		return fmt.Errorf("failed to remove image: %w", err)
+	}
+
+	return nil
 }

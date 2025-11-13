@@ -709,11 +709,8 @@ dewy container \
 # Access the application through the proxy
 curl http://localhost:8000/
 
-# View container logs (proxy)
-docker logs -f app-proxy
-
 # View container logs (app)
-docker logs -f $(docker ps -q --filter "label=dewy.role=current")
+docker logs -f $(docker ps -q --filter "label=dewy.managed=true")
 ```
 
 The reverse proxy feature simplifies container deployment by managing network traffic and providing a consistent access point for your applications.

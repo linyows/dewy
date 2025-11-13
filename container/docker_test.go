@@ -41,7 +41,6 @@ func TestRunOptions(t *testing.T) {
 	opts := RunOptions{
 		Image:   "nginx:latest",
 		Name:    "test-container",
-		Network: "test-net",
 		Env:     []string{"FOO=bar", "BAZ=qux"},
 		Volumes: []string{"/host:/container"},
 		Labels: map[string]string{
@@ -70,13 +69,12 @@ func TestDeployOptions(t *testing.T) {
 	}
 
 	opts := DeployOptions{
-		ImageRef:     "ghcr.io/linyows/myapp:v1.0.0",
-		AppName:      "myapp",
-		Network:      "myapp-net",
-		NetworkAlias: "myapp-current",
-		Env:          []string{"APP_ENV=production"},
-		Volumes:      []string{"/data:/app/data"},
-		HealthCheck:  healthCheck,
+		ImageRef:      "ghcr.io/linyows/myapp:v1.0.0",
+		AppName:       "myapp",
+		ContainerPort: 8080,
+		Env:           []string{"APP_ENV=production"},
+		Volumes:       []string{"/data:/app/data"},
+		HealthCheck:   healthCheck,
 	}
 
 	if opts.ImageRef != "ghcr.io/linyows/myapp:v1.0.0" {
@@ -85,6 +83,10 @@ func TestDeployOptions(t *testing.T) {
 
 	if opts.AppName != "myapp" {
 		t.Errorf("Expected appName myapp, got %s", opts.AppName)
+	}
+
+	if opts.ContainerPort != 8080 {
+		t.Errorf("Expected containerPort 8080, got %d", opts.ContainerPort)
 	}
 
 	if opts.HealthCheck == nil {

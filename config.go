@@ -63,8 +63,6 @@ type CacheConfig struct {
 // ContainerConfig struct for container command.
 type ContainerConfig struct {
 	Name          string
-	Network       string
-	NetworkAlias  string
 	ContainerPort int
 	Env           []string
 	Volumes       []string
@@ -72,9 +70,6 @@ type ContainerConfig struct {
 	HealthTimeout time.Duration
 	DrainTime     time.Duration
 	Runtime       string // "docker" or "podman"
-	Proxy         bool   // Enable reverse proxy
-	ProxyPort     int    // Proxy port (default: 80)
-	ProxyImage    string // Proxy image (default: "caddy:2-alpine")
 }
 
 // Config struct.
@@ -82,6 +77,7 @@ type Config struct {
 	Command          Command
 	Registry         string
 	Notifier         string
+	Port             int // Port for HTTP server (used by both server and container commands)
 	Cache            CacheConfig
 	Starter          starter.Config
 	Container        *ContainerConfig

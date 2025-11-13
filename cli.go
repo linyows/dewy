@@ -37,19 +37,14 @@ type cli struct {
 	BeforeDeployHook string   `long:"before-deploy-hook" description:"Shell command to execute before deployment begins"`
 	AfterDeployHook  string   `long:"after-deploy-hook" description:"Shell command to execute after successful deployment"`
 	// Container-specific options
-	Network          string   `long:"network" description:"Docker network name for container command (default: dewy-net)"`
-	NetworkAlias     string   `long:"network-alias" description:"Network alias for container (default: dewy-current)"`
 	ContainerPort    int      `long:"container-port" description:"Container port (default: 8080)"`
 	HealthPath       string   `long:"health-path" description:"Health check path (optional, e.g., /health)"`
 	HealthTimeout    int      `long:"health-timeout" description:"Health check timeout in seconds (default: 30)"`
 	DrainTime        int      `long:"drain-time" description:"Drain time in seconds after traffic switch (default: 30 for container command)"`
 	ContainerRuntime string   `long:"runtime" description:"Container runtime (docker or podman, default: docker)"`
-	Env              []string `long:"env" short:"e" description:"Environment variables for container (format: KEY=VALUE)"`
-	Volumes          []string `long:"volume" description:"Volume mounts for container (format: host:container or host:container:ro)"`
-	Proxy            bool     `long:"proxy" description:"Enable reverse proxy with Caddy"`
-	ProxyPort        int      `long:"proxy-port" description:"Proxy port (default: 80)"`
-	ProxyImage       string   `long:"proxy-image" description:"Proxy container image (default: caddy:2-alpine)"`
-	Help             bool     `long:"help" short:"h" description:"show this help message and exit"`
+	Env     []string `long:"env" short:"e" description:"Environment variables for container (format: KEY=VALUE)"`
+	Volumes []string `long:"volume" description:"Volume mounts for container (format: host:container or host:container:ro)"`
+	Help    bool     `long:"help" short:"h" description:"show this help message and exit"`
 	Version          bool     `long:"version" short:"v" description:"prints the version number"`
 }
 
@@ -147,8 +142,6 @@ func (c *cli) showHelp() {
 	}), "\n")
 
 	containerOpts := strings.Join(c.buildHelp([]string{
-		"Network",
-		"NetworkAlias",
 		"ContainerPort",
 		"Env",
 		"Volumes",
@@ -156,9 +149,6 @@ func (c *cli) showHelp() {
 		"HealthTimeout",
 		"DrainTime",
 		"ContainerRuntime",
-		"Proxy",
-		"ProxyPort",
-		"ProxyImage",
 	}), "\n")
 
 	help := `Usage: dewy [--version] [--help] command <options>
@@ -254,6 +244,13 @@ func (c *cli) run() int {
 	switch c.command {
 	case "server":
 		conf.Command = SERVER
+
+		// Port is required for server command
+		if len(c.Ports) == 0 {
+			fmt.Fprintf(c.env.Err, "Error: --port option is required for server command\n")
+			return ExitErr
+		}
+
 		parsedPorts, err := parsePorts(c.Ports)
 		if err != nil {
 			fmt.Fprintf(c.env.Err, "Error: invalid port specification: %s\n", err)
@@ -276,13 +273,30 @@ func (c *cli) run() int {
 	case "container":
 		conf.Command = CONTAINER
 
+		// Port is required for container command
+		if len(c.Ports) == 0 {
+			fmt.Fprintf(c.env.Err, "Error: --port option is required for container command\n")
+			return ExitErr
+		}
+
+		// Parse port for reverse proxy (use first port from --port flag)
+		parsedPorts, err := parsePorts(c.Ports)
+		if err != nil {
+			fmt.Fprintf(c.env.Err, "Error: failed to parse port: %v\n", err)
+			return ExitErr
+		}
+		if len(parsedPorts) == 0 {
+			fmt.Fprintf(c.env.Err, "Error: no valid port specified\n")
+			return ExitErr
+		}
+		portNum, err := strconv.Atoi(parsedPorts[0])
+		if err != nil {
+			fmt.Fprintf(c.env.Err, "Error: invalid port number: %v\n", err)
+			return ExitErr
+		}
+		conf.Port = portNum
+
 		// Set defaults
-		if c.Network == "" {
-			c.Network = "dewy-net"
-		}
-		if c.NetworkAlias == "" {
-			c.NetworkAlias = "dewy-current"
-		}
 		if c.ContainerPort == 0 {
 			c.ContainerPort = 8080
 		}
@@ -296,16 +310,8 @@ func (c *cli) run() int {
 		if c.ContainerRuntime == "" {
 			c.ContainerRuntime = "docker"
 		}
-		if c.ProxyPort == 0 {
-			c.ProxyPort = 80
-		}
-		if c.ProxyImage == "" {
-			c.ProxyImage = "caddy:2-alpine"
-		}
 
 		conf.Container = &ContainerConfig{
-			Network:       c.Network,
-			NetworkAlias:  c.NetworkAlias,
 			ContainerPort: c.ContainerPort,
 			Env:           c.Env,
 			Volumes:       c.Volumes,
@@ -313,9 +319,6 @@ func (c *cli) run() int {
 			HealthTimeout: time.Duration(c.HealthTimeout) * time.Second,
 			DrainTime:     time.Duration(c.DrainTime) * time.Second,
 			Runtime:       c.ContainerRuntime,
-			Proxy:         c.Proxy,
-			ProxyPort:     c.ProxyPort,
-			ProxyImage:    c.ProxyImage,
 		}
 	default:
 		conf.Command = ASSETS

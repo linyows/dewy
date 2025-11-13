@@ -27,30 +27,31 @@ type Runtime interface {
 	// Remove removes a container.
 	Remove(ctx context.Context, containerID string) error
 
-	// NetworkConnect connects a container to a network with alias.
-	NetworkConnect(ctx context.Context, network, containerID, alias string) error
-
-	// NetworkDisconnect disconnects a container from a network.
-	NetworkDisconnect(ctx context.Context, network, containerID string) error
-
 	// FindContainerByLabel finds a container by labels.
 	FindContainerByLabel(ctx context.Context, labels map[string]string) (string, error)
 
 	// UpdateLabel updates a container's label.
 	UpdateLabel(ctx context.Context, containerID, key, value string) error
+
+	// GetMappedPort returns the host port mapped to the container port.
+	GetMappedPort(ctx context.Context, containerID string, containerPort int) (int, error)
+
+	// ListImages returns a list of images matching the given repository.
+	ListImages(ctx context.Context, repository string) ([]ImageInfo, error)
+
+	// RemoveImage removes an image by ID.
+	RemoveImage(ctx context.Context, imageID string) error
 }
 
 // RunOptions contains options for running a container.
 type RunOptions struct {
-	Image        string
-	Name         string
-	Network      string
-	NetworkAlias string // Network alias for the container in the network
-	Env          []string
-	Volumes      []string
-	Labels       map[string]string
-	Ports        []string // Port mappings in format "host:container" (e.g., "8080:8080")
-	Detach       bool
+	Image   string
+	Name    string
+	Env     []string
+	Volumes []string
+	Labels  map[string]string
+	Ports   []string // Port mappings in format "host:container" or "127.0.0.1::container" for random localhost port
+	Detach  bool
 }
 
 // Container represents container information.
@@ -63,16 +64,24 @@ type Container struct {
 	Created time.Time
 }
 
+// ImageInfo represents container image information.
+type ImageInfo struct {
+	ID         string
+	Repository string
+	Tag        string
+	Created    time.Time
+	Size       int64
+}
+
 // DeployOptions contains options for deploying a container.
 type DeployOptions struct {
-	ImageRef     string
-	AppName      string
-	Network      string
-	NetworkAlias string
-	Env          []string
-	Volumes      []string
-	Ports        []string // Port mappings in format "host:container" (e.g., "8080:8080")
-	HealthCheck  HealthCheckFunc
+	ImageRef      string
+	AppName       string
+	ContainerPort int      // Container port to expose (will be mapped to random localhost port)
+	Env           []string
+	Volumes       []string
+	Ports         []string // Explicit port mappings in format "host:container" (e.g., "8080:8080")
+	HealthCheck   HealthCheckFunc
 }
 
 // HealthCheckFunc is a function type for health checking.

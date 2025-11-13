@@ -6,6 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
+	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"os"
 	"os/exec"
@@ -33,7 +36,7 @@ const (
 	releaseDir   = ISO8601
 	releasesDir  = "releases"
 	symlinkDir   = "current"
-	keepReleases = 7
+	keepReleases = 7 // Keep last 7 releases (for server/assets) or images (for container)
 
 	// currentkeyName is a name whose value is the version of the currently running server application.
 	// For example, if you are using a file for the cache store, running `cat current` will show `v1.2.3--app_linux_amd64.tar.gz`, which is a combination of the tag and artifact.
@@ -43,16 +46,20 @@ const (
 
 // Dewy struct.
 type Dewy struct {
-	config          Config
-	registry        registry.Registry
-	artifact        artifact.Artifact
-	cache           kvs.KVS
-	isServerRunning bool
-	disableReport   bool
-	root            string
-	job             *scheduler.Job
-	notifier        notifier.Notifier
-	logger          *logging.Logger
+	config           Config
+	registry         registry.Registry
+	artifact         artifact.Artifact
+	cache            kvs.KVS
+	isServerRunning  bool
+	disableReport    bool
+	root             string
+	job              *scheduler.Job
+	notifier         notifier.Notifier
+	logger           *logging.Logger
+	proxyServer      *http.Server
+	proxyBackend     *url.URL
+	proxyMutex       sync.RWMutex
+	containerRuntime container.Runtime
 	sync.RWMutex
 }
 
@@ -110,15 +117,13 @@ func (d *Dewy) Start(i int) {
 	if d.config.Command == CONTAINER {
 		runtime := d.config.Container.Runtime
 		msg := "Container logs are not displayed in dewy output, To view application logs."
-		d.logger.Info(fmt.Sprintf("%s Use: %s logs -f $(%s ps -q --filter \"label=dewy.role=current\")", msg, runtime, runtime))
+		d.logger.Info(fmt.Sprintf("%s Use: %s logs -f $(%s ps -q --filter \"label=dewy.managed=true\")", msg, runtime, runtime))
 
-		// Start proxy if enabled
-		if d.config.Container.Proxy {
-			if err := d.startProxy(ctx); err != nil {
-				d.logger.Error("Proxy startup failed", slog.String("error", err.Error()))
-				d.notifier.SendError(ctx, err)
-				return
-			}
+		// Start built-in reverse proxy
+		if err := d.startProxy(ctx); err != nil {
+			d.logger.Error("Proxy startup failed", slog.String("error", err.Error()))
+			d.notifier.SendError(ctx, err)
+			return
 		}
 	}
 
@@ -166,16 +171,14 @@ func (d *Dewy) waitSigs(ctx context.Context) {
 		case syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:
 			d.job.Quit <- true
 
-			// Cleanup managed containers if in CONTAINER mode with proxy enabled
-			if d.config.Command == CONTAINER && d.config.Container.Proxy {
-				d.logger.Info("Cleaning up managed containers")
-				dockerRuntime, err := container.NewDocker(d.logger.Logger, d.config.Container.DrainTime)
-				if err != nil {
-					d.logger.Error("Failed to create Docker runtime for cleanup", slog.String("error", err.Error()))
-				} else {
-					if err := dockerRuntime.CleanupManagedContainers(ctx); err != nil {
-						d.logger.Error("Failed to cleanup managed containers", slog.String("error", err.Error()))
-					}
+			// Stop managed containers and reverse proxy if running
+			if d.config.Command == CONTAINER {
+				if err := d.stopManagedContainers(ctx); err != nil {
+					d.logger.Error("Failed to stop managed containers", slog.String("error", err.Error()))
+				}
+
+				if err := d.stopProxy(ctx); err != nil {
+					d.logger.Error("Failed to stop proxy", slog.String("error", err.Error()))
 				}
 			}
 
@@ -464,6 +467,65 @@ func (d *Dewy) keepReleases() error {
 	return nil
 }
 
+// cleanupOldImages removes old container images, keeping only the most recent ones.
+func (d *Dewy) cleanupOldImages(ctx context.Context, imageRef string) error {
+	if d.containerRuntime == nil {
+		return fmt.Errorf("container runtime not initialized")
+	}
+
+	// Extract repository from imageRef (remove tag if present)
+	// Example: "ghcr.io/linyows/myapp:v1.0.0" -> "ghcr.io/linyows/myapp"
+	repository := imageRef
+	if idx := strings.LastIndex(imageRef, ":"); idx != -1 {
+		repository = imageRef[:idx]
+	}
+
+	// List all images for this repository
+	images, err := d.containerRuntime.ListImages(ctx, repository)
+	if err != nil {
+		return fmt.Errorf("failed to list images: %w", err)
+	}
+
+	if len(images) <= keepReleases {
+		d.logger.Debug("No old images to clean up",
+			slog.String("repository", repository),
+			slog.Int("count", len(images)),
+			slog.Int("keep", keepReleases))
+		return nil
+	}
+
+	// Sort images by creation time (newest first)
+	sort.Slice(images, func(i, j int) bool {
+		return images[i].Created.After(images[j].Created)
+	})
+
+	// Remove old images (keep only the most recent keepReleases)
+	for i, img := range images {
+		if i < keepReleases {
+			d.logger.Debug("Keeping image",
+				slog.String("id", img.ID),
+				slog.String("tag", img.Tag),
+				slog.Time("created", img.Created))
+			continue
+		}
+
+		d.logger.Info("Removing old image",
+			slog.String("id", img.ID),
+			slog.String("tag", img.Tag),
+			slog.Time("created", img.Created))
+
+		if err := d.containerRuntime.RemoveImage(ctx, img.ID); err != nil {
+			d.logger.Warn("Failed to remove image",
+				slog.String("id", img.ID),
+				slog.String("error", err.Error()))
+			// Continue with other images even if one fails
+			continue
+		}
+	}
+
+	return nil
+}
+
 func (d *Dewy) execHook(cmd string) (*notifier.HookResult, error) {
 	if cmd == "" {
 		return nil, nil
@@ -551,7 +613,10 @@ func (d *Dewy) RunContainer() error {
 		return fmt.Errorf("failed to create Docker runtime: %w", err)
 	}
 
-	runningID, err := dockerRuntime.GetRunningContainerWithImage(ctx, imageRef, d.config.Container.NetworkAlias)
+	// Store runtime for shutdown handling
+	d.containerRuntime = dockerRuntime
+
+	runningID, err := dockerRuntime.GetRunningContainerWithImage(ctx, imageRef)
 	if err != nil {
 		d.logger.Warn("Failed to check running containers", slog.String("error", err.Error()))
 		// Continue with deployment even if check fails
@@ -622,6 +687,13 @@ func (d *Dewy) RunContainer() error {
 	d.logger.Info("Deployment notification", slog.String("message", msg))
 	d.notifier.Send(ctx, msg)
 
+	// Clean up old images
+	d.logger.Info("Keep images", slog.Int("count", keepReleases))
+	err = d.cleanupOldImages(ctx, imageRef)
+	if err != nil {
+		d.logger.Error("Keep images failure", slog.String("error", err.Error()))
+	}
+
 	return nil
 }
 
@@ -673,92 +745,235 @@ func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentRespons
 	// Create health check function
 	var healthCheck container.HealthCheckFunc
 	if d.config.Container.HealthPath != "" {
-		// Use docker exec for health check to work on all platforms (Linux, macOS, Windows)
-		// This avoids the issue where Docker Desktop on macOS doesn't allow direct network access from host
-		healthCheck = container.WaitForHTTPviaNetwork(
-			d.logger.Logger,
-			dockerRuntime,
-			d.config.Container.Network,
-			d.config.Container.HealthPath,
-			d.config.Container.ContainerPort,
-			d.config.Container.HealthTimeout,
-			5, // retries
-		)
+		// Health check will use the mapped localhost port after deployment
+		// For now, we'll implement a simple HTTP check via localhost
+		healthCheck = func(ctx context.Context, containerID string) error {
+			// Get mapped port
+			mappedPort, err := dockerRuntime.GetMappedPort(ctx, containerID, d.config.Container.ContainerPort)
+			if err != nil {
+				return fmt.Errorf("failed to get mapped port for health check: %w", err)
+			}
+
+			// Check HTTP endpoint on localhost
+			healthURL := fmt.Sprintf("http://localhost:%d%s", mappedPort, d.config.Container.HealthPath)
+			client := &http.Client{Timeout: 5 * time.Second}
+
+			retries := 5
+			for i := 0; i < retries; i++ {
+				resp, err := client.Get(healthURL)
+				if err == nil {
+					resp.Body.Close()
+					if resp.StatusCode >= 200 && resp.StatusCode < 400 {
+						d.logger.Debug("Health check passed",
+							slog.String("url", healthURL),
+							slog.Int("status", resp.StatusCode))
+						return nil
+					}
+				}
+				if i < retries-1 {
+					time.Sleep(2 * time.Second)
+				}
+			}
+			return fmt.Errorf("health check failed after %d retries", retries)
+		}
 	} else {
 		d.logger.Info("Health check disabled - container will start without health verification")
 	}
 
-	// If proxy is enabled, don't expose app ports directly
-	// The proxy container will handle external traffic
-	var ports []string
-	if !d.config.Container.Proxy {
-		// No proxy - expose container port directly
-		// Format: "host_port:container_port"
-		ports = []string{fmt.Sprintf("%d:%d", d.config.Container.ContainerPort, d.config.Container.ContainerPort)}
-	}
-
+	// Deploy with localhost-only port mapping (127.0.0.1::containerPort)
+	// Docker will assign a random host port on localhost only for security
+	// The built-in reverse proxy will connect to localhost:mappedPort
 	deployOpts := container.DeployOptions{
-		ImageRef:     imageRef,
-		AppName:      appName,
-		Network:      d.config.Container.Network,
-		NetworkAlias: d.config.Container.NetworkAlias,
-		Env:          d.config.Container.Env,
-		Volumes:      d.config.Container.Volumes,
-		Ports:        ports,
-		HealthCheck:  healthCheck,
+		ImageRef:      imageRef,
+		AppName:       appName,
+		ContainerPort: d.config.Container.ContainerPort,
+		Env:           d.config.Container.Env,
+		Volumes:       d.config.Container.Volumes,
+		Ports:         nil, // No explicit port mapping - using ContainerPort for localhost-only mapping
+		HealthCheck:   healthCheck,
 	}
 
-	return dockerRuntime.DeployContainer(ctx, deployOpts)
-}
+	// Deploy container with callback to update proxy backend
+	newContainerID, err := dockerRuntime.DeployContainerWithCallback(ctx, deployOpts, func(containerID string) error {
+		// This callback is called after the new container passes health checks
+		// but before the old container is stopped
 
-// startProxy starts the reverse proxy container.
-func (d *Dewy) startProxy(ctx context.Context) error {
-	// Create Docker runtime
-	dockerRuntime, err := container.NewDocker(d.logger.Logger, d.config.Container.DrainTime)
-	if err != nil {
-		return fmt.Errorf("failed to create Docker runtime: %w", err)
-	}
+		// Get the mapped host port
+		mappedPort, err := dockerRuntime.GetMappedPort(ctx, containerID, d.config.Container.ContainerPort)
+		if err != nil {
+			return fmt.Errorf("failed to get mapped port: %w", err)
+		}
 
-	// Check if proxy container already exists
-	existingProxyID, err := dockerRuntime.FindProxyContainer(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to check for existing proxy: %w", err)
-	}
+		d.logger.Info("Container port mapped",
+			slog.Int("container_port", d.config.Container.ContainerPort),
+			slog.Int("host_port", mappedPort))
 
-	if existingProxyID != "" {
-		return fmt.Errorf("proxy container already running (container ID: %s). Please stop it first: docker stop %s && docker rm %s",
-			existingProxyID, existingProxyID, existingProxyID)
-	}
+		// Atomically update proxy backend to point to the new container
+		if err := d.updateProxyBackend("localhost", mappedPort); err != nil {
+			return fmt.Errorf("failed to update proxy backend: %w", err)
+		}
 
-	// Ensure network exists
-	if err := dockerRuntime.EnsureNetwork(ctx, d.config.Container.Network); err != nil {
-		return fmt.Errorf("failed to ensure network: %w", err)
-	}
+		return nil
+	})
 
-	// Determine app name for proxy container name
-	// For now, we'll use a simple "app" name, but this could be enhanced later
-	appName := "app"
-	proxyName := fmt.Sprintf("%s-proxy", appName)
-
-	// Start proxy container
-	proxyOpts := container.ProxyOptions{
-		Image:        d.config.Container.ProxyImage,
-		Name:         proxyName,
-		Network:      d.config.Container.Network,
-		ProxyPort:    d.config.Container.ProxyPort,
-		UpstreamHost: d.config.Container.NetworkAlias,
-		UpstreamPort: d.config.Container.ContainerPort,
-	}
-
-	proxyID, err := dockerRuntime.StartProxy(ctx, proxyOpts)
 	if err != nil {
 		return err
 	}
 
-	d.logger.Info("Proxy started successfully",
-		slog.String("container", proxyID),
-		slog.String("proxy_port", fmt.Sprintf("%d", d.config.Container.ProxyPort)),
-		slog.String("upstream", fmt.Sprintf("%s:%d", d.config.Container.NetworkAlias, d.config.Container.ContainerPort)))
+	d.logger.Info("Container deployment completed",
+		slog.String("container", newContainerID))
+
+	return nil
+}
+
+// startProxy starts the built-in reverse proxy HTTP server.
+func (d *Dewy) startProxy(ctx context.Context) error {
+	// Create a reverse proxy handler with atomic backend switching
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		d.proxyMutex.RLock()
+		backend := d.proxyBackend
+		d.proxyMutex.RUnlock()
+
+		if backend == nil {
+			http.Error(w, "Service Unavailable - No backend configured", http.StatusServiceUnavailable)
+			d.logger.Debug("Proxy request rejected - no backend configured",
+				slog.String("method", r.Method),
+				slog.String("path", r.URL.Path))
+			return
+		}
+
+		// Create reverse proxy for current backend
+		proxy := httputil.NewSingleHostReverseProxy(backend)
+
+		// Custom error handler
+		proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+			d.logger.Error("Proxy error",
+				slog.String("backend", backend.String()),
+				slog.String("method", r.Method),
+				slog.String("path", r.URL.Path),
+				slog.String("error", err.Error()))
+			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+		}
+
+		// Proxy the request
+		d.logger.Debug("Proxying request",
+			slog.String("backend", backend.String()),
+			slog.String("method", r.Method),
+			slog.String("path", r.URL.Path))
+		proxy.ServeHTTP(w, r)
+	})
+
+	// Create HTTP server using the configured port
+	addr := fmt.Sprintf(":%d", d.config.Port)
+	d.proxyServer = &http.Server{
+		Addr:    addr,
+		Handler: handler,
+	}
+
+	// Start server in background
+	go func() {
+		d.logger.Info("Starting built-in reverse proxy",
+			slog.String("address", addr))
+
+		if err := d.proxyServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			d.logger.Error("Proxy server error", slog.String("error", err.Error()))
+		}
+	}()
+
+	// Wait a moment to ensure server starts
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify server is listening
+	conn, err := net.DialTimeout("tcp", addr, 1*time.Second)
+	if err != nil {
+		return fmt.Errorf("proxy server failed to start: %w", err)
+	}
+	conn.Close()
+
+	d.logger.Info("Built-in reverse proxy started successfully",
+		slog.String("listen", addr))
+
+	return nil
+}
+
+// updateProxyBackend atomically updates the reverse proxy backend.
+func (d *Dewy) updateProxyBackend(host string, port int) error {
+	backend, err := url.Parse(fmt.Sprintf("http://%s:%d", host, port))
+	if err != nil {
+		return fmt.Errorf("failed to parse backend URL: %w", err)
+	}
+
+	d.proxyMutex.Lock()
+	d.proxyBackend = backend
+	d.proxyMutex.Unlock()
+
+	d.logger.Info("Proxy backend updated",
+		slog.String("backend", backend.String()))
+
+	return nil
+}
+
+// stopProxy gracefully shuts down the reverse proxy server.
+func (d *Dewy) stopProxy(ctx context.Context) error {
+	if d.proxyServer == nil {
+		return nil
+	}
+
+	d.logger.Info("Stopping reverse proxy")
+
+	shutdownCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	if err := d.proxyServer.Shutdown(shutdownCtx); err != nil {
+		return fmt.Errorf("failed to shutdown proxy: %w", err)
+	}
+
+	d.logger.Info("Reverse proxy stopped")
+	return nil
+}
+
+// stopManagedContainers stops all containers managed by dewy.
+func (d *Dewy) stopManagedContainers(ctx context.Context) error {
+	if d.containerRuntime == nil {
+		return nil
+	}
+
+	d.logger.Info("Stopping managed containers")
+
+	// Find all containers with dewy.managed=true label
+	containerID, err := d.containerRuntime.FindContainerByLabel(ctx, map[string]string{
+		"dewy.managed": "true",
+	})
+	if err != nil {
+		if err.Error() == "container not found" {
+			d.logger.Debug("No managed containers found to stop")
+			return nil
+		}
+		return fmt.Errorf("failed to find managed containers: %w", err)
+	}
+
+	// Stop the container with graceful timeout
+	timeout := 10 * time.Second
+	if err := d.containerRuntime.Stop(ctx, containerID, timeout); err != nil {
+		d.logger.Error("Failed to stop container",
+			slog.String("container", containerID),
+			slog.String("error", err.Error()))
+		return fmt.Errorf("failed to stop container: %w", err)
+	}
+
+	d.logger.Info("Managed container stopped",
+		slog.String("container", containerID))
+
+	// Remove the container
+	if err := d.containerRuntime.Remove(ctx, containerID); err != nil {
+		d.logger.Warn("Failed to remove container",
+			slog.String("container", containerID),
+			slog.String("error", err.Error()))
+		// Don't return error as the important part (stopping) succeeded
+	} else {
+		d.logger.Info("Managed container removed",
+			slog.String("container", containerID))
+	}
 
 	return nil
 }
