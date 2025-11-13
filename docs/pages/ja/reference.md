@@ -27,7 +27,7 @@ dewy server [オプション] -- [アプリケーションコマンド]
 dewy assets [オプション]
 ```
 
-### image コマンド
+### container コマンド
 
 `dewy container`コマンドは、ゼロダウンタイムのBlue-Greenデプロイメント戦略でコンテナイメージのデプロイメントを処理します。OCIレジストリを監視して新しいイメージバージョンを検出し、自動的にデプロイします。
 
@@ -87,46 +87,6 @@ dewy server --port 9090 -- /opt/app/current/app
 dewy server --interval 300 -- /opt/app/current/app
 ```
 
-### --keeptime (-k)
-
-アーティファクトを保持する時間を秒単位で指定します。古いアーティファクトは自動的に削除されます。
-
-```bash
-dewy server --keeptime 86400 -- /opt/app/current/app
-```
-
-### --timezone (-t)
-
-ログやスケジュールで使用するタイムゾーンを指定します。デフォルトはUTCです。
-
-```bash
-dewy server --timezone Asia/Tokyo -- /opt/app/current/app
-```
-
-### --user (-u)
-
-アプリケーションを実行するユーザーを指定します。セキュリティ上の理由から、専用ユーザーでの実行を推奨します。
-
-```bash
-dewy server --user app-user -- /opt/app/current/app
-```
-
-### --group (-g)
-
-アプリケーションを実行するグループを指定します。ユーザーオプションと組み合わせて使用します。
-
-```bash
-dewy server --user app-user --group app-group -- /opt/app/current/app
-```
-
-### --workdir (-w)
-
-アプリケーションの作業ディレクトリを指定します。アプリケーションがファイルの読み書きを行う際の基準ディレクトリになります。
-
-```bash
-dewy server --workdir /opt/app/data -- /opt/app/current/app
-```
-
 ### --verbose (-v)
 
 詳細なログ出力を有効にします。デバッグやトラブルシューティングに有用です。
@@ -153,25 +113,9 @@ dewy server --help
 dewy container --help
 ```
 
-## imageコマンドオプション
+## containerコマンドオプション
 
 `dewy container`コマンドには、コンテナデプロイメント管理用の固有のオプションがあります。
-
-### --network
-
-コンテナデプロイメント用のDockerネットワーク名を指定します。デフォルトは `dewy-net` です。
-
-```bash
-dewy container --registry img://ghcr.io/owner/app --network myapp-network
-```
-
-### --network-alias
-
-現在のコンテナ用のネットワークエイリアスを指定します。このエイリアスはBlue-Greenデプロイメントでのトラフィックルーティングに使用されます。デフォルトは `dewy-current` です。
-
-```bash
-dewy container --registry img://ghcr.io/owner/app --network-alias app-current
-```
 
 ### --container-port
 
@@ -283,46 +227,6 @@ export DEWY_PORT=8080
 
 ```bash
 export DEWY_INTERVAL=600
-```
-
-### DEWY_KEEPTIME
-
-アーティファクト保持時間を設定します。`--keeptime`オプションと同じ効果があります。
-
-```bash
-export DEWY_KEEPTIME=86400
-```
-
-### DEWY_TIMEZONE
-
-タイムゾーンを設定します。`--timezone`オプションと同じ効果があります。
-
-```bash
-export DEWY_TIMEZONE=Asia/Tokyo
-```
-
-### DEWY_USER
-
-実行ユーザーを設定します。`--user`オプションと同じ効果があります。
-
-```bash
-export DEWY_USER=app-user
-```
-
-### DEWY_GROUP
-
-実行グループを設定します。`--group`オプションと同じ効果があります。
-
-```bash
-export DEWY_GROUP=app-group
-```
-
-### DEWY_WORKDIR
-
-作業ディレクトリを設定します。`--workdir`オプションと同じ効果があります。
-
-```bash
-export DEWY_WORKDIR=/opt/app/data
 ```
 
 ## レジストリーURL形式

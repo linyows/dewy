@@ -27,7 +27,7 @@ The `dewy assets` command displays detailed information about the current artifa
 dewy assets [options]
 ```
 
-### image Command
+### container Command
 
 The `dewy container` command handles container image deployment with zero-downtime Blue-Green deployment strategy. It monitors OCI registries for new image versions and automatically deploys them.
 
@@ -87,46 +87,6 @@ Specifies the interval in seconds to check the registry. Default is 600 seconds 
 dewy server --interval 300 -- /opt/app/current/app
 ```
 
-### --keeptime (-k)
-
-Specifies the time in seconds to retain artifacts. Old artifacts are automatically deleted.
-
-```bash
-dewy server --keeptime 86400 -- /opt/app/current/app
-```
-
-### --timezone (-t)
-
-Specifies the timezone used for logs and scheduling. Default is UTC.
-
-```bash
-dewy server --timezone Asia/Tokyo -- /opt/app/current/app
-```
-
-### --user (-u)
-
-Specifies the user to run the application. Running with a dedicated user is recommended for security reasons.
-
-```bash
-dewy server --user app-user -- /opt/app/current/app
-```
-
-### --group (-g)
-
-Specifies the group to run the application. Use in combination with the user option.
-
-```bash
-dewy server --user app-user --group app-group -- /opt/app/current/app
-```
-
-### --workdir (-w)
-
-Specifies the working directory for the application. This becomes the base directory when the application reads and writes files.
-
-```bash
-dewy server --workdir /opt/app/data -- /opt/app/current/app
-```
-
 ### --verbose (-v)
 
 Enables verbose log output. Useful for debugging and troubleshooting.
@@ -156,22 +116,6 @@ dewy container --help
 ## Image Command Options
 
 The `dewy container` command has specific options for container deployment management.
-
-### --network
-
-Specifies the Docker network name for container deployment. Default is `dewy-net`.
-
-```bash
-dewy container --registry img://ghcr.io/owner/app --network myapp-network
-```
-
-### --network-alias
-
-Specifies the network alias for the current container. This alias is used for traffic routing in Blue-Green deployment. Default is `dewy-current`.
-
-```bash
-dewy container --registry img://ghcr.io/owner/app --network-alias app-current
-```
 
 ### --container-port
 
@@ -233,42 +177,6 @@ dewy container --registry img://ghcr.io/owner/app \
   --volume /config:/app/config:ro
 ```
 
-### --proxy
-
-Enables automatic reverse proxy setup using Caddy. When enabled, dewy manages both the proxy container and application containers, providing a clean separation between external traffic and internal application traffic.
-
-```bash
-dewy container --registry img://ghcr.io/owner/app --proxy
-```
-
-**Features:**
-- Automatic Caddy proxy container management
-- Application containers have no external port mapping (internal network only)
-- Automatic cleanup on shutdown
-- Zero-downtime Blue-Green deployment support
-
-See [Reverse Proxy with Caddy](/deployment-workflow#reverse-proxy-with-caddy) for detailed information.
-
-### --proxy-port
-
-Specifies the external port for the proxy to listen on. Only effective when `--proxy` is enabled. Default is 80.
-
-```bash
-dewy container --registry img://ghcr.io/owner/app \
-  --proxy \
-  --proxy-port 8000
-```
-
-### --proxy-image
-
-Specifies the Caddy container image to use for the proxy. Only effective when `--proxy` is enabled. Default is `caddy:2-alpine`.
-
-```bash
-dewy container --registry img://ghcr.io/owner/app \
-  --proxy \
-  --proxy-image caddy:2.7-alpine
-```
-
 ## Environment Variables
 
 Dewy can use the following environment variables to customize behavior. Environment variables have lower priority than command line options.
@@ -319,46 +227,6 @@ Sets the registry check interval. Has the same effect as the `--interval` option
 
 ```bash
 export DEWY_INTERVAL=600
-```
-
-### DEWY_KEEPTIME
-
-Sets the artifact retention time. Has the same effect as the `--keeptime` option.
-
-```bash
-export DEWY_KEEPTIME=86400
-```
-
-### DEWY_TIMEZONE
-
-Sets the timezone. Has the same effect as the `--timezone` option.
-
-```bash
-export DEWY_TIMEZONE=Asia/Tokyo
-```
-
-### DEWY_USER
-
-Sets the execution user. Has the same effect as the `--user` option.
-
-```bash
-export DEWY_USER=app-user
-```
-
-### DEWY_GROUP
-
-Sets the execution group. Has the same effect as the `--group` option.
-
-```bash
-export DEWY_GROUP=app-group
-```
-
-### DEWY_WORKDIR
-
-Sets the working directory. Has the same effect as the `--workdir` option.
-
-```bash
-export DEWY_WORKDIR=/opt/app/data
 ```
 
 ## Registry URL Formats
