@@ -665,6 +665,145 @@ Implementation details of the built-in proxy:
 - **Health Checks**: HTTP health checks via localhost before switching backends
 - **Error Handling**: Automatic rollback if health checks fail
 - **Performance**: In-process proxy eliminates container-to-container network overhead
+- **Load Balancing**: Round-robin distribution for multiple container replicas
+
+## Multiple Container Replicas
+
+Dewy supports running multiple container replicas for improved availability and load distribution. The built-in reverse proxy automatically load balances requests across all healthy replicas using a round-robin algorithm.
+
+### Load Balancing
+
+When multiple replicas are configured, the reverse proxy distributes incoming requests evenly:
+
+```
+Request 1 → Container 1 (localhost:32768)
+Request 2 → Container 2 (localhost:32770)
+Request 3 → Container 3 (localhost:32772)
+Request 4 → Container 1 (localhost:32768)  # Round-robin
+...
+```
+
+**Key Features:**
+- Round-robin load balancing for even traffic distribution
+- Each container runs on its own localhost port
+- Automatic health checks for all replicas
+- Failed containers are automatically excluded from rotation
+
+### Rolling Update Deployment
+
+When deploying new versions with multiple replicas, Dewy performs a gradual rolling update:
+
+```mermaid
+sequenceDiagram
+    participant D as Dewy
+    participant P as Built-in Proxy
+    participant Old as Old Replicas (3)
+    participant New as New Replicas (3)
+
+    Note over D,Old: Current state: 3 old replicas running
+
+    D->>New: Start new replica 1
+    New->>D: Health check passed
+    D->>P: Add replica 1 to load balancer
+    Note over P: Traffic to: Old(3) + New(1)
+
+    D->>New: Start new replica 2
+    New->>D: Health check passed
+    D->>P: Add replica 2 to load balancer
+    Note over P: Traffic to: Old(3) + New(2)
+
+    D->>New: Start new replica 3
+    New->>D: Health check passed
+    D->>P: Add replica 3 to load balancer
+    Note over P: Traffic to: Old(3) + New(3)
+
+    D->>P: Remove old replica 1 from load balancer
+    D->>Old: Stop old replica 1
+    Note over P: Traffic to: Old(2) + New(3)
+
+    D->>P: Remove old replica 2 from load balancer
+    D->>Old: Stop old replica 2
+    Note over P: Traffic to: Old(1) + New(3)
+
+    D->>P: Remove old replica 3 from load balancer
+    D->>Old: Stop old replica 3
+    Note over P: Traffic to: New(3)
+
+    Note over D,New: Deployment complete: 3 new replicas
+```
+
+**Rolling Update Process:**
+1. Start new replicas one at a time
+2. Health check each new replica
+3. Add healthy replicas to load balancer
+4. After all new replicas are running, remove old replicas one by one
+5. Gradual transition ensures continuous availability
+
+**Benefits:**
+- Zero downtime during updates
+- Automatic rollback if health checks fail
+- Always maintains capacity during deployment
+- Safe gradual rollout reduces risk
+
+### Example: Multiple Replicas
+
+```bash
+# Run with 3 replicas for high availability
+dewy container \
+  --registry "img://ghcr.io/linyows/myapp?pre-release=true" \
+  --container-port 8080 \
+  --replicas 3 \
+  --health-path /health \
+  --health-timeout 30 \
+  --port 8000 \
+  --log-level info
+
+# Output shows rolling deployment:
+# INFO: Starting container deployment replicas=3
+# INFO: Pulling new image image=ghcr.io/linyows/myapp:v1.2.3
+# INFO: Found existing containers count=0
+# INFO: Starting new container replica=1 total=3
+# INFO: Container started container=abc123... mapped_port=32768
+# INFO: Health check passed url=http://localhost:32768/health
+# INFO: Container added to load balancer backend_count=1
+# INFO: Starting new container replica=2 total=3
+# INFO: Container started container=def456... mapped_port=32770
+# INFO: Health check passed url=http://localhost:32770/health
+# INFO: Container added to load balancer backend_count=2
+# INFO: Starting new container replica=3 total=3
+# INFO: Container started container=ghi789... mapped_port=32772
+# INFO: Health check passed url=http://localhost:32772/health
+# INFO: Container added to load balancer backend_count=3
+# INFO: Container deployment completed new_containers=3
+
+# All replicas handle traffic via round-robin
+curl http://localhost:8000/  # → Container 1
+curl http://localhost:8000/  # → Container 2
+curl http://localhost:8000/  # → Container 3
+curl http://localhost:8000/  # → Container 1 (round-robin)
+```
+
+### Use Cases for Multiple Replicas
+
+**High Availability:**
+- If one replica crashes, others continue serving traffic
+- No single point of failure
+- Improved resilience
+
+**Load Distribution:**
+- CPU-intensive workloads benefit from parallel processing
+- Better resource utilization
+- Handles traffic spikes more effectively
+
+**Zero-Downtime Updates:**
+- Rolling updates ensure continuous service
+- Gradual rollout reduces deployment risk
+- Always maintains minimum capacity
+
+**Recommended Configuration:**
+- **Production**: 3-5 replicas for high availability
+- **Development**: 1 replica to save resources
+- **Staging**: 2 replicas to test multi-instance scenarios
 
 ### Example: Complete Setup
 
@@ -700,7 +839,8 @@ docker logs -f $(docker ps -q --filter "label=dewy.managed=true" --filter "label
 
 - `--port 8000`: External port for the built-in proxy to listen on (default: 8000)
 - `--container-port 8080`: Application port inside the container (will be mapped to localhost)
+- `--replicas 3`: Number of container replicas to run (default: 1)
 - `--health-path /health`: HTTP path for health checks
 - `--health-timeout 30`: Health check timeout in seconds
 
-The built-in reverse proxy provides zero-downtime deployments with enhanced security through localhost-only container access.
+The built-in reverse proxy provides zero-downtime deployments with enhanced security through localhost-only container access. Multiple replicas enable high availability and load distribution.
