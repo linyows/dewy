@@ -64,8 +64,8 @@ steps:
   uses: shell
   with:
     cmd: |
-      grep -c 'Starting new container' {{ outputs.container.log }} | \
-      grep -v {{ vars.new_version }} | tr -d '\n'
+      grep 'Starting new container' {{ outputs.container.log }} | \
+        grep -vc {{ vars.new_version }} | tr -d '\n'
   test: res.stdout == "3"
   outputs:
     ok: res.stdout == "3"
@@ -75,8 +75,8 @@ steps:
   uses: shell
   with:
     cmd: |
-      grep -c 'Starting new container' {{ outputs.container.log }} | \
-      grep -c "{{ vars.new_version }}" | tr -d '\n'
+      grep 'Starting new container' {{ outputs.container.log }} | \
+        grep -c {{ vars.new_version }} | tr -d '\n'
   test: res.stdout == "3"
   outputs:
     ok: res.stdout == "3"
