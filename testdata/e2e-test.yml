@@ -201,7 +201,7 @@ jobs:
         github_token: "{{ vars.github_token }}"
         registry: img
         registry_url: "img://ghcr.io/linyows/dewy-testapp?pre-release=true"
-        port: 8002
+        port: 7000
         replicas: 3
         container_port: 3333
         log_level: debug
