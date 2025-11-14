@@ -40,6 +40,7 @@ jobs:
     - { command: 'assets', registry: 'ghr' }
     - { command: 'assets', registry: 's3' }
     - { command: 'assets', registry: 'gs' }
+    - { command: 'container', registry: 'img' }
 
 - name: Create new version
   needs: [build]
@@ -88,7 +89,7 @@ jobs:
         aws_secret_access_key: "{{ vars.aws_secret_access_key }}"
         google_application_credentials: "{{ vars.google_application_credentials }}"
         registry: ghr
-        registry_url: ghr://linyows/dewy-testapp?pre-release=true
+        registry_url: "ghr://linyows/dewy-testapp?pre-release=true"
         port: 8000
         log_level: debug
         new_version: "{{ outputs.release.version }}"
@@ -107,7 +108,7 @@ jobs:
         aws_secret_access_key: "{{ vars.aws_secret_access_key }}"
         google_application_credentials: "{{ vars.google_application_credentials }}"
         registry: s3
-        registry_url: s3://ap-northeast-3/dewy-testapp?pre-release=true
+        registry_url: "s3://ap-northeast-3/dewy-testapp?pre-release=true"
         port: 8001
         log_level: debug
         new_version: "{{ outputs.release.version }}"
@@ -126,7 +127,7 @@ jobs:
         aws_secret_access_key: "{{ vars.aws_secret_access_key }}"
         google_application_credentials: "{{ vars.google_application_credentials }}"
         registry: gs
-        registry_url: gs://dewy-testapp?pre-release=true
+        registry_url: "gs://dewy-testapp?pre-release=true"
         port: 8002
         log_level: debug
         new_version: "{{ outputs.release.version }}"
@@ -145,7 +146,7 @@ jobs:
         aws_secret_access_key: "{{ vars.aws_secret_access_key }}"
         google_application_credentials: "{{ vars.google_application_credentials }}"
         registry: ghr
-        registry_url: ghr://linyows/dewy-testapp?pre-release=true
+        registry_url: "ghr://linyows/dewy-testapp?pre-release=true"
         port: 9000
         log_level: debug
         new_version: "{{ outputs.release.version }}"
@@ -164,7 +165,7 @@ jobs:
         aws_secret_access_key: "{{ vars.aws_secret_access_key }}"
         google_application_credentials: "{{ vars.google_application_credentials }}"
         registry: s3
-        registry_url: s3://ap-northeast-3/dewy-testapp?pre-release=true
+        registry_url: "s3://ap-northeast-3/dewy-testapp?pre-release=true"
         port: 9001
         log_level: debug
         new_version: "{{ outputs.release.version }}"
@@ -183,8 +184,26 @@ jobs:
         aws_secret_access_key: "{{ vars.aws_secret_access_key }}"
         google_application_credentials: "{{ vars.google_application_credentials }}"
         registry: gs
-        registry_url: gs://dewy-testapp?pre-release=true
+        registry_url: "gs://dewy-testapp?pre-release=true"
         port: 9002
+        log_level: debug
+        new_version: "{{ outputs.release.version }}"
+    test: res.code == 0
+
+- name: Run container by OCI registry
+  needs: [build]
+  steps:
+  - name: Container test
+    uses: embedded
+    with:
+      path: ./testdata/jobs/container.yml
+      vars:
+        github_token: "{{ vars.github_token }}"
+        registry: img
+        registry_url: "img://ghcr.io/linyows/dewy-testapp?pre-release=true"
+        port: 8002
+        replicas: 3
+        container_port: 3333
         log_level: debug
         new_version: "{{ outputs.release.version }}"
     test: res.code == 0

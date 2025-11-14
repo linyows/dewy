@@ -7,10 +7,15 @@ build:
 	go build ./cmd/dewy
 
 server:
-	go run cmd/dewy/main.go server --registry ghr://linyows/dewy-testapp -p 8000 -l $(LOGLEVEL) -- $(HOME)/.go/src/github.com/linyows/dewy/current/dewy-testapp
+	go run cmd/dewy/main.go server --registry ghr://linyows/dewy-testapp?pre-release=true \
+		-p 8000 -l $(LOGLEVEL) -- $(HOME)/.go/src/github.com/linyows/dewy/current/dewy-testapp
 
 assets:
-	go run cmd/dewy/main.go assets --registry ghr://linyows/dewy-testapp -l $(LOGLEVEL)
+	go run cmd/dewy/main.go assets --registry ghr://linyows/dewy-testapp?pre-release=true -l $(LOGLEVEL)
+
+container:
+	go run cmd/dewy/main.go container --registry 'img://ghcr.io/linyows/dewy-testapp?pre-release=true' \
+		-p 8000 --health-path /health --container-port 3333 -l $(LOGLEVEL) --replicas 3
 
 protobuf:
 	cd registry && go tool buf generate

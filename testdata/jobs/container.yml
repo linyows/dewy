@@ -1,0 +1,89 @@
+name: Container Test
+
+steps:
+- name: Start dewy
+  id: container
+  uses: shell
+  with:
+    workdir: ./testdata/container/{{ vars.registry }}
+    background: true
+    env:
+      GITHUB_TOKEN: "{{ vars.github_token }}"
+    cmd: |
+      ./dewy container -p {{ vars.port }} -l {{ vars.log_level }} \
+      --registry "{{ vars.registry_url }}" \
+      --health-path /health \
+      --container-port {{ vars.container_port }} \
+      --replicas {{ vars.replicas }}
+  test: status == -1
+  outputs:
+    pid: res.pid
+    log: res.log
+  echo: |
+    PID: {{ res.pid }}
+    Log: {{ res.log }}
+
+- name: Wait for new version to start
+  uses: shell
+  retry:
+    max_attempts: 60
+    interval: 5s
+  with:
+    cmd: |
+      if [ -f "{{ outputs.container.log }}" ]; then
+        grep "Starting new container" "{{ outputs.container.log }}" | \
+          grep -q "{{ vars.new_version }}" && exit 0
+      fi
+      exit 1
+  test: status == 0
+
+- name: Wait for stabilization
+  wait: 30s
+  uses: shell
+  with:
+    cmd: "echo 'Waiting for system stabilization after new version detection'"
+  test: status == 0
+
+- name: Stop dewy
+  uses: shell
+  with: # Use Process Group ID
+    cmd: "kill -TERM -{{ outputs.container.pid }}"
+  test: status == 0
+
+- name: Verify no error
+  id: noerr
+  uses: shell
+  with:
+    cmd: "grep -i error {{ outputs.container.log }}"
+  test: status == 1
+  outputs:
+    ok: status == 1
+
+- name: Verify current 3 containers creates
+  id: cver
+  uses: shell
+  with:
+    cmd: |
+      grep -c 'Starting new container' {{ outputs.container.log }} | \
+      grep -v {{ vars.new_version }} | tr -d '\n'
+  test: res.stdout == "3"
+  outputs:
+    ok: res.stdout == "3"
+
+- name: Verify new 3 containers creates
+  id: nver
+  uses: shell
+  with:
+    cmd: |
+      grep -c 'Starting new container' {{ outputs.container.log }} | \
+      grep -c "{{ vars.new_version }}" | tr -d '\n'
+  test: res.stdout == "3"
+  outputs:
+    ok: res.stdout == "3"
+
+- name: Show log
+  skipif: outputs.noerr.ok && outputs.cver.ok && outputs.nver.ok
+  uses: shell
+  with:
+    cmd: "cat {{ outputs.container.log }}"
+  echo: "{{ res.stdout }}"

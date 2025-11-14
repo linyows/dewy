@@ -8,3 +8,4 @@ dist/
 .dewy/
 /testdata/server
 /testdata/assets
+/testdata/container

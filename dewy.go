@@ -61,6 +61,7 @@ type Dewy struct {
 	proxyIndex       int        // Round-robin counter
 	proxyMutex       sync.RWMutex
 	containerRuntime container.Runtime
+	cVer             string // Current deployed version (tag)
 	sync.RWMutex
 }
 
@@ -290,18 +291,23 @@ func (d *Dewy) Run() error {
 		return err
 	}
 
+	// Save current version
+	d.Lock()
+	d.cVer = res.Tag
+	d.Unlock()
+
 	if d.config.Command == SERVER {
 		if d.isServerRunning {
 			err = d.restartServer()
 			if err == nil {
-				msg := fmt.Sprintf("Server restarted for `%s`", res.Tag)
+				msg := fmt.Sprintf("Server restarted for `%s`", d.cVer)
 				d.logger.Info("Restart notification", slog.String("message", msg))
 				d.notifier.Send(ctx, msg)
 			}
 		} else {
 			err = d.startServer()
 			if err == nil {
-				msg := fmt.Sprintf("Server started for `%s`", res.Tag)
+				msg := fmt.Sprintf("Server started for `%s`", d.cVer)
 				d.logger.Info("Start notification", slog.String("message", msg))
 				d.notifier.Send(ctx, msg)
 			}
@@ -404,7 +410,7 @@ func (d *Dewy) restartServer() error {
 	if err != nil {
 		return err
 	}
-	d.logger.Info("Send SIGHUP for server restart", slog.Int("pid", pid))
+	d.logger.Info("Send SIGHUP for server restart", slog.String("version", d.cVer), slog.Int("pid", pid))
 
 	return nil
 }
@@ -413,7 +419,7 @@ func (d *Dewy) startServer() error {
 	d.Lock()
 	defer d.Unlock()
 
-	d.logger.Info("Start server")
+	d.logger.Info("Start server", slog.String("version", d.cVer))
 
 	// Try to create starter first (synchronous validation)
 	s, err := starter.NewStarter(d.config.Starter)
@@ -662,6 +668,11 @@ func (d *Dewy) RunContainer() error {
 		return err
 	}
 
+	// Save current version
+	d.Lock()
+	d.cVer = res.Tag
+	d.Unlock()
+
 	// Execute after deploy hook
 	afterResult, afterErr := d.execHook(d.config.AfterDeployHook)
 	if afterResult != nil {
@@ -684,7 +695,7 @@ func (d *Dewy) RunContainer() error {
 		}
 	}
 
-	msg = fmt.Sprintf("Container deployed successfully for `%s`", res.Tag)
+	msg = fmt.Sprintf("Container deployed successfully for `%s`", d.cVer)
 	d.logger.Info("Deployment notification", slog.String("message", msg))
 	d.notifier.Send(ctx, msg)
 
@@ -779,6 +790,7 @@ func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentRespons
 
 	for i := 0; i < replicas; i++ {
 		d.logger.Info("Starting new container",
+			slog.String("version", res.Tag),
 			slog.Int("replica", i+1),
 			slog.Int("total", replicas))
 
