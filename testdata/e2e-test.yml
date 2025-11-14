@@ -43,6 +43,7 @@ jobs:
     - { command: 'container', registry: 'img' }
 
 - name: Create new version
+  id: create_release
   needs: [build]
   steps:
   - name: Create release
@@ -77,7 +78,7 @@ jobs:
     test: status == 0
 
 - name: Run server by Github-Releases registry
-  needs: [build]
+  needs: [create_release]
   steps:
   - name: Server test
     uses: embedded
@@ -96,7 +97,7 @@ jobs:
     test: res.code == 0
 
 - name: Run server by AWS S3 registry
-  needs: [build]
+  needs: [create_release]
   steps:
   - name: Server test
     uses: embedded
@@ -115,7 +116,7 @@ jobs:
     test: res.code == 0
 
 - name: Run server by GCloud Storage registry
-  needs: [build]
+  needs: [create_release]
   steps:
   - name: Server test
     uses: embedded
@@ -134,7 +135,7 @@ jobs:
     test: res.code == 0
 
 - name: Run assets by Github-Releases registry
-  needs: [build]
+  needs: [create_release]
   steps:
   - name: Assets test
     uses: embedded
@@ -153,7 +154,7 @@ jobs:
     test: res.code == 0
 
 - name: Run assets by AWS S3 registry
-  needs: [build]
+  needs: [create_release]
   steps:
   - name: Assets test
     uses: embedded
@@ -172,7 +173,7 @@ jobs:
     test: res.code == 0
 
 - name: Run assets by GCloud Storage registry
-  needs: [build]
+  needs: [create_release]
   steps:
   - name: Assets test
     uses: embedded
@@ -191,7 +192,7 @@ jobs:
     test: res.code == 0
 
 - name: Run container by OCI registry
-  needs: [build]
+  needs: [create_release]
   steps:
   - name: Container test
     uses: embedded
