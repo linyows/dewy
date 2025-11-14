@@ -78,7 +78,7 @@ jobs:
     test: status == 0
 
 - name: Run server by Github-Releases registry
-  needs: [create_release]
+  needs: [build]
   steps:
   - name: Server test
     uses: embedded
@@ -97,7 +97,7 @@ jobs:
     test: res.code == 0
 
 - name: Run server by AWS S3 registry
-  needs: [create_release]
+  needs: [build]
   steps:
   - name: Server test
     uses: embedded
@@ -116,7 +116,7 @@ jobs:
     test: res.code == 0
 
 - name: Run server by GCloud Storage registry
-  needs: [create_release]
+  needs: [build]
   steps:
   - name: Server test
     uses: embedded
@@ -135,7 +135,7 @@ jobs:
     test: res.code == 0
 
 - name: Run assets by Github-Releases registry
-  needs: [create_release]
+  needs: [build]
   steps:
   - name: Assets test
     uses: embedded
@@ -154,7 +154,7 @@ jobs:
     test: res.code == 0
 
 - name: Run assets by AWS S3 registry
-  needs: [create_release]
+  needs: [build]
   steps:
   - name: Assets test
     uses: embedded
@@ -173,7 +173,7 @@ jobs:
     test: res.code == 0
 
 - name: Run assets by GCloud Storage registry
-  needs: [create_release]
+  needs: [build]
   steps:
   - name: Assets test
     uses: embedded
@@ -208,5 +208,3 @@ jobs:
         log_level: debug
         new_version: "{{ outputs.release.version }}"
     test: res.code == 0
-    echo: |
-      {{ outputs }}
