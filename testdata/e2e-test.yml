@@ -207,3 +207,5 @@ jobs:
         log_level: debug
         new_version: "{{ outputs.release.version }}"
     test: res.code == 0
+    echo: |
+      {{ outputs }}
