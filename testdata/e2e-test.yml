@@ -24,9 +24,22 @@ jobs:
     uses: hello
     test: vars.google_application_credentials != ''
 
+- name: Generate version
+  id: generate_version
+  needs: [check]
+  steps:
+  - name: Generate version string
+    id: genver
+    uses: hello
+    vars:
+      version: v3.0.0-{{ unixtime() }}
+    outputs:
+      version: vars.version
+    echo: "Generated version: {{ vars.version }}"
+
 - name: Build dewy
   id: build
-  needs: [check]
+  needs: [generate_version]
   steps:
   - name: Go build for {{ vars.command }}-{{ vars.registry }}
     uses: shell
@@ -47,21 +60,16 @@ jobs:
   needs: [build]
   steps:
   - name: Create release
-    id: release
     uses: shell
     with:
       env:
         GH_TOKEN: "{{ vars.github_token }}"
       cmd: |
-        gh release create {{ vars.version }} \
+        gh release create {{ outputs.genver.version }} \
           --repo linyows/dewy-testapp \
-          --title {{ vars.version }} \
+          --title {{ outputs.genver.version }} \
           --notes "End-to-end Testing by Probe"
-    vars:
-      version: v3.0.0-{{ unixtime() }}
     test: status == 0
-    outputs:
-      version: vars.version
     echo: |
       {{res.stdout}}
   - name: Verify release exists
@@ -73,7 +81,7 @@ jobs:
       env:
         GH_TOKEN: "{{ vars.github_token }}"
       cmd: |
-        gh release view {{ outputs.release.version }} \
+        gh release view {{ outputs.genver.version }} \
           --repo linyows/dewy-testapp
     test: status == 0
 
@@ -93,7 +101,7 @@ jobs:
         registry_url: "ghr://linyows/dewy-testapp?pre-release=true"
         port: 8000
         log_level: debug
-        new_version: "{{ outputs.release.version }}"
+        new_version: "{{ outputs.genver.version }}"
     test: res.code == 0
 
 - name: Run server by AWS S3 registry
@@ -112,7 +120,7 @@ jobs:
         registry_url: "s3://ap-northeast-3/dewy-testapp?pre-release=true"
         port: 8001
         log_level: debug
-        new_version: "{{ outputs.release.version }}"
+        new_version: "{{ outputs.genver.version }}"
     test: res.code == 0
 
 - name: Run server by GCloud Storage registry
@@ -131,7 +139,7 @@ jobs:
         registry_url: "gs://dewy-testapp?pre-release=true"
         port: 8002
         log_level: debug
-        new_version: "{{ outputs.release.version }}"
+        new_version: "{{ outputs.genver.version }}"
     test: res.code == 0
 
 - name: Run assets by Github-Releases registry
@@ -150,7 +158,7 @@ jobs:
         registry_url: "ghr://linyows/dewy-testapp?pre-release=true"
         port: 9000
         log_level: debug
-        new_version: "{{ outputs.release.version }}"
+        new_version: "{{ outputs.genver.version }}"
     test: res.code == 0
 
 - name: Run assets by AWS S3 registry
@@ -169,7 +177,7 @@ jobs:
         registry_url: "s3://ap-northeast-3/dewy-testapp?pre-release=true"
         port: 9001
         log_level: debug
-        new_version: "{{ outputs.release.version }}"
+        new_version: "{{ outputs.genver.version }}"
     test: res.code == 0
 
 - name: Run assets by GCloud Storage registry
@@ -188,11 +196,11 @@ jobs:
         registry_url: "gs://dewy-testapp?pre-release=true"
         port: 9002
         log_level: debug
-        new_version: "{{ outputs.release.version }}"
+        new_version: "{{ outputs.genver.version }}"
     test: res.code == 0
 
 - name: Run container by OCI registry
-  needs: [create_release]
+  needs: [build]
   steps:
   - name: Container test
     uses: embedded
@@ -206,5 +214,5 @@ jobs:
         replicas: 3
         container_port: 3333
         log_level: debug
-        new_version: "{{ outputs.release.version }}"
+        new_version: "{{ outputs.genver.version }}"
     test: res.code == 0
