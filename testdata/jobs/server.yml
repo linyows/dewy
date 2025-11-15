@@ -33,7 +33,6 @@ steps:
     cmd: |
       if [ -f "{{ outputs.server.log }}" ]; then
         grep "starting version" "{{ outputs.server.log }}" | \
-          awk '{print $6}' | \
           grep -q "{{ replace(vars.new_version, 'v', '') }}" && exit 0
       fi
       exit 1
@@ -87,7 +86,6 @@ steps:
   with:
     cmd: |
       grep 'starting version' {{ outputs.server.log }} | \
-        awk '{print $6}' | \
         grep {{ replace(vars.new_version, 'v', '') }}
   test: status == 0
   outputs:
