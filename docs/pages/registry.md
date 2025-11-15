@@ -167,6 +167,10 @@ myapp/v1.2.3/myapp_linux_amd64.tar.gz
 
 OCI-compliant container registries can be used for container image deployment with the `dewy container` command.
 
+{% callout type="caution" %}
+Audit tracking is not supported for OCI registries.
+{% /callout %}
+
 ### Supported Registries
 
 Dewy supports all OCI Distribution Specification-compliant registries:

@@ -61,6 +61,7 @@ type Dewy struct {
 	proxyIndex       int        // Round-robin counter
 	proxyMutex       sync.RWMutex
 	containerRuntime container.Runtime
+	cVer             string // Current deployed version (tag)
 	sync.RWMutex
 }
 
@@ -290,18 +291,23 @@ func (d *Dewy) Run() error {
 		return err
 	}
 
+	// Save current version
+	d.Lock()
+	d.cVer = res.Tag
+	d.Unlock()
+
 	if d.config.Command == SERVER {
 		if d.isServerRunning {
 			err = d.restartServer()
 			if err == nil {
-				msg := fmt.Sprintf("Server restarted for `%s`", res.Tag)
+				msg := fmt.Sprintf("Server restarted for `%s`", d.cVer)
 				d.logger.Info("Restart notification", slog.String("message", msg))
 				d.notifier.Send(ctx, msg)
 			}
 		} else {
 			err = d.startServer()
 			if err == nil {
-				msg := fmt.Sprintf("Server started for `%s`", res.Tag)
+				msg := fmt.Sprintf("Server started for `%s`", d.cVer)
 				d.logger.Info("Start notification", slog.String("message", msg))
 				d.notifier.Send(ctx, msg)
 			}
@@ -404,7 +410,7 @@ func (d *Dewy) restartServer() error {
 	if err != nil {
 		return err
 	}
-	d.logger.Info("Send SIGHUP for server restart", slog.Int("pid", pid))
+	d.logger.Info("Send SIGHUP for server restart", slog.String("version", d.cVer), slog.Int("pid", pid))
 
 	return nil
 }
@@ -413,7 +419,7 @@ func (d *Dewy) startServer() error {
 	d.Lock()
 	defer d.Unlock()
 
-	d.logger.Info("Start server")
+	d.logger.Info("Start server", slog.String("version", d.cVer))
 
 	// Try to create starter first (synchronous validation)
 	s, err := starter.NewStarter(d.config.Starter)
@@ -657,10 +663,18 @@ func (d *Dewy) RunContainer() error {
 	}
 
 	// Perform Blue-Green deployment
-	if err := d.deployContainer(ctx, res); err != nil {
-		d.logger.Error("Container deployment failed", slog.String("error", err.Error()))
+	deployedCount, err := d.deployContainer(ctx, res)
+	if err != nil {
+		d.logger.Error("Container deployment failed",
+			slog.Int("deployed", deployedCount),
+			slog.String("error", err.Error()))
 		return err
 	}
+
+	// Save current version
+	d.Lock()
+	d.cVer = res.Tag
+	d.Unlock()
 
 	// Execute after deploy hook
 	afterResult, afterErr := d.execHook(d.config.AfterDeployHook)
@@ -684,8 +698,16 @@ func (d *Dewy) RunContainer() error {
 		}
 	}
 
-	msg = fmt.Sprintf("Container deployed successfully for `%s`", res.Tag)
-	d.logger.Info("Deployment notification", slog.String("message", msg))
+	// Prepare deployment notification
+	totalReplicas := d.config.Container.Replicas
+	if totalReplicas <= 0 {
+		totalReplicas = 1
+	}
+	msg = fmt.Sprintf("Container deployed successfully: `%d/%d` replicas of `%s`", deployedCount, totalReplicas, d.cVer)
+	d.logger.Info("Container deployed successfully",
+		slog.String("version", d.cVer),
+		slog.Int("replicas", deployedCount),
+		slog.Int("total", totalReplicas))
 	d.notifier.Send(ctx, msg)
 
 	// Clean up old images
@@ -699,9 +721,10 @@ func (d *Dewy) RunContainer() error {
 }
 
 // deployContainer performs the actual container deployment using rolling update strategy.
-func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentResponse) error {
+// Returns the number of successfully deployed containers and any error encountered.
+func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentResponse) (int, error) {
 	if d.config.Container == nil {
-		return fmt.Errorf("container config is nil")
+		return 0, fmt.Errorf("container config is nil")
 	}
 
 	// Get replicas count (default: 1)
@@ -722,13 +745,13 @@ func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentRespons
 		runtime, err = container.NewDocker(d.logger.Logger, d.config.Container.DrainTime)
 	case "podman":
 		// TODO: Phase 2 - Podman support
-		return fmt.Errorf("podman runtime not yet supported")
+		return 0, fmt.Errorf("podman runtime not yet supported")
 	default:
-		return fmt.Errorf("unsupported runtime: %s", d.config.Container.Runtime)
+		return 0, fmt.Errorf("unsupported runtime: %s", d.config.Container.Runtime)
 	}
 
 	if err != nil {
-		return fmt.Errorf("failed to create container runtime: %w", err)
+		return 0, fmt.Errorf("failed to create container runtime: %w", err)
 	}
 
 	// Extract image reference from artifact URL
@@ -749,13 +772,13 @@ func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentRespons
 	// Get Docker runtime
 	dockerRuntime, ok := runtime.(*container.Docker)
 	if !ok {
-		return fmt.Errorf("runtime is not Docker")
+		return 0, fmt.Errorf("runtime is not Docker")
 	}
 
 	// Pull the new image first
 	d.logger.Info("Pulling new image", slog.String("image", imageRef))
 	if err := dockerRuntime.Pull(ctx, imageRef); err != nil {
-		return fmt.Errorf("pull failed: %w", err)
+		return 0, fmt.Errorf("pull failed: %w", err)
 	}
 
 	// Find existing containers
@@ -764,7 +787,7 @@ func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentRespons
 		"dewy.app":     appName,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to find existing containers: %w", err)
+		return 0, fmt.Errorf("failed to find existing containers: %w", err)
 	}
 
 	d.logger.Info("Found existing containers",
@@ -779,6 +802,7 @@ func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentRespons
 
 	for i := 0; i < replicas; i++ {
 		d.logger.Info("Starting new container",
+			slog.String("version", res.Tag),
 			slog.Int("replica", i+1),
 			slog.Int("total", replicas))
 
@@ -791,7 +815,7 @@ func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentRespons
 				slog.Int("replica", i+1),
 				slog.String("error", err.Error()))
 			d.rollbackContainers(ctx, dockerRuntime, newContainers)
-			return err
+			return len(newContainers), err
 		}
 
 		newContainers = append(newContainers, containerID)
@@ -803,7 +827,7 @@ func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentRespons
 			d.logger.Error("Failed to add proxy backend",
 				slog.String("error", err.Error()))
 			d.rollbackContainers(ctx, dockerRuntime, newContainers)
-			return err
+			return len(newContainers), err
 		}
 
 		d.logger.Info("Container added to load balancer",
@@ -845,7 +869,7 @@ func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentRespons
 		slog.Int("new_containers", len(newContainers)),
 		slog.Int("removed_containers", len(existingContainers)))
 
-	return nil
+	return len(newContainers), nil
 }
 
 // createHealthCheckFunc creates a health check function based on configuration.

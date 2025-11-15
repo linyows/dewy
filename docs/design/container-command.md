@@ -20,6 +20,7 @@ This document describes the design for adding container image deployment functio
 2. **Advanced Load Balancing**: Weighted round-robin, sticky sessions, etc. are out of scope for initial version
 3. **Kubernetes-Equivalent Features**: Service discovery, ConfigMap, Secrets, etc. are out of scope
 4. **Auto-Scaling**: Dynamic adjustment of replica count is out of scope
+5. **Audit Support**: Deployment history tracking is not supported for OCI registries (see Limitations section)
 
 # Background
 
@@ -294,6 +295,7 @@ Downtime: **0 seconds** (at least one replica always running)
 1. **Single Host Limitation**: Distributed deployment to multiple servers is not supported
 2. **Load Balancing**: Round-robin only (weighted, sticky sessions, etc. not supported)
 3. **Health Checks**: HTTP GET only (TCP, gRPC, etc. not supported)
+4. **Audit Information**: Deployment history tracking is not supported
 
 ### Future Expansion Possibilities
 
