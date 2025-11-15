@@ -177,6 +177,10 @@ myapp/v1.2.3/myapp_linux_amd64.tar.gz
 
 OCI準拠のコンテナレジストリは、`dewy container`コマンドでコンテナイメージのデプロイメントに使用できます。
 
+{% callout type="caution" %}
+OCIレジストリでは監査追跡（Audit tracking）に対応していません。
+{% /callout %}
+
 ### 対応レジストリ
 
 DewyはOCI Distribution Specification準拠のすべてのレジストリをサポートしています：
