@@ -383,9 +383,8 @@ dewy server \
 Example deploying container images with rolling update deployment strategy. Monitors OCI registry for new versions.
 
 ```bash
-# Set credentials for private registry
-export DOCKER_USERNAME=myusername
-export DOCKER_PASSWORD=mypassword
+# Authenticate for private registry
+docker login ghcr.io
 
 # Deploy with health checks
 dewy container \

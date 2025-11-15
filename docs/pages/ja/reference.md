@@ -383,9 +383,8 @@ dewy server \
 ローリングアップデート戦略でコンテナイメージをデプロイする例です。OCIレジストリを監視して新しいバージョンを検出します。
 
 ```bash
-# プライベートレジストリの認証情報を設定
-export DOCKER_USERNAME=myusername
-export DOCKER_PASSWORD=mypassword
+# プライベートレジストリの認証
+docker login ghcr.io
 
 # ヘルスチェック付きでデプロイ
 dewy container \

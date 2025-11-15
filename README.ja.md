@@ -30,10 +30,11 @@
   </a>
 </p>
 
-Dewyは、主にGoで作られたアプリケーションを非コンテナ環境において宣言的にデプロイするソフトウェアです。
-Dewyは、アプリケーションのSupervisor的な役割をし、Dewyがメインプロセスとなり、子プロセスとしてアプリケーションを起動させます。
-Dewyのスケジューラーは、指定する「レジストリ」をポーリングし、セマンティックバージョニングで管理された最新のバージョンを検知すると、指定する「アーティファクト」ストアからデプロイを行います。
-Dewyは、いわゆるプル型のデプロイを実現します。Dewyは、レジストリ、アーティファクトストア、キャッシュストア、通知の４つのインターフェースから構成されています。
+Dewyは、コンテナ環境と非コンテナ環境の両方でアプリケーションを宣言的にデプロイするソフトウェアです。
+バイナリアプリケーション（主にGo）、静的アセット、コンテナ化されたアプリケーションという複数のデプロイメントモードをサポートします。
+Dewyは、指定する「レジストリ」をポーリングし、セマンティックバージョニングで管理された最新のバージョンを検知すると、指定する「アーティファクト」ストアまたはOCIレジストリから自動的にデプロイを行います。
+コンテナ化されたアプリケーションの場合、Dewyはヘルスチェック付きのゼロダウンタイムローリングアップデートデプロイメントを提供します。
+Dewyは、レジストリ、アーティファクトストア、キャッシュストア、通知の４つのインターフェースから構成されています。
 以下はDewyのデプロイプロセスと構成を図にしたものです。
 
 <p align="center">
@@ -44,14 +45,19 @@ Dewyは、いわゆるプル型のデプロイを実現します。Dewyは、レ
 --
 
 - 宣言的プル型デプロイメント
+- 複数のデプロイメントモード（バイナリ、アセット、コンテナイメージ）
+- コンテナ向けゼロダウンタイムローリングアップデートデプロイメント
 - グレースフルリスタート
 - 選択可能なレジストリとアーティファクトストア
+- Docker Hub、GHCR、GAR、ECRなどのOCIレジストリをサポート
 - デプロイ状況の通知
 - JSON形式対応の構造化ログ
 - オーディットログ
 
 使いかた
 --
+
+### Serverコマンド
 
 次のServerコマンドは、registryにgithub releasesを使い、8000番ポートでサーバ起動し、ログレベルをinfoに設定し、slackに通知する例です。
 
@@ -60,17 +66,36 @@ $ dewy server --registry ghr://linyows/myapp \
   --notifier slack://general?title=myapp -p 8000 -l info -- /opt/myapp/current/myapp
 ```
 
+### Assetsコマンド
+
+HTMLやCSS、JavaScriptなどの静的ファイルをデプロイします：
+
+```sh
+$ dewy assets --registry ghr://linyows/frontend -d /var/www/html -l info
+```
+
+### Containerコマンド
+
+ゼロダウンタイムローリングアップデートデプロイメントでコンテナ化されたアプリケーションをデプロイします：
+
+```sh
+$ dewy container --registry img://ghcr.io/linyows/myapp \
+  --container-port 8080 --health-path /health --replicas 3 -l info
+```
+
 レジストリと通知の指定はurlを模擬した構成になっています。urlのschemeにあたる箇所はレジストリや通知の名前です。レジストリの項目で詳しく解説します。
 
 コマンド
 --
 
-Dewyには、ServerとAssetsコマンドがあります。
+Dewyには、Server、Assets、Containerの3つの主要なコマンドがあります。
 ServerはServer Application用でApplicationのプロセス管理を行い、Applicationのバージョンを最新に維持します。
 Assetsはhtmlやcssやjsなど、静的ファイルのバージョンを最新に維持します。
+Containerはコンテナ化されたアプリケーションのゼロダウンタイムデプロイメントを実現し、ローリングアップデートをサポートします。
 
 - server
 - assets
+- container
 
 インターフェース
 --
@@ -86,7 +111,7 @@ Registry
 --
 
 レジストリは、アプリケーションやファイルのバージョンを管理するインターフェースです。
-レジストリは、Github Releases、AWS S3、Google Cloud Storage、GRPCから選択できます。
+レジストリは、Github Releases、AWS S3、Google Cloud Storage、OCIレジストリ（Docker Hub、GHCR、GAR、ECR）、GRPCから選択できます。
 
 #### 共通オプション
 
@@ -195,6 +220,50 @@ grpc://<server-host>?<options: no-tls>
 # 例
 $ dewy grpc://localhost:9000?no-tls=true
 ```
+
+### OCI Registry
+
+OCI準拠のコンテナレジストリは、`dewy container`コマンドでコンテナイメージのデプロイメントに使用できます。サポートされているレジストリには、Docker Hub、GitHub Container Registry（GHCR）、Google Artifact Registry（GAR）、AWS Elastic Container Registry（ECR）があります。
+
+> [!IMPORTANT]
+> **監査ログの制限**: OCIレジストリでは監査ログはサポートされていません。
+
+```sh
+# 構造
+# img://<registry-host>/<image-name>?<options: pre-release>
+
+# 例
+$ dewy container --registry img://ghcr.io/owner/app --container-port 8080
+$ dewy container --registry img://docker.io/myuser/myapp --container-port 3000
+$ dewy container --registry img://gcr.io/my-project/myapp --container-port 8080
+```
+
+OCIレジストリの認証は、Dockerの認証システムを通じて設定します：
+
+```sh
+# docker loginを使用
+$ docker login ghcr.io
+$ dewy container --registry img://ghcr.io/myorg/private-app
+```
+
+`dewy container`コマンドは、ゼロダウンタイムローリングアップデートデプロイメントを提供します：
+
+1. Dewyは指定された間隔でレジストリの新しいタグをポーリングします
+2. セマンティックバージョニングに準拠した新しいタグが自動的に検出されます
+3. 新しいコンテナイメージがプルされ、新しいコンテナが起動されます
+4. ヘルスチェックが実行されます（`--health-path`が指定されている場合）
+5. ネットワークエイリアスを更新することで、トラフィックが新しいコンテナに切り替えられます
+6. 古いコンテナはドレイン期間中も稼働し続け、その後削除されます
+
+コンテナ固有のオプション：
+
+Option | Type | Description
+---    | ---  | ---
+container-port | int | コンテナがリッスンするポート（必須）
+health-path | string | ヘルスチェック用のHTTPパス（例：/health）
+health-timeout | int | ヘルスチェックのタイムアウト秒数（デフォルト：30）
+drain-time | int | 古いコンテナを削除する前のドレイン期間の秒数（デフォルト：30）
+replicas | int | コンテナのレプリカ数（デフォルト：1）
 
 Artifact
 --

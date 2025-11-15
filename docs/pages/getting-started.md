@@ -45,9 +45,8 @@ dewy assets --registry ghr://owner/frontend-assets
 For deploying containerized applications with zero-downtime rolling update deployment:
 
 ```bash
-# Set environment variables (if using private registry)
-export DOCKER_USERNAME=your_username
-export DOCKER_PASSWORD=your_password
+# Authenticate if using private registry
+docker login ghcr.io
 
 # Deploy container image from OCI registry
 dewy container --registry img://ghcr.io/owner/app --container-port 8080
@@ -88,9 +87,8 @@ dewy server \
 ### Example Using OCI Registry
 
 ```bash
-# Configure registry credentials (if private)
-export DOCKER_USERNAME=myusername
-export DOCKER_PASSWORD=mypassword
+# Authenticate if using private registry
+docker login ghcr.io
 
 # Ensure Docker/Podman is running
 docker info

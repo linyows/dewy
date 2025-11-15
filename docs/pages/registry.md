@@ -202,20 +202,7 @@ img://registry.example.com/<repository>
 
 ### Authentication
 
-#### Environment Variables
-
-```bash
-# Using username and password
-export DOCKER_USERNAME=myusername
-export DOCKER_PASSWORD=mypassword
-
-# Or using Docker config file (automatically used if present)
-# ~/.docker/config.json
-```
-
-#### Docker Config File
-
-Dewy automatically uses existing Docker authentication if configured:
+Dewy uses Docker's authentication system. Authenticate using `docker login`:
 
 ```bash
 # Login to registry (credentials saved to ~/.docker/config.json)
@@ -250,8 +237,7 @@ dewy container --registry img://ghcr.io/myorg/myapp \
 dewy container --registry img://ghcr.io/owner/app
 
 # Private image (requires authentication)
-export DOCKER_USERNAME=github-username
-export DOCKER_PASSWORD=ghp_personal_access_token
+docker login ghcr.io
 dewy container --registry img://ghcr.io/owner/private-app
 ```
 

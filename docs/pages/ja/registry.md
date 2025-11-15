@@ -212,20 +212,7 @@ img://registry.example.com/<repository>
 
 ### 認証
 
-#### 環境変数
-
-```bash
-# ユーザー名とパスワードを使用
-export DOCKER_USERNAME=myusername
-export DOCKER_PASSWORD=mypassword
-
-# またはDocker設定ファイルを使用（存在する場合自動的に使用されます）
-# ~/.docker/config.json
-```
-
-#### Docker設定ファイル
-
-Dewyは既存のDocker認証が設定されている場合、自動的に使用します：
+Dewyは、Dockerの認証システムを使用します。`docker login`で認証してください：
 
 ```bash
 # レジストリにログイン（認証情報は~/.docker/config.jsonに保存されます）
@@ -260,8 +247,7 @@ dewy container --registry img://ghcr.io/myorg/myapp \
 dewy container --registry img://ghcr.io/owner/app
 
 # プライベートイメージ（認証が必要）
-export DOCKER_USERNAME=github-username
-export DOCKER_PASSWORD=ghp_personal_access_token
+docker login ghcr.io
 dewy container --registry img://ghcr.io/owner/private-app
 ```
 

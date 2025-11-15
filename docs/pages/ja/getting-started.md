@@ -45,9 +45,8 @@ dewy assets --registry ghr://owner/frontend-assets
 ゼロダウンタイムのローリングアップデートでコンテナ化されたアプリケーションをデプロイする場合：
 
 ```bash
-# 環境変数を設定（プライベートレジストリの場合）
-export DOCKER_USERNAME=your_username
-export DOCKER_PASSWORD=your_password
+# プライベートレジストリの場合は認証
+docker login ghcr.io
 
 # OCIレジストリからコンテナイメージをデプロイ
 dewy container --registry img://ghcr.io/owner/app --container-port 8080
@@ -88,9 +87,8 @@ dewy server \
 ### OCIレジストリを使った例
 
 ```bash
-# レジストリ認証情報を設定（プライベートの場合）
-export DOCKER_USERNAME=myusername
-export DOCKER_PASSWORD=mypassword
+# プライベートレジストリの場合は認証
+docker login ghcr.io
 
 # Docker/Podmanが起動していることを確認
 docker info

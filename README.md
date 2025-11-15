@@ -30,7 +30,7 @@
   </a>
 </p>
 
-Dewy is software primarily designed to declaratively deploy applications written in Go in non-container environments. Dewy acts as a supervisor for applications, running as the main process while launching the application as a child process. Its scheduler polls specified registries and, upon detecting the latest version (using semantic versioning), deploys from the designated artifact store. This enables Dewy to perform pull-based deployments. Dewy's architecture is composed of abstracted components: registries, artifact stores, cache stores, and notification channels. Below are diagrams illustrating Dewy's deployment process and architecture.
+Dewy is software for declaratively deploying applications in both container and non-container environments. It supports multiple deployment modes: binary applications (primarily Go), static assets, and containerized applications. Dewy acts as a supervisor, polling specified registries and, upon detecting the latest version (using semantic versioning), automatically deploys from the designated artifact store or OCI registry. For containerized applications, Dewy provides zero-downtime rolling update deployment with health checks. Dewy's architecture is composed of abstracted components: registries, artifact stores, cache stores, and notification channels. Below are diagrams illustrating Dewy's deployment process and architecture.
 
 <p align="center">
   <img alt="Dewy Architecture" src="https://github.com/linyows/dewy/blob/main/misc/dewy-architecture.svg?raw=true" width="640"/>
@@ -39,15 +39,20 @@ Dewy is software primarily designed to declaratively deploy applications written
 Features
 --
 
-- Pull-based declaratively deployment
+- Pull-based declarative deployment
+- Multiple deployment modes (binary, assets, container images)
+- Zero-downtime rolling update deployment for containers
 - Graceful restarts
 - Configurable registries and artifact stores
+- Support for Docker Hub, GHCR, GAR, ECR, and other OCI registries
 - Deployment status notifications
 - Structured logging with JSON format support
 - Audit logging
 
 Usage
 --
+
+### Server Command
 
 The following Server command demonstrates how to use GitHub Releases as a registry, start a server on port 8000, set the log level to `info` and enable notifications via Slack.
 
@@ -56,15 +61,33 @@ $ dewy server --registry ghr://linyows/myapp \
   --notifier slack://general?title=myapp -p 8000 -l info -- /opt/myapp/current/myapp
 ```
 
+### Assets Command
+
+Deploy static files such as HTML, CSS, and JavaScript:
+
+```sh
+$ dewy assets --registry ghr://linyows/frontend -d /var/www/html -l info
+```
+
+### Container Command
+
+Deploy containerized applications with zero-downtime rolling update deployment:
+
+```sh
+$ dewy container --registry img://ghcr.io/linyows/myapp \
+  --container-port 8080 --health-path /health --replicas 3 -l info
+```
+
 The registry and notification configurations are URL-like structures, where the scheme component represents the registry or notification type. More details are provided in the Registry section.
 
 Commands
 --
 
-Dewy provides two main commands: `Server` and `Assets`. The `Server` command is designed for server applications, managing the application's processes and ensuring the application version stays up to date. The `Assets` command focuses on static files such as HTML, CSS, and JavaScript, keeping these assets updated to the latest version.
+Dewy provides three main commands: `Server`, `Assets`, and `Container`. The `Server` command is designed for server applications, managing the application's processes and ensuring the application version stays up to date. The `Assets` command focuses on static files such as HTML, CSS, and JavaScript, keeping these assets updated to the latest version. The `Container` command enables zero-downtime deployment of containerized applications with rolling update support.
 
 -	server
 -	assets
+-	container
 
 Interfaces
 --
@@ -79,7 +102,7 @@ Dewy provides several interfaces, each with multiple implementations to choose f
 Registry
 --
 
-The Registry interface manages versions of applications and files. It currently supports GitHub Releases, AWS S3, Google Cloud Storage, and GRPC as sources.
+The Registry interface manages versions of applications and files. It currently supports GitHub Releases, AWS S3, Google Cloud Storage, OCI registries (Docker Hub, GHCR, GAR, ECR), and GRPC as sources.
 
 ### Common Options
 
@@ -185,6 +208,50 @@ For using GRPC as a registry, configure as follows. Since the GRPC server define
 # Example
 $ dewy --registry grpc://localhost:9000?no-tls=true ...
 ```
+
+### OCI Registry
+
+OCI-compliant container registries can be used for container image deployment with the `dewy container` command. Supported registries include Docker Hub, GitHub Container Registry (GHCR), Google Artifact Registry (GAR), and AWS Elastic Container Registry (ECR).
+
+> [!IMPORTANT]
+> **Audit Tracking Limitation**: Audit tracking is not supported for OCI registries.
+
+```sh
+# Format
+# img://<registry-host>/<image-name>?<options: pre-release>
+
+# Examples
+$ dewy container --registry img://ghcr.io/owner/app --container-port 8080
+$ dewy container --registry img://docker.io/myuser/myapp --container-port 3000
+$ dewy container --registry img://gcr.io/my-project/myapp --container-port 8080
+```
+
+Authentication for OCI registries is configured through Docker's authentication system:
+
+```sh
+# Use docker login
+$ docker login ghcr.io
+$ dewy container --registry img://ghcr.io/myorg/private-app
+```
+
+The `dewy container` command provides zero-downtime rolling update deployment:
+
+1. Dewy polls the registry for new tags at the specified interval
+2. New semver-compliant tags are detected automatically
+3. The new container image is pulled and a new container is started
+4. Health checks are performed (if `--health-path` is specified)
+5. Traffic is switched to the new container by updating the network alias
+6. The old container continues running during the drain period, then is removed
+
+Container-specific options:
+
+Option | Type | Description
+---    | ---  | ---
+container-port | int | Port the container listens on (required)
+health-path | string | HTTP path for health checks (e.g., /health)
+health-timeout | int | Health check timeout in seconds (default: 30)
+drain-time | int | Drain period in seconds before removing old container (default: 30)
+replicas | int | Number of container replicas (default: 1)
 
 Artifact
 --
