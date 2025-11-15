@@ -703,7 +703,7 @@ func (d *Dewy) RunContainer() error {
 	if totalReplicas <= 0 {
 		totalReplicas = 1
 	}
-	msg = fmt.Sprintf("Container deployed successfully: %d/%d replicas of `%s`", deployedCount, totalReplicas, d.cVer)
+	msg = fmt.Sprintf("Container deployed successfully: `%d/%d` replicas of `%s`", deployedCount, totalReplicas, d.cVer)
 	d.logger.Info("Container deployed successfully",
 		slog.String("version", d.cVer),
 		slog.Int("replicas", deployedCount),
