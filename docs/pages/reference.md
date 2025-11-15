@@ -65,7 +65,7 @@ dewy server --cache file:///tmp/dewy-cache -- /opt/app/current/app
 
 ### --notifier (-n)
 
-Configures deployment status notifications. Notification channels such as Slack, Discord, and email can be set up.
+Configures deployment status notifications. Notification channels such as Slack and email can be set up.
 
 ```bash
 dewy server --notifier slack://webhook-url -- /opt/app/current/app
@@ -260,15 +260,6 @@ ecr://region/repository
 ecr://account-id.dkr.ecr.region.amazonaws.com/repository
 ```
 
-### Git (git://)
-
-Retrieves version information from Git repository tags. Supports SSH and HTTPS authentication.
-
-```bash
-git://github.com/owner/repository
-git://gitlab.com/owner/repository
-```
-
 ## Notification Formats
 
 Dewy supports various notification channels. Deployment success and failure can be notified to appropriate destinations.
@@ -282,38 +273,12 @@ slack://webhook-url
 slack://token@channel
 ```
 
-### Discord
-
-Sends notifications using Discord Webhook or Bot Token.
-
-```bash
-discord://webhook-url
-discord://token@channel-id
-```
-
-### Microsoft Teams
-
-Sends notifications using Microsoft Teams Incoming Webhook.
-
-```bash
-teams://webhook-url
-```
-
 ### Email (SMTP)
 
 Sends email notifications through SMTP server. Authentication credentials and server settings are required.
 
 ```bash
 smtp://user:password@host:port/to@example.com
-```
-
-### HTTP/HTTPS
-
-POSTs notifications to custom HTTP endpoints. Supports webhook-style notifications.
-
-```bash
-http://your-webhook-endpoint
-https://your-webhook-endpoint
 ```
 
 ## Exit Codes
@@ -447,25 +412,3 @@ dewy container \
   --interval 300 \
   --log-level info
 ```
-
-### Container Deployment with Reverse Proxy
-
-Example using Caddy reverse proxy for container deployment. The proxy handles external traffic while application containers remain on the internal network only.
-
-```bash
-dewy container \
-  --registry img://ghcr.io/mycompany/webapp \
-  --container-port 3333 \
-  --health-path /health \
-  --proxy \
-  --proxy-port 8000 \
-  --env API_KEY=secret \
-  --log-level info
-```
-
-In this setup:
-- External clients access the application through `http://localhost:8000`
-- Caddy proxy forwards requests to `dewy-current:3333` (internal network)
-- Application container port 3333 is not exposed externally
-- Both proxy and application containers are managed by dewy
-- All containers are cleaned up automatically on shutdown

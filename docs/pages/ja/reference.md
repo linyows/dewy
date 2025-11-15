@@ -65,7 +65,7 @@ dewy server --cache file:///tmp/dewy-cache -- /opt/app/current/app
 
 ### --notifier (-n)
 
-デプロイメント状況の通知設定を指定します。Slack、Discord、メールなどの通知チャンネルを設定できます。
+デプロイメント状況の通知設定を指定します。Slack、メールなどの通知チャンネルを設定できます。
 
 ```bash
 dewy server --notifier slack://webhook-url -- /opt/app/current/app
@@ -260,15 +260,6 @@ ecr://region/repository
 ecr://account-id.dkr.ecr.region.amazonaws.com/repository
 ```
 
-### Git (git://)
-
-Gitリポジトリのタグからバージョン情報を取得します。SSH認証やHTTPS認証に対応しています。
-
-```bash
-git://github.com/owner/repository
-git://gitlab.com/owner/repository
-```
-
 ## 通知形式
 
 Dewyは様々な通知チャンネルをサポートしています。デプロイメントの成功・失敗を適切な場所に通知できます。
@@ -282,38 +273,12 @@ slack://webhook-url
 slack://token@channel
 ```
 
-### Discord
-
-Discord WebhookまたはBot Tokenを使用して通知を送信します。
-
-```bash
-discord://webhook-url
-discord://token@channel-id
-```
-
-### Microsoft Teams
-
-Microsoft Teams Incoming Webhookを使用して通知を送信します。
-
-```bash
-teams://webhook-url
-```
-
 ### Email (SMTP)
 
 SMTPサーバーを通じてメール通知を送信します。認証情報とサーバー設定が必要です。
 
 ```bash
 smtp://user:password@host:port/to@example.com
-```
-
-### HTTP/HTTPS
-
-カスタムHTTPエンドポイントに通知をPOSTします。Webhook形式の通知に対応します。
-
-```bash
-http://your-webhook-endpoint
-https://your-webhook-endpoint
 ```
 
 ## 終了コード
@@ -431,19 +396,5 @@ dewy container \
   --drain-time 30 \
   --env DATABASE_URL=postgres://db:5432/mydb \
   --volume /data:/app/data \
-  --log-level info
-```
-
-### カスタムネットワークを使用したコンテナデプロイメント
-
-カスタムDockerネットワークとネットワークエイリアスを使用したサービスディスカバリーの例です。
-
-```bash
-dewy container \
-  --registry img://ghcr.io/mycompany/api \
-  --network production-net \
-  --network-alias api-service \
-  --container-port 3000 \
-  --interval 300 \
   --log-level info
 ```
