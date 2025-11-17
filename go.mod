@@ -21,7 +21,7 @@ require (
 	github.com/lestrrat-go/slack v0.0.0-20190827134815-1aaae719550a
 	github.com/linyows/server-starter v0.1.0
 	github.com/mholt/archives v0.1.5
-	github.com/migueleliasweb/go-github-mock v1.4.0
+	github.com/migueleliasweb/go-github-mock v1.5.0
 	golang.org/x/oauth2 v0.32.0
 	google.golang.org/api v0.255.0
 	google.golang.org/grpc v1.76.0
