@@ -75,7 +75,8 @@ Deploy containerized applications with zero-downtime rolling update deployment:
 
 ```sh
 $ dewy container --registry img://ghcr.io/linyows/myapp \
-  --container-port 8080 --health-path /health --replicas 3 -l info
+  --port 8080 --container-port 8080 --health-path /health --replicas 3 \
+  -- -e DATABASE_URL=postgres://db:5432/mydb -v /data:/app/data
 ```
 
 The registry and notification configurations are URL-like structures, where the scheme component represents the registry or notification type. More details are provided in the Registry section.
@@ -252,6 +253,10 @@ health-path | string | HTTP path for health checks (e.g., /health)
 health-timeout | int | Health check timeout in seconds (default: 30)
 drain-time | int | Drain period in seconds before removing old container (default: 30)
 replicas | int | Number of container replicas (default: 1)
+cmd | string | Command and arguments to pass to container (can be specified multiple times)
+-- | separator | Pass additional docker run options after this separator (e.g., `-e`, `-v`, `--cpus`, `--memory`)
+
+**Docker run options passthrough:** All options after `--` are passed directly to docker run. Forbidden options: `-d`, `-it`, `-i`, `-t`, `-l`, `-p`
 
 Artifact
 --

@@ -157,24 +157,45 @@ dewy container --registry img://ghcr.io/owner/app --drain-time 60
 dewy container --registry img://ghcr.io/owner/app --runtime podman
 ```
 
-### --env (-e)
+### --cmd
 
-コンテナに渡す環境変数を指定します。複数回指定可能です。
+コンテナに渡すコマンドと引数を指定します。複数回指定可能です。コンテナイメージのデフォルトCMDを上書きします。
 
 ```bash
 dewy container --registry img://ghcr.io/owner/app \
-  --env API_KEY=secret \
-  --env DATABASE_URL=postgres://localhost/db
+  --cmd "/bin/sh" \
+  --cmd "-c" \
+  --cmd "node server.js --debug"
 ```
 
-### --volume
+### -- (セパレータ)
 
-コンテナのボリュームマウントを指定します。形式は`host:container`または読み取り専用の場合は`host:container:ro`です。複数回指定可能です。
+`--` セパレータを使用すると、docker run の追加オプションを直接渡すことができます。`--` 以降の全ての引数は docker run コマンドに渡されます。
+
+**サポートされるオプション:** 環境変数 (`-e`)、ボリューム (`-v`)、リソース制限 (`--cpus`, `--memory`)、エントリーポイント (`--entrypoint`) など、ほとんどの docker run オプション。
+
+**禁止オプション:** `-d`, `-it`, `-i`, `-t`, `-l`, `-p` (これらはDewyの管理と競合します)
+
+**カスタムコンテナ名:** `--name` を指定してコンテナのベース名をカスタマイズできます。Dewyは自動的にタイムスタンプとレプリカインデックスを付加して一意性を保証します。
 
 ```bash
-dewy container --registry img://ghcr.io/owner/app \
-  --volume /data:/app/data \
-  --volume /config:/app/config:ro
+# 環境変数とボリューム
+dewy container --registry img://ghcr.io/owner/app -- \
+  -e API_KEY=secret \
+  -e DATABASE_URL=postgres://localhost/db \
+  -v /data:/app/data \
+  -v /config:/app/config:ro
+
+# リソース制限とカスタムエントリーポイント
+dewy container --registry img://ghcr.io/owner/app -- \
+  --cpus 2 \
+  --memory 1g \
+  --entrypoint /custom/entrypoint
+
+# カスタムコンテナ名（タイムスタンプとレプリカインデックスが付加されます）
+dewy container --registry img://ghcr.io/owner/app --replicas 3 -- \
+  --name myapp
+# 結果: myapp-1234567890-0, myapp-1234567890-1, myapp-1234567890-2
 ```
 
 ## 環境変数
@@ -386,14 +407,40 @@ dewy server \
 # プライベートレジストリの認証
 docker login ghcr.io
 
-# ヘルスチェック付きでデプロイ
+# 基本的なヘルスチェック付きデプロイ
 dewy container \
   --registry img://ghcr.io/mycompany/myapp \
+  --port 8080 \
   --container-port 8080 \
   --health-path /health \
   --health-timeout 30 \
   --drain-time 30 \
-  --env DATABASE_URL=postgres://db:5432/mydb \
-  --volume /data:/app/data \
-  --log-level info
+  --log-level info \
+  -- \
+  -e DATABASE_URL=postgres://db:5432/mydb \
+  -v /data:/app/data
+
+# カスタムコマンドでの複数レプリカ
+dewy container \
+  --registry img://ghcr.io/mycompany/myapp \
+  --port 8080 \
+  --replicas 3 \
+  --cmd "node" \
+  --cmd "server.js" \
+  --cmd "--workers=4" \
+  -- \
+  -e NODE_ENV=production \
+  --cpus 2 \
+  --memory 2g
+
+# カスタムコンテナ名とリソース制限
+dewy container \
+  --registry img://ghcr.io/mycompany/myapp \
+  --port 8080 \
+  -- \
+  --name custom-app \
+  -e API_KEY=secret \
+  --cpus 4 \
+  --memory 4g \
+  --restart unless-stopped
 ```

@@ -388,9 +388,14 @@ After considering the above two methods, we implemented a built-in reverse proxy
 ## Implementation Files
 
 - `dewy.go`: Rolling update deployment implementation (`deployContainer` function)
-- `container/docker.go`: Docker CLI wrapper
+- `container/docker.go`: Docker CLI wrapper with validation and docker run option passthrough
+- `container/container.go`: Runtime interface and data structures (RunOptions, DeployOptions)
 - `registry/img.go`: OCI registry implementation
-- `cli.go`: CLI definition for `container` command (`--replicas`, etc.)
+- `cli.go`: CLI definition for `container` command
+  - Dewy-specific options: `--replicas`, `--health-path`, `--cmd`
+  - Docker run options passthrough via `--` separator
+  - Forbidden options validation: `-d`, `-it`, `-i`, `-t`, `-l`, `-p`
+- `config.go`: Container configuration structure (Command, ExtraArgs)
 
 ## Related Documentation
 
