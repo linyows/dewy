@@ -48,13 +48,15 @@ type Runtime interface {
 
 // RunOptions contains options for running a container.
 type RunOptions struct {
-	Image   string
-	Name    string
-	Env     []string
-	Volumes []string
-	Labels  map[string]string
-	Ports   []string // Port mappings in format "host:container" or "127.0.0.1::container" for random localhost port
-	Detach  bool
+	Image        string
+	Name         string
+	AppName      string   // Application name for default naming
+	ReplicaIndex int      // Replica index for naming (0-based)
+	Labels       map[string]string
+	Ports        []string // Port mappings in format "host:container" or "127.0.0.1::container" for random localhost port
+	Detach       bool
+	Command      []string // Command and arguments to pass to container
+	ExtraArgs    []string // Extra docker run arguments (from -- separator)
 }
 
 // Container represents container information.
@@ -81,9 +83,9 @@ type DeployOptions struct {
 	ImageRef      string
 	AppName       string
 	ContainerPort int      // Container port to expose (will be mapped to random localhost port)
-	Env           []string
-	Volumes       []string
 	Ports         []string // Explicit port mappings in format "host:container" (e.g., "8080:8080")
+	Command       []string // Command and arguments to pass to container
+	ExtraArgs     []string // Extra docker run arguments (from -- separator)
 	HealthCheck   HealthCheckFunc
 }
 

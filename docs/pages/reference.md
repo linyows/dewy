@@ -157,24 +157,45 @@ Specifies the container runtime to use. Supports `docker` or `podman`. Default i
 dewy container --registry img://ghcr.io/owner/app --runtime podman
 ```
 
-### --env (-e)
+### --cmd
 
-Specifies environment variables to pass to the container. Can be specified multiple times.
+Specifies the command and arguments to pass to the container. Can be specified multiple times. This overrides the container image's default CMD.
 
 ```bash
 dewy container --registry img://ghcr.io/owner/app \
-  --env API_KEY=secret \
-  --env DATABASE_URL=postgres://localhost/db
+  --cmd "/bin/sh" \
+  --cmd "-c" \
+  --cmd "node server.js --debug"
 ```
 
-### --volume
+### -- (Separator)
 
-Specifies volume mounts for the container. Format is `host:container` or `host:container:ro` for read-only. Can be specified multiple times.
+The `--` separator allows you to pass additional docker run options directly. All arguments after `--` are passed to the docker run command.
+
+**Supported options:** Environment variables (`-e`), volumes (`-v`), resource limits (`--cpus`, `--memory`), entrypoint (`--entrypoint`), and most other docker run options.
+
+**Forbidden options:** `-d`, `-it`, `-i`, `-t`, `-l`, `-p` (these conflict with Dewy's management)
+
+**Custom container name:** You can specify `--name` to customize the container base name. Dewy automatically appends a timestamp and replica index to ensure uniqueness.
 
 ```bash
-dewy container --registry img://ghcr.io/owner/app \
-  --volume /data:/app/data \
-  --volume /config:/app/config:ro
+# Environment variables and volumes
+dewy container --registry img://ghcr.io/owner/app -- \
+  -e API_KEY=secret \
+  -e DATABASE_URL=postgres://localhost/db \
+  -v /data:/app/data \
+  -v /config:/app/config:ro
+
+# Resource limits and custom entrypoint
+dewy container --registry img://ghcr.io/owner/app -- \
+  --cpus 2 \
+  --memory 1g \
+  --entrypoint /custom/entrypoint
+
+# Custom container name (will be suffixed with timestamp and replica index)
+dewy container --registry img://ghcr.io/owner/app --replicas 3 -- \
+  --name myapp
+# Results in: myapp-1234567890-0, myapp-1234567890-1, myapp-1234567890-2
 ```
 
 ## Environment Variables
@@ -386,14 +407,40 @@ Example deploying container images with rolling update deployment strategy. Moni
 # Authenticate for private registry
 docker login ghcr.io
 
-# Deploy with health checks
+# Basic deployment with health checks
 dewy container \
   --registry img://ghcr.io/mycompany/myapp \
+  --port 8080 \
   --container-port 8080 \
   --health-path /health \
   --health-timeout 30 \
   --drain-time 30 \
-  --env DATABASE_URL=postgres://db:5432/mydb \
-  --volume /data:/app/data \
-  --log-level info
+  --log-level info \
+  -- \
+  -e DATABASE_URL=postgres://db:5432/mydb \
+  -v /data:/app/data
+
+# Multiple replicas with custom command
+dewy container \
+  --registry img://ghcr.io/mycompany/myapp \
+  --port 8080 \
+  --replicas 3 \
+  --cmd "node" \
+  --cmd "server.js" \
+  --cmd "--workers=4" \
+  -- \
+  -e NODE_ENV=production \
+  --cpus 2 \
+  --memory 2g
+
+# Custom container name and resource limits
+dewy container \
+  --registry img://ghcr.io/mycompany/myapp \
+  --port 8080 \
+  -- \
+  --name custom-app \
+  -e API_KEY=secret \
+  --cpus 4 \
+  --memory 4g \
+  --restart unless-stopped
 ```

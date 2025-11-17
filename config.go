@@ -65,8 +65,8 @@ type ContainerConfig struct {
 	Name          string
 	ContainerPort int
 	Replicas      int           // Number of container replicas to run (default: 1)
-	Env           []string
-	Volumes       []string
+	Command       []string      // Command and arguments to pass to container
+	ExtraArgs     []string      // Extra docker run arguments from -- separator
 	HealthPath    string
 	HealthTimeout time.Duration
 	DrainTime     time.Duration

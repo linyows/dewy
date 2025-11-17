@@ -17,6 +17,16 @@ type Docker struct {
 	drainTime time.Duration
 }
 
+// Forbidden options that conflict with Dewy management
+var forbiddenOptions = []string{
+	"-d", "--detach",
+	"-it",
+	"-i", "--interactive",
+	"-t", "--tty",
+	"-l", "--label",
+	"-p", "--publish",
+}
+
 // NewDocker creates a new Docker runtime.
 func NewDocker(logger *slog.Logger, drainTime time.Duration) (*Docker, error) {
 	cmd := "docker"
@@ -29,6 +39,38 @@ func NewDocker(logger *slog.Logger, drainTime time.Duration) (*Docker, error) {
 		logger:    logger,
 		drainTime: drainTime,
 	}, nil
+}
+
+// validateExtraArgs checks if any forbidden options are present in extra args.
+func validateExtraArgs(args []string) error {
+	for _, arg := range args {
+		for _, forbidden := range forbiddenOptions {
+			if arg == forbidden || strings.HasPrefix(arg, forbidden+"=") {
+				return fmt.Errorf("option %s conflicts with Dewy management and cannot be used", forbidden)
+			}
+		}
+	}
+	return nil
+}
+
+// extractNameOption extracts --name option from args and returns the name and filtered args.
+func extractNameOption(args []string) (string, []string) {
+	var name string
+	filtered := []string{}
+
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--name" && i+1 < len(args) {
+			name = args[i+1]
+			i++ // Skip next argument
+		} else if strings.HasPrefix(arg, "--name=") {
+			name = arg[7:] // Skip "--name="
+		} else {
+			filtered = append(filtered, arg)
+		}
+	}
+
+	return name, filtered
 }
 
 // execCommand executes a docker command without returning output.
@@ -108,40 +150,56 @@ func (d *Docker) Pull(ctx context.Context, imageRef string) error {
 
 // Run starts a new container and returns the container ID.
 func (d *Docker) Run(ctx context.Context, opts RunOptions) (string, error) {
+	// Validate extra args first
+	if err := validateExtraArgs(opts.ExtraArgs); err != nil {
+		return "", err
+	}
+
+	// Extract --name from extra args
+	userName, filteredArgs := extractNameOption(opts.ExtraArgs)
+
+	// Determine container name
+	baseName := opts.AppName
+	if userName != "" {
+		baseName = userName
+	}
+
+	// Generate container name with timestamp and replica index
+	timestamp := time.Now().Unix()
+	containerName := fmt.Sprintf("%s-%d-%d", baseName, timestamp, opts.ReplicaIndex)
+
+	// Build docker run command
 	args := []string{"run"}
 
+	// Always detach
 	if opts.Detach {
 		args = append(args, "-d")
 	}
 
-	if opts.Name != "" {
-		args = append(args, "--name", opts.Name)
-	}
+	// Container name
+	args = append(args, "--name", containerName)
 
-	// Environment variables
-	for _, env := range opts.Env {
-		args = append(args, "-e", env)
-	}
-
-	// Volumes
-	for _, vol := range opts.Volumes {
-		args = append(args, "-v", vol)
-	}
-
-	// Ports
-	for _, port := range opts.Ports {
-		args = append(args, "-p", port)
-	}
-
-	// Labels
+	// Labels (managed by Dewy)
 	for key, value := range opts.Labels {
 		args = append(args, "--label", fmt.Sprintf("%s=%s", key, value))
 	}
 
+	// Ports (managed by Dewy)
+	for _, port := range opts.Ports {
+		args = append(args, "-p", port)
+	}
+
+	// User-specified extra args (filtered, --name removed)
+	args = append(args, filteredArgs...)
+
+	// Image
 	args = append(args, opts.Image)
 
+	// Command and arguments
+	args = append(args, opts.Command...)
+
 	d.logger.Info("Starting container",
-		slog.String("name", opts.Name),
+		slog.String("name", containerName),
 		slog.String("image", opts.Image))
 
 	containerID, err := d.execCommandOutput(ctx, args...)
@@ -268,7 +326,6 @@ func (d *Docker) deployContainerInternal(ctx context.Context, opts DeployOptions
 	}
 
 	// 3. Start new container
-	newName := fmt.Sprintf("%s-%d", opts.AppName, time.Now().Unix())
 	labels := map[string]string{
 		"dewy.managed": "true",
 		"dewy.app":     opts.AppName,
@@ -292,13 +349,14 @@ func (d *Docker) deployContainerInternal(ctx context.Context, opts DeployOptions
 	}
 
 	newID, err := d.Run(ctx, RunOptions{
-		Image:   opts.ImageRef,
-		Name:    newName,
-		Env:     opts.Env,
-		Volumes: opts.Volumes,
-		Ports:   ports,
-		Labels:  labels,
-		Detach:  true,
+		Image:        opts.ImageRef,
+		AppName:      opts.AppName,
+		ReplicaIndex: 0, // Single container deployment (for backward compatibility)
+		Ports:        ports,
+		Labels:       labels,
+		Detach:       true,
+		Command:      opts.Command,
+		ExtraArgs:    opts.ExtraArgs,
 	})
 	if err != nil {
 		return "", fmt.Errorf("start new container failed: %w", err)

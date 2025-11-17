@@ -43,9 +43,8 @@ type cli struct {
 	HealthTimeout    int      `long:"health-timeout" description:"Health check timeout in seconds (default: 30)"`
 	DrainTime        int      `long:"drain-time" description:"Drain time in seconds after traffic switch (default: 30 for container command)"`
 	ContainerRuntime string   `long:"runtime" description:"Container runtime (docker or podman, default: docker)"`
-	Env     []string `long:"env" short:"e" description:"Environment variables for container (format: KEY=VALUE)"`
-	Volumes []string `long:"volume" description:"Volume mounts for container (format: host:container or host:container:ro)"`
-	Help    bool     `long:"help" short:"h" description:"show this help message and exit"`
+	Cmd              []string `long:"cmd" description:"Command and arguments to pass to container (can be specified multiple times)"`
+	Help             bool     `long:"help" short:"h" description:"show this help message and exit"`
 	Version          bool     `long:"version" short:"v" description:"prints the version number"`
 }
 
@@ -145,8 +144,7 @@ func (c *cli) showHelp() {
 	containerOpts := strings.Join(c.buildHelp([]string{
 		"ContainerPort",
 		"Replicas",
-		"Env",
-		"Volumes",
+		"Cmd",
 		"HealthPath",
 		"HealthTimeout",
 		"DrainTime",
@@ -316,8 +314,8 @@ func (c *cli) run() int {
 		conf.Container = &ContainerConfig{
 			ContainerPort: c.ContainerPort,
 			Replicas:      c.Replicas,
-			Env:           c.Env,
-			Volumes:       c.Volumes,
+			Command:       c.Cmd,
+			ExtraArgs:     c.args, // Arguments after -- separator (docker run options)
 			HealthPath:    c.HealthPath,
 			HealthTimeout: time.Duration(c.HealthTimeout) * time.Second,
 			DrainTime:     time.Duration(c.DrainTime) * time.Second,

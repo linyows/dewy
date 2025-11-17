@@ -807,8 +807,7 @@ func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentRespons
 			slog.Int("total", replicas))
 
 		// Start new container
-		containerName := fmt.Sprintf("%s-%d", appName, time.Now().Unix())
-		containerID, mappedPort, err := d.startSingleContainer(ctx, dockerRuntime, imageRef, appName, containerName, healthCheck)
+		containerID, mappedPort, err := d.startSingleContainer(ctx, dockerRuntime, imageRef, appName, i, healthCheck)
 		if err != nil {
 			// Rollback: remove newly created containers
 			d.logger.Error("Failed to start container, rolling back",
@@ -911,22 +910,23 @@ func (d *Dewy) createHealthCheckFunc(dockerRuntime *container.Docker) container.
 }
 
 // startSingleContainer starts a single container and returns its ID and mapped port.
-func (d *Dewy) startSingleContainer(ctx context.Context, dockerRuntime *container.Docker, imageRef, appName, containerName string, healthCheck container.HealthCheckFunc) (string, int, error) {
+func (d *Dewy) startSingleContainer(ctx context.Context, dockerRuntime *container.Docker, imageRef, appName string, replicaIndex int, healthCheck container.HealthCheckFunc) (string, int, error) {
 	// Prepare port mapping for localhost-only access
 	ports := []string{fmt.Sprintf("127.0.0.1::%d", d.config.Container.ContainerPort)}
 
 	// Start container
 	containerID, err := dockerRuntime.Run(ctx, container.RunOptions{
-		Image:   imageRef,
-		Name:    containerName,
-		Env:     d.config.Container.Env,
-		Volumes: d.config.Container.Volumes,
-		Ports:   ports,
+		Image:        imageRef,
+		AppName:      appName,
+		ReplicaIndex: replicaIndex,
+		Ports:        ports,
 		Labels: map[string]string{
 			"dewy.managed": "true",
 			"dewy.app":     appName,
 		},
-		Detach: true,
+		Detach:    true,
+		Command:   d.config.Container.Command,
+		ExtraArgs: d.config.Container.ExtraArgs,
 	})
 	if err != nil {
 		return "", 0, fmt.Errorf("failed to start container: %w", err)
@@ -944,7 +944,6 @@ func (d *Dewy) startSingleContainer(ctx context.Context, dockerRuntime *containe
 
 	d.logger.Info("Container started",
 		slog.String("container", containerID),
-		slog.String("name", containerName),
 		slog.Int("mapped_port", mappedPort))
 
 	// Perform health check if configured
