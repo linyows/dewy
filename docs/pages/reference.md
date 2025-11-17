@@ -397,17 +397,3 @@ dewy container \
   --volume /data:/app/data \
   --log-level info
 ```
-
-### Container Deployment with Custom Network
-
-Example using custom Docker network and network alias for service discovery.
-
-```bash
-dewy container \
-  --registry img://ghcr.io/mycompany/api \
-  --network production-net \
-  --network-alias api-service \
-  --container-port 3000 \
-  --interval 300 \
-  --log-level info
-```

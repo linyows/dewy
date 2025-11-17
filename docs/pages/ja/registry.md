@@ -321,7 +321,6 @@ OCIレジストリを`dewy container`コマンドと使用する場合：
 2. セマンティックバージョニング準拠の新しいタグが自動的に検出されます
 3. 新しいコンテナイメージがプルされます
 4. 新しいコンテナのヘルスチェックが実行されます（設定されている場合）
-5. ネットワークエイリアス経由でトラフィックが新しいコンテナに切り替えられます
 6. 古いコンテナはドレインされて削除されます
 
 ```bash
@@ -333,8 +332,6 @@ dewy container \
   --health-path /health \
   --health-timeout 30 \
   --drain-time 30 \
-  --network production \
-  --network-alias myapp-current \
   --log-level info
 ```
 

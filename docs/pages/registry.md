@@ -312,7 +312,6 @@ When using OCI registry with `dewy container` command:
 2. New semver-compliant tags are detected automatically
 3. New container image is pulled
 4. Health check is performed on new container (if configured)
-5. Traffic is switched to new container via network alias
 6. Old container is drained and removed
 
 ```bash
@@ -324,8 +323,6 @@ dewy container \
   --health-path /health \
   --health-timeout 30 \
   --drain-time 30 \
-  --network production \
-  --network-alias myapp-current \
   --log-level info
 ```
 
