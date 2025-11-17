@@ -44,6 +44,12 @@ type Runtime interface {
 
 	// RemoveImage removes an image by ID.
 	RemoveImage(ctx context.Context, imageID string) error
+
+	// GetContainerInfo returns detailed information about a container.
+	GetContainerInfo(ctx context.Context, containerID string, containerPort int) (*ContainerInfo, error)
+
+	// ListContainersByLabels returns detailed information about containers matching the given labels.
+	ListContainersByLabels(ctx context.Context, labels map[string]string, containerPort int) ([]*ContainerInfo, error)
 }
 
 // RunOptions contains options for running a container.
@@ -67,6 +73,18 @@ type Container struct {
 	Status  string
 	Labels  map[string]string
 	Created time.Time
+}
+
+// ContainerInfo represents detailed container information for admin API.
+type ContainerInfo struct {
+	ID         string            `json:"id"`
+	Name       string            `json:"name"`
+	Image      string            `json:"image"`
+	Status     string            `json:"status"`
+	IPPort     string            `json:"ip_port"`     // Mapped host address (e.g., "127.0.0.1:49152")
+	StartedAt  time.Time         `json:"started_at"`  // When container was started
+	DeployedAt time.Time         `json:"deployed_at"` // When deployed by dewy
+	Labels     map[string]string `json:"labels"`
 }
 
 // ImageInfo represents container image information.

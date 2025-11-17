@@ -35,6 +35,29 @@ The `dewy container` command handles container image deployment with zero-downti
 dewy container [options]
 ```
 
+#### container list Subcommand
+
+The `dewy container list` subcommand displays information about currently running containers managed by dewy.
+
+```bash
+dewy container list
+```
+
+**Output:**
+```
+UPSTREAM           DEPLOY TIME            NAME
+127.0.0.1:8080     2025-01-15 10:30:00    myapp-0
+127.0.0.1:8081     2025-01-15 10:30:05    myapp-1
+127.0.0.1:8082     2025-01-15 10:30:10    myapp-2
+```
+
+Shows:
+- **UPSTREAM**: Proxy backend address (IP:port)
+- **DEPLOY TIME**: When the container was deployed
+- **NAME**: Container name (sorted alphabetically)
+
+**Note:** Must be run from the same directory where `dewy container` was started.
+
 ## Command Line Options
 
 Use the following options to customize Dewy's behavior.

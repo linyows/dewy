@@ -724,3 +724,85 @@ func TestValidateAndDeduplicatePorts(t *testing.T) {
 		})
 	}
 }
+
+func TestExtractAppNameFromRegistry(t *testing.T) {
+	tests := []struct {
+		name     string
+		registry string
+		want     string
+	}{
+		// img:// (OCI registry) - container command
+		{
+			name:     "img - ghcr.io with tag",
+			registry: "img://ghcr.io/owner/myapp:latest",
+			want:     "myapp",
+		},
+		{
+			name:     "img - ghcr.io without tag",
+			registry: "img://ghcr.io/owner/myapp",
+			want:     "myapp",
+		},
+		{
+			name:     "img - docker.io library",
+			registry: "img://docker.io/library/nginx:1.21",
+			want:     "nginx",
+		},
+		{
+			name:     "img - gcr.io",
+			registry: "img://gcr.io/my-project/myapp",
+			want:     "myapp",
+		},
+		{
+			name:     "img - simple image name",
+			registry: "img://myapp:latest",
+			want:     "myapp",
+		},
+		{
+			name:     "img - with query parameters",
+			registry: "img://ghcr.io/owner/myapp?pre-release=true",
+			want:     "myapp",
+		},
+		{
+			name:     "img - with tag and query parameters",
+			registry: "img://ghcr.io/owner/myapp:v1.0.0?pre-release=true",
+			want:     "myapp",
+		},
+		// ghr:// (GitHub Releases)
+		{
+			name:     "ghr - owner/repo",
+			registry: "ghr://owner/myrepo",
+			want:     "myrepo",
+		},
+		// s3://
+		{
+			name:     "s3 - simple path",
+			registry: "s3://us-east-1/bucket/myapp",
+			want:     "myapp",
+		},
+		{
+			name:     "s3 - nested path",
+			registry: "s3://us-east-1/bucket/path/to/myapp",
+			want:     "myapp",
+		},
+		// Invalid cases
+		{
+			name:     "invalid format - no scheme",
+			registry: "invalid-url",
+			want:     "",
+		},
+		{
+			name:     "empty string",
+			registry: "",
+			want:     "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractAppNameFromRegistry(tt.registry)
+			if got != tt.want {
+				t.Errorf("extractAppNameFromRegistry(%q) = %q, want %q", tt.registry, got, tt.want)
+			}
+		})
+	}
+}
