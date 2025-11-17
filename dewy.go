@@ -1315,7 +1315,7 @@ func (d *Dewy) handleGetContainers(w http.ResponseWriter, r *http.Request) {
 		"dewy.app":     d.config.Container.Name,
 	}
 
-	var containers []*container.ContainerInfo
+	var containers []*container.Info
 	var err error
 
 	if d.config.Command == CONTAINER {

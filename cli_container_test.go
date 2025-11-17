@@ -17,7 +17,9 @@ func TestFindDewySocketFiles(t *testing.T) {
 
 	// Change to temp directory for test
 	originalDir, _ := os.Getwd()
-	defer os.Chdir(originalDir)
+	defer func() {
+		_ = os.Chdir(originalDir)
+	}()
 
 	if err := os.Chdir(tmpDir); err != nil {
 		t.Fatalf("Failed to change to temp directory: %v", err)
@@ -89,17 +91,17 @@ func TestFindDewySocketFiles(t *testing.T) {
 func TestDisplayContainerList(t *testing.T) {
 	tests := []struct {
 		name       string
-		containers []*container.ContainerInfo
+		containers []*container.Info
 		wantOutput string
 	}{
 		{
 			name:       "empty list",
-			containers: []*container.ContainerInfo{},
+			containers: []*container.Info{},
 			wantOutput: "No containers found.\n",
 		},
 		{
 			name: "single container",
-			containers: []*container.ContainerInfo{
+			containers: []*container.Info{
 				{
 					ID:         "abc123",
 					Name:       "myapp-0",
@@ -114,7 +116,7 @@ func TestDisplayContainerList(t *testing.T) {
 		},
 		{
 			name: "multiple containers sorted by name",
-			containers: []*container.ContainerInfo{
+			containers: []*container.Info{
 				{
 					ID:         "def456",
 					Name:       "myapp-2",
@@ -183,7 +185,7 @@ func TestDisplayContainerList(t *testing.T) {
 					return
 				}
 
-				if !(idx0 < idx1 && idx1 < idx2) {
+				if idx0 >= idx1 || idx1 >= idx2 {
 					t.Errorf("Containers are not sorted correctly: myapp-0 at %d, myapp-1 at %d, myapp-2 at %d",
 						idx0, idx1, idx2)
 				}

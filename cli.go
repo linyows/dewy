@@ -577,7 +577,7 @@ func (c *cli) runContainerList() int {
 
 	// Parse response
 	var result struct {
-		Containers []*container.ContainerInfo `json:"containers"`
+		Containers []*container.Info `json:"containers"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		fmt.Fprintf(c.env.Err, "Error: failed to parse response: %v\n", err)
@@ -591,7 +591,7 @@ func (c *cli) runContainerList() int {
 }
 
 // displayContainerList displays container information in table format.
-func (c *cli) displayContainerList(containers []*container.ContainerInfo) {
+func (c *cli) displayContainerList(containers []*container.Info) {
 	if len(containers) == 0 {
 		fmt.Fprintf(c.env.Out, "No containers found.\n")
 		return
@@ -638,33 +638,6 @@ func (c *cli) displayContainerList(containers []*container.ContainerInfo) {
 			deployTimeWidth, deployTime,
 			info.Name)
 	}
-}
-
-// formatDuration formats a duration into a human-readable string.
-func formatDuration(d time.Duration) string {
-	if d < time.Minute {
-		return fmt.Sprintf("%ds", int(d.Seconds()))
-	}
-	if d < time.Hour {
-		return fmt.Sprintf("%dm", int(d.Minutes()))
-	}
-	if d < 24*time.Hour {
-		return fmt.Sprintf("%dh%dm", int(d.Hours()), int(d.Minutes())%60)
-	}
-	days := int(d.Hours()) / 24
-	hours := int(d.Hours()) % 24
-	return fmt.Sprintf("%dd%dh", days, hours)
-}
-
-// truncate truncates a string to the specified length with "..." suffix if needed.
-func truncate(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	if maxLen <= 3 {
-		return s[:maxLen]
-	}
-	return s[:maxLen-3] + "..."
 }
 
 // getAdminSocketPath returns the path to the admin API Unix socket.

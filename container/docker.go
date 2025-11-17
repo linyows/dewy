@@ -585,7 +585,7 @@ type dockerInspect struct {
 }
 
 // GetContainerInfo returns detailed information about a container.
-func (d *Docker) GetContainerInfo(ctx context.Context, containerID string, containerPort int) (*ContainerInfo, error) {
+func (d *Docker) GetContainerInfo(ctx context.Context, containerID string, containerPort int) (*Info, error) {
 	output, err := d.execCommandOutput(ctx, "inspect", containerID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to inspect container: %w", err)
@@ -629,7 +629,7 @@ func (d *Docker) GetContainerInfo(ctx context.Context, containerID string, conta
 	// Remove leading slash from container name
 	name := strings.TrimPrefix(inspect.Name, "/")
 
-	return &ContainerInfo{
+	return &Info{
 		ID:         inspect.ID,
 		Name:       name,
 		Image:      inspect.Config.Image,
@@ -642,13 +642,13 @@ func (d *Docker) GetContainerInfo(ctx context.Context, containerID string, conta
 }
 
 // ListContainersByLabels returns detailed information about containers matching the given labels.
-func (d *Docker) ListContainersByLabels(ctx context.Context, labels map[string]string, containerPort int) ([]*ContainerInfo, error) {
+func (d *Docker) ListContainersByLabels(ctx context.Context, labels map[string]string, containerPort int) ([]*Info, error) {
 	containerIDs, err := d.FindContainersByLabel(ctx, labels)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find containers: %w", err)
 	}
 
-	infos := make([]*ContainerInfo, 0, len(containerIDs))
+	infos := make([]*Info, 0, len(containerIDs))
 	for _, containerID := range containerIDs {
 		info, err := d.GetContainerInfo(ctx, containerID, containerPort)
 		if err != nil {

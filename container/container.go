@@ -46,10 +46,10 @@ type Runtime interface {
 	RemoveImage(ctx context.Context, imageID string) error
 
 	// GetContainerInfo returns detailed information about a container.
-	GetContainerInfo(ctx context.Context, containerID string, containerPort int) (*ContainerInfo, error)
+	GetContainerInfo(ctx context.Context, containerID string, containerPort int) (*Info, error)
 
 	// ListContainersByLabels returns detailed information about containers matching the given labels.
-	ListContainersByLabels(ctx context.Context, labels map[string]string, containerPort int) ([]*ContainerInfo, error)
+	ListContainersByLabels(ctx context.Context, labels map[string]string, containerPort int) ([]*Info, error)
 }
 
 // RunOptions contains options for running a container.
@@ -75,8 +75,8 @@ type Container struct {
 	Created time.Time
 }
 
-// ContainerInfo represents detailed container information for admin API.
-type ContainerInfo struct {
+// Info represents detailed container information for admin API.
+type Info struct {
 	ID         string            `json:"id"`
 	Name       string            `json:"name"`
 	Image      string            `json:"image"`
