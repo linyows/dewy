@@ -39,10 +39,11 @@ func TestNewDocker(t *testing.T) {
 
 func TestRunOptions(t *testing.T) {
 	opts := RunOptions{
-		Image:   "nginx:latest",
-		Name:    "test-container",
-		Env:     []string{"FOO=bar", "BAZ=qux"},
-		Volumes: []string{"/host:/container"},
+		Image:        "nginx:latest",
+		AppName:      "test-app",
+		ReplicaIndex: 0,
+		Command:      []string{"nginx", "-g", "daemon off;"},
+		ExtraArgs:    []string{"-e", "FOO=bar", "-v", "/host:/container"},
 		Labels: map[string]string{
 			"app":  "test",
 			"role": "blue",
@@ -54,8 +55,16 @@ func TestRunOptions(t *testing.T) {
 		t.Errorf("Expected image nginx:latest, got %s", opts.Image)
 	}
 
-	if len(opts.Env) != 2 {
-		t.Errorf("Expected 2 environment variables, got %d", len(opts.Env))
+	if opts.AppName != "test-app" {
+		t.Errorf("Expected appName test-app, got %s", opts.AppName)
+	}
+
+	if len(opts.Command) != 3 {
+		t.Errorf("Expected 3 command arguments, got %d", len(opts.Command))
+	}
+
+	if len(opts.ExtraArgs) != 4 {
+		t.Errorf("Expected 4 extra arguments, got %d", len(opts.ExtraArgs))
 	}
 
 	if len(opts.Labels) != 2 {
@@ -72,8 +81,8 @@ func TestDeployOptions(t *testing.T) {
 		ImageRef:      "ghcr.io/linyows/myapp:v1.0.0",
 		AppName:       "myapp",
 		ContainerPort: 8080,
-		Env:           []string{"APP_ENV=production"},
-		Volumes:       []string{"/data:/app/data"},
+		Command:       []string{"node", "server.js"},
+		ExtraArgs:     []string{"-e", "APP_ENV=production", "-v", "/data:/app/data"},
 		HealthCheck:   healthCheck,
 	}
 
@@ -87,6 +96,14 @@ func TestDeployOptions(t *testing.T) {
 
 	if opts.ContainerPort != 8080 {
 		t.Errorf("Expected containerPort 8080, got %d", opts.ContainerPort)
+	}
+
+	if len(opts.Command) != 2 {
+		t.Errorf("Expected 2 command arguments, got %d", len(opts.Command))
+	}
+
+	if len(opts.ExtraArgs) != 4 {
+		t.Errorf("Expected 4 extra arguments, got %d", len(opts.ExtraArgs))
 	}
 
 	if opts.HealthCheck == nil {
