@@ -608,6 +608,7 @@ func (d *Docker) GetContainerInfo(ctx context.Context, containerID string, conta
 		d.logger.Warn("Failed to parse StartedAt timestamp",
 			slog.String("container", containerID),
 			slog.String("timestamp", inspect.State.StartedAt))
+		// Use zero time as fallback - will display as "0001-01-01 00:00:00" which indicates invalid/missing timestamp
 		startedAt = time.Time{}
 	}
 

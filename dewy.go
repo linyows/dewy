@@ -1235,16 +1235,14 @@ func (d *Dewy) startAdminAPI(ctx context.Context) error {
 		return fmt.Errorf("failed to remove existing socket: %w", err)
 	}
 
-	// Create Unix socket listener
+	// Set umask to ensure socket is created with owner-only permissions
+	// This prevents a security window where the socket might be accessible with default permissions
+	oldUmask := syscall.Umask(0077)
 	listener, err := net.Listen("unix", socketPath)
+	// Restore previous umask immediately after socket creation
+	syscall.Umask(oldUmask)
 	if err != nil {
 		return fmt.Errorf("failed to create Unix socket: %w", err)
-	}
-
-	// Set socket permissions (owner read/write only for security)
-	if err := os.Chmod(socketPath, 0600); err != nil {
-		listener.Close()
-		return fmt.Errorf("failed to set socket permissions: %w", err)
 	}
 
 	// Create HTTP mux for admin API

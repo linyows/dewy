@@ -28,6 +28,9 @@ const (
 
 	// ExitErr for exit code.
 	ExitErr int = 1
+
+	// deployTimeFormat is the time format used for displaying container deployment times.
+	deployTimeFormat = "2006-01-02 15:04:05"
 )
 
 type cli struct {
@@ -605,7 +608,7 @@ func (c *cli) displayContainerList(containers []*container.Info) {
 	// Calculate max widths for each column
 	upstreamWidth := len("UPSTREAM")
 	deployTimeWidth := len("DEPLOY TIME")
-	deployTimeDataWidth := len("2006-01-02 15:04:05") // 19 chars fixed
+	deployTimeDataWidth := len(deployTimeFormat)
 
 	for _, info := range containers {
 		if len(info.IPPort) > upstreamWidth {
@@ -631,7 +634,7 @@ func (c *cli) displayContainerList(containers []*container.Info) {
 	// Print container rows
 	for _, info := range containers {
 		// Format deploy time
-		deployTime := info.DeployedAt.Format("2006-01-02 15:04:05")
+		deployTime := info.DeployedAt.Format(deployTimeFormat)
 
 		fmt.Fprintf(c.env.Out, "%-*s%-*s%s\n",
 			upstreamWidth, info.IPPort,
