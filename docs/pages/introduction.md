@@ -5,7 +5,7 @@ description: Introduction to Dewy
 
 # What is Dewy? {% #overview %}
 
-Dewy is software for declaratively deploying applications in both container and non-container environments.
+Dewy is software for declaratively deploying applications in non-Kubernetes environments.
 It ensures that applications and data on servers are always up-to-date.
 
 Dewy supports multiple deployment modes:
