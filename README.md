@@ -30,7 +30,7 @@
   </a>
 </p>
 
-Dewy is software for declaratively deploying applications in both container and non-container environments. It supports multiple deployment modes: binary applications (primarily Go), static assets, and containerized applications. Dewy acts as a supervisor, polling specified registries and, upon detecting the latest version (using semantic versioning), automatically deploys from the designated artifact store or OCI registry. For containerized applications, Dewy provides zero-downtime rolling update deployment with health checks. Dewy's architecture is composed of abstracted components: registries, artifact stores, cache stores, and notification channels. Below are diagrams illustrating Dewy's deployment process and architecture.
+Dewy is software for declaratively deploying applications in non-Kubernetes environments. It supports multiple deployment modes: binary applications (primarily Go), static assets, and containerized applications. Dewy acts as a supervisor, polling specified registries and, upon detecting the latest version (using semantic versioning), automatically deploys from the designated artifact store or OCI registry. For containerized applications, Dewy provides zero-downtime rolling update deployment with health checks. Dewy's architecture is composed of abstracted components: registries, artifact stores, cache stores, and notification channels. Below are diagrams illustrating Dewy's deployment process and architecture.
 
 <p align="center">
   <img alt="Dewy Architecture" src="https://github.com/linyows/dewy/blob/main/misc/dewy-architecture.svg?raw=true" width="640"/>
