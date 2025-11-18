@@ -119,10 +119,6 @@ func (d *Dewy) Start(i int) {
 	d.notifier.Send(ctx, msg)
 
 	if d.config.Command == CONTAINER {
-		runtime := d.config.Container.Runtime
-		msg := "Container logs are not displayed in dewy output, To view application logs."
-		d.logger.Info(fmt.Sprintf("%s Use: %s logs -f $(%s ps -q --filter \"label=dewy.managed=true\")", msg, runtime, runtime))
-
 		// Start built-in reverse proxy
 		if err := d.startProxy(ctx); err != nil {
 			d.logger.Error("Proxy startup failed", slog.String("error", err.Error()))
