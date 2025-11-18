@@ -3,6 +3,7 @@ package dewy
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -60,6 +61,7 @@ type Dewy struct {
 	proxyBackends    []*url.URL // Multiple backends for load balancing
 	proxyIndex       int        // Round-robin counter
 	proxyMutex       sync.RWMutex
+	adminServer      *http.Server // Admin API server for CLI communication
 	containerRuntime container.Runtime
 	cVer             string // Current deployed version (tag)
 	sync.RWMutex
@@ -117,13 +119,16 @@ func (d *Dewy) Start(i int) {
 	d.notifier.Send(ctx, msg)
 
 	if d.config.Command == CONTAINER {
-		runtime := d.config.Container.Runtime
-		msg := "Container logs are not displayed in dewy output, To view application logs."
-		d.logger.Info(fmt.Sprintf("%s Use: %s logs -f $(%s ps -q --filter \"label=dewy.managed=true\")", msg, runtime, runtime))
-
 		// Start built-in reverse proxy
 		if err := d.startProxy(ctx); err != nil {
 			d.logger.Error("Proxy startup failed", slog.String("error", err.Error()))
+			d.notifier.SendError(ctx, err)
+			return
+		}
+
+		// Start admin API server
+		if err := d.startAdminAPI(ctx); err != nil {
+			d.logger.Error("Admin API startup failed", slog.String("error", err.Error()))
 			d.notifier.SendError(ctx, err)
 			return
 		}
@@ -181,6 +186,10 @@ func (d *Dewy) waitSigs(ctx context.Context) {
 
 				if err := d.stopProxy(ctx); err != nil {
 					d.logger.Error("Failed to stop proxy", slog.String("error", err.Error()))
+				}
+
+				if err := d.stopAdminAPI(ctx); err != nil {
+					d.logger.Error("Failed to stop admin API", slog.String("error", err.Error()))
 				}
 			}
 
@@ -921,8 +930,9 @@ func (d *Dewy) startSingleContainer(ctx context.Context, dockerRuntime *containe
 		ReplicaIndex: replicaIndex,
 		Ports:        ports,
 		Labels: map[string]string{
-			"dewy.managed": "true",
-			"dewy.app":     appName,
+			"dewy.managed":    "true",
+			"dewy.app":        appName,
+			"dewy.deployed_at": time.Now().Format(time.RFC3339),
 		},
 		Detach:    true,
 		Command:   d.config.Container.Command,
@@ -1190,4 +1200,158 @@ func (d *Dewy) stopManagedContainers(ctx context.Context) error {
 		slog.Int("total", len(containerIDs)))
 
 	return nil
+}
+
+// getAdminSocketPath returns the path to the admin API Unix socket.
+func (d *Dewy) getAdminSocketPath() string {
+	// Use .dewy directory in current working directory (same as cache)
+	pwd, err := os.Getwd()
+	if err != nil {
+		d.logger.Warn("Failed to get current directory, falling back to temp dir",
+			slog.String("error", err.Error()))
+		return filepath.Join(os.TempDir(), "api.sock")
+	}
+
+	dewyDir := filepath.Join(pwd, ".dewy")
+	if err := os.MkdirAll(dewyDir, 0755); err != nil {
+		d.logger.Warn("Failed to create .dewy directory, falling back to temp dir",
+			slog.String("error", err.Error()))
+		return filepath.Join(os.TempDir(), "api.sock")
+	}
+
+	return filepath.Join(dewyDir, "api.sock")
+}
+
+// startAdminAPI starts the admin API server on a Unix domain socket.
+func (d *Dewy) startAdminAPI(ctx context.Context) error {
+	socketPath := d.getAdminSocketPath()
+
+	// Remove existing socket file if it exists
+	if err := os.Remove(socketPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to remove existing socket: %w", err)
+	}
+
+	// Set umask to ensure socket is created with owner-only permissions
+	// This prevents a security window where the socket might be accessible with default permissions
+	oldUmask := syscall.Umask(0077)
+	listener, err := net.Listen("unix", socketPath)
+	// Restore previous umask immediately after socket creation
+	syscall.Umask(oldUmask)
+	if err != nil {
+		return fmt.Errorf("failed to create Unix socket: %w", err)
+	}
+
+	// Create HTTP mux for admin API
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/containers", d.handleGetContainers)
+	mux.HandleFunc("/api/status", d.handleGetStatus)
+
+	d.adminServer = &http.Server{
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+
+	// Start server in background
+	go func() {
+		d.logger.Info("Starting admin API server",
+			slog.String("socket", socketPath))
+
+		if err := d.adminServer.Serve(listener); err != nil && err != http.ErrServerClosed {
+			d.logger.Error("Admin API server error", slog.String("error", err.Error()))
+		}
+	}()
+
+	d.logger.Info("Admin API server started",
+		slog.String("socket", socketPath))
+
+	return nil
+}
+
+// stopAdminAPI stops the admin API server.
+func (d *Dewy) stopAdminAPI(ctx context.Context) error {
+	if d.adminServer == nil {
+		return nil
+	}
+
+	d.logger.Info("Stopping admin API server")
+
+	shutdownCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	if err := d.adminServer.Shutdown(shutdownCtx); err != nil {
+		return fmt.Errorf("failed to shutdown admin API: %w", err)
+	}
+
+	// Clean up socket file
+	socketPath := d.getAdminSocketPath()
+	if err := os.Remove(socketPath); err != nil && !os.IsNotExist(err) {
+		d.logger.Warn("Failed to remove socket file",
+			slog.String("path", socketPath),
+			slog.String("error", err.Error()))
+	}
+
+	d.logger.Info("Admin API server stopped")
+	return nil
+}
+
+// handleGetContainers handles GET /api/containers endpoint.
+func (d *Dewy) handleGetContainers(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	ctx := r.Context()
+
+	// Get containers managed by dewy
+	labels := map[string]string{
+		"dewy.managed": "true",
+		"dewy.app":     d.config.Container.Name,
+	}
+
+	var containers []*container.Info
+	var err error
+
+	if d.config.Command == CONTAINER {
+		containers, err = d.containerRuntime.ListContainersByLabels(ctx, labels, d.config.Container.ContainerPort)
+		if err != nil {
+			d.logger.Error("Failed to list containers",
+				slog.String("error", err.Error()))
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Return JSON response
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
+		"containers": containers,
+	}); err != nil {
+		d.logger.Error("Failed to encode response",
+			slog.String("error", err.Error()))
+	}
+}
+
+// handleGetStatus handles GET /api/status endpoint.
+func (d *Dewy) handleGetStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	d.RLock()
+	defer d.RUnlock()
+
+	// Return JSON response
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
+		"name":             d.config.Container.Name,
+		"command":          d.config.Command,
+		"current_version":  d.cVer,
+		"proxy_backends":   len(d.proxyBackends),
+		"is_running":       d.isServerRunning,
+	}); err != nil {
+		d.logger.Error("Failed to encode response",
+			slog.String("error", err.Error()))
+	}
 }

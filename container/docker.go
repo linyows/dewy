@@ -2,6 +2,7 @@ package container
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -560,4 +561,105 @@ func (d *Docker) RemoveImage(ctx context.Context, imageID string) error {
 	}
 
 	return nil
+}
+
+// dockerInspect represents the structure of docker inspect JSON output.
+type dockerInspect struct {
+	ID      string `json:"Id"`
+	Name    string `json:"Name"`
+	Created string `json:"Created"`
+	State   struct {
+		Status    string `json:"Status"`
+		StartedAt string `json:"StartedAt"`
+	} `json:"State"`
+	Config struct {
+		Image  string            `json:"Image"`
+		Labels map[string]string `json:"Labels"`
+	} `json:"Config"`
+	NetworkSettings struct {
+		Ports map[string][]struct {
+			HostIP   string `json:"HostIp"`
+			HostPort string `json:"HostPort"`
+		} `json:"Ports"`
+	} `json:"NetworkSettings"`
+}
+
+// GetContainerInfo returns detailed information about a container.
+func (d *Docker) GetContainerInfo(ctx context.Context, containerID string, containerPort int) (*Info, error) {
+	output, err := d.execCommandOutput(ctx, "inspect", containerID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to inspect container: %w", err)
+	}
+
+	var inspects []dockerInspect
+	if err := json.Unmarshal([]byte(output), &inspects); err != nil {
+		return nil, fmt.Errorf("failed to parse inspect output: %w", err)
+	}
+
+	if len(inspects) == 0 {
+		return nil, ErrContainerNotFound
+	}
+
+	inspect := inspects[0]
+
+	// Parse timestamps
+	startedAt, err := time.Parse(time.RFC3339Nano, inspect.State.StartedAt)
+	if err != nil {
+		d.logger.Warn("Failed to parse StartedAt timestamp",
+			slog.String("container", containerID),
+			slog.String("timestamp", inspect.State.StartedAt))
+		// Use zero time as fallback - will display as "0001-01-01 00:00:00" which indicates invalid/missing timestamp
+		startedAt = time.Time{}
+	}
+
+	// Get deployed_at from labels if available
+	deployedAt := startedAt
+	if deployedAtStr, ok := inspect.Config.Labels["dewy.deployed_at"]; ok {
+		if t, err := time.Parse(time.RFC3339, deployedAtStr); err == nil {
+			deployedAt = t
+		}
+	}
+
+	// Find the mapped port
+	ipPort := ""
+	portSpec := fmt.Sprintf("%d/tcp", containerPort)
+	if portBindings, ok := inspect.NetworkSettings.Ports[portSpec]; ok && len(portBindings) > 0 {
+		ipPort = fmt.Sprintf("%s:%s", portBindings[0].HostIP, portBindings[0].HostPort)
+	}
+
+	// Remove leading slash from container name
+	name := strings.TrimPrefix(inspect.Name, "/")
+
+	return &Info{
+		ID:         inspect.ID,
+		Name:       name,
+		Image:      inspect.Config.Image,
+		Status:     inspect.State.Status,
+		IPPort:     ipPort,
+		StartedAt:  startedAt,
+		DeployedAt: deployedAt,
+		Labels:     inspect.Config.Labels,
+	}, nil
+}
+
+// ListContainersByLabels returns detailed information about containers matching the given labels.
+func (d *Docker) ListContainersByLabels(ctx context.Context, labels map[string]string, containerPort int) ([]*Info, error) {
+	containerIDs, err := d.FindContainersByLabel(ctx, labels)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find containers: %w", err)
+	}
+
+	infos := make([]*Info, 0, len(containerIDs))
+	for _, containerID := range containerIDs {
+		info, err := d.GetContainerInfo(ctx, containerID, containerPort)
+		if err != nil {
+			d.logger.Warn("Failed to get container info",
+				slog.String("container", containerID),
+				slog.String("error", err.Error()))
+			continue
+		}
+		infos = append(infos, info)
+	}
+
+	return infos, nil
 }

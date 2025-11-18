@@ -2,9 +2,15 @@ package dewy
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
+	"net/http"
+	"os"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"strconv"
@@ -13,6 +19,7 @@ import (
 
 	"github.com/fatih/color"
 	flags "github.com/jessevdk/go-flags"
+	"github.com/linyows/dewy/container"
 )
 
 const (
@@ -21,12 +28,16 @@ const (
 
 	// ExitErr for exit code.
 	ExitErr int = 1
+
+	// deployTimeFormat is the time format used for displaying container deployment times.
+	deployTimeFormat = "2006-01-02 15:04:05"
 )
 
 type cli struct {
 	env              Env
 	command          string
 	args             []string
+	Name             string   `long:"name" short:"n" description:"Application name for container deployment"`
 	LogLevel         string   `long:"log-level" short:"l" arg:"(debug|info|warn|error)" description:"Set log level for output (default: error)"`
 	LogFormat        string   `long:"log-format" short:"f" arg:"(text|json)" description:"Set log format for output (default: text)"`
 	Interval         int      `long:"interval" arg:"seconds" short:"i" description:"Polling interval in seconds for checking registry updates (default: 10)"`
@@ -202,6 +213,16 @@ func (c *cli) run() int {
 		return ExitErr
 	}
 
+	// Handle container subcommands (e.g., "dewy container list")
+	if args[0] == "container" && len(args) > 1 {
+		switch args[1] {
+		case "list":
+			return c.runContainerList()
+		default:
+			// Unknown subcommand, continue with normal container command
+		}
+	}
+
 	if c.Interval < 0 {
 		c.Interval = 10
 	}
@@ -311,7 +332,18 @@ func (c *cli) run() int {
 			c.ContainerRuntime = "docker"
 		}
 
+		// Set default name if not specified
+		appName := c.Name
+		if appName == "" {
+			// Extract app name from registry URL (e.g., img://ghcr.io/owner/myapp:latest -> myapp)
+			appName = extractAppNameFromRegistry(c.Registry)
+			if appName == "" {
+				appName = "app" // Fallback if extraction fails
+			}
+		}
+
 		conf.Container = &ContainerConfig{
+			Name:          appName,
 			ContainerPort: c.ContainerPort,
 			Replicas:      c.Replicas,
 			Command:       c.Cmd,
@@ -495,4 +527,218 @@ Dewy - A declarative deployment tool of apps in non-K8s environments.
 https://github.com/linyows/dewy
 
 `)
+}
+
+// runContainerList runs the "dewy container list" command.
+func (c *cli) runContainerList() int {
+	// Auto-detect running dewy instance
+	sockets, err := c.findDewySocketFiles()
+	if err != nil {
+		fmt.Fprintf(c.env.Err, "Error: failed to find dewy instances: %v\n", err)
+		return ExitErr
+	}
+
+	if len(sockets) == 0 {
+		fmt.Fprintf(c.env.Err, "Error: no running dewy instances found\n")
+		return ExitErr
+	}
+
+	if len(sockets) > 1 {
+		fmt.Fprintf(c.env.Err, "Error: multiple dewy instances found:\n")
+		for _, name := range sockets {
+			fmt.Fprintf(c.env.Err, "  - %s\n", name)
+		}
+		fmt.Fprintf(c.env.Err, "\nPlease stop other instances or specify which one to query.\n")
+		return ExitErr
+	}
+
+	// Use the socket path
+	socketPath := c.getAdminSocketPath()
+
+	// Create HTTP client with Unix socket transport
+	client := &http.Client{
+		Transport: &http.Transport{
+			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
+				return net.Dial("unix", socketPath)
+			},
+		},
+		Timeout: 10 * time.Second,
+	}
+
+	// Make request to admin API
+	resp, err := client.Get("http://unix/api/containers")
+	if err != nil {
+		fmt.Fprintf(c.env.Err, "Error: failed to connect to dewy admin API: %v\n", err)
+		return ExitErr
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		fmt.Fprintf(c.env.Err, "Error: admin API returned status %d\n", resp.StatusCode)
+		return ExitErr
+	}
+
+	// Parse response
+	var result struct {
+		Containers []*container.Info `json:"containers"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		fmt.Fprintf(c.env.Err, "Error: failed to parse response: %v\n", err)
+		return ExitErr
+	}
+
+	// Display results
+	c.displayContainerList(result.Containers)
+
+	return ExitOK
+}
+
+// displayContainerList displays container information in table format.
+func (c *cli) displayContainerList(containers []*container.Info) {
+	if len(containers) == 0 {
+		fmt.Fprintf(c.env.Out, "No containers found.\n")
+		return
+	}
+
+	// Sort by name
+	sort.Slice(containers, func(i, j int) bool {
+		return containers[i].Name < containers[j].Name
+	})
+
+	// Calculate max widths for each column
+	upstreamWidth := len("UPSTREAM")
+	deployTimeWidth := len("DEPLOY TIME")
+	deployTimeDataWidth := len(deployTimeFormat)
+
+	for _, info := range containers {
+		if len(info.IPPort) > upstreamWidth {
+			upstreamWidth = len(info.IPPort)
+		}
+	}
+
+	// Use the larger of header or data width for deploy time
+	if deployTimeDataWidth > deployTimeWidth {
+		deployTimeWidth = deployTimeDataWidth
+	}
+
+	// Add 4 spaces padding to each column
+	upstreamWidth += 4
+	deployTimeWidth += 4
+
+	// Print header
+	fmt.Fprintf(c.env.Out, "%-*s%-*s%s\n",
+		upstreamWidth, "UPSTREAM",
+		deployTimeWidth, "DEPLOY TIME",
+		"NAME")
+
+	// Print container rows
+	for _, info := range containers {
+		// Format deploy time
+		deployTime := info.DeployedAt.Format(deployTimeFormat)
+
+		fmt.Fprintf(c.env.Out, "%-*s%-*s%s\n",
+			upstreamWidth, info.IPPort,
+			deployTimeWidth, deployTime,
+			info.Name)
+	}
+}
+
+// getAdminSocketPath returns the path to the admin API Unix socket.
+// This uses the same logic as the server to ensure consistency.
+func (c *cli) getAdminSocketPath() string {
+	// Use .dewy directory in current working directory (same as cache)
+	pwd, err := os.Getwd()
+	if err != nil {
+		// Fallback to temp dir
+		return filepath.Join(os.TempDir(), "api.sock")
+	}
+
+	return filepath.Join(pwd, ".dewy", "api.sock")
+}
+
+// findDewySocketFiles finds dewy socket file in .dewy directory.
+// Returns a list with single element if socket exists, empty list otherwise.
+func (c *cli) findDewySocketFiles() ([]string, error) {
+	pwd, err := os.Getwd()
+	if err != nil {
+		return []string{}, nil
+	}
+
+	socketPath := filepath.Join(pwd, ".dewy", "api.sock")
+
+	// Check if socket exists
+	if _, err := os.Stat(socketPath); os.IsNotExist(err) {
+		return []string{}, nil
+	}
+
+	// Return a dummy name (not used since we always use the same socket path)
+	return []string{"default"}, nil
+}
+
+// extractAppNameFromRegistry extracts application name from registry URL.
+// For container command (img:// scheme):
+//   - img://ghcr.io/owner/myapp:latest -> myapp
+//   - img://docker.io/library/nginx:1.21 -> nginx
+//   - img://gcr.io/project/myapp -> myapp
+//   - img://myapp:latest -> myapp
+// For other commands:
+//   - ghr://owner/myrepo -> myrepo
+//   - s3://region/bucket/path/to/app -> app
+func extractAppNameFromRegistry(registryURL string) string {
+	// Remove scheme (img://, ghr://, s3://, etc.)
+	parts := strings.SplitN(registryURL, "://", 2)
+	if len(parts) != 2 {
+		return ""
+	}
+
+	scheme := parts[0]
+	path := parts[1]
+
+	// For img:// (OCI registry): extract image name
+	// Examples:
+	//   ghcr.io/owner/myapp:latest -> myapp
+	//   docker.io/library/nginx:1.21 -> nginx
+	//   gcr.io/project/myapp -> myapp
+	//   myapp:latest -> myapp
+	if scheme == "img" {
+		// Remove query parameters if present (e.g., ?pre-release=true)
+		if idx := strings.Index(path, "?"); idx != -1 {
+			path = path[:idx]
+		}
+
+		// Split by / to get path components
+		pathParts := strings.Split(path, "/")
+		// Get the last component (image name with possible tag)
+		imageName := pathParts[len(pathParts)-1]
+
+		// Remove tag (everything after :)
+		if idx := strings.Index(imageName, ":"); idx != -1 {
+			imageName = imageName[:idx]
+		}
+
+		return imageName
+	}
+
+	// For ghr (GitHub Releases): owner/repo -> repo
+	if scheme == "ghr" {
+		pathParts := strings.Split(path, "/")
+		if len(pathParts) >= 2 {
+			return pathParts[1]
+		}
+	}
+
+	// For s3: region/bucket/path/to/app -> app
+	if scheme == "s3" {
+		pathParts := strings.Split(path, "/")
+		if len(pathParts) > 0 {
+			// Get last non-empty component
+			for i := len(pathParts) - 1; i >= 0; i-- {
+				if pathParts[i] != "" {
+					return pathParts[i]
+				}
+			}
+		}
+	}
+
+	return ""
 }
