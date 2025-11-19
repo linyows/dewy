@@ -51,7 +51,6 @@ type cli struct {
 	ContainerRuntime string   `long:"runtime" description:"Container runtime (docker or podman, default: docker)"`
 	Cmd              []string `long:"cmd" description:"Command and arguments to pass to container (can be specified multiple times)"`
 	AdminPort        int      `long:"admin-port" description:"Admin API port for container command (default: 17539, auto-increments if in use)"`
-	adminPort        int      // Internal field for storing parsed admin port
 	Help             bool     `long:"help" short:"h" description:"show this help message and exit"`
 	Version          bool     `long:"version" short:"v" description:"prints the version number"`
 }
@@ -258,7 +257,6 @@ func (c *cli) run() int {
 	conf.BeforeDeployHook = c.BeforeDeployHook
 	conf.AfterDeployHook = c.AfterDeployHook
 	conf.AdminPort = c.AdminPort
-	c.adminPort = c.AdminPort // Store for container list command
 
 	switch c.command {
 	case "server":
@@ -597,7 +595,7 @@ https://github.com/linyows/dewy
 // runContainerList runs the "dewy container list" command.
 func (c *cli) runContainerList() int {
 	// Default admin port
-	adminPort := c.adminPort
+	adminPort := c.AdminPort
 	if adminPort == 0 {
 		adminPort = 17539
 	}
