@@ -20,7 +20,7 @@ type Docker struct {
 	drainTime time.Duration
 }
 
-//nolint:godot // Forbidden options that conflict with Dewy management
+// Forbidden options that conflict with Dewy management
 var forbiddenOptions = []string{
 	"-d", "--detach",
 	"-it",
