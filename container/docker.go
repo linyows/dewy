@@ -633,9 +633,21 @@ func (d *Docker) GetContainerInfo(ctx context.Context, containerID string, conta
 
 	// Find the mapped port
 	ipPort := ""
-	portSpec := fmt.Sprintf("%d/tcp", containerPort)
-	if portBindings, ok := inspect.NetworkSettings.Ports[portSpec]; ok && len(portBindings) > 0 {
-		ipPort = fmt.Sprintf("%s:%s", portBindings[0].HostIP, portBindings[0].HostPort)
+	if containerPort > 0 {
+		// If container port is specified, use it
+		portSpec := fmt.Sprintf("%d/tcp", containerPort)
+		if portBindings, ok := inspect.NetworkSettings.Ports[portSpec]; ok && len(portBindings) > 0 {
+			ipPort = fmt.Sprintf("%s:%s", portBindings[0].HostIP, portBindings[0].HostPort)
+		}
+	} else {
+		// If container port is not specified (0), find first available port mapping
+		// This handles the case where --port was specified without container port (auto-detect)
+		for _, portBindings := range inspect.NetworkSettings.Ports {
+			if len(portBindings) > 0 {
+				ipPort = fmt.Sprintf("%s:%s", portBindings[0].HostIP, portBindings[0].HostPort)
+				break
+			}
+		}
 	}
 
 	// Remove leading slash from container name
