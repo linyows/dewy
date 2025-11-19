@@ -75,7 +75,7 @@ Deploy containerized applications with zero-downtime rolling update deployment:
 
 ```sh
 $ dewy container --registry img://ghcr.io/linyows/myapp \
-  --port 8080 --container-port 8080 --health-path /health --replicas 3 \
+  --port 8080 --health-path /health --replicas 3 \
   -- -e DATABASE_URL=postgres://db:5432/mydb -v /data:/app/data
 ```
 
@@ -222,9 +222,9 @@ OCI-compliant container registries can be used for container image deployment wi
 # img://<registry-host>/<image-name>?<options: pre-release>
 
 # Examples
-$ dewy container --registry img://ghcr.io/owner/app --container-port 8080
-$ dewy container --registry img://docker.io/myuser/myapp --container-port 3000
-$ dewy container --registry img://gcr.io/my-project/myapp --container-port 8080
+$ dewy container --registry img://ghcr.io/owner/app --port 8080
+$ dewy container --registry img://docker.io/myuser/myapp --port 3000
+$ dewy container --registry img://gcr.io/my-project/myapp --port 8080
 ```
 
 Authentication for OCI registries is configured through Docker's authentication system:
@@ -248,12 +248,13 @@ Container-specific options:
 
 Option | Type | Description
 ---    | ---  | ---
-container-port | int | Port the container listens on (required)
+port | string | Port mapping in format 'proxy' or 'proxy:container' (required, can be specified multiple times)
 health-path | string | HTTP path for health checks (e.g., /health)
 health-timeout | int | Health check timeout in seconds (default: 30)
 drain-time | int | Drain period in seconds before removing old container (default: 30)
 replicas | int | Number of container replicas (default: 1)
 cmd | string | Command and arguments to pass to container (can be specified multiple times)
+admin-port | int | Admin API port (default: 17539, auto-increments if in use)
 -- | separator | Pass additional docker run options after this separator (e.g., `-e`, `-v`, `--cpus`, `--memory`)
 
 **Docker run options passthrough:** All options after `--` are passed directly to docker run. Forbidden options: `-d`, `-it`, `-i`, `-t`, `-l`, `-p`
