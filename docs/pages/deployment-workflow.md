@@ -451,11 +451,11 @@ Container deployments use localhost-only port mapping with built-in reverse prox
 ```
 [External Client]
        ↓
-   [Dewy Built-in Proxy :8000]  ← --port 8000 (external access)
+   [Dewy Built-in Proxy :8000]  ← --port 8000:8080 (proxy:container)
        ↓ atomic backend switch
    [localhost:32768]  ← Docker port mapping (127.0.0.1::8080)
        ↓
-   [Container:8080]  ← App container (--container-port 8080)
+   [Container:8080]  ← App container
 ```
 
 Key security features:
@@ -751,11 +751,10 @@ sequenceDiagram
 # Run with 3 replicas for high availability
 dewy container \
   --registry "img://ghcr.io/linyows/myapp?pre-release=true" \
-  --container-port 8080 \
+  --port 8000:8080 \
   --replicas 3 \
   --health-path /health \
   --health-timeout 30 \
-  --port 8000 \
   --log-level info
 
 # Output shows rolling deployment:
@@ -811,10 +810,9 @@ curl http://localhost:8000/  # → Container 1 (round-robin)
 # Start dewy with built-in reverse proxy
 dewy container \
   --registry "img://ghcr.io/linyows/myapp?pre-release=true" \
-  --container-port 8080 \
+  --port 8000:8080 \
   --health-path /health \
   --health-timeout 30 \
-  --port 8000 \
   --log-level info
 
 # Output:
@@ -837,8 +835,7 @@ docker logs -f $(docker ps -q --filter "label=dewy.managed=true" --filter "label
 
 **CLI Options:**
 
-- `--port 8000`: External port for the built-in proxy to listen on (default: 8000)
-- `--container-port 8080`: Application port inside the container (will be mapped to localhost)
+- `--port 8000:8080`: Port mapping in format 'proxy:container' (can also use `--port 8000` to auto-detect container port from image)
 - `--replicas 3`: Number of container replicas to run (default: 1)
 - `--health-path /health`: HTTP path for health checks
 - `--health-timeout 30`: Health check timeout in seconds

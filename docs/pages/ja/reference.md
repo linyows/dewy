@@ -469,7 +469,6 @@ docker login ghcr.io
 dewy container \
   --registry img://ghcr.io/mycompany/myapp \
   --port 8080 \
-  --container-port 8080 \
   --health-path /health \
   --health-timeout 30 \
   --drain-time 30 \

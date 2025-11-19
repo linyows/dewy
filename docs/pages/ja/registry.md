@@ -234,7 +234,7 @@ dewy container --registry "img://ghcr.io/myorg/myapp?pre-release=true"
 
 # コンテナオプション付き
 dewy container --registry img://ghcr.io/myorg/myapp \
-  --container-port 8080 \
+  --port 8000:8080 \
   --health-path /health
 ```
 
@@ -328,7 +328,7 @@ OCIレジストリを`dewy container`コマンドと使用する場合：
 dewy container \
   --registry img://ghcr.io/myorg/myapp \
   --interval 300 \
-  --container-port 8080 \
+  --port 8000:8080 \
   --health-path /health \
   --health-timeout 30 \
   --drain-time 30 \

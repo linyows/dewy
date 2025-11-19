@@ -99,7 +99,7 @@ docker info
 # ローリングアップデートでコンテナイメージをデプロイ
 dewy container \
   --registry img://ghcr.io/myorg/myapp \
-  --container-port 3000 \
+  --port 8080:3000 \
   --health-path /health \
   --health-timeout 30 \
   --drain-time 30 \

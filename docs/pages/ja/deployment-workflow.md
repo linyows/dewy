@@ -445,11 +445,11 @@ INFO: Removed 3 old images kept=7
 ```
 [外部クライアント]
        ↓
-   [Dewy ビルトインプロキシ :8000]  ← --port 8000 (外部アクセス)
+   [Dewy ビルトインプロキシ :8000]  ← --port 8000:8080 (プロキシ:コンテナ)
        ↓ アトミックなバックエンド切り替え
    [localhost:32768]  ← Dockerポートマッピング (127.0.0.1::8080)
        ↓
-   [コンテナ:8080]  ← アプリコンテナ (--container-port 8080)
+   [コンテナ:8080]  ← アプリコンテナ
 ```
 
 **セキュリティ上の利点：**
@@ -607,11 +607,10 @@ sequenceDiagram
 # 高可用性のため3つのレプリカで実行
 dewy container \
   --registry "img://ghcr.io/linyows/myapp?pre-release=true" \
-  --container-port 8080 \
+  --port 8000:8080 \
   --replicas 3 \
   --health-path /health \
   --health-timeout 30 \
-  --port 8000 \
   --log-level info
 
 # ローリングデプロイメントの出力:
