@@ -41,14 +41,13 @@ type cli struct {
 	LogLevel         string   `long:"log-level" short:"l" arg:"(debug|info|warn|error)" description:"Set log level for output (default: error)"`
 	LogFormat        string   `long:"log-format" short:"f" arg:"(text|json)" description:"Set log format for output (default: text)"`
 	Interval         int      `long:"interval" arg:"seconds" short:"i" description:"Polling interval in seconds for checking registry updates (default: 10)"`
-	Ports            []string `long:"port" short:"p" description:"TCP ports for server command to listen on (comma-separated, ranges, or multiple flags)"`
+	Ports            []string `long:"port" short:"p" description:"For server: TCP ports to listen on. For container: port mappings in format 'proxy' or 'proxy:container' (multiple flags supported)"`
 	Registry         string   `long:"registry" description:"Registry URL (e.g., ghr://owner/repo, s3://region/bucket/prefix, docker://registry/repo)"`
 	Notify           string   `long:"notify" description:"[DEPRECATED] Use --notifier instead"`
 	Notifier         string   `long:"notifier" description:"Notifier URL for deployment notifications (e.g., slack://channel, mail://smtp:port/recipient)"`
 	BeforeDeployHook string   `long:"before-deploy-hook" description:"Shell command to execute before deployment begins"`
 	AfterDeployHook  string   `long:"after-deploy-hook" description:"Shell command to execute after successful deployment"`
 	// Container-specific options
-	ContainerPort    int      `long:"container-port" description:"Container port (default: 8080)"`
 	Replicas         int      `long:"replicas" description:"Number of container replicas to run (default: 1)"`
 	HealthPath       string   `long:"health-path" description:"Health check path (optional, e.g., /health)"`
 	HealthTimeout    int      `long:"health-timeout" description:"Health check timeout in seconds (default: 30)"`
@@ -153,7 +152,6 @@ func (c *cli) showHelp() {
 	}), "\n")
 
 	containerOpts := strings.Join(c.buildHelp([]string{
-		"ContainerPort",
 		"Replicas",
 		"Cmd",
 		"HealthPath",
@@ -300,27 +298,18 @@ func (c *cli) run() int {
 			return ExitErr
 		}
 
-		// Parse port for reverse proxy (use first port from --port flag)
-		parsedPorts, err := parsePorts(c.Ports)
+		// Parse port mappings
+		portMappings, err := parsePortMappings(c.Ports)
 		if err != nil {
-			fmt.Fprintf(c.env.Err, "Error: failed to parse port: %v\n", err)
+			fmt.Fprintf(c.env.Err, "Error: failed to parse port mappings: %v\n", err)
 			return ExitErr
 		}
-		if len(parsedPorts) == 0 {
-			fmt.Fprintf(c.env.Err, "Error: no valid port specified\n")
+		if len(portMappings) == 0 {
+			fmt.Fprintf(c.env.Err, "Error: no valid port mappings specified\n")
 			return ExitErr
 		}
-		portNum, err := strconv.Atoi(parsedPorts[0])
-		if err != nil {
-			fmt.Fprintf(c.env.Err, "Error: invalid port number: %v\n", err)
-			return ExitErr
-		}
-		conf.Port = portNum
 
 		// Set defaults
-		if c.ContainerPort == 0 {
-			c.ContainerPort = 8080
-		}
 		// HealthPath is optional - if not specified, health check will be skipped
 		if c.HealthTimeout == 0 {
 			c.HealthTimeout = 30
@@ -344,7 +333,7 @@ func (c *cli) run() int {
 
 		conf.Container = &ContainerConfig{
 			Name:          appName,
-			ContainerPort: c.ContainerPort,
+			PortMappings:  portMappings,
 			Replicas:      c.Replicas,
 			Command:       c.Cmd,
 			ExtraArgs:     c.args, // Arguments after -- separator (docker run options)
@@ -509,6 +498,82 @@ func validateAndDeduplicatePorts(ports []string) ([]string, error) {
 	})
 
 	return result, nil
+}
+
+// parsePortMappings parses port mapping specifications for container command.
+// Supports formats:
+//   - "8080" -> proxy=8080, container=auto-detect
+//   - "8080:80" -> proxy=8080, container=80
+func parsePortMappings(portSpecs []string) ([]PortMapping, error) {
+	if len(portSpecs) == 0 {
+		return nil, nil
+	}
+
+	mappings := make([]PortMapping, 0, len(portSpecs))
+	proxyPorts := make(map[int]bool) // Track duplicate proxy ports
+
+	for _, spec := range portSpecs {
+		spec = strings.TrimSpace(spec)
+		if spec == "" {
+			continue
+		}
+
+		var mapping PortMapping
+
+		// Check if it contains ":"
+		if strings.Contains(spec, ":") {
+			// Format: "proxy:container"
+			parts := strings.Split(spec, ":")
+			if len(parts) != 2 {
+				return nil, fmt.Errorf("invalid port mapping format: %s (expected proxy:container)", spec)
+			}
+
+			proxyPort, err := strconv.Atoi(strings.TrimSpace(parts[0]))
+			if err != nil {
+				return nil, fmt.Errorf("invalid proxy port in %s: %w", spec, err)
+			}
+			if err := validatePortNumber(proxyPort); err != nil {
+				return nil, fmt.Errorf("invalid proxy port in %s: %w", spec, err)
+			}
+
+			containerPort, err := strconv.Atoi(strings.TrimSpace(parts[1]))
+			if err != nil {
+				return nil, fmt.Errorf("invalid container port in %s: %w", spec, err)
+			}
+			if err := validatePortNumber(containerPort); err != nil {
+				return nil, fmt.Errorf("invalid container port in %s: %w", spec, err)
+			}
+
+			mapping = PortMapping{
+				ProxyPort:     proxyPort,
+				ContainerPort: &containerPort,
+			}
+		} else {
+			// Format: "proxy" (container port will be auto-detected)
+			proxyPort, err := strconv.Atoi(spec)
+			if err != nil {
+				return nil, fmt.Errorf("invalid port: %s", spec)
+			}
+			if err := validatePortNumber(proxyPort); err != nil {
+				return nil, fmt.Errorf("invalid port: %w", err)
+			}
+
+			mapping = PortMapping{
+				ProxyPort:     proxyPort,
+				ContainerPort: nil, // Auto-detect
+			}
+		}
+
+		// Check for duplicate proxy ports
+		if proxyPorts[mapping.ProxyPort] {
+			return nil, fmt.Errorf("duplicate proxy port: %d", mapping.ProxyPort)
+		}
+		proxyPorts[mapping.ProxyPort] = true
+
+		mappings = append(mappings, mapping)
+	}
+
+	return mappings, nil
 }
 
 // Banner displays the Dewy ASCII art logo.
