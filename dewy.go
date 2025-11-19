@@ -729,7 +729,7 @@ func (d *Dewy) RunContainer() error {
 	return nil
 }
 
-// containerBackends stores container ID and its port mappings
+// containerBackends stores container ID and its port mappings.
 type containerBackends struct {
 	containerID string
 	backends    map[int]int // map[proxyPort]mappedPort
@@ -950,7 +950,7 @@ func (d *Dewy) createHealthCheckFunc(dockerRuntime *container.Docker, resolvedMa
 }
 
 // startSingleContainer starts a single container and returns its ID and mapped ports.
-// Returns: containerID, map[proxyPort]mappedPort, error
+// Returns: containerID, map[proxyPort]mappedPort, error.
 func (d *Dewy) startSingleContainer(ctx context.Context, dockerRuntime *container.Docker, imageRef, appName string, replicaIndex int, resolvedMappings []PortMapping, healthCheck container.HealthCheckFunc) (string, map[int]int, error) {
 	// Prepare port mappings for localhost-only access
 	ports := make([]string, 0, len(resolvedMappings))

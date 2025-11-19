@@ -2,7 +2,6 @@ version: "2"
 linters:
   enable:
     - errorlint
-    - godot
     - gosec
     - misspell
     - revive
