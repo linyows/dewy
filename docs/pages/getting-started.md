@@ -62,7 +62,6 @@ In this example:
 - Health check path can be specified with `--health-path /health` (optional)
 
 Dewy automatically:
-- Creates a Docker network if it doesn't exist (default: `dewy-net`)
 - Performs rolling update deployment with zero downtime
 - Switches traffic to the new container after health checks pass
 - Removes the old container after the drain period
