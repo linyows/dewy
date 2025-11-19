@@ -56,7 +56,7 @@ UPSTREAM           DEPLOY TIME            NAME
 - **DEPLOY TIME**: コンテナがデプロイされた時刻
 - **NAME**: コンテナ名（アルファベット順にソート）
 
-**注意:** `dewy container`を起動したディレクトリと同じ場所で実行してください。
+**注意:** このコマンドはdewy管理APIにTCP localhostポート17539（デフォルト）で接続します。複数のdewyインスタンスがポート競合で起動している場合、自動的にポート17539-17548をスキャンします。どのディレクトリからでも実行可能です。
 
 ## コマンドラインオプション
 
@@ -200,6 +200,20 @@ dewy container --registry img://ghcr.io/owner/app --drain-time 60
 ```bash
 dewy container --registry img://ghcr.io/owner/app --runtime podman
 ```
+
+### --admin-port
+
+containerコマンド用の管理APIポートを指定します。デフォルトは17539です。ポートが既に使用されている場合、Dewyは自動的にポート番号をインクリメントします。管理APIは`dewy container list`コマンドがコンテナ情報を照会するために使用されます。
+
+```bash
+# カスタム管理ポートを使用
+dewy container --registry img://ghcr.io/owner/app --admin-port 20000
+
+# デフォルトポート（17539） - 使用中の場合は自動インクリメント
+dewy container --registry img://ghcr.io/owner/app
+```
+
+**注意:** `dewy container list`コマンドは自動的にポート17539-17548をスキャンして実行中のインスタンスを検出するため、特定のポート要件がない限り、通常このオプションを指定する必要はありません。
 
 ### --cmd
 

@@ -56,7 +56,7 @@ Shows:
 - **DEPLOY TIME**: When the container was deployed
 - **NAME**: Container name (sorted alphabetically)
 
-**Note:** Must be run from the same directory where `dewy container` was started.
+**Note:** The command connects to the dewy admin API on TCP localhost port 17539 (default). If multiple dewy instances are running with port conflicts, the command automatically scans ports 17539-17548. Can be run from any directory.
 
 ## Command Line Options
 
@@ -200,6 +200,20 @@ Specifies the container runtime to use. Supports `docker` or `podman`. Default i
 ```bash
 dewy container --registry img://ghcr.io/owner/app --runtime podman
 ```
+
+### --admin-port
+
+Specifies the admin API port for the container command. Default is 17539. If the port is already in use, Dewy automatically increments the port number. The admin API is used by the `dewy container list` command to query container information.
+
+```bash
+# Use custom admin port
+dewy container --registry img://ghcr.io/owner/app --admin-port 20000
+
+# Default port (17539) - auto-increments if occupied
+dewy container --registry img://ghcr.io/owner/app
+```
+
+**Note:** The `dewy container list` command automatically scans ports 17539-17548 to find running instances, so you typically don't need to specify this option unless you have specific port requirements.
 
 ### --cmd
 
