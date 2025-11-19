@@ -85,6 +85,7 @@ type Config struct {
 	Registry         string
 	Notifier         string
 	Port             int // Port for HTTP server (used by both server and container commands)
+	AdminPort        int // Port for admin API (container command only, default: 17539)
 	Cache            CacheConfig
 	Starter          starter.Config
 	Container        *ContainerConfig

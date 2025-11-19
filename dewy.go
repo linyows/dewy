@@ -1264,43 +1264,37 @@ func (d *Dewy) stopManagedContainers(ctx context.Context) error {
 	return nil
 }
 
-// getAdminSocketPath returns the path to the admin API Unix socket.
-func (d *Dewy) getAdminSocketPath() string {
-	// Use .dewy directory in current working directory (same as cache)
-	pwd, err := os.Getwd()
-	if err != nil {
-		d.logger.Warn("Failed to get current directory, falling back to temp dir",
-			slog.String("error", err.Error()))
-		return filepath.Join(os.TempDir(), "api.sock")
-	}
-
-	dewyDir := filepath.Join(pwd, ".dewy")
-	if err := os.MkdirAll(dewyDir, 0755); err != nil {
-		d.logger.Warn("Failed to create .dewy directory, falling back to temp dir",
-			slog.String("error", err.Error()))
-		return filepath.Join(os.TempDir(), "api.sock")
-	}
-
-	return filepath.Join(dewyDir, "api.sock")
-}
-
-// startAdminAPI starts the admin API server on a Unix domain socket.
+// startAdminAPI starts the admin API server on TCP localhost.
 func (d *Dewy) startAdminAPI(ctx context.Context) error {
-	socketPath := d.getAdminSocketPath()
-
-	// Remove existing socket file if it exists
-	if err := os.Remove(socketPath); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to remove existing socket: %w", err)
+	// Default admin port is 17539 (DEWY: D=4, E=5, W=23, Y=25 -> 4+5+2+3+2+5=21, but 17539 is more unique)
+	adminPort := d.config.AdminPort
+	if adminPort == 0 {
+		adminPort = 17539
 	}
 
-	// Set umask to ensure socket is created with owner-only permissions
-	// This prevents a security window where the socket might be accessible with default permissions
-	oldUmask := syscall.Umask(0077)
-	listener, err := net.Listen("unix", socketPath)
-	// Restore previous umask immediately after socket creation
-	syscall.Umask(oldUmask)
-	if err != nil {
-		return fmt.Errorf("failed to create Unix socket: %w", err)
+	// Try to bind to the port, increment if already in use
+	var listener net.Listener
+	var err error
+	maxAttempts := 10
+
+	for i := 0; i < maxAttempts; i++ {
+		currentPort := adminPort + i
+		addr := fmt.Sprintf("localhost:%d", currentPort)
+		listener, err = net.Listen("tcp", addr)
+		if err == nil {
+			// Successfully bound to port
+			adminPort = currentPort
+			d.logger.Info("Admin API port bound successfully",
+				slog.Int("port", adminPort))
+			break
+		}
+		d.logger.Debug("Admin API port in use, trying next",
+			slog.Int("port", currentPort),
+			slog.String("error", err.Error()))
+	}
+
+	if listener == nil {
+		return fmt.Errorf("failed to bind admin API after %d attempts: %w", maxAttempts, err)
 	}
 
 	// Create HTTP mux for admin API
@@ -1316,7 +1310,7 @@ func (d *Dewy) startAdminAPI(ctx context.Context) error {
 	// Start server in background
 	go func() {
 		d.logger.Info("Starting admin API server",
-			slog.String("socket", socketPath))
+			slog.Int("port", adminPort))
 
 		if err := d.adminServer.Serve(listener); err != nil && err != http.ErrServerClosed {
 			d.logger.Error("Admin API server error", slog.String("error", err.Error()))
@@ -1324,7 +1318,8 @@ func (d *Dewy) startAdminAPI(ctx context.Context) error {
 	}()
 
 	d.logger.Info("Admin API server started",
-		slog.String("socket", socketPath))
+		slog.Int("port", adminPort),
+		slog.String("address", fmt.Sprintf("http://localhost:%d", adminPort)))
 
 	return nil
 }
@@ -1342,14 +1337,6 @@ func (d *Dewy) stopAdminAPI(ctx context.Context) error {
 
 	if err := d.adminServer.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("failed to shutdown admin API: %w", err)
-	}
-
-	// Clean up socket file
-	socketPath := d.getAdminSocketPath()
-	if err := os.Remove(socketPath); err != nil && !os.IsNotExist(err) {
-		d.logger.Warn("Failed to remove socket file",
-			slog.String("path", socketPath),
-			slog.String("error", err.Error()))
 	}
 
 	d.logger.Info("Admin API server stopped")

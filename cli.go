@@ -2,15 +2,11 @@ package dewy
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"net/http"
-	"os"
-	"path/filepath"
 	"reflect"
 	"sort"
 	"strconv"
@@ -54,6 +50,8 @@ type cli struct {
 	DrainTime        int      `long:"drain-time" description:"Drain time in seconds after traffic switch (default: 30 for container command)"`
 	ContainerRuntime string   `long:"runtime" description:"Container runtime (docker or podman, default: docker)"`
 	Cmd              []string `long:"cmd" description:"Command and arguments to pass to container (can be specified multiple times)"`
+	AdminPort        int      `long:"admin-port" description:"Admin API port for container command (default: 17539, auto-increments if in use)"`
+	adminPort        int      // Internal field for storing parsed admin port
 	Help             bool     `long:"help" short:"h" description:"show this help message and exit"`
 	Version          bool     `long:"version" short:"v" description:"prints the version number"`
 }
@@ -259,6 +257,8 @@ func (c *cli) run() int {
 	}
 	conf.BeforeDeployHook = c.BeforeDeployHook
 	conf.AfterDeployHook = c.AfterDeployHook
+	conf.AdminPort = c.AdminPort
+	c.adminPort = c.AdminPort // Store for container list command
 
 	switch c.command {
 	case "server":
@@ -596,44 +596,37 @@ https://github.com/linyows/dewy
 
 // runContainerList runs the "dewy container list" command.
 func (c *cli) runContainerList() int {
-	// Auto-detect running dewy instance
-	sockets, err := c.findDewySocketFiles()
-	if err != nil {
-		fmt.Fprintf(c.env.Err, "Error: failed to find dewy instances: %v\n", err)
-		return ExitErr
+	// Default admin port
+	adminPort := c.adminPort
+	if adminPort == 0 {
+		adminPort = 17539
 	}
 
-	if len(sockets) == 0 {
-		fmt.Fprintf(c.env.Err, "Error: no running dewy instances found\n")
-		return ExitErr
-	}
-
-	if len(sockets) > 1 {
-		fmt.Fprintf(c.env.Err, "Error: multiple dewy instances found:\n")
-		for _, name := range sockets {
-			fmt.Fprintf(c.env.Err, "  - %s\n", name)
-		}
-		fmt.Fprintf(c.env.Err, "\nPlease stop other instances or specify which one to query.\n")
-		return ExitErr
-	}
-
-	// Use the socket path
-	socketPath := c.getAdminSocketPath()
-
-	// Create HTTP client with Unix socket transport
+	// Try to connect to admin API, scanning through possible ports
+	maxAttempts := 10
 	client := &http.Client{
-		Transport: &http.Transport{
-			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
-				return net.Dial("unix", socketPath)
-			},
-		},
-		Timeout: 10 * time.Second,
+		Timeout: 2 * time.Second,
 	}
 
-	// Make request to admin API
-	resp, err := client.Get("http://unix/api/containers")
-	if err != nil {
-		fmt.Fprintf(c.env.Err, "Error: failed to connect to dewy admin API: %v\n", err)
+	var resp *http.Response
+	var err error
+	var successPort int
+
+	for i := 0; i < maxAttempts; i++ {
+		currentPort := adminPort + i
+		url := fmt.Sprintf("http://localhost:%d/api/containers", currentPort)
+
+		resp, err = client.Get(url)
+		if err == nil {
+			// Successfully connected
+			successPort = currentPort
+			break
+		}
+	}
+
+	if resp == nil {
+		fmt.Fprintf(c.env.Err, "Error: no running dewy instances found (tried ports %d-%d)\n",
+			adminPort, adminPort+maxAttempts-1)
 		return ExitErr
 	}
 	defer resp.Body.Close()
@@ -654,6 +647,11 @@ func (c *cli) runContainerList() int {
 
 	// Display results
 	c.displayContainerList(result.Containers)
+
+	// Show which port was used (helpful for debugging)
+	if successPort != adminPort {
+		fmt.Fprintf(c.env.Out, "\n(Connected to admin API on port %d)\n", successPort)
+	}
 
 	return ExitOK
 }
@@ -706,38 +704,6 @@ func (c *cli) displayContainerList(containers []*container.Info) {
 			deployTimeWidth, deployTime,
 			info.Name)
 	}
-}
-
-// getAdminSocketPath returns the path to the admin API Unix socket.
-// This uses the same logic as the server to ensure consistency.
-func (c *cli) getAdminSocketPath() string {
-	// Use .dewy directory in current working directory (same as cache)
-	pwd, err := os.Getwd()
-	if err != nil {
-		// Fallback to temp dir
-		return filepath.Join(os.TempDir(), "api.sock")
-	}
-
-	return filepath.Join(pwd, ".dewy", "api.sock")
-}
-
-// findDewySocketFiles finds dewy socket file in .dewy directory.
-// Returns a list with single element if socket exists, empty list otherwise.
-func (c *cli) findDewySocketFiles() ([]string, error) {
-	pwd, err := os.Getwd()
-	if err != nil {
-		return []string{}, nil
-	}
-
-	socketPath := filepath.Join(pwd, ".dewy", "api.sock")
-
-	// Check if socket exists
-	if _, err := os.Stat(socketPath); os.IsNotExist(err) {
-		return []string{}, nil
-	}
-
-	// Return a dummy name (not used since we always use the same socket path)
-	return []string{"default"}, nil
 }
 
 // extractAppNameFromRegistry extracts application name from registry URL.
