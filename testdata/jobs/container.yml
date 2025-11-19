@@ -64,7 +64,7 @@ steps:
   with:
     cmd: |
       grep 'Starting new container' {{ outputs.container.log }} | \
-        grep -vc {{ replace(vars.new_version, 'v', '') }} | tr -d '\n'
+        grep -vc {{ vars.new_version }} | tr -d '\n'
   test: res.stdout == "3"
   outputs:
     ok: res.stdout == "3"
@@ -75,7 +75,7 @@ steps:
   with:
     cmd: |
       grep 'Starting new container' {{ outputs.container.log }} | \
-        grep -c {{ replace(vars.new_version, 'v', '') }} | tr -d '\n'
+        grep -c {{ vars.new_version }} | tr -d '\n'
   test: res.stdout == "3"
   outputs:
     ok: res.stdout == "3"
