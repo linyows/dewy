@@ -37,7 +37,7 @@ steps:
   test: status == 0
 
 - name: Wait for stabilization
-  wait: 30s
+  wait: 60s
   uses: shell
   with:
     cmd: "echo 'Waiting for system stabilization after new version detection'"
