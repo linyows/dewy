@@ -110,7 +110,7 @@ In this example:
 - Dewy polls the OCI registry for new image versions
 - When a new version is detected, it pulls the image and starts a new container
 - The new container is health-checked (if `--health-path` is specified)
-- Traffic is switched to the new container by updating the network alias
+- Traffic is switched to the new container by the proxy
 - The old container continues running during the drain period, then is removed
 - The process repeats automatically when new versions are published
 
