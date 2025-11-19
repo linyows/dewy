@@ -114,7 +114,7 @@ In this example:
 - The old container continues running during the drain period, then is removed
 - The process repeats automatically when new versions are published
 
-You can access the application via the network alias (default: `dewy-current`) from other containers in the same network, or expose ports through a reverse proxy like nginx or Caddy.
+The proxy listens on the specified port and forwards traffic to the current container. You can expose this port through a reverse proxy like nginx or Caddy.
 
 ## Next Steps
 
