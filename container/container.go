@@ -50,6 +50,9 @@ type Runtime interface {
 
 	// ListContainersByLabels returns detailed information about containers matching the given labels.
 	ListContainersByLabels(ctx context.Context, labels map[string]string, containerPort int) ([]*Info, error)
+
+	// GetImageExposedPorts returns the list of exposed ports from an image.
+	GetImageExposedPorts(ctx context.Context, imageRef string) ([]int, error)
 }
 
 // RunOptions contains options for running a container.

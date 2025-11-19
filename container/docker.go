@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log/slog"
 	"os/exec"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -18,7 +20,7 @@ type Docker struct {
 	drainTime time.Duration
 }
 
-//nolint:godot // Forbidden options that conflict with Dewy management
+// Forbidden options that conflict with Dewy management
 var forbiddenOptions = []string{
 	"-d", "--detach",
 	"-it",
@@ -573,8 +575,9 @@ type dockerInspect struct {
 		StartedAt string `json:"StartedAt"`
 	} `json:"State"`
 	Config struct {
-		Image  string            `json:"Image"`
-		Labels map[string]string `json:"Labels"`
+		Image        string            `json:"Image"`
+		Labels       map[string]string `json:"Labels"`
+		ExposedPorts map[string]struct{} `json:"ExposedPorts"` // e.g., {"80/tcp": {}, "443/tcp": {}}
 	} `json:"Config"`
 	NetworkSettings struct {
 		Ports map[string][]struct {
@@ -582,6 +585,14 @@ type dockerInspect struct {
 			HostPort string `json:"HostPort"`
 		} `json:"Ports"`
 	} `json:"NetworkSettings"`
+}
+
+// dockerImageInspect represents the structure of docker image inspect JSON output.
+type dockerImageInspect struct {
+	ID     string `json:"Id"`
+	Config struct {
+		ExposedPorts map[string]struct{} `json:"ExposedPorts"` // e.g., {"80/tcp": {}, "443/tcp": {}}
+	} `json:"Config"`
 }
 
 // GetContainerInfo returns detailed information about a container.
@@ -622,9 +633,21 @@ func (d *Docker) GetContainerInfo(ctx context.Context, containerID string, conta
 
 	// Find the mapped port
 	ipPort := ""
-	portSpec := fmt.Sprintf("%d/tcp", containerPort)
-	if portBindings, ok := inspect.NetworkSettings.Ports[portSpec]; ok && len(portBindings) > 0 {
-		ipPort = fmt.Sprintf("%s:%s", portBindings[0].HostIP, portBindings[0].HostPort)
+	if containerPort > 0 {
+		// If container port is specified, use it
+		portSpec := fmt.Sprintf("%d/tcp", containerPort)
+		if portBindings, ok := inspect.NetworkSettings.Ports[portSpec]; ok && len(portBindings) > 0 {
+			ipPort = fmt.Sprintf("%s:%s", portBindings[0].HostIP, portBindings[0].HostPort)
+		}
+	} else {
+		// If container port is not specified (0), find first available port mapping
+		// This handles the case where --port was specified without container port (auto-detect)
+		for _, portBindings := range inspect.NetworkSettings.Ports {
+			if len(portBindings) > 0 {
+				ipPort = fmt.Sprintf("%s:%s", portBindings[0].HostIP, portBindings[0].HostPort)
+				break
+			}
+		}
 	}
 
 	// Remove leading slash from container name
@@ -662,4 +685,57 @@ func (d *Docker) ListContainersByLabels(ctx context.Context, labels map[string]s
 	}
 
 	return infos, nil
+}
+
+// GetImageExposedPorts returns the list of exposed ports from an image.
+// Returns port numbers (e.g., [80, 443]) sorted in ascending order.
+func (d *Docker) GetImageExposedPorts(ctx context.Context, imageRef string) ([]int, error) {
+	output, err := d.execCommandOutput(ctx, "image", "inspect", imageRef)
+	if err != nil {
+		return nil, fmt.Errorf("failed to inspect image: %w", err)
+	}
+
+	var inspects []dockerImageInspect
+	if err := json.Unmarshal([]byte(output), &inspects); err != nil {
+		return nil, fmt.Errorf("failed to parse image inspect output: %w", err)
+	}
+
+	if len(inspects) == 0 {
+		return nil, fmt.Errorf("image not found: %s", imageRef)
+	}
+
+	inspect := inspects[0]
+	if len(inspect.Config.ExposedPorts) == 0 {
+		return []int{}, nil
+	}
+
+	// Parse exposed ports
+	ports := make([]int, 0, len(inspect.Config.ExposedPorts))
+	for portSpec := range inspect.Config.ExposedPorts {
+		// portSpec format: "80/tcp", "443/tcp", "53/udp", etc.
+		// We only support TCP ports for now
+		if !strings.HasSuffix(portSpec, "/tcp") {
+			continue
+		}
+
+		portStr := strings.TrimSuffix(portSpec, "/tcp")
+		port, err := strconv.Atoi(portStr)
+		if err != nil {
+			d.logger.Warn("Failed to parse exposed port",
+				slog.String("port_spec", portSpec),
+				slog.String("error", err.Error()))
+			continue
+		}
+
+		ports = append(ports, port)
+	}
+
+	// Sort ports
+	sort.Ints(ports)
+
+	d.logger.Debug("Detected exposed ports from image",
+		slog.String("image", imageRef),
+		slog.Any("ports", ports))
+
+	return ports, nil
 }

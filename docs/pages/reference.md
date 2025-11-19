@@ -56,7 +56,7 @@ Shows:
 - **DEPLOY TIME**: When the container was deployed
 - **NAME**: Container name (sorted alphabetically)
 
-**Note:** Must be run from the same directory where `dewy container` was started.
+**Note:** The command connects to the dewy admin API on TCP localhost port 17539 (default). If multiple dewy instances are running with port conflicts, the command automatically scans ports 17539-17548. Can be run from any directory.
 
 ## Command Line Options
 
@@ -140,12 +140,33 @@ dewy container --help
 
 The `dewy container` command has specific options for container deployment management.
 
-### --container-port
+### --port
 
-Specifies the port that the container listens on. Default is 8080. This is used for health checks and traffic routing.
+Specifies port mapping between the proxy and container. Can be specified multiple times for multi-port applications.
+
+**Format:**
+- `--port proxy`: Auto-detect container port from Docker image EXPOSE directive
+- `--port proxy:container`: Explicit port mapping
+
+**Auto-Detection Behavior:**
+- If container port not specified, Dewy inspects the Docker image
+- Single EXPOSE port → automatically used
+- Multiple EXPOSE ports → error, must specify explicitly
+- No EXPOSE ports → error, must specify explicitly
+
+**Examples:**
 
 ```bash
-dewy container --registry img://ghcr.io/owner/app --container-port 3000
+# Auto-detect container port (container EXPOSEs port 8080)
+dewy container --registry img://ghcr.io/owner/app --port 8080
+
+# Explicit port mapping (proxy listens on 8080, forwards to container port 3000)
+dewy container --registry img://ghcr.io/owner/app --port 8080:3000
+
+# Multi-port application (HTTP + gRPC)
+dewy container --registry img://ghcr.io/owner/app \
+  --port 8080:80 \
+  --port 9090:50051
 ```
 
 ### --health-path
@@ -179,6 +200,20 @@ Specifies the container runtime to use. Supports `docker` or `podman`. Default i
 ```bash
 dewy container --registry img://ghcr.io/owner/app --runtime podman
 ```
+
+### --admin-port
+
+Specifies the admin API port for the container command. Default is 17539. If the port is already in use, Dewy automatically increments the port number. The admin API is used by the `dewy container list` command to query container information.
+
+```bash
+# Use custom admin port
+dewy container --registry img://ghcr.io/owner/app --admin-port 20000
+
+# Default port (17539) - auto-increments if occupied
+dewy container --registry img://ghcr.io/owner/app
+```
+
+**Note:** The `dewy container list` command automatically scans ports 17539-17548 to find running instances, so you typically don't need to specify this option unless you have specific port requirements.
 
 ### --cmd
 
@@ -430,11 +465,10 @@ Example deploying container images with rolling update deployment strategy. Moni
 # Authenticate for private registry
 docker login ghcr.io
 
-# Basic deployment with health checks
+# Basic deployment with health checks (auto-detect container port)
 dewy container \
   --registry img://ghcr.io/mycompany/myapp \
   --port 8080 \
-  --container-port 8080 \
   --health-path /health \
   --health-timeout 30 \
   --drain-time 30 \
@@ -442,6 +476,21 @@ dewy container \
   -- \
   -e DATABASE_URL=postgres://db:5432/mydb \
   -v /data:/app/data
+
+# Explicit port mapping (proxy:container)
+dewy container \
+  --registry img://ghcr.io/mycompany/myapp \
+  --port 8080:3000 \
+  --health-path /health \
+  --log-level info
+
+# Multi-port application (HTTP + gRPC)
+dewy container \
+  --registry img://ghcr.io/mycompany/myapp \
+  --port 8080:80 \
+  --port 9090:50051 \
+  --health-path /health \
+  --replicas 3
 
 # Multiple replicas with custom command
 dewy container \

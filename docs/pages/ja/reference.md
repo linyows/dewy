@@ -56,7 +56,7 @@ UPSTREAM           DEPLOY TIME            NAME
 - **DEPLOY TIME**: コンテナがデプロイされた時刻
 - **NAME**: コンテナ名（アルファベット順にソート）
 
-**注意:** `dewy container`を起動したディレクトリと同じ場所で実行してください。
+**注意:** このコマンドはdewy管理APIにTCP localhostポート17539（デフォルト）で接続します。複数のdewyインスタンスがポート競合で起動している場合、自動的にポート17539-17548をスキャンします。どのディレクトリからでも実行可能です。
 
 ## コマンドラインオプション
 
@@ -140,12 +140,33 @@ dewy container --help
 
 `dewy container`コマンドには、コンテナデプロイメント管理用の固有のオプションがあります。
 
-### --container-port
+### --port
 
-コンテナがリッスンするポートを指定します。デフォルトは8080です。ヘルスチェックとトラフィックルーティングに使用されます。
+プロキシとコンテナ間のポートマッピングを指定します。マルチポートアプリケーションの場合、複数回指定できます。
+
+**フォーマット:**
+- `--port proxy`: DockerイメージのEXPOSEディレクティブからコンテナポートを自動検出
+- `--port proxy:container`: 明示的なポートマッピング
+
+**自動検出の動作:**
+- コンテナポートが指定されていない場合、DewyはDockerイメージを検査します
+- 単一のEXPOSEポート → 自動的に使用
+- 複数のEXPOSEポート → エラー、明示的に指定する必要があります
+- EXPOSEポートなし → エラー、明示的に指定する必要があります
+
+**例:**
 
 ```bash
-dewy container --registry img://ghcr.io/owner/app --container-port 3000
+# コンテナポートを自動検出（コンテナがポート8080をEXPOSE）
+dewy container --registry img://ghcr.io/owner/app --port 8080
+
+# 明示的なポートマッピング（プロキシは8080でリッスン、コンテナポート3000に転送）
+dewy container --registry img://ghcr.io/owner/app --port 8080:3000
+
+# マルチポートアプリケーション（HTTP + gRPC）
+dewy container --registry img://ghcr.io/owner/app \
+  --port 8080:80 \
+  --port 9090:50051
 ```
 
 ### --health-path
@@ -179,6 +200,20 @@ dewy container --registry img://ghcr.io/owner/app --drain-time 60
 ```bash
 dewy container --registry img://ghcr.io/owner/app --runtime podman
 ```
+
+### --admin-port
+
+containerコマンド用の管理APIポートを指定します。デフォルトは17539です。ポートが既に使用されている場合、Dewyは自動的にポート番号をインクリメントします。管理APIは`dewy container list`コマンドがコンテナ情報を照会するために使用されます。
+
+```bash
+# カスタム管理ポートを使用
+dewy container --registry img://ghcr.io/owner/app --admin-port 20000
+
+# デフォルトポート（17539） - 使用中の場合は自動インクリメント
+dewy container --registry img://ghcr.io/owner/app
+```
+
+**注意:** `dewy container list`コマンドは自動的にポート17539-17548をスキャンして実行中のインスタンスを検出するため、特定のポート要件がない限り、通常このオプションを指定する必要はありません。
 
 ### --cmd
 

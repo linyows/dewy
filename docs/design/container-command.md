@@ -68,6 +68,33 @@ Initially considered Blue-Green deployment, but adopted Rolling Update approach 
 - Gradual rollout reduces risk
 - Works well with load balancing
 
+### Port Mapping
+
+Flexible port mapping with automatic container port detection.
+
+**Specification:**
+- `--port proxy`: Auto-detect container port from Docker image EXPOSE directive
+- `--port proxy:container`: Explicit port mapping
+- Multiple mappings supported: `--port 8080:80 --port 9090:50051`
+
+**Auto-Detection Behavior:**
+- If container port not specified, dewy inspects the Docker image
+- Single EXPOSE port → automatically used
+- Multiple EXPOSE ports → error, must specify explicitly
+- No EXPOSE ports → error, must specify explicitly
+
+**Examples:**
+```bash
+# Auto-detect (container EXPOSEs port 8080)
+dewy container --registry img://myapp --port 8080
+
+# Explicit mapping (proxy 8080 → container 80)
+dewy container --registry img://myapp --port 8080:80
+
+# Multi-port (HTTP + gRPC)
+dewy container --registry img://myapp --port 8080:80 --port 9090:50051
+```
+
 ### Multiple Replicas & Load Balancing
 
 Start multiple containers with `--replicas` flag, dewy performs round-robin load balancing.
@@ -392,10 +419,11 @@ After considering the above two methods, we implemented a built-in reverse proxy
 - `container/container.go`: Runtime interface and data structures (RunOptions, DeployOptions)
 - `registry/img.go`: OCI registry implementation
 - `cli.go`: CLI definition for `container` command
+  - Port mapping: `--port proxy[:container]` (auto-detects container port if not specified)
   - Dewy-specific options: `--replicas`, `--health-path`, `--cmd`
   - Docker run options passthrough via `--` separator
   - Forbidden options validation: `-d`, `-it`, `-i`, `-t`, `-l`, `-p`
-- `config.go`: Container configuration structure (Command, ExtraArgs)
+- `config.go`: Container configuration structure (PortMappings, Command, ExtraArgs)
 
 ## Related Documentation
 

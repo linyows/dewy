@@ -2,15 +2,11 @@ package dewy
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"net/http"
-	"os"
-	"path/filepath"
 	"reflect"
 	"sort"
 	"strconv"
@@ -41,20 +37,21 @@ type cli struct {
 	LogLevel         string   `long:"log-level" short:"l" arg:"(debug|info|warn|error)" description:"Set log level for output (default: error)"`
 	LogFormat        string   `long:"log-format" short:"f" arg:"(text|json)" description:"Set log format for output (default: text)"`
 	Interval         int      `long:"interval" arg:"seconds" short:"i" description:"Polling interval in seconds for checking registry updates (default: 10)"`
-	Ports            []string `long:"port" short:"p" description:"TCP ports for server command to listen on (comma-separated, ranges, or multiple flags)"`
+	Ports            []string `long:"port" short:"p" description:"For server: TCP ports to listen on. For container: port mappings in format 'proxy' or 'proxy:container' (multiple flags supported)"`
 	Registry         string   `long:"registry" description:"Registry URL (e.g., ghr://owner/repo, s3://region/bucket/prefix, docker://registry/repo)"`
 	Notify           string   `long:"notify" description:"[DEPRECATED] Use --notifier instead"`
 	Notifier         string   `long:"notifier" description:"Notifier URL for deployment notifications (e.g., slack://channel, mail://smtp:port/recipient)"`
 	BeforeDeployHook string   `long:"before-deploy-hook" description:"Shell command to execute before deployment begins"`
 	AfterDeployHook  string   `long:"after-deploy-hook" description:"Shell command to execute after successful deployment"`
 	// Container-specific options
-	ContainerPort    int      `long:"container-port" description:"Container port (default: 8080)"`
 	Replicas         int      `long:"replicas" description:"Number of container replicas to run (default: 1)"`
 	HealthPath       string   `long:"health-path" description:"Health check path (optional, e.g., /health)"`
 	HealthTimeout    int      `long:"health-timeout" description:"Health check timeout in seconds (default: 30)"`
 	DrainTime        int      `long:"drain-time" description:"Drain time in seconds after traffic switch (default: 30 for container command)"`
 	ContainerRuntime string   `long:"runtime" description:"Container runtime (docker or podman, default: docker)"`
 	Cmd              []string `long:"cmd" description:"Command and arguments to pass to container (can be specified multiple times)"`
+	AdminPort        int      `long:"admin-port" description:"Admin API port for container command (default: 17539, auto-increments if in use)"`
+	adminPort        int      // Internal field for storing parsed admin port
 	Help             bool     `long:"help" short:"h" description:"show this help message and exit"`
 	Version          bool     `long:"version" short:"v" description:"prints the version number"`
 }
@@ -153,7 +150,6 @@ func (c *cli) showHelp() {
 	}), "\n")
 
 	containerOpts := strings.Join(c.buildHelp([]string{
-		"ContainerPort",
 		"Replicas",
 		"Cmd",
 		"HealthPath",
@@ -261,6 +257,8 @@ func (c *cli) run() int {
 	}
 	conf.BeforeDeployHook = c.BeforeDeployHook
 	conf.AfterDeployHook = c.AfterDeployHook
+	conf.AdminPort = c.AdminPort
+	c.adminPort = c.AdminPort // Store for container list command
 
 	switch c.command {
 	case "server":
@@ -300,27 +298,18 @@ func (c *cli) run() int {
 			return ExitErr
 		}
 
-		// Parse port for reverse proxy (use first port from --port flag)
-		parsedPorts, err := parsePorts(c.Ports)
+		// Parse port mappings
+		portMappings, err := parsePortMappings(c.Ports)
 		if err != nil {
-			fmt.Fprintf(c.env.Err, "Error: failed to parse port: %v\n", err)
+			fmt.Fprintf(c.env.Err, "Error: failed to parse port mappings: %v\n", err)
 			return ExitErr
 		}
-		if len(parsedPorts) == 0 {
-			fmt.Fprintf(c.env.Err, "Error: no valid port specified\n")
+		if len(portMappings) == 0 {
+			fmt.Fprintf(c.env.Err, "Error: no valid port mappings specified\n")
 			return ExitErr
 		}
-		portNum, err := strconv.Atoi(parsedPorts[0])
-		if err != nil {
-			fmt.Fprintf(c.env.Err, "Error: invalid port number: %v\n", err)
-			return ExitErr
-		}
-		conf.Port = portNum
 
 		// Set defaults
-		if c.ContainerPort == 0 {
-			c.ContainerPort = 8080
-		}
 		// HealthPath is optional - if not specified, health check will be skipped
 		if c.HealthTimeout == 0 {
 			c.HealthTimeout = 30
@@ -344,7 +333,7 @@ func (c *cli) run() int {
 
 		conf.Container = &ContainerConfig{
 			Name:          appName,
-			ContainerPort: c.ContainerPort,
+			PortMappings:  portMappings,
 			Replicas:      c.Replicas,
 			Command:       c.Cmd,
 			ExtraArgs:     c.args, // Arguments after -- separator (docker run options)
@@ -511,6 +500,82 @@ func validateAndDeduplicatePorts(ports []string) ([]string, error) {
 	return result, nil
 }
 
+// parsePortMappings parses port mapping specifications for container command.
+// Supports formats:
+//   - "8080" -> proxy=8080, container=auto-detect
+//   - "8080:80" -> proxy=8080, container=80
+func parsePortMappings(portSpecs []string) ([]PortMapping, error) {
+	if len(portSpecs) == 0 {
+		return nil, nil
+	}
+
+	mappings := make([]PortMapping, 0, len(portSpecs))
+	proxyPorts := make(map[int]bool) // Track duplicate proxy ports
+
+	for _, spec := range portSpecs {
+		spec = strings.TrimSpace(spec)
+		if spec == "" {
+			continue
+		}
+
+		var mapping PortMapping
+
+		// Check if it contains ":"
+		if strings.Contains(spec, ":") {
+			// Format: "proxy:container"
+			parts := strings.Split(spec, ":")
+			if len(parts) != 2 {
+				return nil, fmt.Errorf("invalid port mapping format: %s (expected proxy:container)", spec)
+			}
+
+			proxyPort, err := strconv.Atoi(strings.TrimSpace(parts[0]))
+			if err != nil {
+				return nil, fmt.Errorf("invalid proxy port in %s: %w", spec, err)
+			}
+			if err := validatePortNumber(proxyPort); err != nil {
+				return nil, fmt.Errorf("invalid proxy port in %s: %w", spec, err)
+			}
+
+			containerPort, err := strconv.Atoi(strings.TrimSpace(parts[1]))
+			if err != nil {
+				return nil, fmt.Errorf("invalid container port in %s: %w", spec, err)
+			}
+			if err := validatePortNumber(containerPort); err != nil {
+				return nil, fmt.Errorf("invalid container port in %s: %w", spec, err)
+			}
+
+			mapping = PortMapping{
+				ProxyPort:     proxyPort,
+				ContainerPort: &containerPort,
+			}
+		} else {
+			// Format: "proxy" (container port will be auto-detected)
+			proxyPort, err := strconv.Atoi(spec)
+			if err != nil {
+				return nil, fmt.Errorf("invalid port: %s", spec)
+			}
+			if err := validatePortNumber(proxyPort); err != nil {
+				return nil, fmt.Errorf("invalid port: %w", err)
+			}
+
+			mapping = PortMapping{
+				ProxyPort:     proxyPort,
+				ContainerPort: nil, // Auto-detect
+			}
+		}
+
+		// Check for duplicate proxy ports
+		if proxyPorts[mapping.ProxyPort] {
+			return nil, fmt.Errorf("duplicate proxy port: %d", mapping.ProxyPort)
+		}
+		proxyPorts[mapping.ProxyPort] = true
+
+		mappings = append(mappings, mapping)
+	}
+
+	return mappings, nil
+}
+
 // Banner displays the Dewy ASCII art logo.
 func Banner(w io.Writer) {
 	green := color.RGB(194, 73, 85)
@@ -531,44 +596,37 @@ https://github.com/linyows/dewy
 
 // runContainerList runs the "dewy container list" command.
 func (c *cli) runContainerList() int {
-	// Auto-detect running dewy instance
-	sockets, err := c.findDewySocketFiles()
-	if err != nil {
-		fmt.Fprintf(c.env.Err, "Error: failed to find dewy instances: %v\n", err)
-		return ExitErr
+	// Default admin port
+	adminPort := c.adminPort
+	if adminPort == 0 {
+		adminPort = 17539
 	}
 
-	if len(sockets) == 0 {
-		fmt.Fprintf(c.env.Err, "Error: no running dewy instances found\n")
-		return ExitErr
-	}
-
-	if len(sockets) > 1 {
-		fmt.Fprintf(c.env.Err, "Error: multiple dewy instances found:\n")
-		for _, name := range sockets {
-			fmt.Fprintf(c.env.Err, "  - %s\n", name)
-		}
-		fmt.Fprintf(c.env.Err, "\nPlease stop other instances or specify which one to query.\n")
-		return ExitErr
-	}
-
-	// Use the socket path
-	socketPath := c.getAdminSocketPath()
-
-	// Create HTTP client with Unix socket transport
+	// Try to connect to admin API, scanning through possible ports
+	maxAttempts := 10
 	client := &http.Client{
-		Transport: &http.Transport{
-			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
-				return net.Dial("unix", socketPath)
-			},
-		},
-		Timeout: 10 * time.Second,
+		Timeout: 2 * time.Second,
 	}
 
-	// Make request to admin API
-	resp, err := client.Get("http://unix/api/containers")
-	if err != nil {
-		fmt.Fprintf(c.env.Err, "Error: failed to connect to dewy admin API: %v\n", err)
+	var resp *http.Response
+	var err error
+	var successPort int
+
+	for i := 0; i < maxAttempts; i++ {
+		currentPort := adminPort + i
+		url := fmt.Sprintf("http://localhost:%d/api/containers", currentPort)
+
+		resp, err = client.Get(url)
+		if err == nil {
+			// Successfully connected
+			successPort = currentPort
+			break
+		}
+	}
+
+	if resp == nil {
+		fmt.Fprintf(c.env.Err, "Error: no running dewy instances found (tried ports %d-%d)\n",
+			adminPort, adminPort+maxAttempts-1)
 		return ExitErr
 	}
 	defer resp.Body.Close()
@@ -589,6 +647,11 @@ func (c *cli) runContainerList() int {
 
 	// Display results
 	c.displayContainerList(result.Containers)
+
+	// Show which port was used (helpful for debugging)
+	if successPort != adminPort {
+		fmt.Fprintf(c.env.Out, "\n(Connected to admin API on port %d)\n", successPort)
+	}
 
 	return ExitOK
 }
@@ -641,38 +704,6 @@ func (c *cli) displayContainerList(containers []*container.Info) {
 			deployTimeWidth, deployTime,
 			info.Name)
 	}
-}
-
-// getAdminSocketPath returns the path to the admin API Unix socket.
-// This uses the same logic as the server to ensure consistency.
-func (c *cli) getAdminSocketPath() string {
-	// Use .dewy directory in current working directory (same as cache)
-	pwd, err := os.Getwd()
-	if err != nil {
-		// Fallback to temp dir
-		return filepath.Join(os.TempDir(), "api.sock")
-	}
-
-	return filepath.Join(pwd, ".dewy", "api.sock")
-}
-
-// findDewySocketFiles finds dewy socket file in .dewy directory.
-// Returns a list with single element if socket exists, empty list otherwise.
-func (c *cli) findDewySocketFiles() ([]string, error) {
-	pwd, err := os.Getwd()
-	if err != nil {
-		return []string{}, nil
-	}
-
-	socketPath := filepath.Join(pwd, ".dewy", "api.sock")
-
-	// Check if socket exists
-	if _, err := os.Stat(socketPath); os.IsNotExist(err) {
-		return []string{}, nil
-	}
-
-	// Return a dummy name (not used since we always use the same socket path)
-	return []string{"default"}, nil
 }
 
 // extractAppNameFromRegistry extracts application name from registry URL.

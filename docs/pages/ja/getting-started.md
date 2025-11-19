@@ -48,13 +48,17 @@ dewy assets --registry ghr://owner/frontend-assets
 # プライベートレジストリの場合は認証
 docker login ghcr.io
 
-# OCIレジストリからコンテナイメージをデプロイ
-dewy container --registry img://ghcr.io/owner/app --container-port 8080
+# OCIレジストリからコンテナイメージをデプロイ（コンテナポートを自動検出）
+dewy container --registry img://ghcr.io/owner/app --port 8080
+
+# または明示的なポートマッピング（プロキシ:コンテナ）
+dewy container --registry img://ghcr.io/owner/app --port 8080:3000
 ```
 
 この例では：
 - `img://ghcr.io/owner/app`: OCIレジストリURL（Docker Hub、GHCR、GCR、ECRなどに対応）
-- `--container-port 8080`: コンテナがリッスンするポート
+- `--port 8080`: プロキシはポート8080でリッスン、コンテナポートはDockerイメージから自動検出
+- `--port 8080:3000`: プロキシは8080でリッスン、コンテナポート3000に転送
 - ヘルスチェックパスは `--health-path /health` で指定可能（オプション）
 
 Dewyは自動的に：

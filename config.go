@@ -60,10 +60,16 @@ type CacheConfig struct {
 	Expiration int
 }
 
+// PortMapping represents a port mapping between proxy and container.
+type PortMapping struct {
+	ProxyPort     int  // Port where the proxy listens (required)
+	ContainerPort *int // Container port to forward to (nil means auto-detect from image EXPOSE)
+}
+
 // ContainerConfig struct for container command.
 type ContainerConfig struct {
 	Name          string
-	ContainerPort int
+	PortMappings  []PortMapping // Port mappings between proxy and container
 	Replicas      int           // Number of container replicas to run (default: 1)
 	Command       []string      // Command and arguments to pass to container
 	ExtraArgs     []string      // Extra docker run arguments from -- separator
@@ -79,6 +85,7 @@ type Config struct {
 	Registry         string
 	Notifier         string
 	Port             int // Port for HTTP server (used by both server and container commands)
+	AdminPort        int // Port for admin API (container command only, default: 17539)
 	Cache            CacheConfig
 	Starter          starter.Config
 	Container        *ContainerConfig
