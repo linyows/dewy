@@ -14,7 +14,7 @@ description: |
 Dewy supports the following notification methods:
 
 - **Slack** (`slack://`): Notifications to Slack channels
-- **Mail** (`mail://`, `smtp://`): Email notifications via SMTP
+- **Mail** (`smtp://`): Email notifications via SMTP
 
 ## Notification Timing
 
@@ -92,13 +92,11 @@ Basic configuration
 
 ```bash
 # Basic format
-mail://<smtp-host>:<port>/<recipient>
-# or
 smtp://<smtp-host>:<port>/<recipient>
 
 # Example
 dewy server --registry ghr://owner/repo \
-  --notifier mail://smtp.gmail.com:587/admin@example.com \
+  --notifier smtp://smtp.gmail.com:587/admin@example.com \
   -- /opt/myapp/current/myapp
 ```
 
@@ -150,7 +148,7 @@ export MAIL_FROM=sender@gmail.com
 ```bash
 # Specify all settings with URL parameters
 dewy server --registry ghr://owner/repo \
-  --notifier "mail://smtp.gmail.com:587/admin@example.com?username=sender@gmail.com&password=app-password&from=sender@gmail.com&subject=Deploy+Notification"
+  --notifier "smtp://smtp.gmail.com:587/admin@example.com?username=sender@gmail.com&password=app-password&from=sender@gmail.com&subject=Deploy+Notification"
 ```
 
 ### Gmail Configuration Example
@@ -163,7 +161,7 @@ export MAIL_FROM=sender@gmail.com
 
 # Execute Dewy
 dewy server --registry ghr://owner/repo \
-  --notifier "mail://smtp.gmail.com:587/admin@example.com?subject=MyApp+Deploy"
+  --notifier "smtp://smtp.gmail.com:587/admin@example.com?subject=MyApp+Deploy"
 ```
 
 {% callout type="important" %}
@@ -237,7 +235,7 @@ dewy server --registry "ghr://owner/repo?pre-release=true" \
    ```bash
    # Test with TLS disabled (not recommended)
    dewy server --registry ghr://owner/repo \
-     --notifier "mail://smtp.example.com:25/admin@example.com?tls=false"
+     --notifier "smtp://smtp.example.com:25/admin@example.com?tls=false"
    ```
 
 The notification feature enables sharing deployment status across teams and enables early problem detection and response. Build an efficient operational system with appropriate notification settings.

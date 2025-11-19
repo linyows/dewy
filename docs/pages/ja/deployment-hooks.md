@@ -595,7 +595,7 @@ dewy server --registry ghr://owner/repo \
 **Mail通知付きの設定:**
 ```bash
 dewy server --registry ghr://owner/repo \
-  --notifier "mail://smtp.company.com:587/ops@company.com" \
+  --notifier "smtp://smtp.company.com:587/ops@company.com" \
   --before-deploy-hook "scripts/pre-deploy-check.sh" \
   --after-deploy-hook "scripts/post-deploy-report.sh" \
   -- /opt/myapp/current/myapp

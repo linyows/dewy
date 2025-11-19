@@ -14,7 +14,7 @@ description: |
 Dewyは以下の通知方法に対応しています。
 
 - **Slack** (`slack://`): Slackチャンネルへの通知
-- **Mail** (`mail://`, `smtp://`): SMTP経由でのメール通知
+- **Mail** (`smtp://`): SMTP経由でのメール通知
 
 ## 通知のタイミング
 
@@ -92,13 +92,11 @@ dewy server --registry ghr://owner/repo \
 
 ```bash
 # 基本形式
-mail://<smtp-host>:<port>/<recipient>
-# または
 smtp://<smtp-host>:<port>/<recipient>
 
 # 例
 dewy server --registry ghr://owner/repo \
-  --notifier mail://smtp.gmail.com:587/admin@example.com \
+  --notifier smtp://smtp.gmail.com:587/admin@example.com \
   -- /opt/myapp/current/myapp
 ```
 
@@ -150,7 +148,7 @@ export MAIL_FROM=sender@gmail.com
 ```bash
 # URLパラメータで全設定を指定
 dewy server --registry ghr://owner/repo \
-  --notifier "mail://smtp.gmail.com:587/admin@example.com?username=sender@gmail.com&password=app-password&from=sender@gmail.com&subject=Deploy+Notification"
+  --notifier "smtp://smtp.gmail.com:587/admin@example.com?username=sender@gmail.com&password=app-password&from=sender@gmail.com&subject=Deploy+Notification"
 ```
 
 ### Gmail での設定例
@@ -163,7 +161,7 @@ export MAIL_FROM=sender@gmail.com
 
 # Dewy実行
 dewy server --registry ghr://owner/repo \
-  --notifier "mail://smtp.gmail.com:587/admin@example.com?subject=MyApp+Deploy"
+  --notifier "smtp://smtp.gmail.com:587/admin@example.com?subject=MyApp+Deploy"
 ```
 
 {% callout type="important" %}
@@ -295,7 +293,7 @@ Slack通知が届かない
    ```bash
    # TLSを無効にしてテスト（非推奨）
    dewy server --registry ghr://owner/repo \
-     --notifier "mail://smtp.example.com:25/admin@example.com?tls=false"
+     --notifier "smtp://smtp.example.com:25/admin@example.com?tls=false"
    ```
 
 ### デバッグ方法
