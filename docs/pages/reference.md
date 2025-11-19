@@ -140,12 +140,33 @@ dewy container --help
 
 The `dewy container` command has specific options for container deployment management.
 
-### --container-port
+### --port
 
-Specifies the port that the container listens on. Default is 8080. This is used for health checks and traffic routing.
+Specifies port mapping between the proxy and container. Can be specified multiple times for multi-port applications.
+
+**Format:**
+- `--port proxy`: Auto-detect container port from Docker image EXPOSE directive
+- `--port proxy:container`: Explicit port mapping
+
+**Auto-Detection Behavior:**
+- If container port not specified, Dewy inspects the Docker image
+- Single EXPOSE port → automatically used
+- Multiple EXPOSE ports → error, must specify explicitly
+- No EXPOSE ports → error, must specify explicitly
+
+**Examples:**
 
 ```bash
-dewy container --registry img://ghcr.io/owner/app --container-port 3000
+# Auto-detect container port (container EXPOSEs port 8080)
+dewy container --registry img://ghcr.io/owner/app --port 8080
+
+# Explicit port mapping (proxy listens on 8080, forwards to container port 3000)
+dewy container --registry img://ghcr.io/owner/app --port 8080:3000
+
+# Multi-port application (HTTP + gRPC)
+dewy container --registry img://ghcr.io/owner/app \
+  --port 8080:80 \
+  --port 9090:50051
 ```
 
 ### --health-path
@@ -430,11 +451,10 @@ Example deploying container images with rolling update deployment strategy. Moni
 # Authenticate for private registry
 docker login ghcr.io
 
-# Basic deployment with health checks
+# Basic deployment with health checks (auto-detect container port)
 dewy container \
   --registry img://ghcr.io/mycompany/myapp \
   --port 8080 \
-  --container-port 8080 \
   --health-path /health \
   --health-timeout 30 \
   --drain-time 30 \
@@ -442,6 +462,21 @@ dewy container \
   -- \
   -e DATABASE_URL=postgres://db:5432/mydb \
   -v /data:/app/data
+
+# Explicit port mapping (proxy:container)
+dewy container \
+  --registry img://ghcr.io/mycompany/myapp \
+  --port 8080:3000 \
+  --health-path /health \
+  --log-level info
+
+# Multi-port application (HTTP + gRPC)
+dewy container \
+  --registry img://ghcr.io/mycompany/myapp \
+  --port 8080:80 \
+  --port 9090:50051 \
+  --health-path /health \
+  --replicas 3
 
 # Multiple replicas with custom command
 dewy container \

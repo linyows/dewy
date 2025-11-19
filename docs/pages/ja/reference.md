@@ -140,12 +140,33 @@ dewy container --help
 
 `dewy container`コマンドには、コンテナデプロイメント管理用の固有のオプションがあります。
 
-### --container-port
+### --port
 
-コンテナがリッスンするポートを指定します。デフォルトは8080です。ヘルスチェックとトラフィックルーティングに使用されます。
+プロキシとコンテナ間のポートマッピングを指定します。マルチポートアプリケーションの場合、複数回指定できます。
+
+**フォーマット:**
+- `--port proxy`: DockerイメージのEXPOSEディレクティブからコンテナポートを自動検出
+- `--port proxy:container`: 明示的なポートマッピング
+
+**自動検出の動作:**
+- コンテナポートが指定されていない場合、DewyはDockerイメージを検査します
+- 単一のEXPOSEポート → 自動的に使用
+- 複数のEXPOSEポート → エラー、明示的に指定する必要があります
+- EXPOSEポートなし → エラー、明示的に指定する必要があります
+
+**例:**
 
 ```bash
-dewy container --registry img://ghcr.io/owner/app --container-port 3000
+# コンテナポートを自動検出（コンテナがポート8080をEXPOSE）
+dewy container --registry img://ghcr.io/owner/app --port 8080
+
+# 明示的なポートマッピング（プロキシは8080でリッスン、コンテナポート3000に転送）
+dewy container --registry img://ghcr.io/owner/app --port 8080:3000
+
+# マルチポートアプリケーション（HTTP + gRPC）
+dewy container --registry img://ghcr.io/owner/app \
+  --port 8080:80 \
+  --port 9090:50051
 ```
 
 ### --health-path

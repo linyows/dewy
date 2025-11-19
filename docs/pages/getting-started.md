@@ -48,13 +48,17 @@ For deploying containerized applications with zero-downtime rolling update deplo
 # Authenticate if using private registry
 docker login ghcr.io
 
-# Deploy container image from OCI registry
-dewy container --registry img://ghcr.io/owner/app --container-port 8080
+# Deploy container image from OCI registry (auto-detect container port)
+dewy container --registry img://ghcr.io/owner/app --port 8080
+
+# Or specify explicit port mapping (proxy:container)
+dewy container --registry img://ghcr.io/owner/app --port 8080:3000
 ```
 
 In this example:
 - `img://ghcr.io/owner/app`: OCI registry URL (supports Docker Hub, GHCR, GCR, ECR, etc.)
-- `--container-port 8080`: Port the container listens on
+- `--port 8080`: Proxy listens on port 8080, container port auto-detected from Docker image
+- `--port 8080:3000`: Proxy listens on 8080, forwards to container port 3000
 - Health check path can be specified with `--health-path /health` (optional)
 
 Dewy automatically:
@@ -96,7 +100,7 @@ docker info
 # Deploy container image with rolling update deployment
 dewy container \
   --registry img://ghcr.io/myorg/myapp \
-  --container-port 3000 \
+  --port 8080:3000 \
   --health-path /health \
   --health-timeout 30 \
   --drain-time 30 \
