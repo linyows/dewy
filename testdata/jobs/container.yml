@@ -13,7 +13,6 @@ steps:
       ./dewy container -p {{ vars.port }} -l {{ vars.log_level }} \
       --registry "{{ vars.registry_url }}" \
       --health-path /health \
-      --container-port {{ vars.container_port }} \
       --replicas {{ vars.replicas }}
   test: status == -1
   outputs:

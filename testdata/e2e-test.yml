@@ -212,7 +212,6 @@ jobs:
         registry_url: "img://ghcr.io/linyows/dewy-testapp?pre-release=true"
         port: 7000
         replicas: 3
-        container_port: 3333
         log_level: debug
         new_version: "{{ outputs.genver.version }}"
     test: res.code == 0
