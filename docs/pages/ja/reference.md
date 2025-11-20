@@ -5,7 +5,7 @@ description: Dewy CLIコマンドとオプションの完全なリファレン�
 
 # Dewy CLIリファレンス
 
-このページでは、Dewy CLIのコマンド、オプション、環境変数、および使用例について詳しく説明します。
+このページでは、Dewy CLIのコマンド、オプション、および使用例について詳しく説明します。
 
 ## 基本コマンド
 
@@ -256,58 +256,6 @@ dewy container --registry img://ghcr.io/owner/app --replicas 3 -- \
 # 結果: myapp-1234567890-0, myapp-1234567890-1, myapp-1234567890-2
 ```
 
-## 環境変数
-
-Dewyは以下の環境変数を使用して動作をカスタマイズできます。コマンドラインオプションよりも環境変数の方が優先度は低くなります。
-
-### DEWY_REGISTRY
-
-デフォルトのレジストリーURLを設定します。`--registry`オプションと同じ効果があります。
-
-```bash
-export DEWY_REGISTRY=ghr://owner/repo
-```
-
-### DEWY_ARTIFACT
-
-デフォルトのアーティファクトURLを設定します。`--artifact`オプションと同じ効果があります。
-
-```bash
-export DEWY_ARTIFACT=s3://bucket/path/to/artifact
-```
-
-### DEWY_CACHE
-
-デフォルトのキャッシュ設定を指定します。`--cache`オプションと同じ効果があります。
-
-```bash
-export DEWY_CACHE=file:///tmp/dewy-cache
-```
-
-### DEWY_NOTIFIER
-
-デフォルトの通知設定を指定します。`--notifier`オプションと同じ効果があります。
-
-```bash
-export DEWY_NOTIFIER=slack://webhook-url
-```
-
-### DEWY_PORT
-
-DewyのHTTPサーバーポートを設定します。`--port`オプションと同じ効果があります。
-
-```bash
-export DEWY_PORT=8080
-```
-
-### DEWY_INTERVAL
-
-レジストリーチェック間隔を設定します。`--interval`オプションと同じ効果があります。
-
-```bash
-export DEWY_INTERVAL=600
-```
-
 ## レジストリーURL形式
 
 Dewyは複数のレジストリータイプをサポートしています。それぞれ異なるURL形式を使用します。
@@ -418,22 +366,6 @@ dewy server \
   --workdir /opt/app/data \
   --verbose \
   -- /opt/app/current/myapp --config /opt/app/config/app.conf
-```
-
-### 環境変数を使用した例
-
-環境変数を活用してコマンドラインを簡潔にする例です。Docker環境や設定管理ツールとの相性が良いアプローチです。
-
-```bash
-export DEWY_REGISTRY=ghr://mycompany/myapp
-export DEWY_ARTIFACT=s3://mybucket/artifacts/
-export DEWY_CACHE=file:///tmp/dewy-cache
-export DEWY_NOTIFIER=slack://hooks.slack.com/services/xxx/yyy/zzz
-export DEWY_PORT=8080
-export DEWY_INTERVAL=300
-export DEWY_TIMEZONE=Asia/Tokyo
-
-dewy server -- /opt/app/current/myapp
 ```
 
 ### アーティファクト情報の確認例

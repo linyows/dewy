@@ -5,7 +5,7 @@ description: Complete reference guide for Dewy CLI commands and options
 
 # Dewy CLI Reference
 
-This page provides detailed information about Dewy CLI commands, options, environment variables, and usage examples.
+This page provides detailed information about Dewy CLI commands, options, and usage examples.
 
 ## Basic Commands
 
@@ -256,58 +256,6 @@ dewy container --registry img://ghcr.io/owner/app --replicas 3 -- \
 # Results in: myapp-1234567890-0, myapp-1234567890-1, myapp-1234567890-2
 ```
 
-## Environment Variables
-
-Dewy can use the following environment variables to customize behavior. Environment variables have lower priority than command line options.
-
-### DEWY_REGISTRY
-
-Sets the default registry URL. Has the same effect as the `--registry` option.
-
-```bash
-export DEWY_REGISTRY=ghr://owner/repo
-```
-
-### DEWY_ARTIFACT
-
-Sets the default artifact URL. Has the same effect as the `--artifact` option.
-
-```bash
-export DEWY_ARTIFACT=s3://bucket/path/to/artifact
-```
-
-### DEWY_CACHE
-
-Specifies the default cache settings. Has the same effect as the `--cache` option.
-
-```bash
-export DEWY_CACHE=file:///tmp/dewy-cache
-```
-
-### DEWY_NOTIFIER
-
-Specifies the default notification settings. Has the same effect as the `--notifier` option.
-
-```bash
-export DEWY_NOTIFIER=slack://webhook-url
-```
-
-### DEWY_PORT
-
-Sets the Dewy HTTP server port. Has the same effect as the `--port` option.
-
-```bash
-export DEWY_PORT=8080
-```
-
-### DEWY_INTERVAL
-
-Sets the registry check interval. Has the same effect as the `--interval` option.
-
-```bash
-export DEWY_INTERVAL=600
-```
-
 ## Registry URL Formats
 
 Dewy supports multiple registry types, each using different URL formats.
@@ -418,22 +366,6 @@ dewy server \
   --workdir /opt/app/data \
   --verbose \
   -- /opt/app/current/myapp --config /opt/app/config/app.conf
-```
-
-### Environment Variables Example
-
-Example using environment variables to keep the command line concise. This approach has good compatibility with Docker environments and configuration management tools.
-
-```bash
-export DEWY_REGISTRY=ghr://mycompany/myapp
-export DEWY_ARTIFACT=s3://mybucket/artifacts/
-export DEWY_CACHE=file:///tmp/dewy-cache
-export DEWY_NOTIFIER=slack://hooks.slack.com/services/xxx/yyy/zzz
-export DEWY_PORT=8080
-export DEWY_INTERVAL=300
-export DEWY_TIMEZONE=Asia/Tokyo
-
-dewy server -- /opt/app/current/myapp
 ```
 
 ### Artifact Information Check Example
