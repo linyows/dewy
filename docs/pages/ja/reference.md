@@ -266,25 +266,44 @@ GitHub Releasesからバージョン情報を取得する場合に使用しま�
 
 ```bash
 ghr://owner/repository
-ghr://owner/repository#tag-pattern
+ghr://owner/repository?pre-release=true
 ```
 
-### Docker Hub (dockerhub://)
+### Amazon S3 (s3://)
 
-Docker Hubのイメージタグからバージョン情報を取得します。コンテナ化されたアプリケーションでも使用できます。
+Amazon S3バケットからバージョン情報を取得します。AWSの認証情報が必要です。
 
 ```bash
-dockerhub://namespace/repository
-dockerhub://namespace/repository:tag-pattern
+s3://region/bucket/prefix
+s3://region/bucket/prefix?pre-release=true
 ```
 
-### Amazon ECR (ecr://)
+### Google Cloud Storage (gs://)
 
-Amazon Elastic Container Registryからバージョン情報を取得します。AWSの認証情報が必要です。
+Google Cloud Storageバケットからバージョン情報を取得します。GCPの認証情報が必要です。
 
 ```bash
-ecr://region/repository
-ecr://account-id.dkr.ecr.region.amazonaws.com/repository
+gs://bucket/prefix
+gs://bucket/prefix?pre-release=true
+```
+
+### OCIレジストリ (img://)
+
+OCI互換のコンテナレジストリからバージョン情報を取得します。Docker Hub、GitHub Container Registry (GHCR)、Google Container Registry (GCR)、Amazon ECRなど、すべてのOCIレジストリに対応しています。
+
+```bash
+# Docker Hub
+img://namespace/repository
+img://namespace/repository?pre-release=true
+
+# GitHub Container Registry
+img://ghcr.io/owner/repository
+
+# Google Container Registry
+img://gcr.io/project/repository
+
+# Amazon ECR
+img://account-id.dkr.ecr.region.amazonaws.com/repository
 ```
 
 ## 通知形式

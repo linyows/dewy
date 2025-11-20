@@ -266,25 +266,44 @@ Used to retrieve version information from GitHub Releases. Supports both public 
 
 ```bash
 ghr://owner/repository
-ghr://owner/repository#tag-pattern
+ghr://owner/repository?pre-release=true
 ```
 
-### Docker Hub (dockerhub://)
+### Amazon S3 (s3://)
 
-Retrieves version information from Docker Hub image tags. Can also be used with containerized applications.
+Retrieves version information from Amazon S3 bucket. AWS credentials are required.
 
 ```bash
-dockerhub://namespace/repository
-dockerhub://namespace/repository:tag-pattern
+s3://region/bucket/prefix
+s3://region/bucket/prefix?pre-release=true
 ```
 
-### Amazon ECR (ecr://)
+### Google Cloud Storage (gs://)
 
-Retrieves version information from Amazon Elastic Container Registry. AWS credentials are required.
+Retrieves version information from Google Cloud Storage bucket. GCP credentials are required.
 
 ```bash
-ecr://region/repository
-ecr://account-id.dkr.ecr.region.amazonaws.com/repository
+gs://bucket/prefix
+gs://bucket/prefix?pre-release=true
+```
+
+### OCI Registry (img://)
+
+Retrieves version information from OCI-compatible container registries. Supports Docker Hub, GitHub Container Registry (GHCR), Google Container Registry (GCR), Amazon ECR, and other OCI registries.
+
+```bash
+# Docker Hub
+img://namespace/repository
+img://namespace/repository?pre-release=true
+
+# GitHub Container Registry
+img://ghcr.io/owner/repository
+
+# Google Container Registry
+img://gcr.io/project/repository
+
+# Amazon ECR
+img://account-id.dkr.ecr.region.amazonaws.com/repository
 ```
 
 ## Notification Formats
