@@ -759,8 +759,7 @@ func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentRespons
 	case "docker":
 		runtime, err = container.NewDocker(d.logger.Logger, d.config.Container.DrainTime)
 	case "podman":
-		// TODO: Phase 2 - Podman support
-		return 0, fmt.Errorf("podman runtime not yet supported")
+		runtime, err = container.NewPodman(d.logger.Logger, d.config.Container.DrainTime)
 	default:
 		return 0, fmt.Errorf("unsupported runtime: %s", d.config.Container.Runtime)
 	}

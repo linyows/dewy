@@ -13,109 +13,67 @@ import (
 	"time"
 )
 
-// Docker implements Runtime interface using Docker CLI.
-type Docker struct {
+// Podman implements Runtime interface using Podman CLI.
+type Podman struct {
 	cmd       string
 	logger    *slog.Logger
 	drainTime time.Duration
 }
 
-// Forbidden options that conflict with Dewy management
-var forbiddenOptions = []string{
-	"-d", "--detach",
-	"-it",
-	"-i", "--interactive",
-	"-t", "--tty",
-	"-l", "--label",
-	"-p", "--publish",
-}
-
-// NewDocker creates a new Docker runtime.
-func NewDocker(logger *slog.Logger, drainTime time.Duration) (*Docker, error) {
-	cmd := "docker"
+// NewPodman creates a new Podman runtime.
+func NewPodman(logger *slog.Logger, drainTime time.Duration) (*Podman, error) {
+	cmd := "podman"
 	if _, err := exec.LookPath(cmd); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrRuntimeNotFound, err)
 	}
 
-	return &Docker{
+	return &Podman{
 		cmd:       cmd,
 		logger:    logger,
 		drainTime: drainTime,
 	}, nil
 }
 
-// validateExtraArgs checks if any forbidden options are present in extra args.
-func validateExtraArgs(args []string) error {
-	for _, arg := range args {
-		for _, forbidden := range forbiddenOptions {
-			if arg == forbidden || strings.HasPrefix(arg, forbidden+"=") {
-				return fmt.Errorf("option %s conflicts with Dewy management and cannot be used", forbidden)
-			}
-		}
-	}
-	return nil
-}
-
-// extractNameOption extracts --name option from args and returns the name and filtered args.
-func extractNameOption(args []string) (string, []string) {
-	var name string
-	filtered := []string{}
-
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		if arg == "--name" && i+1 < len(args) {
-			name = args[i+1]
-			i++ // Skip next argument
-		} else if strings.HasPrefix(arg, "--name=") {
-			name = arg[7:] // Skip "--name="
-		} else {
-			filtered = append(filtered, arg)
-		}
-	}
-
-	return name, filtered
-}
-
-// execCommand executes a docker command without returning output.
-func (d *Docker) execCommand(ctx context.Context, args ...string) error {
+// execCommand executes a podman command without returning output.
+func (p *Podman) execCommand(ctx context.Context, args ...string) error {
 	// #nosec G204 - args are constructed internally from validated inputs
-	cmd := exec.CommandContext(ctx, d.cmd, args...)
-	d.logger.Debug("Executing docker command",
-		slog.String("cmd", d.cmd),
+	cmd := exec.CommandContext(ctx, p.cmd, args...)
+	p.logger.Debug("Executing podman command",
+		slog.String("cmd", p.cmd),
 		slog.Any("args", args))
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		d.logger.Error("Docker command failed",
-			slog.String("cmd", d.cmd),
+		p.logger.Error("Podman command failed",
+			slog.String("cmd", p.cmd),
 			slog.Any("args", args),
 			slog.String("output", string(output)),
 			slog.String("error", err.Error()))
-		return fmt.Errorf("docker %s failed: %w: %s",
+		return fmt.Errorf("podman %s failed: %w: %s",
 			strings.Join(args, " "), err, string(output))
 	}
 
 	return nil
 }
 
-// execCommandOutput executes a docker command and returns the output.
-func (d *Docker) execCommandOutput(ctx context.Context, args ...string) (string, error) {
+// execCommandOutput executes a podman command and returns the output.
+func (p *Podman) execCommandOutput(ctx context.Context, args ...string) (string, error) {
 	// #nosec G204 - args are constructed internally from validated inputs
-	cmd := exec.CommandContext(ctx, d.cmd, args...)
-	d.logger.Debug("Executing docker command",
-		slog.String("cmd", d.cmd),
+	cmd := exec.CommandContext(ctx, p.cmd, args...)
+	p.logger.Debug("Executing podman command",
+		slog.String("cmd", p.cmd),
 		slog.Any("args", args))
 
 	output, err := cmd.Output()
 	if err != nil {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
-			d.logger.Error("Docker command failed",
-				slog.String("cmd", d.cmd),
+			p.logger.Error("Podman command failed",
+				slog.String("cmd", p.cmd),
 				slog.Any("args", args),
 				slog.String("stderr", string(exitErr.Stderr)),
 				slog.String("error", err.Error()))
-			return "", fmt.Errorf("docker %s failed: %w: %s",
+			return "", fmt.Errorf("podman %s failed: %w: %s",
 				strings.Join(args, " "), err, string(exitErr.Stderr))
 		}
 		return "", err
@@ -126,23 +84,23 @@ func (d *Docker) execCommandOutput(ctx context.Context, args ...string) (string,
 
 // Pull pulls an image from the registry.
 // If the image already exists locally, it will still attempt to pull to get the latest version.
-func (d *Docker) Pull(ctx context.Context, imageRef string) error {
+func (p *Podman) Pull(ctx context.Context, imageRef string) error {
 	// Check if image exists locally first
-	_, err := d.execCommandOutput(ctx, "image", "inspect", imageRef)
+	_, err := p.execCommandOutput(ctx, "image", "inspect", imageRef)
 	if err == nil {
 		// Image exists locally
-		d.logger.Info("Image already exists locally, pulling to check for updates",
+		p.logger.Info("Image already exists locally, pulling to check for updates",
 			slog.String("image", imageRef))
 	}
 
 	// Always try to pull to get the latest version
 	// For local-only images (not in a registry), this will fail but that's expected
-	d.logger.Info("Pulling image", slog.String("image", imageRef))
-	pullErr := d.execCommand(ctx, "pull", imageRef)
+	p.logger.Info("Pulling image", slog.String("image", imageRef))
+	pullErr := p.execCommand(ctx, "pull", imageRef)
 
 	// If pull fails but image exists locally, we can use the local image
 	if pullErr != nil && err == nil {
-		d.logger.Warn("Failed to pull image, but local image exists - using local version",
+		p.logger.Warn("Failed to pull image, but local image exists - using local version",
 			slog.String("image", imageRef),
 			slog.String("pull_error", pullErr.Error()))
 		return nil // Use local image
@@ -152,7 +110,7 @@ func (d *Docker) Pull(ctx context.Context, imageRef string) error {
 }
 
 // Run starts a new container and returns the container ID.
-func (d *Docker) Run(ctx context.Context, opts RunOptions) (string, error) {
+func (p *Podman) Run(ctx context.Context, opts RunOptions) (string, error) {
 	// Validate extra args first
 	if err := validateExtraArgs(opts.ExtraArgs); err != nil {
 		return "", err
@@ -171,7 +129,7 @@ func (d *Docker) Run(ctx context.Context, opts RunOptions) (string, error) {
 	timestamp := time.Now().Unix()
 	containerName := fmt.Sprintf("%s-%d-%d", baseName, timestamp, opts.ReplicaIndex)
 
-	// Build docker run command
+	// Build podman run command
 	args := []string{"run"}
 
 	// Always detach
@@ -201,11 +159,11 @@ func (d *Docker) Run(ctx context.Context, opts RunOptions) (string, error) {
 	// Command and arguments
 	args = append(args, opts.Command...)
 
-	d.logger.Info("Starting container",
+	p.logger.Info("Starting container",
 		slog.String("name", containerName),
 		slog.String("image", opts.Image))
 
-	containerID, err := d.execCommandOutput(ctx, args...)
+	containerID, err := p.execCommandOutput(ctx, args...)
 	if err != nil {
 		return "", err
 	}
@@ -214,30 +172,30 @@ func (d *Docker) Run(ctx context.Context, opts RunOptions) (string, error) {
 }
 
 // Stop stops a running container gracefully.
-func (d *Docker) Stop(ctx context.Context, containerID string, timeout time.Duration) error {
-	d.logger.Info("Stopping container gracefully",
+func (p *Podman) Stop(ctx context.Context, containerID string, timeout time.Duration) error {
+	p.logger.Info("Stopping container gracefully",
 		slog.String("container", containerID),
 		slog.Duration("timeout", timeout))
 
 	timeoutSec := int(timeout.Seconds())
-	return d.execCommand(ctx, "stop", fmt.Sprintf("--time=%d", timeoutSec), containerID)
+	return p.execCommand(ctx, "stop", fmt.Sprintf("--time=%d", timeoutSec), containerID)
 }
 
 // Remove removes a container.
-func (d *Docker) Remove(ctx context.Context, containerID string) error {
-	d.logger.Info("Removing container", slog.String("container", containerID))
-	return d.execCommand(ctx, "rm", containerID)
+func (p *Podman) Remove(ctx context.Context, containerID string) error {
+	p.logger.Info("Removing container", slog.String("container", containerID))
+	return p.execCommand(ctx, "rm", containerID)
 }
 
 // FindContainerByLabel finds a container by labels.
-func (d *Docker) FindContainerByLabel(ctx context.Context, labels map[string]string) (string, error) {
+func (p *Podman) FindContainerByLabel(ctx context.Context, labels map[string]string) (string, error) {
 	args := []string{"ps", "-q"}
 
 	for key, value := range labels {
 		args = append(args, "--filter", fmt.Sprintf("label=%s=%s", key, value))
 	}
 
-	output, err := d.execCommandOutput(ctx, args...)
+	output, err := p.execCommandOutput(ctx, args...)
 	if err != nil {
 		return "", err
 	}
@@ -252,14 +210,14 @@ func (d *Docker) FindContainerByLabel(ctx context.Context, labels map[string]str
 }
 
 // FindContainersByLabel finds all containers matching the given labels.
-func (d *Docker) FindContainersByLabel(ctx context.Context, labels map[string]string) ([]string, error) {
+func (p *Podman) FindContainersByLabel(ctx context.Context, labels map[string]string) ([]string, error) {
 	args := []string{"ps", "-q"}
 
 	for key, value := range labels {
 		args = append(args, "--filter", fmt.Sprintf("label=%s=%s", key, value))
 	}
 
-	output, err := d.execCommandOutput(ctx, args...)
+	output, err := p.execCommandOutput(ctx, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -278,7 +236,7 @@ func (d *Docker) FindContainersByLabel(ctx context.Context, labels map[string]st
 		}
 	}
 
-	d.logger.Debug("Found containers by label",
+	p.logger.Debug("Found containers by label",
 		slog.Any("labels", labels),
 		slog.Int("count", len(containers)))
 
@@ -286,38 +244,38 @@ func (d *Docker) FindContainersByLabel(ctx context.Context, labels map[string]st
 }
 
 // UpdateLabel updates a container's label.
-func (d *Docker) UpdateLabel(ctx context.Context, containerID, key, value string) error {
-	d.logger.Debug("Label update skipped (not supported by Docker)",
+func (p *Podman) UpdateLabel(ctx context.Context, containerID, key, value string) error {
+	p.logger.Debug("Label update skipped (not supported by Podman)",
 		slog.String("container", containerID),
 		slog.String("key", key),
 		slog.String("value", value))
 
-	// Docker doesn't support updating labels on running containers
+	// Podman doesn't support updating labels on running containers
 	// Labels are immutable after container creation
 	return nil
 }
 
 // DeployContainerWithCallback performs Blue-Green deployment with a callback.
-func (d *Docker) DeployContainerWithCallback(ctx context.Context, opts DeployOptions, callback DeployContainerCallback) (string, error) {
-	return d.deployContainerInternal(ctx, opts, callback)
+func (p *Podman) DeployContainerWithCallback(ctx context.Context, opts DeployOptions, callback DeployContainerCallback) (string, error) {
+	return p.deployContainerInternal(ctx, opts, callback)
 }
 
 // DeployContainer performs Blue-Green deployment.
-func (d *Docker) DeployContainer(ctx context.Context, opts DeployOptions) error {
-	_, err := d.deployContainerInternal(ctx, opts, nil)
+func (p *Podman) DeployContainer(ctx context.Context, opts DeployOptions) error {
+	_, err := p.deployContainerInternal(ctx, opts, nil)
 	return err
 }
 
 // deployContainerInternal is the internal implementation of container deployment.
-func (d *Docker) deployContainerInternal(ctx context.Context, opts DeployOptions, callback DeployContainerCallback) (string, error) {
+func (p *Podman) deployContainerInternal(ctx context.Context, opts DeployOptions, callback DeployContainerCallback) (string, error) {
 	// 1. Pull new image
-	d.logger.Info("Pulling new image", slog.String("image", opts.ImageRef))
-	if err := d.Pull(ctx, opts.ImageRef); err != nil {
+	p.logger.Info("Pulling new image", slog.String("image", opts.ImageRef))
+	if err := p.Pull(ctx, opts.ImageRef); err != nil {
 		return "", fmt.Errorf("pull failed: %w", err)
 	}
 
 	// 2. Find current container
-	currentID, err := d.FindContainerByLabel(ctx, map[string]string{
+	currentID, err := p.FindContainerByLabel(ctx, map[string]string{
 		"dewy.managed": "true",
 		"dewy.app":     opts.AppName,
 	})
@@ -340,15 +298,15 @@ func (d *Docker) deployContainerInternal(ctx context.Context, opts DeployOptions
 	ports := opts.Ports
 
 	// If ContainerPort is specified, add localhost-only port mapping
-	// Format: "127.0.0.1::containerPort" - Docker will assign a random host port on localhost only
+	// Format: "127.0.0.1::containerPort" - Podman will assign a random host port on localhost only
 	if opts.ContainerPort > 0 {
 		localhostPort := fmt.Sprintf("127.0.0.1::%d", opts.ContainerPort)
 		ports = append(ports, localhostPort)
-		d.logger.Debug("Adding localhost-only port mapping",
+		p.logger.Debug("Adding localhost-only port mapping",
 			slog.String("mapping", localhostPort))
 	}
 
-	newID, err := d.Run(ctx, RunOptions{
+	newID, err := p.Run(ctx, RunOptions{
 		Image:        opts.ImageRef,
 		AppName:      opts.AppName,
 		ReplicaIndex: 0, // Single container deployment (for backward compatibility)
@@ -365,17 +323,17 @@ func (d *Docker) deployContainerInternal(ctx context.Context, opts DeployOptions
 	// 5. Health check
 	if opts.HealthCheck != nil {
 		// Give the container a moment to fully start up before health checking
-		d.logger.Info("Waiting for container to start...")
+		p.logger.Info("Waiting for container to start...")
 		time.Sleep(3 * time.Second)
 
-		d.logger.Info("Health checking new container")
+		p.logger.Info("Health checking new container")
 		if err := opts.HealthCheck(ctx, newID); err != nil {
-			d.logger.Error("Health check failed, rolling back")
-			if stopErr := d.Stop(ctx, newID, 5*time.Second); stopErr != nil {
-				d.logger.Error("Failed to stop container during rollback", slog.String("error", stopErr.Error()))
+			p.logger.Error("Health check failed, rolling back")
+			if stopErr := p.Stop(ctx, newID, 5*time.Second); stopErr != nil {
+				p.logger.Error("Failed to stop container during rollback", slog.String("error", stopErr.Error()))
 			}
-			if removeErr := d.Remove(ctx, newID); removeErr != nil {
-				d.logger.Error("Failed to remove container during rollback", slog.String("error", removeErr.Error()))
+			if removeErr := p.Remove(ctx, newID); removeErr != nil {
+				p.logger.Error("Failed to remove container during rollback", slog.String("error", removeErr.Error()))
 			}
 			return "", fmt.Errorf("health check failed: %w", err)
 		}
@@ -383,14 +341,14 @@ func (d *Docker) deployContainerInternal(ctx context.Context, opts DeployOptions
 
 	// 5.5. Execute callback after health check passes but before stopping old container
 	if callback != nil {
-		d.logger.Debug("Executing deployment callback")
+		p.logger.Debug("Executing deployment callback")
 		if err := callback(newID); err != nil {
-			d.logger.Error("Deployment callback failed, rolling back", slog.String("error", err.Error()))
-			if stopErr := d.Stop(ctx, newID, 5*time.Second); stopErr != nil {
-				d.logger.Error("Failed to stop container during rollback", slog.String("error", stopErr.Error()))
+			p.logger.Error("Deployment callback failed, rolling back", slog.String("error", err.Error()))
+			if stopErr := p.Stop(ctx, newID, 5*time.Second); stopErr != nil {
+				p.logger.Error("Failed to stop container during rollback", slog.String("error", stopErr.Error()))
 			}
-			if removeErr := d.Remove(ctx, newID); removeErr != nil {
-				d.logger.Error("Failed to remove container during rollback", slog.String("error", removeErr.Error()))
+			if removeErr := p.Remove(ctx, newID); removeErr != nil {
+				p.logger.Error("Failed to remove container during rollback", slog.String("error", removeErr.Error()))
 			}
 			return "", fmt.Errorf("deployment callback failed: %w", err)
 		}
@@ -401,25 +359,25 @@ func (d *Docker) deployContainerInternal(ctx context.Context, opts DeployOptions
 	// This causes existing connections to fail fast and retry (connecting to new container)
 	// rather than hanging indefinitely
 	if currentID != "" {
-		d.logger.Info("Stopping old container to complete traffic switch",
+		p.logger.Info("Stopping old container to complete traffic switch",
 			slog.String("note", "Existing connections will reconnect to new container"))
 		// Stop old container with a short timeout to force connection migration
-		if stopErr := d.Stop(ctx, currentID, 10*time.Second); stopErr != nil {
-			d.logger.Error("Failed to stop old container", slog.String("error", stopErr.Error()))
+		if stopErr := p.Stop(ctx, currentID, 10*time.Second); stopErr != nil {
+			p.logger.Error("Failed to stop old container", slog.String("error", stopErr.Error()))
 		}
-		if removeErr := d.Remove(ctx, currentID); removeErr != nil {
-			d.logger.Error("Failed to remove old container", slog.String("error", removeErr.Error()))
+		if removeErr := p.Remove(ctx, currentID); removeErr != nil {
+			p.logger.Error("Failed to remove old container", slog.String("error", removeErr.Error()))
 		}
 	}
 
-	d.logger.Info("Deployment completed successfully", slog.String("container", newID))
+	p.logger.Info("Deployment completed successfully", slog.String("container", newID))
 	return newID, nil
 }
 
 // GetMappedPort returns the host port mapped to the container port.
-func (d *Docker) GetMappedPort(ctx context.Context, containerID string, containerPort int) (int, error) {
+func (p *Podman) GetMappedPort(ctx context.Context, containerID string, containerPort int) (int, error) {
 	portSpec := fmt.Sprintf("%d/tcp", containerPort)
-	output, err := d.execCommandOutput(ctx, "port", containerID, portSpec)
+	output, err := p.execCommandOutput(ctx, "port", containerID, portSpec)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get mapped port: %w", err)
 	}
@@ -459,10 +417,10 @@ func (d *Docker) GetMappedPort(ctx context.Context, containerID string, containe
 
 // GetRunningContainerWithImage checks if a container is running with the specified image.
 // It returns the container ID if found, or an empty string if not found.
-func (d *Docker) GetRunningContainerWithImage(ctx context.Context, imageRef string) (string, error) {
+func (p *Podman) GetRunningContainerWithImage(ctx context.Context, imageRef string) (string, error) {
 	// Get list of running containers with the specified ancestor (image)
-	// Format: docker ps --filter ancestor=<image> --filter status=running --format "{{.ID}}"
-	output, err := d.execCommandOutput(ctx, "ps",
+	// Format: podman ps --filter ancestor=<image> --filter status=running --format "{{.ID}}"
+	output, err := p.execCommandOutput(ctx, "ps",
 		"--filter", fmt.Sprintf("ancestor=%s", imageRef),
 		"--filter", "status=running",
 		"--format", "{{.ID}}")
@@ -472,7 +430,7 @@ func (d *Docker) GetRunningContainerWithImage(ctx context.Context, imageRef stri
 	}
 
 	if output == "" {
-		d.logger.Debug("No running container found with image", slog.String("image", imageRef))
+		p.logger.Debug("No running container found with image", slog.String("image", imageRef))
 		return "", nil
 	}
 
@@ -480,17 +438,17 @@ func (d *Docker) GetRunningContainerWithImage(ctx context.Context, imageRef stri
 	containerIDs := strings.Split(output, "\n")
 	containerID := strings.TrimSpace(containerIDs[0])
 
-	d.logger.Debug("Found running container with image",
+	p.logger.Debug("Found running container with image",
 		slog.String("image", imageRef),
 		slog.String("container", containerID))
 	return containerID, nil
 }
 
 // ListImages returns a list of images matching the given repository.
-func (d *Docker) ListImages(ctx context.Context, repository string) ([]ImageInfo, error) {
-	// Format: docker images --format "{{.ID}}|{{.Repository}}|{{.Tag}}|{{.CreatedAt}}|{{.Size}}" <repository>
+func (p *Podman) ListImages(ctx context.Context, repository string) ([]ImageInfo, error) {
+	// Format: podman images --format "{{.ID}}|{{.Repository}}|{{.Tag}}|{{.CreatedAt}}|{{.Size}}" <repository>
 	format := "{{.ID}}|{{.Repository}}|{{.Tag}}|{{.CreatedAt}}|{{.Size}}"
-	output, err := d.execCommandOutput(ctx, "images", "--format", format, repository)
+	output, err := p.execCommandOutput(ctx, "images", "--format", format, repository)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list images: %w", err)
 	}
@@ -510,11 +468,11 @@ func (d *Docker) ListImages(ctx context.Context, repository string) ([]ImageInfo
 
 		parts := strings.Split(line, "|")
 		if len(parts) != 5 {
-			d.logger.Warn("Unexpected image format", slog.String("line", line))
+			p.logger.Warn("Unexpected image format", slog.String("line", line))
 			continue
 		}
 
-		// Parse creation time - Docker returns various formats
+		// Parse creation time - Podman returns various formats
 		// Example: "2025-01-13 10:30:45 +0900 JST"
 		var created time.Time
 		createdStr := strings.TrimSpace(parts[3])
@@ -542,7 +500,7 @@ func (d *Docker) ListImages(ctx context.Context, repository string) ([]ImageInfo
 		})
 	}
 
-	d.logger.Debug("Listed images",
+	p.logger.Debug("Listed images",
 		slog.String("repository", repository),
 		slog.Int("count", len(images)))
 
@@ -550,11 +508,11 @@ func (d *Docker) ListImages(ctx context.Context, repository string) ([]ImageInfo
 }
 
 // RemoveImage removes an image by ID.
-func (d *Docker) RemoveImage(ctx context.Context, imageID string) error {
-	d.logger.Info("Removing image", slog.String("image", imageID))
+func (p *Podman) RemoveImage(ctx context.Context, imageID string) error {
+	p.logger.Info("Removing image", slog.String("image", imageID))
 
 	// Use --force to remove even if there are stopped containers using it
-	err := d.execCommand(ctx, "rmi", "--force", imageID)
+	err := p.execCommand(ctx, "rmi", "--force", imageID)
 	if err != nil {
 		return fmt.Errorf("failed to remove image: %w", err)
 	}
@@ -562,8 +520,8 @@ func (d *Docker) RemoveImage(ctx context.Context, imageID string) error {
 	return nil
 }
 
-// dockerInspect represents the structure of docker inspect JSON output.
-type dockerInspect struct {
+// podmanInspect represents the structure of podman inspect JSON output.
+type podmanInspect struct {
 	ID      string `json:"Id"`
 	Name    string `json:"Name"`
 	Created string `json:"Created"`
@@ -584,8 +542,8 @@ type dockerInspect struct {
 	} `json:"NetworkSettings"`
 }
 
-// dockerImageInspect represents the structure of docker image inspect JSON output.
-type dockerImageInspect struct {
+// podmanImageInspect represents the structure of podman image inspect JSON output.
+type podmanImageInspect struct {
 	ID     string `json:"Id"`
 	Config struct {
 		ExposedPorts map[string]struct{} `json:"ExposedPorts"` // e.g., {"80/tcp": {}, "443/tcp": {}}
@@ -593,13 +551,13 @@ type dockerImageInspect struct {
 }
 
 // GetContainerInfo returns detailed information about a container.
-func (d *Docker) GetContainerInfo(ctx context.Context, containerID string, containerPort int) (*Info, error) {
-	output, err := d.execCommandOutput(ctx, "inspect", containerID)
+func (p *Podman) GetContainerInfo(ctx context.Context, containerID string, containerPort int) (*Info, error) {
+	output, err := p.execCommandOutput(ctx, "inspect", containerID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to inspect container: %w", err)
 	}
 
-	var inspects []dockerInspect
+	var inspects []podmanInspect
 	if err := json.Unmarshal([]byte(output), &inspects); err != nil {
 		return nil, fmt.Errorf("failed to parse inspect output: %w", err)
 	}
@@ -613,7 +571,7 @@ func (d *Docker) GetContainerInfo(ctx context.Context, containerID string, conta
 	// Parse timestamps
 	startedAt, err := time.Parse(time.RFC3339Nano, inspect.State.StartedAt)
 	if err != nil {
-		d.logger.Warn("Failed to parse StartedAt timestamp",
+		p.logger.Warn("Failed to parse StartedAt timestamp",
 			slog.String("container", containerID),
 			slog.String("timestamp", inspect.State.StartedAt))
 		// Use zero time as fallback - will display as "0001-01-01 00:00:00" which indicates invalid/missing timestamp
@@ -663,17 +621,17 @@ func (d *Docker) GetContainerInfo(ctx context.Context, containerID string, conta
 }
 
 // ListContainersByLabels returns detailed information about containers matching the given labels.
-func (d *Docker) ListContainersByLabels(ctx context.Context, labels map[string]string, containerPort int) ([]*Info, error) {
-	containerIDs, err := d.FindContainersByLabel(ctx, labels)
+func (p *Podman) ListContainersByLabels(ctx context.Context, labels map[string]string, containerPort int) ([]*Info, error) {
+	containerIDs, err := p.FindContainersByLabel(ctx, labels)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find containers: %w", err)
 	}
 
 	infos := make([]*Info, 0, len(containerIDs))
 	for _, containerID := range containerIDs {
-		info, err := d.GetContainerInfo(ctx, containerID, containerPort)
+		info, err := p.GetContainerInfo(ctx, containerID, containerPort)
 		if err != nil {
-			d.logger.Warn("Failed to get container info",
+			p.logger.Warn("Failed to get container info",
 				slog.String("container", containerID),
 				slog.String("error", err.Error()))
 			continue
@@ -686,13 +644,13 @@ func (d *Docker) ListContainersByLabels(ctx context.Context, labels map[string]s
 
 // GetImageExposedPorts returns the list of exposed ports from an image.
 // Returns port numbers (e.g., [80, 443]) sorted in ascending order.
-func (d *Docker) GetImageExposedPorts(ctx context.Context, imageRef string) ([]int, error) {
-	output, err := d.execCommandOutput(ctx, "image", "inspect", imageRef)
+func (p *Podman) GetImageExposedPorts(ctx context.Context, imageRef string) ([]int, error) {
+	output, err := p.execCommandOutput(ctx, "image", "inspect", imageRef)
 	if err != nil {
 		return nil, fmt.Errorf("failed to inspect image: %w", err)
 	}
 
-	var inspects []dockerImageInspect
+	var inspects []podmanImageInspect
 	if err := json.Unmarshal([]byte(output), &inspects); err != nil {
 		return nil, fmt.Errorf("failed to parse image inspect output: %w", err)
 	}
@@ -718,7 +676,7 @@ func (d *Docker) GetImageExposedPorts(ctx context.Context, imageRef string) ([]i
 		portStr := strings.TrimSuffix(portSpec, "/tcp")
 		port, err := strconv.Atoi(portStr)
 		if err != nil {
-			d.logger.Warn("Failed to parse exposed port",
+			p.logger.Warn("Failed to parse exposed port",
 				slog.String("port_spec", portSpec),
 				slog.String("error", err.Error()))
 			continue
@@ -730,7 +688,7 @@ func (d *Docker) GetImageExposedPorts(ctx context.Context, imageRef string) ([]i
 	// Sort ports
 	sort.Ints(ports)
 
-	d.logger.Debug("Detected exposed ports from image",
+	p.logger.Debug("Detected exposed ports from image",
 		slog.String("image", imageRef),
 		slog.Any("ports", ports))
 
