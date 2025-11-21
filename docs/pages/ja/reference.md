@@ -260,7 +260,9 @@ dewy container --registry img://ghcr.io/owner/app --replicas 3 -- \
 
 Dewyは複数のレジストリータイプをサポートしています。それぞれ異なるURL形式を使用します。
 
-### GitHub Releases (ghr://)
+### GitHub Releases
+
+レジストリURL形式: `ghr://`
 
 GitHub Releasesからバージョン情報を取得する場合に使用します。パブリックリポジトリとプライベートリポジトリの両方に対応しています。
 
@@ -269,7 +271,9 @@ ghr://owner/repository
 ghr://owner/repository?pre-release=true
 ```
 
-### Amazon S3 (s3://)
+### Amazon S3
+
+レジストリURL形式: `s3://`
 
 Amazon S3バケットからバージョン情報を取得します。AWSの認証情報が必要です。
 
@@ -278,7 +282,9 @@ s3://region/bucket/prefix
 s3://region/bucket/prefix?pre-release=true
 ```
 
-### Google Cloud Storage (gs://)
+### Google Cloud Storage
+
+レジストリURL形式: `gs://`
 
 Google Cloud Storageバケットからバージョン情報を取得します。GCPの認証情報が必要です。
 
@@ -287,7 +293,9 @@ gs://bucket/prefix
 gs://bucket/prefix?pre-release=true
 ```
 
-### OCIレジストリ (img://)
+### OCIレジストリ
+
+レジストリURL形式: `img://`
 
 OCI互換のコンテナレジストリからバージョン情報を取得します。Docker Hub、GitHub Container Registry (GHCR)、Google Container Registry (GCR)、Amazon ECRなど、すべてのOCIレジストリに対応しています。
 

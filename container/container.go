@@ -112,3 +112,6 @@ type DeployOptions struct {
 
 // HealthCheckFunc is a function type for health checking.
 type HealthCheckFunc func(ctx context.Context, containerID string) error
+
+// DeployContainerCallback is called after health check passes but before stopping old container.
+type DeployContainerCallback func(containerID string) error

@@ -260,7 +260,9 @@ dewy container --registry img://ghcr.io/owner/app --replicas 3 -- \
 
 Dewy supports multiple registry types, each using different URL formats.
 
-### GitHub Releases (ghr://)
+### GitHub Releases
+
+Registry URL format: `ghr://`
 
 Used to retrieve version information from GitHub Releases. Supports both public and private repositories.
 
@@ -269,7 +271,9 @@ ghr://owner/repository
 ghr://owner/repository?pre-release=true
 ```
 
-### Amazon S3 (s3://)
+### Amazon S3
+
+Registry URL format: `s3://`
 
 Retrieves version information from Amazon S3 bucket. AWS credentials are required.
 
@@ -278,7 +282,9 @@ s3://region/bucket/prefix
 s3://region/bucket/prefix?pre-release=true
 ```
 
-### Google Cloud Storage (gs://)
+### Google Cloud Storage
+
+Registry URL format: `gs://`
 
 Retrieves version information from Google Cloud Storage bucket. GCP credentials are required.
 
@@ -287,7 +293,9 @@ gs://bucket/prefix
 gs://bucket/prefix?pre-release=true
 ```
 
-### OCI Registry (img://)
+### OCI Registry
+
+Registry URL format: `img://`
 
 Retrieves version information from OCI-compatible container registries. Supports Docker Hub, GitHub Container Registry (GHCR), Google Container Registry (GCR), Amazon ECR, and other OCI registries.
 
