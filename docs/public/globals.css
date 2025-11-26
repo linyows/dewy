@@ -90,6 +90,38 @@ a {
   color: rgba(75, 85, 99, 1);
 }
 
+.linkbutton a, .primarybutton a {
+  border-radius: 5px;
+  padding: .3rem 1.5rem;
+  text-decoration: none;
+  font-size: 1.2rem;
+  transition: background-color 0.3s ease;
+  display: inline-block;
+  border: 1px solid var(--text-color);
+  color: var(--text-color);
+}
+.linkbutton a:hover {
+  border: 1px solid var(--text-dim-color);
+  background-color: #fff;
+}
+.linkbutton {
+  margin-top: 2rem;
+}
+.primarybutton {
+  margin-top: 1rem;
+  text-align: center;
+}
+.primarybutton a {
+  border: 1px solid var(--text-color);
+  color: var(--text-color);
+  background-color: var(--accent-color);
+}
+.primarybutton a:hover {
+  border: 1px solid var(--primary-color);
+  color: var(--primary-color);
+  background-color: #fff;
+}
+
 @media (max-width: 900px) {
   article h1 {
     margin: 2rem 0 1rem;
