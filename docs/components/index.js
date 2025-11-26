@@ -8,3 +8,8 @@ export * from './TableOfContents';
 export * from './TopNav';
 export * from './Table';
 export * from './Icons';
+export * from './Cards';
+export * from './Section';
+export * from './SideBySide';
+export * from './Keyword';
+export * from './Item';
