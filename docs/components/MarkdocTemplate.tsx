@@ -7,7 +7,7 @@ interface MarkdocTemplateProps {
 
 export default function MarkdocTemplate({ content, filePath }: MarkdocTemplateProps) {
   const githubEditUrl = `https://github.com/linyows/dewy/edit/main/${filePath}`;
-  const isLanding = filePath === 'docs/pages/index.md';
+  const isLanding = filePath === 'docs/pages/index.md' || filePath === 'docs/pages/ja/index.md';
 
   return (
     <div>

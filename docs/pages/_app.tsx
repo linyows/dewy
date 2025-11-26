@@ -73,10 +73,10 @@ export default function MyApp({ Component, pageProps }: AppProps<MyAppProps>) {
   const toc = markdoc?.content ? collectHeadings(pageProps.markdoc.content) : [];
 
   // Dynamically construct the file path for the "Edit this page on GitHub" link
-  const filePath = `docs/pages${pathname === '/' ? '/index' : pathname}.md`;
+  const filePath = `docs/pages${pathname === '/' ? '/index' : pathname === '/ja' ? '/ja/index' : pathname}.md`;
 
   // Whether the current page is the index page
-  const isDocs = pathname !== '/';
+  const isDocs = pathname !== '/' && pathname !== '/ja';
 
   return (
     <LanguageProvider>
