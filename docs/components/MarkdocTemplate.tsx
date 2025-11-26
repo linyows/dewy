@@ -7,15 +7,16 @@ interface MarkdocTemplateProps {
 
 export default function MarkdocTemplate({ content, filePath }: MarkdocTemplateProps) {
   const githubEditUrl = `https://github.com/linyows/dewy/edit/main/${filePath}`;
+  const isLanding = filePath === 'docs/pages/index.md';
 
   return (
     <div>
       {content}
-      <div className="edit-link">
+      {!isLanding && <div className="edit-link">
         <a href={githubEditUrl} target="_blank" rel="noopener noreferrer">
           Edit this page on GitHub
         </a>
-      </div>
+      </div>}
       <style jsx>
         {`
           .edit-link {

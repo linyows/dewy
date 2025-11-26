@@ -18,8 +18,8 @@ import '../public/globals.css'
 import type { AppProps } from 'next/app'
 import type { MarkdocNextJsPageProps } from '@markdoc/next.js'
 
-const TITLE = 'Markdoc';
-const DESCRIPTION = 'A powerful, flexible, Markdown-based authoring framework';
+const TITLE = 'Dewy';
+const DESCRIPTION = 'Dewy enables declarative deployment of applications in non-Kubernetes environments.';
 
 const inter = Inter({ subsets: ["latin"] });
 const zenKakuGothicNew = Zen_Kaku_Gothic_New({ subsets: ["latin"], weight: ["500", "900"] });
@@ -69,12 +69,14 @@ export default function MyApp({ Component, pageProps }: AppProps<MyAppProps>) {
   // Use Zen Kaku Gothic New for /ja/** paths, otherwise use Inter
   const font = pathname.startsWith('/ja') ? zenKakuGothicNew : inter;
 
-  const toc = pageProps.markdoc?.content
-    ? collectHeadings(pageProps.markdoc.content)
-    : [];
+  // Table of Contents
+  const toc = markdoc?.content ? collectHeadings(pageProps.markdoc.content) : [];
 
   // Dynamically construct the file path for the "Edit this page on GitHub" link
   const filePath = `docs/pages${pathname === '/' ? '/index' : pathname}.md`;
+
+  // Whether the current page is the index page
+  const isDocs = pathname !== '/';
 
   return (
     <LanguageProvider>
@@ -86,15 +88,22 @@ export default function MyApp({ Component, pageProps }: AppProps<MyAppProps>) {
         <meta name="description" content={description} />
         <link rel="shortcut icon" href="/favicon.ico" />
         <link rel="icon" href="/favicon.ico" />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://dewy.linyo.ws" />
+        <meta property="og:title" content={title} />
+        <meta property="og:description" content={description} />
+        <meta property="og:image" content="https://dewy.linyo.ws/static/share.png" />
+        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:image" content="https://dewy.linyo.ws/static/share.png" />
       </Head>
       <TopNav className={font.className} />
       <div className={`page ${font.className}`}>
-        <SideNav className={font.className} />
-        <div className='main-and-toc'>
-          <main className="flex column">
+        {isDocs && <SideNav className={font.className} />}
+        <div className={`${isDocs ? 'main-and-toc' : 'landing'}`}>
+          <main className={`${isDocs ? 'docs flex column' : ''}`}>
             <MarkdocTemplate content={<Component {...pageProps} />} filePath={filePath} />
           </main>
-          <TableOfContents toc={toc} />
+          {isDocs && <TableOfContents toc={toc} />}
         </div>
       </div>
       <footer>
@@ -108,6 +117,11 @@ export default function MyApp({ Component, pageProps }: AppProps<MyAppProps>) {
             width: 100vw;
             flex-grow: 1;
           }
+          .landing {
+            margin: 0;
+            width: 100%;
+            padding: 10vh 0 0;
+          }
           .main-and-toc {
             max-width: 1800px;
             margin: 0 auto;
@@ -116,7 +130,7 @@ export default function MyApp({ Component, pageProps }: AppProps<MyAppProps>) {
             grid-template-columns: minmax(0, 1fr) 400px;
             gap: 2rem;
           }
-          main:before {
+          .docs:before {
             content: "";
             position: absolute;
             top: var(--top-nav-height);
@@ -129,7 +143,7 @@ export default function MyApp({ Component, pageProps }: AppProps<MyAppProps>) {
             height: 50px;
             z-index: -1;
           }
-          main {
+          .docs {
             flex-grow: 1;
             font-size: 16px;
             padding: var(--top-nav-height) 2rem 2rem;
