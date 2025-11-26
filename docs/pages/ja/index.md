@@ -5,7 +5,7 @@ description: "Kubernetesを超えたデプロイ: ゼロダウンタイム、ゼ
 
 {% section .hero %}
 {% hero %}
-# Kubernetesを超えたデプロイ: ゼロダウンタイム、ゼロストレス
+# Kubernetesを超えて: 宣言的、ゼロダウンタイム、ゼロストレス
 
 ![Summary](/images/hero-image.png) {% .hero-image %}
 ![Graph](/images/graph.gif)
@@ -20,7 +20,7 @@ Dewyは、Kubernetes以外の環境でアプリケーションを宣言的にデ
 {% cards %}
 - {% item %}
   {% keyword %}
-  Serverコマンド
+  Server command
   {% /keyword %}
   ## アプリケーションサーバーの自動デプロイ
 
@@ -31,7 +31,7 @@ Dewyは、Kubernetes以外の環境でアプリケーションを宣言的にデ
   {% /item %}
 - {% item %}
   {% keyword %}
-  Serverコマンド
+  Server command
   {% /keyword %}
   ## ネットワーク境界を越えたデプロイ
 
@@ -41,7 +41,7 @@ Dewyは、Kubernetes以外の環境でアプリケーションを宣言的にデ
   {% /item %}
 - {% item %}
   {% keyword %}
-  Containerコマンド
+  Container command
   {% /keyword %}
   ## ゼロダウンタイムのコンテナデプロイ
 
@@ -51,7 +51,7 @@ Dewyは、Kubernetes以外の環境でアプリケーションを宣言的にデ
   {% /item %}
 - {% item %}
   {% keyword %}
-  Assetsコマンド
+  Assets command
   {% /keyword %}
   ## データベースマイグレーションの自動化
 
@@ -64,7 +64,7 @@ Dewyは、Kubernetes以外の環境でアプリケーションを宣言的にデ
 
 {% section .core-benefits %}
 {% keyword %}
-コアベネフィット
+Core Benefits
 {% /keyword %}
 
 ![Core Benefits](/images/core-benefits.png)
@@ -75,7 +75,7 @@ Kubernetesは宣言的デプロイを主流にしましたが、アプリケー�
 
 {% section .sub-benefits %}
 {% keyword %}
-組み込みベネフィット
+Built-in Benefits
 {% /keyword %}
 - {% item %}
   ![Secure](/images/secure.png)
@@ -100,7 +100,7 @@ Kubernetesは宣言的デプロイを主流にしましたが、アプリケー�
 非常に実用的
 {% /keyword %}
 
-## 5分のセットアップ、エンタープライズグレードの結果
+## 簡単に使えて、エンタープライズユースも
 
 シングルバイナリ、依存関係ゼロ、どこでも動作。セットアップには数分しかかかりませんが、監査ログ、通知、ゼロダウンタイムデプロイを備えたエンタープライズグレードのデプロイ自動化を手に入れることができます。複雑なオーケストレーター、急な学習曲線は不要。シンプルに実現された強力なデプロイ自動化です。
 
@@ -121,7 +121,7 @@ Ansibleとシェルスクリプトは命令的です。実行するステップ�
 {% /item %}
 {% item %}
 ### Dewyを使用するにはDockerやKubernetesが必要ですか？
-いいえ。Dewyはベアメタルサーバー、VM、VPSで、コンテナプラットフォームなしで動作します。serverコマンドはバイナリを直接デプロイし、assetsコマンドは静的ファイルをデプロイします。Dockerは不要です。containerコマンドにはDockerが必要ですが、それはオプションです。DewyはKubernetesが過剰になる環境向けに特別に設計されています。
+Dewyはベアメタルサーバー、VM、VPSで、コンテナプラットフォームなしで動作します。serverコマンドはバイナリを直接デプロイし、assetsコマンドは静的ファイルをデプロイします。Dockerは不要です。containerコマンドにはDockerが必要ですが、それはオプションです。DewyはKubernetesが過剰になる環境向けに特別に設計されています。
 {% /item %}
 {% item %}
 ### Go以外の言語で書かれたアプリケーションにDewyを使用できますか？

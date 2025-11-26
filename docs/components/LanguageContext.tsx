@@ -48,17 +48,17 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
 
     if (lang === 'ja') {
       // Navigate to Japanese version
-      if (currentPath.startsWith('/ja/')) {
+      if (currentPath.startsWith('/ja')) {
         // Already on Japanese page
         return;
       } else if (currentPath === '/') {
-        newPath = '/ja/introduction';
+        newPath = '/ja';
       } else {
         newPath = `/ja${currentPath}`;
       }
     } else {
       // Navigate to English version
-      if (currentPath.startsWith('/ja/')) {
+      if (currentPath.startsWith('/ja')) {
         // Remove /ja prefix
         const pathWithoutJa = currentPath.replace('/ja', '');
         newPath = pathWithoutJa === '' ? '/' : pathWithoutJa;
@@ -82,8 +82,8 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
       setLanguageState(preferredLang);
 
       // If user prefers Japanese but is on English page, redirect
-      if (preferredLang === 'ja' && !currentPath.startsWith('/ja/')) {
-        const newPath = currentPath === '/' ? '/ja/introduction' : `/ja${currentPath}`;
+      if (preferredLang === 'ja' && !currentPath.startsWith('/ja')) {
+        const newPath = currentPath === '/' ? '/ja' : `/ja${currentPath}`;
         router.replace(newPath);
       }
     }
