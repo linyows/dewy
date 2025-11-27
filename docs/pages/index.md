@@ -3,12 +3,10 @@ title: Dewy
 description: "Deploy beyond Kubernetes: Zero downtime, zero fuss"
 ---
 
+
 {% section .hero %}
 {% hero %}
 # Deploy beyond Kubernetes: Zero downtime, zero fuss
-
-![Summary](/images/hero-image.png) {% .hero-image %}
-![Graph](/images/graph.gif)
 
 Dewy is software for declaratively deploying applications in non-Kubernetes environments. It ensures that applications and data on servers are always up-to-date. {% .desc %}
 
