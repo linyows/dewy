@@ -6,3 +6,4 @@ export * from './item.markdoc';
 export * from './side-by-side.markdoc';
 export * from './keyword.markdoc';
 export * from './hero.markdoc';
+export * from './version-animation.markdoc';
