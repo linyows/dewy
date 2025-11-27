@@ -1,23 +1,39 @@
 import * as React from 'react';
+import { VersionAnimation } from './VersionAnimation';
 
 export function Hero({ children }) {
+  const [first, ...rest] = React.Children.toArray(children);
   return (
     <>
       <div className="hero">
-        {children}
+        <div className="hero-heading">
+          {first}
+        </div>
+
+        <div className="hero-image">
+          <img src="/images/hero-image.png" alt="Dewy overview" className="hero-image-overview" />
+          <img src="/images/graph.gif" alt="Dewy graph" className="hero-image-graph" />
+          <div className="version-animation-container">
+            <VersionAnimation />
+          </div>
+        </div>
+
+        <div className="hero-content">
+          {rest}
+        </div>
       </div>
       <style jsx>
       {`
-        .hero :global(.desc) {
+        .hero-heading :global(h1) {
+          font-size: 3rem;
+          position: relative;
+        }
+        .hero-content {
           font-size: 1.5rem;
           padding-top: 1rem;
           padding-bottom: 1rem;
         }
-        .hero :global(.heading) {
-          font-size: 3rem;
-          position: relative;
-        }
-        .hero :global(.heading):before {
+        .hero-heading :global(h1):before {
           content: "";
           position: absolute;
           top: -1.5rem;
@@ -30,7 +46,7 @@ export function Hero({ children }) {
           height: 50px;
           z-index: -1;
         }
-        .hero :global(.heading):after {
+        .hero-heading :global(h1):after {
           content: "";
           position: absolute;
           bottom: -1.5rem;
@@ -43,18 +59,22 @@ export function Hero({ children }) {
           height: 50px;
           z-index: -1;
         }
-        .hero :global(img) {
+        .hero-image {
+          margin: 4rem 0 0;
+          position: relative;
+        }
+        .hero-image-overview {
           display: block;
           margin: 0 auto;
           width: 80%;
           height: auto;
           position: relative;
         }
-        .hero :global(.hero-image) {
-          margin: 4rem 0 0;
-          position: relative;
-        }
-        .hero :global(img):last-child {
+        .hero-image-graph {
+          display: block;
+          margin: 0 auto;
+          width: 80%;
+          height: auto;
           position: absolute;
           top: 40%;
           left: 0;
@@ -64,29 +84,37 @@ export function Hero({ children }) {
           height: auto;
           object-fit: cover;
         }
+        .version-animation-container {
+          margin: 0;
+          padding: 0;
+          max-width: 400px;
+          position: absolute;
+          top: 66%;
+          left: 65%;
+        }
         @media screen and (max-width: 600px) {
-          .hero :global(.heading) {
+          .hero-heading :global(h1) {
             font-size: 2rem;
           }
-          .hero :global(.heading):before {
+          .hero-heading :global(h1):before {
             top: -1rem;
             left: -1.5rem;
             padding: .5rem;
-            width: 50px;
-            height: 50px;
+            width: 25px;
+            height: 25px;
           }
-          .hero :global(.heading):after {
+          .hero-heading :global(h1):after {
             bottom: -1rem;
             right: -1.5rem;
             padding: .5rem;
-            width: 50px;
-            height: 50px;
+            width: 25px;
+            height: 25px;
           }
-          .hero :global(.desc) {
+          .hero-content {
             font-size: 1rem;
             padding-bottom: .5rem;
           }
-          .hero :global(img) {
+          .hero-image-overview {
             width: 100%;
           }
         }

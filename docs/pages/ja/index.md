@@ -1,14 +1,11 @@
 ---
 title: Dewy
-description: "Kubernetesを超えたデプロイ: ゼロダウンタイム、ゼロストレス"
+description: "Kubernetesを超えたデプロイ: 宣言的、ゼロダウンタイム、ゼロストレス"
 ---
 
 {% section .hero %}
 {% hero %}
 # Kubernetesを超えて: 宣言的、ゼロダウンタイム、ゼロストレス
-
-![Summary](/images/hero-image.png) {% .hero-image %}
-![Graph](/images/graph.gif)
 
 Dewyは、Kubernetes以外の環境でアプリケーションを宣言的にデプロイするためのソフトウェアです。サーバー上のアプリケーションとデータを常に最新の状態に保ちます。 {% .desc %}
 
