@@ -92,9 +92,9 @@ export default function MyApp({ Component, pageProps }: AppProps<MyAppProps>) {
         <meta property="og:url" content="https://dewy.linyo.ws" />
         <meta property="og:title" content={title} />
         <meta property="og:description" content={description} />
-        <meta property="og:image" content="https://dewy.linyo.ws/static/share.png" />
+        <meta property="og:image" content="https://dewy.linyo.ws/images/share.png" />
         <meta name="twitter:card" content="summary" />
-        <meta name="twitter:image" content="https://dewy.linyo.ws/static/share.png" />
+        <meta name="twitter:image" content="https://dewy.linyo.ws/images/share.png" />
       </Head>
       <TopNav className={font.className} />
       <div className={`page ${font.className}`}>
