@@ -69,16 +69,32 @@ export function Section({ children, className }) {
             border-top: 1px solid var(--text-color);
             border-bottom: 1px solid var(--text-color);
           }
+          .faq :global(.keyword) {
+            text-align: center;
+          }
           .faq :global(h2) {
+            margin: 0;
+            padding: 0 0 4rem;
             font-size: 2rem;
+            text-align: center;
           }
           .faq :global(h3) {
             padding: 1rem 0 0;
-            font-size: 1.5rem;
+            font-size: 1.2rem!important;
+            font-weight: 900;
+            color: var(--text-color);
+          }
+          .faq :global(.cards) :global(p) {
+            color: var(--text-dim-color);
           }
           .faq :global(h3):before {
             content: "—";
             margin-right: 1rem;
+          }
+          .faq :global(.cards) {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 3rem;
           }
           @media screen and (max-width: 1000px) {
             .sub-benefits :global(ul) {
@@ -91,6 +107,9 @@ export function Section({ children, className }) {
           @media screen and (max-width: 600px) {
             .wrapper {
               padding: 2rem 0;
+            }
+            .hero section {
+              padding: 0 2rem;
             }
           }
         `}

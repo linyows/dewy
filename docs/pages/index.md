@@ -112,8 +112,13 @@ Single binary, zero dependencies, runs anywhere. Setup takes minutes, but you ge
 {% /section %}
 
 {% section .faq %}
-## Frequent Questions
+{% keyword %}
+Frequent Questions
+{% /keyword %}
 
+## Got Questions?
+
+{% cards %}
 {% item %}
 ### How is Dewy different from Ansible, shell scripts, or CI/CD tools?
 Ansible and shell scripts are imperative—you define the steps to execute. Dewy is declarative—you define the desired state, and Dewy continuously maintains it. CI/CD tools (like GitHub Actions) handle build and test, while
@@ -145,4 +150,5 @@ Dewy includes multiple safety mechanisms. If a before-deploy hook fails, deploym
 ### Is Dewy free? Is it open source?
 Yes, Dewy is completely free and open source under the MIT License. You can use it for personal projects, commercial applications, or enterprise deployments without any cost. The source code is available on [GitHub](https://github.com/linyows/dewy), and contributions are welcome.
 {% /item %}
+{% /cards %}
 {% /section %}
