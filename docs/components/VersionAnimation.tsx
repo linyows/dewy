@@ -19,14 +19,14 @@ export function VersionAnimation({ className, children }: VersionAnimationProps)
     setShowLogs([false, false, false]);
 
     // Show logs sequentially
-    const timer1 = setTimeout(() => setShowLogs([true, false, false]), 100);
-    const timer2 = setTimeout(() => setShowLogs([true, true, false]), 600);
-    const timer3 = setTimeout(() => setShowLogs([true, true, true]), 1200);
+    const timer1 = setTimeout(() => setShowLogs([true, false, false]), 300);
+    const timer2 = setTimeout(() => setShowLogs([true, true, false]), 1200);
+    const timer3 = setTimeout(() => setShowLogs([true, true, true]), 2400);
 
     // Move to next version
     const versionTimer = setTimeout(() => {
       setCurrentIndex((prev) => (prev + 1) % versions.length);
-    }, 2000);
+    }, 4500);
 
     return () => {
       clearTimeout(timer1);
