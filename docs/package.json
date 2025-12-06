@@ -12,7 +12,7 @@
     "@markdoc/next.js": "^0.5.0",
     "autoprefixer": "^10.4.22",
     "mermaid": "^11.12.1",
-    "next": "^16.0.4",
+    "next": "^16.0.6",
     "prismjs": "^1.30.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
