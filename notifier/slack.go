@@ -89,8 +89,136 @@ func (s *Slack) Send(ctx context.Context, message string) {
 	}
 }
 
+// isRed checks if the given RGB color is considered "red" that might indicate failure.
+// Red is defined as: r >= 0xCC and g <= 0x33 and b <= 0x33.
+func isRed(r, g, b uint8) bool {
+	return r >= 0xCC && g <= 0x33 && b <= 0x33
+}
+
+// rgbToHSL converts RGB color values to HSL.
+// r, g, b should be in range 0-255.
+// Returns h (0-360), s (0-1), l (0-1).
+func rgbToHSL(r, g, b uint8) (h, s, l float64) {
+	rf := float64(r) / 255.0
+	gf := float64(g) / 255.0
+	bf := float64(b) / 255.0
+
+	max := rf
+	if gf > max {
+		max = gf
+	}
+	if bf > max {
+		max = bf
+	}
+
+	min := rf
+	if gf < min {
+		min = gf
+	}
+	if bf < min {
+		min = bf
+	}
+
+	l = (max + min) / 2.0
+
+	if max == min {
+		h = 0
+		s = 0
+	} else {
+		d := max - min
+		if l > 0.5 {
+			s = d / (2.0 - max - min)
+		} else {
+			s = d / (max + min)
+		}
+
+		switch max {
+		case rf:
+			h = (gf - bf) / d
+			if gf < bf {
+				h += 6
+			}
+		case gf:
+			h = (bf-rf)/d + 2
+		case bf:
+			h = (rf-gf)/d + 4
+		}
+		h *= 60
+	}
+
+	return h, s, l
+}
+
+// hslToRGB converts HSL color values to RGB.
+// h should be in range 0-360, s and l in range 0-1.
+// Returns r, g, b in range 0-255.
+func hslToRGB(h, s, l float64) (r, g, b uint8) {
+	var rf, gf, bf float64
+
+	if s == 0 {
+		rf = l
+		gf = l
+		bf = l
+	} else {
+		hueToRGB := func(p, q, t float64) float64 {
+			if t < 0 {
+				t += 1
+			}
+			if t > 1 {
+				t -= 1
+			}
+			if t < 1.0/6.0 {
+				return p + (q-p)*6*t
+			}
+			if t < 1.0/2.0 {
+				return q
+			}
+			if t < 2.0/3.0 {
+				return p + (q-p)*(2.0/3.0-t)*6
+			}
+			return p
+		}
+
+		var q float64
+		if l < 0.5 {
+			q = l * (1 + s)
+		} else {
+			q = l + s - l*s
+		}
+		p := 2*l - q
+
+		h = h / 360.0
+		rf = hueToRGB(p, q, h+1.0/3.0)
+		gf = hueToRGB(p, q, h)
+		bf = hueToRGB(p, q, h-1.0/3.0)
+	}
+
+	r = uint8(rf*255 + 0.5)
+	g = uint8(gf*255 + 0.5)
+	b = uint8(bf*255 + 0.5)
+
+	return r, g, b
+}
+
 func (s *Slack) genColor() string {
-	return strings.ToUpper(fmt.Sprintf("#%x", md5.Sum([]byte(hostname())))[0:7]) //nolint:gosec
+	// Generate initial color from hostname
+	hashBytes := md5.Sum([]byte(hostname())) //nolint:gosec
+	r := hashBytes[0]
+	g := hashBytes[1]
+	b := hashBytes[2]
+
+	// Avoid red colors that might indicate failure
+	if isRed(r, g, b) {
+		h, sat, l := rgbToHSL(r, g, b)
+		// Rotate hue by +30 degrees to shift away from red
+		h = h + 30.0
+		if h >= 360.0 {
+			h -= 360.0
+		}
+		r, g, b = hslToRGB(h, sat, l)
+	}
+
+	return strings.ToUpper(fmt.Sprintf("#%02X%02X%02X", r, g, b))
 }
 
 // SendHookResult sends hook result with detailed attachment.

@@ -3,6 +3,7 @@ package notifier
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -320,4 +321,126 @@ func TestSlack_SetSender(t *testing.T) {
 	if slack.sender != mockSender {
 		t.Error("SetSender() didn't set the sender correctly")
 	}
+}
+
+func TestIsRed(t *testing.T) {
+	tests := []struct {
+		name string
+		r, g, b uint8
+		want bool
+	}{
+		{
+			name: "clearly red color",
+			r: 0xFF, g: 0x00, b: 0x00,
+			want: true,
+		},
+		{
+			name: "red threshold boundary (r=0xCC, g=0x33, b=0x33)",
+			r: 0xCC, g: 0x33, b: 0x33,
+			want: true,
+		},
+		{
+			name: "just below red threshold (r=0xCB)",
+			r: 0xCB, g: 0x33, b: 0x33,
+			want: false,
+		},
+		{
+			name: "just above green threshold (g=0x34)",
+			r: 0xCC, g: 0x34, b: 0x33,
+			want: false,
+		},
+		{
+			name: "green color",
+			r: 0x00, g: 0xFF, b: 0x00,
+			want: false,
+		},
+		{
+			name: "blue color",
+			r: 0x00, g: 0x00, b: 0xFF,
+			want: false,
+		},
+		{
+			name: "white color",
+			r: 0xFF, g: 0xFF, b: 0xFF,
+			want: false,
+		},
+		{
+			name: "black color",
+			r: 0x00, g: 0x00, b: 0x00,
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isRed(tt.r, tt.g, tt.b)
+			if got != tt.want {
+				t.Errorf("isRed(%d, %d, %d) = %v, want %v", tt.r, tt.g, tt.b, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRGBToHSLAndBack(t *testing.T) {
+	tests := []struct {
+		name string
+		r, g, b uint8
+	}{
+		{"red", 0xFF, 0x00, 0x00},
+		{"green", 0x00, 0xFF, 0x00},
+		{"blue", 0x00, 0x00, 0xFF},
+		{"white", 0xFF, 0xFF, 0xFF},
+		{"black", 0x00, 0x00, 0x00},
+		{"gray", 0x80, 0x80, 0x80},
+		{"orange", 0xFF, 0xA5, 0x00},
+		{"purple", 0x80, 0x00, 0x80},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h, s, l := rgbToHSL(tt.r, tt.g, tt.b)
+			r, g, b := hslToRGB(h, s, l)
+
+			// Allow small rounding differences
+			if abs(int(r)-int(tt.r)) > 1 || abs(int(g)-int(tt.g)) > 1 || abs(int(b)-int(tt.b)) > 1 {
+				t.Errorf("RGB->HSL->RGB conversion failed: (%d,%d,%d) -> (%.2f,%.2f,%.2f) -> (%d,%d,%d)",
+					tt.r, tt.g, tt.b, h, s, l, r, g, b)
+			}
+		})
+	}
+}
+
+func TestGenColor_AvoidsRed(t *testing.T) {
+	// We can't easily test with actual hostnames since genColor uses hostname()
+	// But we can test the color avoidance logic by checking that the result
+	// is a valid color and properly formatted
+	slack := &Slack{}
+	color := slack.genColor()
+
+	// Check format
+	if !strings.HasPrefix(color, "#") {
+		t.Errorf("genColor() = %v, should start with #", color)
+	}
+	if len(color) != 7 {
+		t.Errorf("genColor() = %v, should be 7 characters long", color)
+	}
+
+	// Parse the color
+	var r, g, b uint8
+	_, err := fmt.Sscanf(color, "#%02X%02X%02X", &r, &g, &b)
+	if err != nil {
+		t.Errorf("genColor() returned invalid color format: %v", color)
+	}
+
+	// Verify the color is not red
+	if isRed(r, g, b) {
+		t.Errorf("genColor() = %v (RGB: %d,%d,%d) is red, should avoid red colors", color, r, g, b)
+	}
+}
+
+func abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
 }
