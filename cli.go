@@ -726,6 +726,7 @@ func (c *cli) displayContainerList(containers []*container.Info) {
 //   - img://docker.io/library/nginx:1.21 -> nginx
 //   - img://gcr.io/project/myapp -> myapp
 //   - img://myapp:latest -> myapp
+//
 // For other commands:
 //   - ghr://owner/myrepo -> myrepo
 //   - s3://region/bucket/path/to/app -> app
