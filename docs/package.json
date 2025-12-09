@@ -14,7 +14,7 @@
     "mermaid": "^11.12.2",
     "next": "^16.0.6",
     "prismjs": "^1.30.0",
-    "react": "^19.2.0",
+    "react": "^19.2.1",
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
