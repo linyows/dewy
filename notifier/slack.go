@@ -210,8 +210,8 @@ func (s *Slack) genColor() string {
 	// Avoid red colors that might indicate failure
 	if isRed(r, g, b) {
 		h, sat, l := rgbToHSL(r, g, b)
-		// Rotate hue by +30 degrees to shift away from red
-		h = h + 30.0
+		// Rotate hue by +35 degrees to shift away from red
+		h = h + 35.0
 		if h >= 360.0 {
 			h -= 360.0
 		}
