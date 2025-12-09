@@ -310,6 +310,9 @@ func (d *Dewy) Run() error {
 			err = d.restartServer()
 			if err == nil {
 				msg := fmt.Sprintf("Server restarted for `%s`", d.cVer)
+				if len(d.config.Starter.Ports()) == 0 {
+					msg += " without port"
+				}
 				d.logger.Info("Restart notification", slog.String("message", msg))
 				d.notifier.Send(ctx, msg)
 			}
@@ -317,6 +320,9 @@ func (d *Dewy) Run() error {
 			err = d.startServer()
 			if err == nil {
 				msg := fmt.Sprintf("Server started for `%s`", d.cVer)
+				if len(d.config.Starter.Ports()) == 0 {
+					msg += " without port"
+				}
 				d.logger.Info("Start notification", slog.String("message", msg))
 				d.notifier.Send(ctx, msg)
 			}
