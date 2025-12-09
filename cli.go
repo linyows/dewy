@@ -289,6 +289,12 @@ func (c *cli) run() int {
 func (c *cli) configureServerCommand(conf *Config) error {
 	conf.Command = SERVER
 
+	// Port is required for server command
+	if len(c.Ports) == 0 {
+		fmt.Fprintf(c.env.Err, "Error: --port option is required for server command\n")
+		return fmt.Errorf("Error: --port option is required for server command\n")
+	}
+
 	parsedPorts, err := parsePorts(c.Ports)
 	if err != nil {
 		fmt.Fprintf(c.env.Err, "Error: invalid port specification: %s\n", err)
