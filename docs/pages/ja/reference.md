@@ -96,10 +96,16 @@ dewy server --notifier slack://webhook-url -- /opt/app/current/app
 
 ### --port (-p)
 
-DewyのHTTPサーバーが使用するポートを指定します。デフォルトは8080です。
+アプリケーションサーバーが使用するポートを指定します。`server`コマンドではこのオプションは任意です。
+
+指定した場合、server-starterが指定されたポートでアプリケーションを管理します。省略した場合、アプリケーションはポートをリッスンせずに実行されます（ジョブワーカー、メッセージキューコンシューマーなどに有用）。
 
 ```bash
+# ポートあり（HTTPサーバー）
 dewy server --port 9090 -- /opt/app/current/app
+
+# ポートなし（ジョブワーカーなど）
+dewy server --registry ghr://owner/repo -- /opt/worker/current/worker
 ```
 
 ### --interval (-i)
