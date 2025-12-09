@@ -810,6 +810,105 @@ func TestExtractAppNameFromRegistry(t *testing.T) {
 	}
 }
 
+func TestCLI_ConfigureServerCommand(t *testing.T) {
+	tests := []struct {
+		name        string
+		ports       []string
+		args        []string
+		logFormat   string
+		expectPorts []string
+		expectCmd   string
+		expectArgs  []string
+		wantErr     bool
+	}{
+		{
+			name:        "with port",
+			ports:       []string{"8080"},
+			args:        []string{"/opt/app/current/app", "arg1", "arg2"},
+			logFormat:   "text",
+			expectPorts: []string{"8080"},
+			expectCmd:   "/opt/app/current/app",
+			expectArgs:  []string{"arg1", "arg2"},
+			wantErr:     false,
+		},
+		{
+			name:        "without port (job worker)",
+			ports:       []string{},
+			args:        []string{"/opt/worker/current/worker"},
+			logFormat:   "json",
+			expectPorts: nil,
+			expectCmd:   "/opt/worker/current/worker",
+			expectArgs:  nil,
+			wantErr:     false,
+		},
+		{
+			name:        "with multiple ports",
+			ports:       []string{"8080,8081,8082"},
+			args:        []string{"/opt/app/current/app"},
+			logFormat:   "text",
+			expectPorts: []string{"8080", "8081", "8082"},
+			expectCmd:   "/opt/app/current/app",
+			expectArgs:  nil,
+			wantErr:     false,
+		},
+		{
+			name:      "with invalid port",
+			ports:     []string{"invalid"},
+			args:      []string{"/opt/app/current/app"},
+			logFormat: "text",
+			wantErr:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var errBuf bytes.Buffer
+			cli := &cli{
+				Ports:     tt.ports,
+				args:      tt.args,
+				LogFormat: tt.logFormat,
+				env: Env{
+					Err: &errBuf,
+				},
+			}
+
+			conf := DefaultConfig()
+			err := cli.configureServerCommand(&conf)
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("configureServerCommand() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if !tt.wantErr {
+				if conf.Command != SERVER {
+					t.Errorf("Expected command SERVER, got %v", conf.Command)
+				}
+
+				if conf.Starter == nil {
+					t.Fatal("Expected Starter to be set")
+				}
+
+				if !reflect.DeepEqual(conf.Starter.Ports(), tt.expectPorts) {
+					t.Errorf("Expected ports %v, got %v", tt.expectPorts, conf.Starter.Ports())
+				}
+
+				if conf.Starter.Command() != tt.expectCmd {
+					t.Errorf("Expected command %q, got %q", tt.expectCmd, conf.Starter.Command())
+				}
+
+				if !reflect.DeepEqual(conf.Starter.Args(), tt.expectArgs) {
+					t.Errorf("Expected args %v, got %v", tt.expectArgs, conf.Starter.Args())
+				}
+
+				if conf.Starter.LogFormat() != tt.logFormat {
+					t.Errorf("Expected logformat %q, got %q", tt.logFormat, conf.Starter.LogFormat())
+				}
+			}
+		})
+	}
+}
+
 func TestDisplayContainerList(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -915,4 +1014,3 @@ func TestDisplayContainerList(t *testing.T) {
 		})
 	}
 }
-

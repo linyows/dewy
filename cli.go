@@ -260,85 +260,12 @@ func (c *cli) run() int {
 
 	switch c.command {
 	case "server":
-		conf.Command = SERVER
-
-		// Port is required for server command
-		if len(c.Ports) == 0 {
-			fmt.Fprintf(c.env.Err, "Error: --port option is required for server command\n")
+		if err := c.configureServerCommand(&conf); err != nil {
 			return ExitErr
-		}
-
-		parsedPorts, err := parsePorts(c.Ports)
-		if err != nil {
-			fmt.Fprintf(c.env.Err, "Error: invalid port specification: %s\n", err)
-			return ExitErr
-		}
-		var command string
-		var cmdArgs []string
-		if len(c.args) > 0 {
-			command = c.args[0]
-			if len(c.args) > 1 {
-				cmdArgs = c.args[1:]
-			}
-		}
-		conf.Starter = &StarterConfig{
-			ports:     parsedPorts,
-			command:   command,
-			args:      cmdArgs,
-			logformat: c.LogFormat,
 		}
 	case "container":
-		conf.Command = CONTAINER
-
-		// Port is required for container command
-		if len(c.Ports) == 0 {
-			fmt.Fprintf(c.env.Err, "Error: --port option is required for container command\n")
+		if err := c.configureContainerCommand(&conf); err != nil {
 			return ExitErr
-		}
-
-		// Parse port mappings
-		portMappings, err := parsePortMappings(c.Ports)
-		if err != nil {
-			fmt.Fprintf(c.env.Err, "Error: failed to parse port mappings: %v\n", err)
-			return ExitErr
-		}
-		if len(portMappings) == 0 {
-			fmt.Fprintf(c.env.Err, "Error: no valid port mappings specified\n")
-			return ExitErr
-		}
-
-		// Set defaults
-		// HealthPath is optional - if not specified, health check will be skipped
-		if c.HealthTimeout == 0 {
-			c.HealthTimeout = 30
-		}
-		if c.DrainTime == 0 {
-			c.DrainTime = 30
-		}
-		if c.ContainerRuntime == "" {
-			c.ContainerRuntime = "docker"
-		}
-
-		// Set default name if not specified
-		appName := c.Name
-		if appName == "" {
-			// Extract app name from registry URL (e.g., img://ghcr.io/owner/myapp:latest -> myapp)
-			appName = extractAppNameFromRegistry(c.Registry)
-			if appName == "" {
-				appName = "app" // Fallback if extraction fails
-			}
-		}
-
-		conf.Container = &ContainerConfig{
-			Name:          appName,
-			PortMappings:  portMappings,
-			Replicas:      c.Replicas,
-			Command:       c.Cmd,
-			ExtraArgs:     c.args, // Arguments after -- separator (docker run options)
-			HealthPath:    c.HealthPath,
-			HealthTimeout: time.Duration(c.HealthTimeout) * time.Second,
-			DrainTime:     time.Duration(c.DrainTime) * time.Second,
-			Runtime:       c.ContainerRuntime,
 		}
 	default:
 		conf.Command = ASSETS
@@ -356,6 +283,95 @@ func (c *cli) run() int {
 	d.Start(c.Interval)
 
 	return ExitOK
+}
+
+// configureServerCommand configures the server command settings.
+func (c *cli) configureServerCommand(conf *Config) error {
+	conf.Command = SERVER
+
+	// Port is optional for server command (can run as job worker without port)
+	var parsedPorts []string
+	var err error
+	if len(c.Ports) > 0 {
+		parsedPorts, err = parsePorts(c.Ports)
+		if err != nil {
+			fmt.Fprintf(c.env.Err, "Error: invalid port specification: %s\n", err)
+			return err
+		}
+	}
+
+	var command string
+	var cmdArgs []string
+	if len(c.args) > 0 {
+		command = c.args[0]
+		if len(c.args) > 1 {
+			cmdArgs = c.args[1:]
+		}
+	}
+	conf.Starter = &StarterConfig{
+		ports:     parsedPorts,
+		command:   command,
+		args:      cmdArgs,
+		logformat: c.LogFormat,
+	}
+	return nil
+}
+
+// configureContainerCommand configures the container command settings.
+func (c *cli) configureContainerCommand(conf *Config) error {
+	conf.Command = CONTAINER
+
+	// Port is required for container command
+	if len(c.Ports) == 0 {
+		fmt.Fprintf(c.env.Err, "Error: --port option is required for container command\n")
+		return fmt.Errorf("port is required for container command")
+	}
+
+	// Parse port mappings
+	portMappings, err := parsePortMappings(c.Ports)
+	if err != nil {
+		fmt.Fprintf(c.env.Err, "Error: failed to parse port mappings: %v\n", err)
+		return err
+	}
+	if len(portMappings) == 0 {
+		fmt.Fprintf(c.env.Err, "Error: no valid port mappings specified\n")
+		return fmt.Errorf("no valid port mappings specified")
+	}
+
+	// Set defaults
+	// HealthPath is optional - if not specified, health check will be skipped
+	if c.HealthTimeout == 0 {
+		c.HealthTimeout = 30
+	}
+	if c.DrainTime == 0 {
+		c.DrainTime = 30
+	}
+	if c.ContainerRuntime == "" {
+		c.ContainerRuntime = "docker"
+	}
+
+	// Set default name if not specified
+	appName := c.Name
+	if appName == "" {
+		// Extract app name from registry URL (e.g., img://ghcr.io/owner/myapp:latest -> myapp)
+		appName = extractAppNameFromRegistry(c.Registry)
+		if appName == "" {
+			appName = "app" // Fallback if extraction fails
+		}
+	}
+
+	conf.Container = &ContainerConfig{
+		Name:          appName,
+		PortMappings:  portMappings,
+		Replicas:      c.Replicas,
+		Command:       c.Cmd,
+		ExtraArgs:     c.args, // Arguments after -- separator (docker run options)
+		HealthPath:    c.HealthPath,
+		HealthTimeout: time.Duration(c.HealthTimeout) * time.Second,
+		DrainTime:     time.Duration(c.DrainTime) * time.Second,
+		Runtime:       c.ContainerRuntime,
+	}
+	return nil
 }
 
 // parsePorts parses port specifications from CLI arguments.
@@ -710,6 +726,7 @@ func (c *cli) displayContainerList(containers []*container.Info) {
 //   - img://docker.io/library/nginx:1.21 -> nginx
 //   - img://gcr.io/project/myapp -> myapp
 //   - img://myapp:latest -> myapp
+//
 // For other commands:
 //   - ghr://owner/myrepo -> myrepo
 //   - s3://region/bucket/path/to/app -> app

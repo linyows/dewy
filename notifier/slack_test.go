@@ -325,48 +325,48 @@ func TestSlack_SetSender(t *testing.T) {
 
 func TestIsRed(t *testing.T) {
 	tests := []struct {
-		name string
+		name    string
 		r, g, b uint8
-		want bool
+		want    bool
 	}{
 		{
 			name: "clearly red color",
-			r: 0xFF, g: 0x00, b: 0x00,
+			r:    0xFF, g: 0x00, b: 0x00,
 			want: true,
 		},
 		{
 			name: "red threshold boundary (r=0xCC, g=0x33, b=0x33)",
-			r: 0xCC, g: 0x33, b: 0x33,
+			r:    0xCC, g: 0x33, b: 0x33,
 			want: true,
 		},
 		{
 			name: "just below red threshold (r=0xCB)",
-			r: 0xCB, g: 0x33, b: 0x33,
+			r:    0xCB, g: 0x33, b: 0x33,
 			want: false,
 		},
 		{
 			name: "just above green threshold (g=0x34)",
-			r: 0xCC, g: 0x34, b: 0x33,
+			r:    0xCC, g: 0x34, b: 0x33,
 			want: false,
 		},
 		{
 			name: "green color",
-			r: 0x00, g: 0xFF, b: 0x00,
+			r:    0x00, g: 0xFF, b: 0x00,
 			want: false,
 		},
 		{
 			name: "blue color",
-			r: 0x00, g: 0x00, b: 0xFF,
+			r:    0x00, g: 0x00, b: 0xFF,
 			want: false,
 		},
 		{
 			name: "white color",
-			r: 0xFF, g: 0xFF, b: 0xFF,
+			r:    0xFF, g: 0xFF, b: 0xFF,
 			want: false,
 		},
 		{
 			name: "black color",
-			r: 0x00, g: 0x00, b: 0x00,
+			r:    0x00, g: 0x00, b: 0x00,
 			want: false,
 		},
 	}
@@ -383,7 +383,7 @@ func TestIsRed(t *testing.T) {
 
 func TestRGBToHSLAndBack(t *testing.T) {
 	tests := []struct {
-		name string
+		name    string
 		r, g, b uint8
 	}{
 		{"red", 0xFF, 0x00, 0x00},

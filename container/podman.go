@@ -530,8 +530,8 @@ type podmanInspect struct {
 		StartedAt string `json:"StartedAt"`
 	} `json:"State"`
 	Config struct {
-		Image        string            `json:"Image"`
-		Labels       map[string]string `json:"Labels"`
+		Image        string              `json:"Image"`
+		Labels       map[string]string   `json:"Labels"`
 		ExposedPorts map[string]struct{} `json:"ExposedPorts"` // e.g., {"80/tcp": {}, "443/tcp": {}}
 	} `json:"Config"`
 	NetworkSettings struct {

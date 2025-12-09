@@ -59,8 +59,8 @@ type Runtime interface {
 type RunOptions struct {
 	Image        string
 	Name         string
-	AppName      string   // Application name for default naming
-	ReplicaIndex int      // Replica index for naming (0-based)
+	AppName      string // Application name for default naming
+	ReplicaIndex int    // Replica index for naming (0-based)
 	Labels       map[string]string
 	Ports        []string // Port mappings in format "host:container" or "127.0.0.1::container" for random localhost port
 	Detach       bool

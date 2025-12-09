@@ -310,6 +310,9 @@ func (d *Dewy) Run() error {
 			err = d.restartServer()
 			if err == nil {
 				msg := fmt.Sprintf("Server restarted for `%s`", d.cVer)
+				if len(d.config.Starter.Ports()) == 0 {
+					msg += " without port"
+				}
 				d.logger.Info("Restart notification", slog.String("message", msg))
 				d.notifier.Send(ctx, msg)
 			}
@@ -317,6 +320,9 @@ func (d *Dewy) Run() error {
 			err = d.startServer()
 			if err == nil {
 				msg := fmt.Sprintf("Server started for `%s`", d.cVer)
+				if len(d.config.Starter.Ports()) == 0 {
+					msg += " without port"
+				}
 				d.logger.Info("Start notification", slog.String("message", msg))
 				d.notifier.Send(ctx, msg)
 			}
@@ -1398,11 +1404,11 @@ func (d *Dewy) handleGetStatus(w http.ResponseWriter, r *http.Request) {
 	// Return JSON response
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(map[string]interface{}{
-		"name":             d.config.Container.Name,
-		"command":          d.config.Command,
-		"current_version":  d.cVer,
-		"proxy_backends":   len(d.proxyBackends),
-		"is_running":       d.isServerRunning,
+		"name":            d.config.Container.Name,
+		"command":         d.config.Command,
+		"current_version": d.cVer,
+		"proxy_backends":  len(d.proxyBackends),
+		"is_running":      d.isServerRunning,
 	}); err != nil {
 		d.logger.Error("Failed to encode response",
 			slog.String("error", err.Error()))
