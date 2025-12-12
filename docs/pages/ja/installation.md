@@ -77,7 +77,7 @@ sudo mv dewy /usr/local/bin/
 
 ```bash
 # 最新のmainブランチから直接インストール
-go install github.com/linyows/dewy@latest
+go install github.com/linyows/dewy/cmd/dewy@latest
 ```
 
 ### 3. プロビジョニングツール
