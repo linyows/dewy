@@ -5,7 +5,7 @@
     "": {
       "dependencies": {
         "@docsearch/css": "^4.4.0",
-        "@docsearch/react": "^4.3.2",
+        "@docsearch/react": "^4.4.0",
         "@markdoc/markdoc": "^0.5.4",
         "@markdoc/next.js": "^0.5.0",
         "autoprefixer": "^10.4.23",
@@ -82,11 +82,11 @@
 
     "@chevrotain/utils": ["@chevrotain/utils@11.0.3", "", {}, "sha512-YslZMgtJUyuMbZ+aKvfF3x1f5liK4mWNxghFRv7jqRR9C3R3fAOGTTKvxXDa2Y1s9zSbcpuO0cAxDYsc9SrXoQ=="],
 
-    "@docsearch/core": ["@docsearch/core@4.3.1", "", { "peerDependencies": { "@types/react": ">= 16.8.0 < 20.0.0", "react": ">= 16.8.0 < 20.0.0", "react-dom": ">= 16.8.0 < 20.0.0" }, "optionalPeers": ["@types/react", "react", "react-dom"] }, "sha512-ktVbkePE+2h9RwqCUMbWXOoebFyDOxHqImAqfs+lC8yOU+XwEW4jgvHGJK079deTeHtdhUNj0PXHSnhJINvHzQ=="],
+    "@docsearch/core": ["@docsearch/core@4.4.0", "", { "peerDependencies": { "@types/react": ">= 16.8.0 < 20.0.0", "react": ">= 16.8.0 < 20.0.0", "react-dom": ">= 16.8.0 < 20.0.0" }, "optionalPeers": ["@types/react", "react", "react-dom"] }, "sha512-kiwNo5KEndOnrf5Kq/e5+D9NBMCFgNsDoRpKQJ9o/xnSlheh6b8AXppMuuUVVdAUIhIfQFk/07VLjjk/fYyKmw=="],
 
     "@docsearch/css": ["@docsearch/css@4.4.0", "", {}, "sha512-e9vPgtih6fkawakmYo0Y6V4BKBmDV7Ykudn7ADWXUs5b6pmtBRwDbpSG/WiaUG63G28OkJDEnsMvgIAnZgGwYw=="],
 
-    "@docsearch/react": ["@docsearch/react@4.3.2", "", { "dependencies": { "@ai-sdk/react": "^2.0.30", "@algolia/autocomplete-core": "1.19.2", "@docsearch/core": "4.3.1", "@docsearch/css": "4.3.2", "ai": "^5.0.30", "algoliasearch": "^5.28.0", "marked": "^16.3.0", "zod": "^4.1.8" }, "peerDependencies": { "@types/react": ">= 16.8.0 < 20.0.0", "react": ">= 16.8.0 < 20.0.0", "react-dom": ">= 16.8.0 < 20.0.0", "search-insights": ">= 1 < 3" }, "optionalPeers": ["@types/react", "react", "react-dom", "search-insights"] }, "sha512-74SFD6WluwvgsOPqifYOviEEVwDxslxfhakTlra+JviaNcs7KK/rjsPj89kVEoQc9FUxRkAofaJnHIR7pb4TSQ=="],
+    "@docsearch/react": ["@docsearch/react@4.4.0", "", { "dependencies": { "@ai-sdk/react": "^2.0.30", "@algolia/autocomplete-core": "1.19.2", "@docsearch/core": "4.4.0", "@docsearch/css": "4.4.0", "ai": "^5.0.30", "algoliasearch": "^5.28.0", "marked": "^16.3.0", "zod": "^4.1.8" }, "peerDependencies": { "@types/react": ">= 16.8.0 < 20.0.0", "react": ">= 16.8.0 < 20.0.0", "react-dom": ">= 16.8.0 < 20.0.0", "search-insights": ">= 1 < 3" }, "optionalPeers": ["@types/react", "react", "react-dom", "search-insights"] }, "sha512-z12zeg1mV7WD4Ag4pKSuGukETJLaucVFwszDXL/qLaEgRqxEaVacO9SR1qqnCXvZztlvz2rt7cMqryi/7sKfjA=="],
 
     "@emnapi/runtime": ["@emnapi/runtime@1.5.0", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-97/BJ3iXHww3djw6hYIfErCZFee7qCtrneuLa20UXFCOTCfBM2cvQHjWJ2EG0s0MtdNwInarqCTz35i4wWXHsQ=="],
 
@@ -495,8 +495,6 @@
     "vscode-uri": ["vscode-uri@3.0.8", "", {}, "sha512-AyFQ0EVmsOZOlAnxoFOGOq1SQDWAB7C6aqMGS23svWAllfOaxbuFvcT8D1i8z3Gyn8fraVeZNNmN6e9bxxXkKw=="],
 
     "zod": ["zod@4.1.11", "", {}, "sha512-WPsqwxITS2tzx1bzhIKsEs19ABD5vmCVa4xBo2tq/SrV4RNZtfws1EnCWQXM6yh8bD08a1idvkB5MZSBiZsjwg=="],
-
-    "@docsearch/react/@docsearch/css": ["@docsearch/css@4.3.2", "", {}, "sha512-K3Yhay9MgkBjJJ0WEL5MxnACModX9xuNt3UlQQkDEDZJZ0+aeWKtOkxHNndMRkMBnHdYvQjxkm6mdlneOtU1IQ=="],
 
     "cytoscape-fcose/cose-base": ["cose-base@2.2.0", "", { "dependencies": { "layout-base": "^2.0.0" } }, "sha512-AzlgcsCbUMymkADOJtQm3wO9S3ltPfYOFD5033keQn9NJzIbtnZj+UdBJe7DYml/8TdbtHJW3j58SOnKhWY/5g=="],
 
