@@ -4,8 +4,8 @@
 4d63.com/gochecknoglobals v0.2.2/go.mod h1:lLxwTQjL5eIesRbvnzIP3jZtG140FnTdz+AlMa+ogt0=
 buf.build/gen/go/bufbuild/bufplugin/protocolbuffers/go v1.36.6-20250121211742-6d880cc6cc8d.1 h1:f6miF8tK6H+Ktad24WpnNfpHO75GRGk0rhJ1mxPXqgA=
 buf.build/gen/go/bufbuild/bufplugin/protocolbuffers/go v1.36.6-20250121211742-6d880cc6cc8d.1/go.mod h1:rvbyamNtvJ4o3ExeCmaG5/6iHnu0vy0E+UQ+Ph0om8s=
-buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.10-20250912141014-52f32327d4b0.1 h1:31on4W/yPcV4nZHL4+UCiCvLPsMqe/vJcNg8Rci0scc=
-buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.10-20250912141014-52f32327d4b0.1/go.mod h1:fUl8CEN/6ZAMk6bP8ahBJPUJw7rbp+j4x+wCcYi2IG4=
+buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.11-20251209175733-2a1774d88802.1 h1:j9yeqTWEFrtimt8Nng2MIeRrpoCvQzM9/g25XTvqUGg=
+buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.11-20251209175733-2a1774d88802.1/go.mod h1:tvtbpgaVXZX4g6Pn+AnzFycuRK3MOz5HJfEGeEllXYM=
 buf.build/gen/go/bufbuild/registry/connectrpc/go v1.18.1-20250606164443-9d1800bf4ccc.1 h1:x7juyChlm/fXZyuJTdBeMzHwAMhPJkP0qE4/IpwpGX4=
 buf.build/gen/go/bufbuild/registry/connectrpc/go v1.18.1-20250606164443-9d1800bf4ccc.1/go.mod h1:vi8xjh+6SQRvLQYnyVFZ7kOBrFevwFudusxWVc6E58A=
 buf.build/gen/go/bufbuild/registry/protocolbuffers/go v1.36.6-20250606164443-9d1800bf4ccc.1 h1:iiP7EL8EWrWmxn9qPDQTFdVSu04qIrmglpyjC10K4IU=
@@ -287,8 +287,8 @@ github.com/blizzy78/varnamelen v0.8.0 h1:oqSblyuQvFsW1hbBHh1zfwrKe3kcSj0rnXkKzsQ
 github.com/blizzy78/varnamelen v0.8.0/go.mod h1:V9TzQZ4fLJ1DSrjVDfl89H7aMnTvKkApdHeyESmyR7k=
 github.com/bluesky-social/indigo v0.0.0-20240411170459-440932307e0d h1:xxPhzCOpmOntzVe8S6tqsMdFgaB8B4NXSV54lG4B1qk=
 github.com/bluesky-social/indigo v0.0.0-20240411170459-440932307e0d/go.mod h1:ysMQ0a4RYWjgyvKrl5ME352oHA6QgK900g5sB9XXgPE=
-github.com/bmatcuk/doublestar/v4 v4.9.1 h1:X8jg9rRZmJd4yRy7ZeNDRnM+T3ZfHv15JiBJ/avrEXE=
-github.com/bmatcuk/doublestar/v4 v4.9.1/go.mod h1:xBQ8jztBU6kakFMg+8WGxn0c6z1fTSPVIjEY1Wr7jzc=
+github.com/bmatcuk/doublestar/v4 v4.9.2 h1:b0mc6WyRSYLjzofB2v/0cuDUZ+MqoGyH3r0dVij35GI=
+github.com/bmatcuk/doublestar/v4 v4.9.2/go.mod h1:xBQ8jztBU6kakFMg+8WGxn0c6z1fTSPVIjEY1Wr7jzc=
 github.com/bodgit/plumbing v1.3.0 h1:pf9Itz1JOQgn7vEOE7v7nlEfBykYqvUYioC61TwWCFU=
 github.com/bodgit/plumbing v1.3.0/go.mod h1:JOTb4XiRu5xfnmdnDJo6GmSbSbtSyufrsyZFByMtKEs=
 github.com/bodgit/sevenzip v1.6.1 h1:kikg2pUMYC9ljU7W9SaqHXhym5HyKm8/M/jd31fYan4=
@@ -834,10 +834,10 @@ github.com/jtolds/gls v4.20.0+incompatible h1:xdiiI2gbIgH/gLH7ADydsJ1uDOEzR8yvV7
 github.com/jtolds/gls v4.20.0+incompatible/go.mod h1:QJZ7F/aHp+rZTRtaJ1ow/lLfFfVYBRgL+9YlvaHOwJU=
 github.com/julz/importas v0.2.0 h1:y+MJN/UdL63QbFJHws9BVC5RpA2iq0kpjrFajTGivjQ=
 github.com/julz/importas v0.2.0/go.mod h1:pThlt589EnCYtMnmhmRYY/qn9lCf/frPOK+WMx3xiJY=
-github.com/k1LoW/bufresolv v0.7.9 h1:E1cd7z9xYtVa6Cg5VczA36Dica0/s1rBVtZfqR0brTU=
-github.com/k1LoW/bufresolv v0.7.9/go.mod h1:m7HRk2zRXpWcDxyhDUKFQvtzFglku+XkrULZ36v2V4Q=
-github.com/k1LoW/grpcstub v0.26.1 h1:wWLcp2ed6aX7hVKUSnLdUR6B5FXYcbQjvfIGCTDJ20M=
-github.com/k1LoW/grpcstub v0.26.1/go.mod h1:+qf5a1UPvLmAsh84ZYI0Sf5jdFi0QhA+6r31QiqhKzI=
+github.com/k1LoW/bufresolv v0.7.10 h1:moC+KF4rQWkK/LfwvfyQV4TVWKxMR6JqZewFdYUf9qM=
+github.com/k1LoW/bufresolv v0.7.10/go.mod h1:LWYEkn88rnRceyKJXktDEZDETrVUrQKC81zgElzIGDU=
+github.com/k1LoW/grpcstub v0.26.2 h1:oES+yBTb35D159wkWx95qDcNU3CbVUbvG846Lh0sook=
+github.com/k1LoW/grpcstub v0.26.2/go.mod h1:hfiS5ckxx42dtirPHCN3WYghZbSmblGr8bFDkjcYH50=
 github.com/k1LoW/protoresolv v0.1.8 h1:9XXxLRzJPPuq+Hrr7opwLSKQb+IVhUd/WaT/zrp0urM=
 github.com/k1LoW/protoresolv v0.1.8/go.mod h1:dO3kmLTwfhbcjjNmgZpg6Swti1i0KMjYqXxY/Fv8lU0=
 github.com/karamaru-alpha/copyloopvar v1.2.1 h1:wmZaZYIjnJ0b5UoKDjUHrikcV0zuPyyxI4SVplLd2CI=
