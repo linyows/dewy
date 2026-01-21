@@ -54,6 +54,7 @@ jobs:
     - { command: 'assets', registry: 's3' }
     - { command: 'assets', registry: 'gs' }
     - { command: 'container', registry: 'img' }
+    - { command: 'container-multiport', registry: 'img' }
 
 - name: Create new version
   id: create_release
@@ -103,6 +104,7 @@ jobs:
         log_level: debug
         new_version: "{{ outputs.genver.version }}"
     test: res.code == 0
+    timeout: 15m
 
 - name: Run server by AWS S3 registry
   needs: [build]
@@ -122,6 +124,7 @@ jobs:
         log_level: debug
         new_version: "{{ outputs.genver.version }}"
     test: res.code == 0
+    timeout: 15m
 
 - name: Run server by GCloud Storage registry
   needs: [build]
@@ -141,6 +144,7 @@ jobs:
         log_level: debug
         new_version: "{{ outputs.genver.version }}"
     test: res.code == 0
+    timeout: 15m
 
 - name: Run assets by Github-Releases registry
   needs: [build]
@@ -160,6 +164,7 @@ jobs:
         log_level: debug
         new_version: "{{ outputs.genver.version }}"
     test: res.code == 0
+    timeout: 15m
 
 - name: Run assets by AWS S3 registry
   needs: [build]
@@ -179,6 +184,7 @@ jobs:
         log_level: debug
         new_version: "{{ outputs.genver.version }}"
     test: res.code == 0
+    timeout: 15m
 
 - name: Run assets by GCloud Storage registry
   needs: [build]
@@ -198,6 +204,7 @@ jobs:
         log_level: debug
         new_version: "{{ outputs.genver.version }}"
     test: res.code == 0
+    timeout: 15m
 
 - name: Run container by OCI registry
   needs: [build]
@@ -215,3 +222,24 @@ jobs:
         log_level: debug
         new_version: "{{ outputs.genver.version }}"
     test: res.code == 0
+    timeout: 15m
+
+- name: Run container with multiple ports by OCI registry
+  needs: [build]
+  steps:
+  - name: Container multi-port test
+    uses: embedded
+    with:
+      path: ./testdata/jobs/container-multiport.yml
+      vars:
+        github_token: "{{ vars.github_token }}"
+        registry: img
+        registry_url: "img://ghcr.io/linyows/dewy-testapp?pre-release=true"
+        port1: 7100
+        port2: 7101
+        container_port: 3333
+        replicas: 2
+        log_level: debug
+        new_version: "{{ outputs.genver.version }}"
+    test: res.code == 0
+    timeout: 15m

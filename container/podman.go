@@ -415,13 +415,14 @@ func (p *Podman) GetMappedPort(ctx context.Context, containerID string, containe
 	return hostPort, nil
 }
 
-// GetRunningContainerWithImage checks if a container is running with the specified image.
+// GetRunningContainerWithImage checks if a container is running with the specified image and app name.
 // It returns the container ID if found, or an empty string if not found.
-func (p *Podman) GetRunningContainerWithImage(ctx context.Context, imageRef string) (string, error) {
-	// Get list of running containers with the specified ancestor (image)
-	// Format: podman ps --filter ancestor=<image> --filter status=running --format "{{.ID}}"
+func (p *Podman) GetRunningContainerWithImage(ctx context.Context, imageRef, appName string) (string, error) {
+	// Get list of running containers with the specified ancestor (image) and app label
+	// Format: podman ps --filter ancestor=<image> --filter label=dewy.app=<appName> --filter status=running --format "{{.ID}}"
 	output, err := p.execCommandOutput(ctx, "ps",
 		"--filter", fmt.Sprintf("ancestor=%s", imageRef),
+		"--filter", fmt.Sprintf("label=dewy.app=%s", appName),
 		"--filter", "status=running",
 		"--format", "{{.ID}}")
 

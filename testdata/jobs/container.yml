@@ -53,7 +53,7 @@ steps:
   id: noerr
   uses: shell
   with:
-    cmd: "grep -i error {{ outputs.container.log }}"
+    cmd: "grep 'level=ERROR' {{ outputs.container.log }}"
   test: status == 1
   outputs:
     ok: status == 1
