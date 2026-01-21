@@ -5,7 +5,7 @@ steps:
   id: container
   uses: shell
   with:
-    workdir: ./testdata/container/{{ vars.registry }}
+    workdir: ./testdata/container-multiport/{{ vars.registry }}
     background: true
     env:
       GITHUB_TOKEN: "{{ vars.github_token }}"
@@ -27,7 +27,6 @@ steps:
 
 - name: Wait for new version to start
   uses: shell
-  timeout: 10m
   retry:
     max_attempts: 120
     interval: 5s
