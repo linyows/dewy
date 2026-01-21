@@ -11,6 +11,7 @@ steps:
       GITHUB_TOKEN: "{{ vars.github_token }}"
     cmd: |
       ./dewy container \
+      --name dewy-testapp-multiport \
       -p {{ vars.port1 }}:{{ vars.container_port }} \
       -p {{ vars.port2 }}:{{ vars.container_port }} \
       -l {{ vars.log_level }} \
