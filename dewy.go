@@ -646,6 +646,17 @@ func (d *Dewy) RunContainer() error {
 	// Extract image reference from artifact URL
 	imageRef := strings.TrimPrefix(res.ArtifactURL, "img://")
 
+	// Determine app name from config or image
+	appName := d.config.Container.Name
+	if appName == "" {
+		// Use repository name as app name
+		parts := strings.Split(imageRef, "/")
+		if len(parts) > 0 {
+			lastPart := parts[len(parts)-1]
+			appName = strings.Split(lastPart, ":")[0]
+		}
+	}
+
 	// Check if this version is already running
 	dockerRuntime, err := container.NewDocker(d.logger.Logger, d.config.Container.DrainTime)
 	if err != nil {
@@ -655,7 +666,7 @@ func (d *Dewy) RunContainer() error {
 	// Store runtime for shutdown handling
 	d.containerRuntime = dockerRuntime
 
-	runningID, err := dockerRuntime.GetRunningContainerWithImage(ctx, imageRef)
+	runningID, err := dockerRuntime.GetRunningContainerWithImage(ctx, imageRef, appName)
 	if err != nil {
 		d.logger.Warn("Failed to check running containers", slog.String("error", err.Error()))
 		// Continue with deployment even if check fails
