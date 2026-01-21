@@ -16,6 +16,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -973,10 +974,14 @@ func (d *Dewy) createHealthCheckFunc(dockerRuntime *container.Docker, resolvedMa
 // startSingleContainer starts a single container and returns its ID and mapped ports.
 // Returns: containerID, map[proxyPort]mappedPort, error.
 func (d *Dewy) startSingleContainer(ctx context.Context, dockerRuntime *container.Docker, imageRef, appName string, replicaIndex int, resolvedMappings []PortMapping, healthCheck container.HealthCheckFunc) (string, map[int]int, error) {
-	// Prepare port mappings for localhost-only access
-	ports := make([]string, 0, len(resolvedMappings))
+	// Prepare port mappings for localhost-only access (deduplicate container ports)
+	uniqueContainerPorts := make(map[int]bool)
+	var ports []string
 	for _, mapping := range resolvedMappings {
-		ports = append(ports, fmt.Sprintf("127.0.0.1::%d", *mapping.ContainerPort))
+		if !uniqueContainerPorts[*mapping.ContainerPort] {
+			uniqueContainerPorts[*mapping.ContainerPort] = true
+			ports = append(ports, fmt.Sprintf("127.0.0.1::%d", *mapping.ContainerPort))
+		}
 	}
 
 	// Start container
@@ -998,9 +1003,16 @@ func (d *Dewy) startSingleContainer(ctx context.Context, dockerRuntime *containe
 		return "", nil, fmt.Errorf("failed to start container: %w", err)
 	}
 
-	// Get all mapped ports
+	// Get all mapped ports (cache to avoid duplicate lookups for same container port)
+	containerPortToMapped := make(map[int]int)
 	mappedPorts := make(map[int]int) // map[proxyPort]mappedPort
 	for _, mapping := range resolvedMappings {
+		// Check if we already looked up this container port
+		if mappedPort, exists := containerPortToMapped[*mapping.ContainerPort]; exists {
+			mappedPorts[mapping.ProxyPort] = mappedPort
+			continue
+		}
+
 		mappedPort, err := dockerRuntime.GetMappedPort(ctx, containerID, *mapping.ContainerPort)
 		if err != nil {
 			rErr := dockerRuntime.Remove(ctx, containerID)
@@ -1009,6 +1021,7 @@ func (d *Dewy) startSingleContainer(ctx context.Context, dockerRuntime *containe
 				fmt.Errorf("runtime remove failed: %w", rErr),
 			)
 		}
+		containerPortToMapped[*mapping.ContainerPort] = mappedPort
 		mappedPorts[mapping.ProxyPort] = mappedPort
 	}
 
@@ -1162,7 +1175,7 @@ func (p *tcpProxy) handleConnection(clientConn net.Conn) {
 	}
 
 	// Connect to backend
-	backendAddr := fmt.Sprintf("%s:%d", backend.host, backend.port)
+	backendAddr := net.JoinHostPort(backend.host, strconv.Itoa(backend.port))
 	backendConn, err := net.DialTimeout("tcp", backendAddr, 5*time.Second)
 	if err != nil {
 		p.logger.Error("Failed to connect to backend",
