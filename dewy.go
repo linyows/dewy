@@ -1347,7 +1347,7 @@ func (d *Dewy) totalProxyBackends() int {
 	return total
 }
 
-// stopManagedContainers stops all containers managed by dewy.
+// stopManagedContainers stops all containers managed by this dewy instance.
 func (d *Dewy) stopManagedContainers(ctx context.Context) error {
 	if d.containerRuntime == nil {
 		return nil
@@ -1361,10 +1361,31 @@ func (d *Dewy) stopManagedContainers(ctx context.Context) error {
 		return fmt.Errorf("runtime is not Docker")
 	}
 
-	// Find all containers with dewy.managed=true label
-	containerIDs, err := dockerRuntime.FindContainersByLabel(ctx, map[string]string{
+	// Determine app name from config or registry
+	appName := d.config.Container.Name
+	if appName == "" {
+		// Use repository name from registry as app name
+		registryURL := d.config.Registry
+		parts := strings.SplitN(registryURL, "://", 2)
+		if len(parts) == 2 {
+			pathParts := strings.Split(parts[1], "/")
+			if len(pathParts) > 0 {
+				lastPart := pathParts[len(pathParts)-1]
+				appName = strings.Split(lastPart, "?")[0]
+				appName = strings.Split(appName, ":")[0]
+			}
+		}
+	}
+
+	// Find all containers with dewy.managed=true and matching app name
+	labels := map[string]string{
 		"dewy.managed": "true",
-	})
+	}
+	if appName != "" {
+		labels["dewy.app"] = appName
+	}
+
+	containerIDs, err := dockerRuntime.FindContainersByLabel(ctx, labels)
 	if err != nil {
 		return fmt.Errorf("failed to find managed containers: %w", err)
 	}
