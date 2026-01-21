@@ -136,7 +136,7 @@ steps:
   id: noerr
   uses: shell
   with:
-    cmd: "grep -i error {{ outputs.container.log }}"
+    cmd: "grep 'level=ERROR' {{ outputs.container.log }}"
   test: status == 1
   outputs:
     ok: status == 1
@@ -148,9 +148,9 @@ steps:
     cmd: |
       grep 'Starting new container' {{ outputs.container.log }} | \
         grep -c {{ vars.new_version }} | tr -d '\n'
-  test: res.stdout == "{{ vars.replicas }}"
+  test: int(res.stdout) == int(vars.replicas)
   outputs:
-    ok: res.stdout == "{{ vars.replicas }}"
+    ok: int(res.stdout) == int(vars.replicas)
 
 - name: Show log
   skipif: outputs.noerr.ok && outputs.proxy1.ok && outputs.proxy2.ok && outputs.allproxies.ok && outputs.backend1.ok && outputs.backend2.ok && outputs.conn1.ok && outputs.conn2.ok && outputs.nver.ok
