@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -53,7 +54,7 @@ func TestNew(t *testing.T) {
 
 	opts := []cmp.Option{
 		cmp.AllowUnexported(Dewy{}, kvs.File{}),
-		cmpopts.IgnoreFields(Dewy{}, "RWMutex", "logger", "proxyServer", "proxyBackends", "proxyIndex", "proxyMutex", "containerRuntime"),
+		cmpopts.IgnoreFields(Dewy{}, "RWMutex", "logger", "tcpProxies", "proxyMutex", "containerRuntime"),
 		cmpopts.IgnoreFields(kvs.File{}, "mutex", "logger"),
 	}
 	if diff := cmp.Diff(dewy, expect, opts...); diff != "" {
@@ -1114,5 +1115,179 @@ func TestHookStdoutStderrTrimming(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestTCPProxy(t *testing.T) {
+	t.Run("create_and_stop", func(t *testing.T) {
+		logger := testLogger()
+		proxy, err := newTCPProxy(0, logger) // port 0 = random available port
+		if err != nil {
+			t.Fatalf("Failed to create TCP proxy: %v", err)
+		}
+		defer proxy.stop()
+
+		if proxy.listener == nil {
+			t.Error("Expected listener to be initialized")
+		}
+		if proxy.proxyPort == 0 {
+			// Port should be assigned even when requesting 0
+			addr := proxy.listener.Addr().(*net.TCPAddr)
+			if addr.Port == 0 {
+				t.Error("Expected port to be assigned")
+			}
+		}
+	})
+
+	t.Run("add_and_remove_backend", func(t *testing.T) {
+		logger := testLogger()
+		proxy, err := newTCPProxy(0, logger)
+		if err != nil {
+			t.Fatalf("Failed to create TCP proxy: %v", err)
+		}
+		defer proxy.stop()
+
+		// Add backends
+		proxy.addBackend("localhost", 8080)
+		proxy.addBackend("localhost", 8081)
+
+		if proxy.backendCount() != 2 {
+			t.Errorf("Expected 2 backends, got %d", proxy.backendCount())
+		}
+
+		// Remove backend
+		removed := proxy.removeBackend("localhost", 8080)
+		if !removed {
+			t.Error("Expected backend to be removed")
+		}
+
+		if proxy.backendCount() != 1 {
+			t.Errorf("Expected 1 backend after removal, got %d", proxy.backendCount())
+		}
+
+		// Try to remove non-existent backend
+		removed = proxy.removeBackend("localhost", 9999)
+		if removed {
+			t.Error("Expected false when removing non-existent backend")
+		}
+	})
+
+	t.Run("round_robin", func(t *testing.T) {
+		logger := testLogger()
+		proxy, err := newTCPProxy(0, logger)
+		if err != nil {
+			t.Fatalf("Failed to create TCP proxy: %v", err)
+		}
+		defer proxy.stop()
+
+		proxy.addBackend("host1", 8080)
+		proxy.addBackend("host2", 8081)
+		proxy.addBackend("host3", 8082)
+
+		// Get backends multiple times and check round-robin
+		seen := make(map[string]int)
+		for i := 0; i < 6; i++ {
+			backend, ok := proxy.getNextBackend()
+			if !ok {
+				t.Fatal("Expected to get backend")
+			}
+			key := fmt.Sprintf("%s:%d", backend.host, backend.port)
+			seen[key]++
+		}
+
+		// Each backend should be selected twice
+		for key, count := range seen {
+			if count != 2 {
+				t.Errorf("Expected backend %s to be selected 2 times, got %d", key, count)
+			}
+		}
+	})
+
+	t.Run("no_backend_available", func(t *testing.T) {
+		logger := testLogger()
+		proxy, err := newTCPProxy(0, logger)
+		if err != nil {
+			t.Fatalf("Failed to create TCP proxy: %v", err)
+		}
+		defer proxy.stop()
+
+		_, ok := proxy.getNextBackend()
+		if ok {
+			t.Error("Expected no backend available")
+		}
+	})
+}
+
+func TestMultiPortTCPProxy(t *testing.T) {
+	logger := testLogger()
+
+	// Create Dewy with multiple port mappings
+	c := DefaultConfig()
+	c.Registry = "ghr://test/repo"
+	port1 := 18080
+	port2 := 18081
+	containerPort1 := 80
+	containerPort2 := 9090
+	c.Container = &ContainerConfig{
+		Name: "test-app",
+		PortMappings: []PortMapping{
+			{ProxyPort: port1, ContainerPort: &containerPort1},
+			{ProxyPort: port2, ContainerPort: &containerPort2},
+		},
+		Replicas: 1,
+	}
+
+	dewy, err := New(c, logger)
+	if err != nil {
+		t.Fatalf("Failed to create Dewy: %v", err)
+	}
+
+	// Start proxies
+	ctx := context.Background()
+	err = dewy.startProxy(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start proxies: %v", err)
+	}
+	defer dewy.stopProxy(ctx)
+
+	// Check that both proxies are running
+	dewy.proxyMutex.RLock()
+	proxyCount := len(dewy.tcpProxies)
+	dewy.proxyMutex.RUnlock()
+
+	if proxyCount != 2 {
+		t.Errorf("Expected 2 proxies, got %d", proxyCount)
+	}
+
+	// Add backends to each proxy
+	err = dewy.addProxyBackend("localhost", 9001, port1)
+	if err != nil {
+		t.Errorf("Failed to add backend to proxy %d: %v", port1, err)
+	}
+
+	err = dewy.addProxyBackend("localhost", 9002, port2)
+	if err != nil {
+		t.Errorf("Failed to add backend to proxy %d: %v", port2, err)
+	}
+
+	// Verify backends
+	if dewy.totalProxyBackends() != 2 {
+		t.Errorf("Expected 2 total backends, got %d", dewy.totalProxyBackends())
+	}
+
+	// Remove backend from proxy 1
+	err = dewy.removeProxyBackend("localhost", 9001, port1)
+	if err != nil {
+		t.Errorf("Failed to remove backend from proxy %d: %v", port1, err)
+	}
+
+	if dewy.totalProxyBackends() != 1 {
+		t.Errorf("Expected 1 total backend after removal, got %d", dewy.totalProxyBackends())
+	}
+
+	// Try to add backend to non-existent proxy
+	err = dewy.addProxyBackend("localhost", 9999, 19999)
+	if err == nil {
+		t.Error("Expected error when adding backend to non-existent proxy")
 	}
 }
