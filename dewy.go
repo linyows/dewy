@@ -6,10 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
 	"os"
 	"os/exec"
@@ -18,6 +18,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -57,14 +58,29 @@ type Dewy struct {
 	job              *scheduler.Job
 	notifier         notifier.Notifier
 	logger           *logging.Logger
-	proxyServer      *http.Server
-	proxyBackends    []*url.URL // Multiple backends for load balancing
-	proxyIndex       int        // Round-robin counter
+	tcpProxies       map[int]*tcpProxy // TCP proxies keyed by proxy port
 	proxyMutex       sync.RWMutex
 	adminServer      *http.Server // Admin API server for CLI communication
 	containerRuntime container.Runtime
 	cVer             string // Current deployed version (tag)
 	sync.RWMutex
+}
+
+// tcpProxy manages a TCP proxy for a single port.
+type tcpProxy struct {
+	proxyPort    int
+	listener     net.Listener
+	backends     []tcpBackend
+	backendIndex uint64 // Atomic counter for round-robin
+	mu           sync.RWMutex
+	done         chan struct{}
+	logger       *logging.Logger
+}
+
+// tcpBackend represents a backend server.
+type tcpBackend struct {
+	host string
+	port int
 }
 
 // New returns Dewy.
@@ -1051,153 +1067,258 @@ func (d *Dewy) rollbackContainers(ctx context.Context, dockerRuntime *container.
 	}
 }
 
-// startProxy starts the built-in reverse proxy HTTP server.
+// startProxy starts TCP proxies for all configured port mappings.
 func (d *Dewy) startProxy(ctx context.Context) error {
-	// Create a reverse proxy handler with round-robin load balancing
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		d.proxyMutex.Lock()
-		backends := d.proxyBackends
-		if len(backends) == 0 {
-			d.proxyMutex.Unlock()
-			http.Error(w, "Service Unavailable - No backend configured", http.StatusServiceUnavailable)
-			d.logger.Debug("Proxy request rejected - no backend configured",
-				slog.String("method", r.Method),
-				slog.String("path", r.URL.Path))
-			return
-		}
-
-		// Round-robin: select next backend
-		backend := backends[d.proxyIndex%len(backends)]
-		d.proxyIndex++
-		d.proxyMutex.Unlock()
-
-		// Create reverse proxy for selected backend
-		proxy := httputil.NewSingleHostReverseProxy(backend)
-
-		// Custom error handler
-		proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-			d.logger.Error("Proxy error",
-				slog.String("backend", backend.String()),
-				slog.String("method", r.Method),
-				slog.String("path", r.URL.Path),
-				slog.String("error", err.Error()))
-			http.Error(w, "Bad Gateway", http.StatusBadGateway)
-		}
-
-		// Proxy the request
-		d.logger.Debug("Proxying request",
-			slog.String("backend", backend.String()),
-			slog.String("method", r.Method),
-			slog.String("path", r.URL.Path))
-		proxy.ServeHTTP(w, r)
-	})
-
-	// Create HTTP server using the first proxy port from port mappings
 	if len(d.config.Container.PortMappings) == 0 {
 		return fmt.Errorf("no port mappings configured for proxy")
 	}
-	proxyPort := d.config.Container.PortMappings[0].ProxyPort
-	addr := fmt.Sprintf(":%d", proxyPort)
-	d.proxyServer = &http.Server{
-		Addr:              addr,
-		Handler:           handler,
-		ReadHeaderTimeout: 5 * time.Second, // For slowloris attack
-	}
-
-	// Start server in background
-	go func() {
-		d.logger.Info("Starting built-in reverse proxy",
-			slog.String("address", addr))
-
-		if err := d.proxyServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			d.logger.Error("Proxy server error", slog.String("error", err.Error()))
-		}
-	}()
-
-	// Wait a moment to ensure server starts
-	time.Sleep(100 * time.Millisecond)
-
-	// Verify server is listening
-	conn, err := net.DialTimeout("tcp", addr, 1*time.Second)
-	if err != nil {
-		return fmt.Errorf("proxy server failed to start: %w", err)
-	}
-	conn.Close()
-
-	d.logger.Info("Built-in reverse proxy started successfully",
-		slog.String("listen", addr))
-
-	return nil
-}
-
-// addProxyBackend adds a new backend to the load balancer pool.
-// For multi-port support, proxyPort specifies which proxy port this backend serves.
-// Currently only single proxy port is supported, so proxyPort is logged but not used.
-func (d *Dewy) addProxyBackend(host string, port int, proxyPort int) error {
-	backend, err := url.Parse(fmt.Sprintf("http://%s:%d", host, port))
-	if err != nil {
-		return fmt.Errorf("failed to parse backend URL: %w", err)
-	}
 
 	d.proxyMutex.Lock()
-	d.proxyBackends = append(d.proxyBackends, backend)
+	d.tcpProxies = make(map[int]*tcpProxy)
 	d.proxyMutex.Unlock()
 
-	d.logger.Info("Proxy backend added",
-		slog.String("backend", backend.String()),
-		slog.Int("proxy_port", proxyPort),
-		slog.Int("total_backends", len(d.proxyBackends)))
+	// Start a TCP proxy for each port mapping
+	for _, mapping := range d.config.Container.PortMappings {
+		proxy, err := newTCPProxy(mapping.ProxyPort, d.logger)
+		if err != nil {
+			// Clean up already started proxies
+			d.stopProxy(ctx)
+			return fmt.Errorf("failed to start proxy on port %d: %w", mapping.ProxyPort, err)
+		}
+
+		d.proxyMutex.Lock()
+		d.tcpProxies[mapping.ProxyPort] = proxy
+		d.proxyMutex.Unlock()
+
+		d.logger.Info("TCP proxy started",
+			slog.Int("proxy_port", mapping.ProxyPort))
+	}
+
+	d.logger.Info("All TCP proxies started successfully",
+		slog.Int("count", len(d.config.Container.PortMappings)))
 
 	return nil
 }
 
-// removeProxyBackend removes a backend from the load balancer pool.
-// For multi-port support, proxyPort specifies which proxy port this backend serves.
-// Currently only single proxy port is supported, so proxyPort is logged but not used.
-func (d *Dewy) removeProxyBackend(host string, port int, proxyPort int) error {
-	targetURL := fmt.Sprintf("http://%s:%d", host, port)
+// newTCPProxy creates and starts a new TCP proxy on the specified port.
+func newTCPProxy(port int, logger *logging.Logger) (*tcpProxy, error) {
+	addr := fmt.Sprintf(":%d", port)
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to listen on %s: %w", addr, err)
+	}
 
+	proxy := &tcpProxy{
+		proxyPort: port,
+		listener:  listener,
+		backends:  make([]tcpBackend, 0),
+		done:      make(chan struct{}),
+		logger:    logger,
+	}
+
+	go proxy.acceptLoop()
+
+	return proxy, nil
+}
+
+// acceptLoop accepts incoming connections and proxies them to backends.
+func (p *tcpProxy) acceptLoop() {
+	for {
+		select {
+		case <-p.done:
+			return
+		default:
+		}
+
+		conn, err := p.listener.Accept()
+		if err != nil {
+			select {
+			case <-p.done:
+				return
+			default:
+				p.logger.Debug("Accept error",
+					slog.Int("proxy_port", p.proxyPort),
+					slog.String("error", err.Error()))
+				continue
+			}
+		}
+
+		go p.handleConnection(conn)
+	}
+}
+
+// handleConnection proxies a single connection to a backend.
+func (p *tcpProxy) handleConnection(clientConn net.Conn) {
+	defer clientConn.Close()
+
+	// Get backend using round-robin
+	backend, ok := p.getNextBackend()
+	if !ok {
+		p.logger.Debug("No backend available",
+			slog.Int("proxy_port", p.proxyPort))
+		return
+	}
+
+	// Connect to backend
+	backendAddr := fmt.Sprintf("%s:%d", backend.host, backend.port)
+	backendConn, err := net.DialTimeout("tcp", backendAddr, 5*time.Second)
+	if err != nil {
+		p.logger.Error("Failed to connect to backend",
+			slog.Int("proxy_port", p.proxyPort),
+			slog.String("backend", backendAddr),
+			slog.String("error", err.Error()))
+		return
+	}
+	defer backendConn.Close()
+
+	p.logger.Debug("Proxying connection",
+		slog.Int("proxy_port", p.proxyPort),
+		slog.String("backend", backendAddr),
+		slog.String("client", clientConn.RemoteAddr().String()))
+
+	// Bidirectional copy
+	done := make(chan struct{}, 2)
+
+	go func() {
+		io.Copy(backendConn, clientConn)
+		done <- struct{}{}
+	}()
+
+	go func() {
+		io.Copy(clientConn, backendConn)
+		done <- struct{}{}
+	}()
+
+	// Wait for either direction to complete
+	<-done
+}
+
+// getNextBackend returns the next backend using round-robin.
+func (p *tcpProxy) getNextBackend() (tcpBackend, bool) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	if len(p.backends) == 0 {
+		return tcpBackend{}, false
+	}
+
+	index := atomic.AddUint64(&p.backendIndex, 1) - 1
+	return p.backends[index%uint64(len(p.backends))], true
+}
+
+// addBackend adds a backend to this proxy.
+func (p *tcpProxy) addBackend(host string, port int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	p.backends = append(p.backends, tcpBackend{host: host, port: port})
+	p.logger.Info("Backend added to TCP proxy",
+		slog.Int("proxy_port", p.proxyPort),
+		slog.String("backend_host", host),
+		slog.Int("backend_port", port),
+		slog.Int("total_backends", len(p.backends)))
+}
+
+// removeBackend removes a backend from this proxy.
+func (p *tcpProxy) removeBackend(host string, port int) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	for i, b := range p.backends {
+		if b.host == host && b.port == port {
+			p.backends = append(p.backends[:i], p.backends[i+1:]...)
+			p.logger.Info("Backend removed from TCP proxy",
+				slog.Int("proxy_port", p.proxyPort),
+				slog.String("backend_host", host),
+				slog.Int("backend_port", port),
+				slog.Int("remaining_backends", len(p.backends)))
+			return true
+		}
+	}
+	return false
+}
+
+// stop stops the TCP proxy.
+func (p *tcpProxy) stop() error {
+	close(p.done)
+	return p.listener.Close()
+}
+
+// backendCount returns the number of backends.
+func (p *tcpProxy) backendCount() int {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return len(p.backends)
+}
+
+// addProxyBackend adds a new backend to the appropriate TCP proxy.
+func (d *Dewy) addProxyBackend(host string, port int, proxyPort int) error {
+	d.proxyMutex.RLock()
+	proxy, exists := d.tcpProxies[proxyPort]
+	d.proxyMutex.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("no proxy configured for port %d", proxyPort)
+	}
+
+	proxy.addBackend(host, port)
+	return nil
+}
+
+// removeProxyBackend removes a backend from the appropriate TCP proxy.
+func (d *Dewy) removeProxyBackend(host string, port int, proxyPort int) error {
+	d.proxyMutex.RLock()
+	proxy, exists := d.tcpProxies[proxyPort]
+	d.proxyMutex.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("no proxy configured for port %d", proxyPort)
+	}
+
+	if !proxy.removeBackend(host, port) {
+		return fmt.Errorf("backend %s:%d not found for proxy port %d", host, port, proxyPort)
+	}
+	return nil
+}
+
+// stopProxy gracefully shuts down all TCP proxies.
+func (d *Dewy) stopProxy(ctx context.Context) error {
 	d.proxyMutex.Lock()
 	defer d.proxyMutex.Unlock()
 
-	newBackends := make([]*url.URL, 0, len(d.proxyBackends))
-	for _, backend := range d.proxyBackends {
-		if backend.String() != targetURL {
-			newBackends = append(newBackends, backend)
-		}
-	}
-
-	if len(newBackends) == len(d.proxyBackends) {
-		return fmt.Errorf("backend not found: %s", targetURL)
-	}
-
-	d.proxyBackends = newBackends
-	d.proxyIndex = 0 // Reset index
-
-	d.logger.Info("Proxy backend removed",
-		slog.String("backend", targetURL),
-		slog.Int("remaining_backends", len(d.proxyBackends)))
-
-	return nil
-}
-
-// stopProxy gracefully shuts down the reverse proxy server.
-func (d *Dewy) stopProxy(ctx context.Context) error {
-	if d.proxyServer == nil {
+	if d.tcpProxies == nil {
 		return nil
 	}
 
-	d.logger.Info("Stopping reverse proxy")
+	d.logger.Info("Stopping TCP proxies", slog.Int("count", len(d.tcpProxies)))
 
-	shutdownCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
-	if err := d.proxyServer.Shutdown(shutdownCtx); err != nil {
-		return fmt.Errorf("failed to shutdown proxy: %w", err)
+	var errs []error
+	for port, proxy := range d.tcpProxies {
+		if err := proxy.stop(); err != nil {
+			errs = append(errs, fmt.Errorf("failed to stop proxy on port %d: %w", port, err))
+		}
 	}
 
-	d.logger.Info("Reverse proxy stopped")
+	d.tcpProxies = nil
+
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+
+	d.logger.Info("All TCP proxies stopped")
 	return nil
+}
+
+// totalProxyBackends returns the total number of backends across all TCP proxies.
+func (d *Dewy) totalProxyBackends() int {
+	d.proxyMutex.RLock()
+	defer d.proxyMutex.RUnlock()
+
+	total := 0
+	for _, proxy := range d.tcpProxies {
+		total += proxy.backendCount()
+	}
+	return total
 }
 
 // stopManagedContainers stops all containers managed by dewy.
@@ -1401,13 +1522,16 @@ func (d *Dewy) handleGetStatus(w http.ResponseWriter, r *http.Request) {
 	d.RLock()
 	defer d.RUnlock()
 
+	// Count total backends across all proxies
+	totalBackends := d.totalProxyBackends()
+
 	// Return JSON response
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"name":            d.config.Container.Name,
 		"command":         d.config.Command,
 		"current_version": d.cVer,
-		"proxy_backends":  len(d.proxyBackends),
+		"proxy_backends":  totalBackends,
 		"is_running":      d.isServerRunning,
 	}); err != nil {
 		d.logger.Error("Failed to encode response",
