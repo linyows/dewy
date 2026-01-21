@@ -1125,15 +1125,17 @@ func TestTCPProxy(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create TCP proxy: %v", err)
 		}
-		defer proxy.stop()
+		defer func() { _ = proxy.stop() }()
 
 		if proxy.listener == nil {
 			t.Error("Expected listener to be initialized")
 		}
 		if proxy.proxyPort == 0 {
 			// Port should be assigned even when requesting 0
-			addr := proxy.listener.Addr().(*net.TCPAddr)
-			if addr.Port == 0 {
+			tcpAddr, ok := proxy.listener.Addr().(*net.TCPAddr)
+			if !ok {
+				t.Error("Expected TCP address")
+			} else if tcpAddr.Port == 0 {
 				t.Error("Expected port to be assigned")
 			}
 		}
@@ -1145,7 +1147,7 @@ func TestTCPProxy(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create TCP proxy: %v", err)
 		}
-		defer proxy.stop()
+		defer func() { _ = proxy.stop() }()
 
 		// Add backends
 		proxy.addBackend("localhost", 8080)
@@ -1178,7 +1180,7 @@ func TestTCPProxy(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create TCP proxy: %v", err)
 		}
-		defer proxy.stop()
+		defer func() { _ = proxy.stop() }()
 
 		proxy.addBackend("host1", 8080)
 		proxy.addBackend("host2", 8081)
@@ -1209,7 +1211,7 @@ func TestTCPProxy(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create TCP proxy: %v", err)
 		}
-		defer proxy.stop()
+		defer func() { _ = proxy.stop() }()
 
 		_, ok := proxy.getNextBackend()
 		if ok {
@@ -1248,7 +1250,7 @@ func TestMultiPortTCPProxy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start proxies: %v", err)
 	}
-	defer dewy.stopProxy(ctx)
+	defer func() { _ = dewy.stopProxy(ctx) }()
 
 	// Check that both proxies are running
 	dewy.proxyMutex.RLock()

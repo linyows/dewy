@@ -1082,7 +1082,9 @@ func (d *Dewy) startProxy(ctx context.Context) error {
 		proxy, err := newTCPProxy(mapping.ProxyPort, d.logger)
 		if err != nil {
 			// Clean up already started proxies
-			d.stopProxy(ctx)
+			if stopErr := d.stopProxy(ctx); stopErr != nil {
+				d.logger.Error("Failed to stop proxies during cleanup", slog.String("error", stopErr.Error()))
+			}
 			return fmt.Errorf("failed to start proxy on port %d: %w", mapping.ProxyPort, err)
 		}
 
@@ -1180,12 +1182,12 @@ func (p *tcpProxy) handleConnection(clientConn net.Conn) {
 	done := make(chan struct{}, 2)
 
 	go func() {
-		io.Copy(backendConn, clientConn)
+		_, _ = io.Copy(backendConn, clientConn)
 		done <- struct{}{}
 	}()
 
 	go func() {
-		io.Copy(clientConn, backendConn)
+		_, _ = io.Copy(clientConn, backendConn)
 		done <- struct{}{}
 	}()
 
