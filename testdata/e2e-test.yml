@@ -215,3 +215,22 @@ jobs:
         log_level: debug
         new_version: "{{ outputs.genver.version }}"
     test: res.code == 0
+
+- name: Run container with multiple ports by OCI registry
+  needs: [build]
+  steps:
+  - name: Container multi-port test
+    uses: embedded
+    with:
+      path: ./testdata/jobs/container-multiport.yml
+      vars:
+        github_token: "{{ vars.github_token }}"
+        registry: img
+        registry_url: "img://ghcr.io/linyows/dewy-testapp?pre-release=true"
+        port1: 7100
+        port2: 7101
+        container_port: 3333
+        replicas: 2
+        log_level: debug
+        new_version: "{{ outputs.genver.version }}"
+    test: res.code == 0

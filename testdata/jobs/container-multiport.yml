@@ -1,0 +1,159 @@
+name: Container Multi-Port Test
+
+steps:
+- name: Start dewy with multiple ports
+  id: container
+  uses: shell
+  with:
+    workdir: ./testdata/container/{{ vars.registry }}
+    background: true
+    env:
+      GITHUB_TOKEN: "{{ vars.github_token }}"
+    cmd: |
+      ./dewy container \
+      -p {{ vars.port1 }}:{{ vars.container_port }} \
+      -p {{ vars.port2 }}:{{ vars.container_port }} \
+      -l {{ vars.log_level }} \
+      --registry "{{ vars.registry_url }}" \
+      --health-path /health \
+      --replicas {{ vars.replicas }}
+  test: status == -1
+  outputs:
+    pid: res.pid
+    log: res.log
+  echo: |
+    PID: {{ res.pid }}
+    Log: {{ res.log }}
+
+- name: Wait for new version to start
+  uses: shell
+  retry:
+    max_attempts: 120
+    interval: 5s
+  with:
+    cmd: |
+      if [ -f "{{ outputs.container.log }}" ]; then
+        grep "Starting new container" "{{ outputs.container.log }}" | \
+          grep -q "{{ vars.new_version }}" && exit 0
+      fi
+      exit 1
+  test: status == 0
+
+- name: Wait for stabilization
+  wait: 60s
+  uses: shell
+  with:
+    cmd: "echo 'Waiting for system stabilization after new version detection'"
+  test: status == 0
+
+- name: Verify TCP proxy started on port1
+  id: proxy1
+  uses: shell
+  with:
+    cmd: |
+      grep 'TCP proxy started' {{ outputs.container.log }} | \
+        grep -c 'proxy_port={{ vars.port1 }}' | tr -d '\n'
+  test: res.stdout == "1"
+  outputs:
+    ok: res.stdout == "1"
+
+- name: Verify TCP proxy started on port2
+  id: proxy2
+  uses: shell
+  with:
+    cmd: |
+      grep 'TCP proxy started' {{ outputs.container.log }} | \
+        grep -c 'proxy_port={{ vars.port2 }}' | tr -d '\n'
+  test: res.stdout == "1"
+  outputs:
+    ok: res.stdout == "1"
+
+- name: Verify all TCP proxies started
+  id: allproxies
+  uses: shell
+  with:
+    cmd: |
+      grep 'All TCP proxies started successfully' {{ outputs.container.log }} | \
+        grep -c 'count=2' | tr -d '\n'
+  test: res.stdout == "1"
+  outputs:
+    ok: res.stdout == "1"
+
+- name: Verify backends added to port1
+  id: backend1
+  uses: shell
+  with:
+    cmd: |
+      grep 'Backend added to TCP proxy' {{ outputs.container.log }} | \
+        grep -c 'proxy_port={{ vars.port1 }}' | tr -d '\n'
+  test: int(res.stdout) >= int(vars.replicas)
+  outputs:
+    ok: int(res.stdout) >= int(vars.replicas)
+
+- name: Verify backends added to port2
+  id: backend2
+  uses: shell
+  with:
+    cmd: |
+      grep 'Backend added to TCP proxy' {{ outputs.container.log }} | \
+        grep -c 'proxy_port={{ vars.port2 }}' | tr -d '\n'
+  test: int(res.stdout) >= int(vars.replicas)
+  outputs:
+    ok: int(res.stdout) >= int(vars.replicas)
+
+- name: Test connection to port1
+  id: conn1
+  uses: shell
+  retry:
+    max_attempts: 5
+    interval: 2s
+  with:
+    cmd: "curl -s -o /dev/null -w '%{http_code}' http://localhost:{{ vars.port1 }}/health"
+  test: res.stdout == "200"
+  outputs:
+    ok: res.stdout == "200"
+
+- name: Test connection to port2
+  id: conn2
+  uses: shell
+  retry:
+    max_attempts: 5
+    interval: 2s
+  with:
+    cmd: "curl -s -o /dev/null -w '%{http_code}' http://localhost:{{ vars.port2 }}/health"
+  test: res.stdout == "200"
+  outputs:
+    ok: res.stdout == "200"
+
+- name: Stop dewy
+  uses: shell
+  with: # Use Process Group ID
+    cmd: "kill -TERM -{{ outputs.container.pid }}"
+  test: status == 0
+
+- name: Verify no error
+  id: noerr
+  uses: shell
+  with:
+    cmd: "grep -i error {{ outputs.container.log }}"
+  test: status == 1
+  outputs:
+    ok: status == 1
+
+- name: Verify new containers created
+  id: nver
+  uses: shell
+  with:
+    cmd: |
+      grep 'Starting new container' {{ outputs.container.log }} | \
+        grep -c {{ vars.new_version }} | tr -d '\n'
+  test: res.stdout == "{{ vars.replicas }}"
+  outputs:
+    ok: res.stdout == "{{ vars.replicas }}"
+
+- name: Show log
+  skipif: outputs.noerr.ok && outputs.proxy1.ok && outputs.proxy2.ok && outputs.allproxies.ok && outputs.backend1.ok && outputs.backend2.ok && outputs.conn1.ok && outputs.conn2.ok && outputs.nver.ok
+  uses: shell
+  with:
+    cmd: "cat {{ outputs.container.log }}"
+  echo: "{{ res.stdout }}"
