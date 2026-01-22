@@ -43,10 +43,10 @@ ci: deps test lint
 	git diff go.mod
 
 xbuild:
-	go tool goreleaser --rm-dist --snapshot --skip-validate
+	goreleaser --rm-dist --snapshot --skip-validate
 
 dist:
-	@test -z $(GITHUB_TOKEN) || go tool goreleaser --rm-dist --skip-validate
+	@test -z $(GITHUB_TOKEN) || goreleaser --rm-dist --skip-validate
 
 clean:
 	git checkout go.*
