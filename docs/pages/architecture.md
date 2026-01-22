@@ -18,12 +18,6 @@ Dewy is composed of four interfaces as pluggable abstractions: Registry, Artifac
 - Cache: Downloaded file management (File, Memory, Consul, Redis)
 - Notifier: Deployment notifications (Slack, Mail)
 
----
-
-## Supervisor Mode (server / assets)
-
-In Supervisor Mode, Dewy acts as the main process and launches applications as child processes. This mode is ideal for deploying binary applications directly on VMs or bare-metal servers.
-
 ### Deployment Process
 
 The following diagram illustrates Dewy's deployment process and configuration.
@@ -37,6 +31,12 @@ The following diagram illustrates Dewy's deployment process and configuration.
 5. Registry saves information about when, where, and what was deployed as files
 6. Notifier sends notifications to specified notification destinations
 
+## Supervisor Mode (server / assets)
+
+In Supervisor Mode, Dewy acts as the main process and launches applications as child processes. This mode is ideal for deploying binary applications directly on VMs or bare-metal servers.
+
+![Supervisor Architecture](https://github.com/linyows/dewy/blob/main/misc/supervisor-architecture.svg?raw=true)
+
 ### Graceful Restart
 
 For the `server` command, Dewy uses [server-starter](https://github.com/lestrrat-go/server-starter) to achieve graceful restarts. When a new version is detected:
@@ -46,34 +46,11 @@ For the `server` command, Dewy uses [server-starter](https://github.com/lestrrat
 3. The old process finishes handling existing requests and exits
 4. Zero-downtime deployment is achieved
 
----
-
 ## Proxy Mode (container)
 
 In Proxy Mode, Dewy manages containerized applications using Docker or Podman. It runs a built-in TCP reverse proxy that routes traffic to container backends, enabling zero-downtime rolling updates.
 
-### Architecture Overview
-
-```
-                    ┌─────────────────────────────────────────┐
-                    │              Dewy Process               │
-                    │                                         │
-   Client Request   │  ┌─────────────┐    ┌──────────────┐   │
- ──────────────────▶│  │  TCP Proxy  │───▶│  Container   │   │
-       :8080        │  │   (:8080)   │    │  (random     │   │
-                    │  │             │───▶│   ports)     │   │
-                    │  │  Round-     │    │              │   │
-                    │  │  Robin LB   │───▶│  Replicas    │   │
-                    │  └─────────────┘    └──────────────┘   │
-                    │                                         │
-                    │  ┌─────────────┐    ┌──────────────┐   │
-                    │  │ Admin API   │    │  Container   │   │
-                    │  │  (:17539)   │    │  Runtime     │   │
-                    │  └─────────────┘    │ (Docker/     │   │
-                    │                     │  Podman)     │   │
-                    │                     └──────────────┘   │
-                    └─────────────────────────────────────────┘
-```
+![Proxy Architecture](https://github.com/linyows/dewy/blob/main/misc/proxy-architecture.svg?raw=true)
 
 ### Components
 
@@ -113,8 +90,6 @@ Containers are started with localhost-only port bindings (`127.0.0.1::containerP
 - Avoids port conflicts between multiple replicas
 - Isolates container traffic to localhost (only accessible via proxy)
 - Allows the proxy to manage all external access
-
----
 
 ## Comparison
 

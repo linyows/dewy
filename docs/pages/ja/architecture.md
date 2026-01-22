@@ -18,12 +18,6 @@ Dewyは、プラグガブルな抽象化として、Registry, Artifact, Cache, N
 - Cache: ダウンロード済みファイル管理（File, Memory, Consul, Redis）
 - Notifier: デプロイ通知（Slack, Mail）
 
----
-
-## Supervisor型 (server / assets)
-
-Supervisor型では、Dewyがメインプロセスとなり、アプリケーションを子プロセスとして起動します。このモードは、VMやベアメタルサーバー上でバイナリアプリケーションを直接デプロイする場合に最適です。
-
 ### デプロイプロセス
 
 以下はDewyのデプロイプロセスと構成を図にしたものです。
@@ -37,6 +31,12 @@ Supervisor型では、Dewyがメインプロセスとなり、アプリケーシ
 5. Registryは、何時どこで何をデプロイした情報をファイルとして保存する
 6. Notifierは、指定した通知先に通知を行う
 
+## Supervisor型 (server / assets)
+
+Supervisor型では、Dewyがメインプロセスとなり、アプリケーションを子プロセスとして起動します。このモードは、VMやベアメタルサーバー上でバイナリアプリケーションを直接デプロイする場合に最適です。
+
+![Supervisor Architecture](https://github.com/linyows/dewy/blob/main/misc/supervisor-architecture.svg?raw=true)
+
 ### グレースフルリスタート
 
 `server` コマンドでは、Dewyは[server-starter](https://github.com/lestrrat-go/server-starter)を使用してグレースフルリスタートを実現します。新しいバージョンが検出されると：
@@ -46,34 +46,11 @@ Supervisor型では、Dewyがメインプロセスとなり、アプリケーシ
 3. 古いプロセスは既存のリクエスト処理を完了して終了
 4. ゼロダウンタイムデプロイが実現
 
----
-
 ## プロキシ型 (container)
 
 プロキシ型では、DewyがDockerまたはPodmanを使用してコンテナ化されたアプリケーションを管理します。内蔵のTCPリバースプロキシがコンテナバックエンドにトラフィックをルーティングし、ゼロダウンタイムのローリングアップデートを可能にします。
 
-### アーキテクチャ概要
-
-```
-                    ┌─────────────────────────────────────────┐
-                    │              Dewy プロセス               │
-                    │                                         │
-   クライアント     │  ┌─────────────┐    ┌──────────────┐   │
-   リクエスト       │  │  TCP Proxy  │───▶│  Container   │   │
- ──────────────────▶│  │   (:8080)   │    │  (ランダム   │   │
-       :8080        │  │             │───▶│   ポート)    │   │
-                    │  │  ラウンド   │    │              │   │
-                    │  │  ロビンLB   │───▶│  レプリカ    │   │
-                    │  └─────────────┘    └──────────────┘   │
-                    │                                         │
-                    │  ┌─────────────┐    ┌──────────────┐   │
-                    │  │ Admin API   │    │  Container   │   │
-                    │  │  (:17539)   │    │  Runtime     │   │
-                    │  └─────────────┘    │ (Docker/     │   │
-                    │                     │  Podman)     │   │
-                    │                     └──────────────┘   │
-                    └─────────────────────────────────────────┘
-```
+![Proxy Architecture](https://github.com/linyows/dewy/blob/main/misc/proxy-architecture.svg?raw=true)
 
 ### コンポーネント
 
@@ -113,8 +90,6 @@ Supervisor型では、Dewyがメインプロセスとなり、アプリケーシ
 - 複数レプリカ間のポート競合を回避
 - コンテナトラフィックをlocalhostに分離（プロキシ経由でのみアクセス可能）
 - プロキシがすべての外部アクセスを管理
-
----
 
 ## 比較
 
