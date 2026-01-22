@@ -120,6 +120,6 @@ dewy container \
 
 さらに詳しく知りたい場合は、以下のドキュメントを参照してください：
 
-- [アーキテクチャ](../architecture/)
-- [Dewy CLIリファレンス](../reference/)
-- [よくある質問](../faq/)
+- [アーキテクチャ](../architecture)
+- [Dewy CLIリファレンス](../reference)
+- [よくある質問](../faq)

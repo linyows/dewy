@@ -34,6 +34,7 @@ const jaItems = [
       { href: '/ja/structured-logging', children: '構造化ログ' },
       { href: '/ja/cache-configuration', children: 'キャッシュ設定' },
       { href: '/ja/deployment-workflow', children: 'デプロイメントワークフロー' },
+      { href: '/ja/e2e-testing', children: 'E2Eテスト' },
     ],
   },
 ];
@@ -69,6 +70,7 @@ const enItems = [
       { href: '/structured-logging', children: 'Structured Logging' },
       { href: '/cache-configuration', children: 'Cache Configuration' },
       { href: '/deployment-workflow', children: 'Deployment Workflow' },
+      { href: '/e2e-testing', children: 'E2E Testing' },
     ],
   },
 ];

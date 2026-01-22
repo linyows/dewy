@@ -120,6 +120,6 @@ The proxy listens on the specified port and forwards traffic to the current cont
 
 For more information, refer to the following documentation:
 
-- [Architecture](../architecture/)
-- [Dewy CLI Reference](../reference/)
-- [FAQ](../faq/)
+- [Architecture](../architecture)
+- [Dewy CLI Reference](../reference)
+- [FAQ](../faq)

@@ -178,9 +178,9 @@ dewy server --registry ghr://linyows/dewy --help
 
 インストールが完了したら、以下のドキュメントを参照して設定を開始してください：
 
-- [はじめに](../getting-started/)
-- [アーキテクチャ](../architecture/)
-- [よくある質問](../faq/)
+- [はじめに](../getting-started)
+- [アーキテクチャ](../architecture)
+- [よくある質問](../faq)
 
 ## トラブルシューティング
 
