@@ -47,6 +47,6 @@ Dewyは、様々な環境でアプリケーションの最新バージョンを�
 
 Dewyを使い始めるには、以下のドキュメントを参照してください：
 
-- [インストール](../installation/)
-- [使ってみよう](../getting-started/)
-- [アーキテクチャ](../architecture/)
+- [インストール](../installation)
+- [使ってみよう](../getting-started)
+- [アーキテクチャ](../architecture)

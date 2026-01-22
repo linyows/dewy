@@ -47,6 +47,6 @@ Dewy is optimal for keeping the latest version of applications running in variou
 
 To start using Dewy, refer to the following documentation:
 
-- [Installation](../installation/)
-- [Getting Started](../getting-started/)
-- [Architecture](../architecture/)
+- [Installation](../installation)
+- [Getting Started](../getting-started)
+- [Architecture](../architecture)

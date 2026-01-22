@@ -38,6 +38,6 @@ dewy server --registry ghr://owner/repo2 --port 8002 -- /opt/app2/current/app
 
 さらに詳しく知りたい場合は、以下のドキュメントを参照してください：
 
-- [使ってみよう](../getting-started/)
-- [アーキテクチャ](../architecture/)
-- [コントリビューティング](../contributing/)
+- [使ってみよう](../getting-started)
+- [アーキテクチャ](../architecture)
+- [コントリビューティング](../contributing)
