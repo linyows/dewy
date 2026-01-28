@@ -73,11 +73,18 @@ func (c *GRPC) Current(ctx context.Context) (*CurrentResponse, error) {
 		createdAt = &t
 	}
 
+	// Extract slot from build metadata
+	var slot string
+	if sv := ParseSemVer(cres.Tag); sv != nil {
+		slot = sv.BuildMetadata
+	}
+
 	res := &CurrentResponse{
 		ID:          cres.Id,
 		Tag:         cres.Tag,
 		ArtifactURL: cres.ArtifactUrl,
 		CreatedAt:   createdAt,
+		Slot:        slot,
 	}
 	return res, nil
 }
