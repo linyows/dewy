@@ -250,6 +250,15 @@ func (d *Dewy) Run() error {
 		return err
 	}
 
+	// Check slot matching for blue/green deployment
+	if d.config.Slot != "" && res.Slot != d.config.Slot {
+		d.logger.Debug("Deploy skipped: slot mismatch",
+			slog.String("expected_slot", d.config.Slot),
+			slog.String("actual_slot", res.Slot),
+			slog.String("tag", res.Tag))
+		return nil
+	}
+
 	// Check cache
 	cachekeyName := d.cachekeyName(res)
 	currentkeyValue, _ := d.cache.Read(currentkeyName)
@@ -641,7 +650,17 @@ func (d *Dewy) RunContainer() error {
 	d.logger.Debug("Found latest image",
 		slog.String("tag", res.Tag),
 		slog.String("digest", res.ID),
-		slog.String("url", res.ArtifactURL))
+		slog.String("url", res.ArtifactURL),
+		slog.String("slot", res.Slot))
+
+	// Check slot matching for blue/green deployment
+	if d.config.Slot != "" && res.Slot != d.config.Slot {
+		d.logger.Debug("Deploy skipped: slot mismatch",
+			slog.String("expected_slot", d.config.Slot),
+			slog.String("actual_slot", res.Slot),
+			slog.String("tag", res.Tag))
+		return nil
+	}
 
 	// Extract image reference from artifact URL
 	imageRef := strings.TrimPrefix(res.ArtifactURL, "img://")

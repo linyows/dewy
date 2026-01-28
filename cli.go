@@ -51,6 +51,7 @@ type cli struct {
 	ContainerRuntime string   `long:"runtime" description:"Container runtime (docker or podman, default: docker)"`
 	Cmd              []string `long:"cmd" description:"Command and arguments to pass to container (can be specified multiple times)"`
 	AdminPort        int      `long:"admin-port" description:"Admin API port for container command (default: 17539, auto-increments if in use)"`
+	Slot             string   `long:"slot" short:"s" description:"Deployment slot for blue/green deployment (e.g., blue, green). Only deploys if tag's build metadata matches."`
 	Help             bool     `long:"help" short:"h" description:"show this help message and exit"`
 	Version          bool     `long:"version" short:"v" description:"prints the version number"`
 }
@@ -137,6 +138,7 @@ func (c *cli) showHelp() {
 	generalOpts := strings.Join(c.buildHelp([]string{
 		"Interval",
 		"Registry",
+		"Slot",
 		"Notifier",
 		"LogLevel",
 		"LogFormat",
@@ -257,6 +259,7 @@ func (c *cli) run() int {
 	conf.BeforeDeployHook = c.BeforeDeployHook
 	conf.AfterDeployHook = c.AfterDeployHook
 	conf.AdminPort = c.AdminPort
+	conf.Slot = c.Slot
 
 	switch c.command {
 	case "server":

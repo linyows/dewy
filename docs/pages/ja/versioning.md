@@ -74,6 +74,39 @@ MAJOR.MINOR.PATCH-<pre-release-identifier>
 例：`v1.2.3-rc.1 < v1.2.3`
 {% /callout %}
 
+### ビルドメタデータとデプロイメントスロット {% #build-metadata %}
+
+セマンティックバージョニングでは、`+`記号で付加するビルドメタデータもサポートされています。Dewyはビルドメタデータを**デプロイメントスロット**管理に使用し、Blue/Greenデプロイメントパターンを実現します。
+
+**形式:**
+```
+MAJOR.MINOR.PATCH+<build-metadata>
+MAJOR.MINOR.PATCH-<pre-release>+<build-metadata>
+```
+
+**よくあるパターン:**
+- `v1.2.3+blue` - Blueスロット用の安定版
+- `v1.2.3+green` - Greenスロット用の安定版
+- `v1.2.3-rc.1+blue` - Blueスロット用のプリリリース版
+
+{% callout type="note" title="ビルドメタデータとバージョン比較" %}
+セマンティックバージョニングの仕様により、ビルドメタデータはバージョン比較時に**無視**されます。
+つまり、`v1.2.3+blue`と`v1.2.3+green`は**同じバージョン**とみなされます。
+Dewyは`--slot`オプションを使用して、ビルドメタデータに基づいてデプロイ対象のバージョンをフィルタリングします。
+{% /callout %}
+
+**使用方法:**
+```bash
+# Blue環境 - +blueメタデータを持つバージョンのみをデプロイ
+dewy server --registry ghr://owner/repo --slot blue -- /opt/myapp/current/myapp
+
+# Green環境 - +greenメタデータを持つバージョンのみをデプロイ
+dewy server --registry ghr://owner/repo --slot green -- /opt/myapp/current/myapp
+
+# --slotなし - すべてのバージョンをデプロイ（後方互換）
+dewy server --registry ghr://owner/repo -- /opt/myapp/current/myapp
+```
+
 ## Dewyのバージョン検出アルゴリズム {% #version-detection %}
 
 ### バージョン比較規則 {% #comparison-rules %}
@@ -209,6 +242,46 @@ dewy server --registry "ghr://company/myapp?pre-release=true" \
 dewy server --registry "ghr://company/myapp?pre-release=true" \
   --interval 30s \
   --log-format text -- ./current/myapp
+```
+
+### Blue/Greenデプロイメント {% #blue-green %}
+
+Blue/Greenデプロイメントパターンでは、ビルドメタデータを使用してデプロイメントスロットを管理します：
+
+**推奨設定:**
+```bash
+# Blue環境
+dewy server --registry ghr://company/myapp --slot blue \
+  --interval 60s \
+  --notifier "slack://production-deploy?title=MyApp+Blue" \
+  -- /opt/myapp/current/myapp
+
+# Green環境
+dewy server --registry ghr://company/myapp --slot green \
+  --interval 60s \
+  --notifier "slack://production-deploy?title=MyApp+Green" \
+  -- /opt/myapp/current/myapp
+```
+
+**特徴:**
+- 各環境で独立したバージョン管理
+- トラフィック切り替えによるゼロダウンタイムデプロイメント
+- トラフィックを戻すだけで簡単にロールバック
+- プリリリースと組み合わせてカナリアデプロイメントも可能
+
+**デプロイメントワークフロー:**
+```bash
+# Step 1: Green（スタンバイ）にデプロイ
+gh release create v1.2.0+green --title "v1.2.0 for Green"
+
+# Step 2: Green環境の動作確認
+
+# Step 3: トラフィックをGreenに切り替え（ロードバランサー経由）
+
+# Step 4: Blueにも同じバージョンをデプロイ
+gh release create v1.2.0+blue --title "v1.2.0 for Blue"
+
+# 両環境がv1.2.0で稼働
 ```
 
 ## バージョン管理のベストプラクティス {% #best-practices %}

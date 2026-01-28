@@ -91,6 +91,7 @@ type Config struct {
 	Container        *ContainerConfig
 	BeforeDeployHook string
 	AfterDeployHook  string
+	Slot             string // Deployment slot for blue/green deployment (e.g., "blue", "green")
 	*Info
 }
 

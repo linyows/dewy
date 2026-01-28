@@ -74,6 +74,39 @@ Pre-release versions are treated with lower priority than official versions of t
 Example: `v1.2.3-rc.1 < v1.2.3`
 {% /callout %}
 
+### Build Metadata and Deployment Slots {% #build-metadata %}
+
+Semantic versioning also supports build metadata, which is appended with a `+` sign. Dewy uses build metadata for **deployment slot** management, enabling blue/green deployment patterns.
+
+**Format:**
+```
+MAJOR.MINOR.PATCH+<build-metadata>
+MAJOR.MINOR.PATCH-<pre-release>+<build-metadata>
+```
+
+**Common patterns:**
+- `v1.2.3+blue` - Stable version for Blue slot
+- `v1.2.3+green` - Stable version for Green slot
+- `v1.2.3-rc.1+blue` - Pre-release for Blue slot
+
+{% callout type="note" title="Build Metadata and Version Comparison" %}
+According to semantic versioning specification, build metadata is **ignored** during version comparison.
+This means `v1.2.3+blue` and `v1.2.3+green` are considered the **same version**.
+Dewy uses the `--slot` option to filter which versions to deploy based on build metadata.
+{% /callout %}
+
+**Usage:**
+```bash
+# Blue environment - only deploys versions with +blue metadata
+dewy server --registry ghr://owner/repo --slot blue -- /opt/myapp/current/myapp
+
+# Green environment - only deploys versions with +green metadata
+dewy server --registry ghr://owner/repo --slot green -- /opt/myapp/current/myapp
+
+# Without --slot - deploys any version (backward compatible)
+dewy server --registry ghr://owner/repo -- /opt/myapp/current/myapp
+```
+
 ## Dewy's Version Detection Algorithm {% #version-detection %}
 
 ### Comparison Rules {% #comparison-rules %}
@@ -180,6 +213,46 @@ dewy server --registry "ghr://company/myapp?pre-release=true" \
 - Actively incorporate pre-release versions
 - Short polling intervals for quick feedback
 - Share with entire team through deployment notifications
+
+### Blue/Green Deployment {% #blue-green %}
+
+For blue/green deployment patterns, use build metadata to manage deployment slots:
+
+**Recommended settings:**
+```bash
+# Blue environment
+dewy server --registry ghr://company/myapp --slot blue \
+  --interval 60s \
+  --notifier "slack://production-deploy?title=MyApp+Blue" \
+  -- /opt/myapp/current/myapp
+
+# Green environment
+dewy server --registry ghr://company/myapp --slot green \
+  --interval 60s \
+  --notifier "slack://production-deploy?title=MyApp+Green" \
+  -- /opt/myapp/current/myapp
+```
+
+**Features:**
+- Independent version control for each environment
+- Zero-downtime deployment through traffic switching
+- Easy rollback by switching traffic back
+- Combine with pre-release for canary deployments
+
+**Deployment workflow:**
+```bash
+# Step 1: Deploy to Green (standby)
+gh release create v1.2.0+green --title "v1.2.0 for Green"
+
+# Step 2: Verify Green environment
+
+# Step 3: Switch traffic to Green (via load balancer)
+
+# Step 4: Deploy same version to Blue
+gh release create v1.2.0+blue --title "v1.2.0 for Blue"
+
+# Both environments now running v1.2.0
+```
 
 ## Version Management Best Practices {% #best-practices %}
 

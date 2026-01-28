@@ -362,9 +362,14 @@ Dewyは、セマンティックバージョニングに基づいてバージョ�
 詳しくは https://semver.org/lang/ja/
 
 ```txt
-# Pre release versions：
+# プレリリースバージョン：
 v1.2.3-rc
 v1.2.3-beta.2
+
+# ビルドメタデータ（デプロイメントスロット用）：
+v1.2.3+blue
+v1.2.3+green
+v1.2.3-rc.1+blue
 ```
 
 ### プレリリースとステージング
@@ -378,6 +383,55 @@ $ dewy --registry ghr://linyows/myapp ...
 # ステージング環境（プレリリース版を含む）
 $ dewy --registry ghr://linyows/myapp?pre-release=true ...
 ```
+
+### ビルドメタデータとBlue/Greenデプロイメント
+
+セマンティックバージョニングでは、`+`記号で付加するビルドメタデータもサポートされています。Dewyはこれを**デプロイメントスロット**管理に使用し、Blue/Greenデプロイメントパターンを実現します。
+
+**仕組み:**
+- リリースにビルドメタデータでデプロイメントスロットを指定してタグ付け: `v1.2.3+blue`, `v1.2.3+green`
+- Dewyインスタンスを `--slot` オプションで起動し、デプロイ対象のスロットを指定
+- 各Dewyインスタンスは、設定されたスロットに一致するバージョンのみをデプロイ
+
+```sh
+# Blue環境
+$ dewy server --registry ghr://linyows/myapp --slot blue -- /opt/myapp/current/myapp
+
+# Green環境
+$ dewy server --registry ghr://linyows/myapp --slot green -- /opt/myapp/current/myapp
+```
+
+**Blue/Greenデプロイメントのワークフロー:**
+
+```sh
+# 1. 初期状態: BlueとGreen両方がv1.0.0で稼働
+gh release create v1.0.0+blue ...
+gh release create v1.0.0+green ...
+
+# 2. まずGreenに新バージョンをデプロイ
+gh release create v1.1.0+green ...
+# → Greenインスタンスのみがv1.1.0に更新される
+
+# 3. Greenが正常に動作していることを確認
+
+# 4. トラフィックをGreenに切り替え（ロードバランサー経由）
+
+# 5. Blueも同じバージョンに更新
+gh release create v1.1.0+blue ...
+# → Blueインスタンスがv1.1.0に更新される
+```
+
+**プレリリースとの組み合わせ:**
+
+ビルドメタデータはプレリリースバージョンと組み合わせて使用できます:
+
+```sh
+v1.2.3-rc.1+blue   # Blueスロット用のプレリリース
+v1.2.3+green       # Greenスロット用の安定版リリース
+```
+
+> [!NOTE]
+> `--slot` を指定しない場合、Dewyはビルドメタデータに関係なくすべてのバージョンをデプロイし、後方互換性を維持します。
 
 デプロイワークフロー
 --
