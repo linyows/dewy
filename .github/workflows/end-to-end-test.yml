@@ -8,28 +8,65 @@ on:
       - '**.go'
       - 'go.mod'
       - 'go.sum'
-  pull_request:
-    branches: [main]
-    paths:
-      - '**.go'
-      - 'go.mod'
-      - 'go.sum'
-      - 'testdata/**'
+  issue_comment:
+    types: [created]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.issue.number || github.ref }}
   cancel-in-progress: false
 
 permissions:
   contents: 'read'
   id-token: 'write'
+  pull-requests: 'write'
 
 jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    # Run if:
+    # 1. push to main or workflow_dispatch
+    # 2. issue_comment with '/run-e2e' from maintainer on a PR
+    if: |
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request &&
+       contains(github.event.comment.body, '/run-e2e') &&
+       (github.event.comment.author_association == 'MEMBER' ||
+        github.event.comment.author_association == 'OWNER' ||
+        github.event.comment.author_association == 'COLLABORATOR'))
     steps:
+    - name: Get PR ref for comment trigger
+      if: github.event_name == 'issue_comment'
+      id: pr
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      with:
+        script: |
+          const { data: pr } = await github.rest.pulls.get({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            pull_number: context.issue.number
+          });
+          core.setOutput('ref', pr.head.ref);
+          core.setOutput('sha', pr.head.sha);
+
+    - name: Add reaction to comment
+      if: github.event_name == 'issue_comment'
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      with:
+        script: |
+          await github.rest.reactions.createForIssueComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            comment_id: context.payload.comment.id,
+            content: 'rocket'
+          });
+
     - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      with:
+        ref: ${{ steps.pr.outputs.ref || github.ref }}
+
     - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
       with:
         go-version-file: go.mod
