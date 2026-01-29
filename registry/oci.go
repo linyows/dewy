@@ -103,11 +103,18 @@ func (o *OCI) Current(ctx context.Context) (*CurrentResponse, error) {
 
 	imageRef := fmt.Sprintf("%s/%s:%s", o.Registry, o.Repository, latestTag)
 
+	// Extract slot from build metadata
+	var slot string
+	if sv := ParseSemVer(latestTag); sv != nil {
+		slot = sv.BuildMetadata
+	}
+
 	return &CurrentResponse{
 		ID:          digest,
 		Tag:         latestTag,
 		ArtifactURL: fmt.Sprintf("img://%s", imageRef),
 		CreatedAt:   createdAt,
+		Slot:        slot,
 	}, nil
 }
 

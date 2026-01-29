@@ -353,6 +353,11 @@ Dewy uses semantic versioning to determine the recency of artifact versions. The
 # Pre release versions：
 v1.2.3-rc
 v1.2.3-beta.2
+
+# Build metadata (for deployment slots):
+v1.2.3+blue
+v1.2.3+green
+v1.2.3-rc.1+blue
 ```
 
 For details, visit https://semver.org/
@@ -368,6 +373,55 @@ $ dewy --registry ghr://linyows/myapp ...
 # Staging environment (includes pre-release versions)
 $ dewy --registry ghr://linyows/myapp?pre-release=true ...
 ```
+
+### Build Metadata and Blue/Green Deployment
+
+Semantic versioning also supports build metadata, which is appended with a `+` sign. Dewy uses this for **deployment slot** management, enabling blue/green deployment patterns.
+
+**How it works:**
+- Tag your releases with build metadata indicating the deployment slot: `v1.2.3+blue`, `v1.2.3+green`
+- Start Dewy instances with the `--slot` option to specify which slot they should deploy
+- Each Dewy instance only deploys versions matching its configured slot
+
+```sh
+# Blue environment
+$ dewy server --registry ghr://linyows/myapp --slot blue -- /opt/myapp/current/myapp
+
+# Green environment
+$ dewy server --registry ghr://linyows/myapp --slot green -- /opt/myapp/current/myapp
+```
+
+**Blue/Green deployment workflow:**
+
+```sh
+# 1. Initial state: Both Blue and Green running v1.0.0
+gh release create v1.0.0+blue ...
+gh release create v1.0.0+green ...
+
+# 2. Deploy new version to Green first
+gh release create v1.1.0+green ...
+# → Only Green instances update to v1.1.0
+
+# 3. Verify Green is working correctly
+
+# 4. Switch traffic to Green (via load balancer)
+
+# 5. Update Blue to the same version
+gh release create v1.1.0+blue ...
+# → Blue instances update to v1.1.0
+```
+
+**Combining with pre-release:**
+
+Build metadata can be combined with pre-release versions:
+
+```sh
+v1.2.3-rc.1+blue   # Pre-release for Blue slot
+v1.2.3+green       # Stable release for Green slot
+```
+
+> [!NOTE]
+> When `--slot` is not specified, Dewy deploys all versions regardless of build metadata, maintaining backward compatibility.
 
 Deployment Workflow
 --

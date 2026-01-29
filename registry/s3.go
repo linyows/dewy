@@ -160,6 +160,7 @@ func (s *S3) Current(ctx context.Context) (*CurrentResponse, error) {
 		Tag:         version.String(),
 		ArtifactURL: s.buildArtifactURL(prefix + artifactName),
 		CreatedAt:   createdAt,
+		Slot:        version.BuildMetadata,
 	}, nil
 }
 

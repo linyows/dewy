@@ -8,8 +8,8 @@ import (
 )
 
 var (
-	SemVerRegexWithoutPreRelease = regexp.MustCompile(`^v?(\d+)\.(\d+)\.(\d+)$`)
-	SemVerRegex                  = regexp.MustCompile(`^(v)?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$`)
+	SemVerRegexWithoutPreRelease = regexp.MustCompile(`^v?(\d+)\.(\d+)\.(\d+)(?:\+([0-9A-Za-z.-]+))?$`)
+	SemVerRegex                  = regexp.MustCompile(`^(v)?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+([0-9A-Za-z.-]+))?$`)
 )
 
 func ParseSemVer(version string) *SemVer {
@@ -23,22 +23,25 @@ func ParseSemVer(version string) *SemVer {
 	minor, _ := strconv.Atoi(match[3])
 	patch, _ := strconv.Atoi(match[4])
 	preRelease := match[5]
+	buildMetadata := match[6]
 
 	return &SemVer{
-		V:          v,
-		Major:      major,
-		Minor:      minor,
-		Patch:      patch,
-		PreRelease: preRelease,
+		V:             v,
+		Major:         major,
+		Minor:         minor,
+		Patch:         patch,
+		PreRelease:    preRelease,
+		BuildMetadata: buildMetadata,
 	}
 }
 
 type SemVer struct {
-	V          string
-	Major      int
-	Minor      int
-	Patch      int
-	PreRelease string
+	V             string
+	Major         int
+	Minor         int
+	Patch         int
+	PreRelease    string
+	BuildMetadata string
 }
 
 func (v *SemVer) Compare(other *SemVer) int {
@@ -61,11 +64,14 @@ func (v *SemVer) Compare(other *SemVer) int {
 }
 
 func (v *SemVer) String() string {
-	var pre string
+	var pre, build string
 	if v.PreRelease != "" {
 		pre = fmt.Sprintf("-%s", v.PreRelease)
 	}
-	return fmt.Sprintf("%s%d.%d.%d%s", v.V, v.Major, v.Minor, v.Patch, pre)
+	if v.BuildMetadata != "" {
+		build = fmt.Sprintf("+%s", v.BuildMetadata)
+	}
+	return fmt.Sprintf("%s%d.%d.%d%s%s", v.V, v.Major, v.Minor, v.Patch, pre, build)
 }
 
 // matchSemVerPattern checks if a string matches semantic versioning patterns.
@@ -79,6 +85,12 @@ func matchSemVerPattern(str string, allowPreRelease bool) bool {
 
 // FindLatestSemVer finds the latest semantic version from a list of version strings.
 func FindLatestSemVer(versionNames []string, allowPreRelease bool) (*SemVer, string, error) {
+	return FindLatestSemVerWithSlot(versionNames, "", allowPreRelease)
+}
+
+// FindLatestSemVerWithSlot finds the latest semantic version that matches the specified slot.
+// If slot is empty, it matches versions without build metadata or any build metadata.
+func FindLatestSemVerWithSlot(versionNames []string, slot string, allowPreRelease bool) (*SemVer, string, error) {
 	var latestVersion *SemVer
 	var latestName string
 
@@ -86,6 +98,10 @@ func FindLatestSemVer(versionNames []string, allowPreRelease bool) (*SemVer, str
 		if matchSemVerPattern(name, allowPreRelease) {
 			ver := ParseSemVer(name)
 			if ver != nil {
+				// Slot filtering: if slot is specified, only match versions with that build metadata
+				if slot != "" && ver.BuildMetadata != slot {
+					continue
+				}
 				if latestVersion == nil || ver.Compare(latestVersion) > 0 {
 					latestVersion = ver
 					latestName = name

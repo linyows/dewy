@@ -37,6 +37,9 @@ type CurrentResponse struct {
 	ArtifactURL string
 	// CreatedAt is the creation time of the release
 	CreatedAt *time.Time
+	// Slot is the deployment slot extracted from build metadata (e.g., "blue", "green").
+	// This is used for blue/green deployment support.
+	Slot string
 }
 
 // ReportRequest is the request to report the result of deploying the artifact.

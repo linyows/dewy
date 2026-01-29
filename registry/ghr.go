@@ -156,11 +156,18 @@ func (g *GHR) Current(ctx context.Context) (*CurrentResponse, error) {
 
 	au := fmt.Sprintf("%s://%s/%s/tag/%s/%s", ghrScheme, g.Owner, g.Repo, release.GetTagName(), artifactName)
 
+	// Extract slot from build metadata
+	var slot string
+	if sv := ParseSemVer(release.GetTagName()); sv != nil {
+		slot = sv.BuildMetadata
+	}
+
 	return &CurrentResponse{
 		ID:          time.Now().Format(ISO8601),
 		Tag:         release.GetTagName(),
 		ArtifactURL: au,
 		CreatedAt:   release.PublishedAt.GetTime(),
+		Slot:        slot,
 	}, nil
 }
 
