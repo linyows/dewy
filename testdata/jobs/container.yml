@@ -49,7 +49,7 @@ steps:
   with:
     cmd: |
       # Get all container IDs managed by dewy
-      containers=$(docker ps --filter "label=dewy.managed=true" --format '{{ "{{.ID}}" }}')
+      containers=$(docker ps --filter "label=dewy.managed=true" -q)
       if [ -z "$containers" ]; then
         echo "No dewy-managed containers found"
         exit 1
