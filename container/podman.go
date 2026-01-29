@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"os/exec"
 	"sort"
 	"strconv"
@@ -152,6 +153,11 @@ func (p *Podman) Run(ctx context.Context, opts RunOptions) (string, error) {
 
 	// User-specified extra args (filtered, --name removed)
 	args = append(args, filteredArgs...)
+
+	// Add default --user if not specified by user
+	if !hasUserOption(filteredArgs) {
+		args = append(args, "--user", fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()))
+	}
 
 	// Image
 	args = append(args, opts.Image)

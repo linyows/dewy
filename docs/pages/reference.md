@@ -240,6 +240,8 @@ The `--` separator allows you to pass additional docker run options directly. Al
 
 **Forbidden options:** `-d`, `-it`, `-i`, `-t`, `-l`, `-p` (these conflict with Dewy's management)
 
+**Default user:** When `--user` or `-u` is not specified in extra args, Dewy automatically adds `--user UID:GID` using the UID and GID of the user running Dewy. This prevents containers from accidentally running as root. If your container requires root privileges, explicitly specify `--user=0:0`.
+
 **Custom container name:** You can specify `--name` to customize the container base name. Dewy automatically appends a timestamp and replica index to ensure uniqueness.
 
 ```bash
