@@ -136,6 +136,170 @@ func TestContainer(t *testing.T) {
 	}
 }
 
+func TestHasUserOption(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		expected bool
+	}{
+		{
+			name:     "empty args",
+			args:     []string{},
+			expected: false,
+		},
+		{
+			name:     "no user option",
+			args:     []string{"-e", "FOO=bar", "-v", "/host:/container"},
+			expected: false,
+		},
+		{
+			name:     "--user with space",
+			args:     []string{"--user", "1000:1000"},
+			expected: true,
+		},
+		{
+			name:     "--user=xxx",
+			args:     []string{"--user=1000:1000"},
+			expected: true,
+		},
+		{
+			name:     "-u with space",
+			args:     []string{"-u", "1000:1000"},
+			expected: true,
+		},
+		{
+			name:     "-u=xxx",
+			args:     []string{"-u=1000:1000"},
+			expected: true,
+		},
+		{
+			name:     "-u1000 combined",
+			args:     []string{"-u1000:1000"},
+			expected: true,
+		},
+		{
+			name:     "--user with other args",
+			args:     []string{"-e", "FOO=bar", "--user", "1000:1000", "-v", "/host:/container"},
+			expected: true,
+		},
+		{
+			name:     "-u with other args",
+			args:     []string{"-e", "FOO=bar", "-u", "root", "-v", "/host:/container"},
+			expected: true,
+		},
+		{
+			name:     "--user=0:0 root",
+			args:     []string{"--user=0:0"},
+			expected: true,
+		},
+		{
+			name:     "-u alone without value",
+			args:     []string{"-u"},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := hasUserOption(tt.args)
+			if result != tt.expected {
+				t.Errorf("hasUserOption(%v) = %v, expected %v", tt.args, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestExtractNameOption(t *testing.T) {
+	tests := []struct {
+		name         string
+		args         []string
+		expectedName string
+		expectedArgs []string
+	}{
+		{
+			name:         "no name option",
+			args:         []string{"-e", "FOO=bar"},
+			expectedName: "",
+			expectedArgs: []string{"-e", "FOO=bar"},
+		},
+		{
+			name:         "--name with space",
+			args:         []string{"--name", "mycontainer", "-e", "FOO=bar"},
+			expectedName: "mycontainer",
+			expectedArgs: []string{"-e", "FOO=bar"},
+		},
+		{
+			name:         "--name=xxx",
+			args:         []string{"--name=mycontainer", "-e", "FOO=bar"},
+			expectedName: "mycontainer",
+			expectedArgs: []string{"-e", "FOO=bar"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			name, filtered := extractNameOption(tt.args)
+			if name != tt.expectedName {
+				t.Errorf("extractNameOption(%v) name = %v, expected %v", tt.args, name, tt.expectedName)
+			}
+			if len(filtered) != len(tt.expectedArgs) {
+				t.Errorf("extractNameOption(%v) filtered length = %v, expected %v", tt.args, len(filtered), len(tt.expectedArgs))
+			}
+			for i := range filtered {
+				if filtered[i] != tt.expectedArgs[i] {
+					t.Errorf("extractNameOption(%v) filtered[%d] = %v, expected %v", tt.args, i, filtered[i], tt.expectedArgs[i])
+				}
+			}
+		})
+	}
+}
+
+func TestValidateExtraArgs(t *testing.T) {
+	tests := []struct {
+		name        string
+		args        []string
+		expectError bool
+	}{
+		{
+			name:        "valid args",
+			args:        []string{"-e", "FOO=bar", "-v", "/host:/container"},
+			expectError: false,
+		},
+		{
+			name:        "forbidden -d",
+			args:        []string{"-d", "-e", "FOO=bar"},
+			expectError: true,
+		},
+		{
+			name:        "forbidden --detach",
+			args:        []string{"--detach", "-e", "FOO=bar"},
+			expectError: true,
+		},
+		{
+			name:        "forbidden -it",
+			args:        []string{"-it", "-e", "FOO=bar"},
+			expectError: true,
+		},
+		{
+			name:        "forbidden -p",
+			args:        []string{"-p", "8080:80"},
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateExtraArgs(tt.args)
+			if tt.expectError && err == nil {
+				t.Errorf("validateExtraArgs(%v) expected error, got nil", tt.args)
+			}
+			if !tt.expectError && err != nil {
+				t.Errorf("validateExtraArgs(%v) expected no error, got %v", tt.args, err)
+			}
+		})
+	}
+}
+
 // Note: Tests for actual Docker operations (Pull, Run, Stop, etc.) are not
 // included in unit tests because they require a running Docker daemon.
 // These will be tested in integration tests instead.

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"os/exec"
 	"sort"
 	"strconv"
@@ -54,6 +55,25 @@ func validateExtraArgs(args []string) error {
 		}
 	}
 	return nil
+}
+
+// hasUserOption checks if --user or -u option is present in args.
+func hasUserOption(args []string) bool {
+	for _, arg := range args {
+		// --user=xxx or --user xxx
+		if arg == "--user" || strings.HasPrefix(arg, "--user=") {
+			return true
+		}
+		// -u=xxx or -u xxx
+		if arg == "-u" || strings.HasPrefix(arg, "-u=") {
+			return true
+		}
+		// Handle combined short options like -u1000 (without =)
+		if len(arg) > 2 && arg[0] == '-' && arg[1] == 'u' && arg[2] != '-' {
+			return true
+		}
+	}
+	return false
 }
 
 // extractNameOption extracts --name option from args and returns the name and filtered args.
@@ -194,6 +214,11 @@ func (d *Docker) Run(ctx context.Context, opts RunOptions) (string, error) {
 
 	// User-specified extra args (filtered, --name removed)
 	args = append(args, filteredArgs...)
+
+	// Add default --user if not specified by user
+	if !hasUserOption(filteredArgs) {
+		args = append(args, "--user", fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()))
+	}
 
 	// Image
 	args = append(args, opts.Image)

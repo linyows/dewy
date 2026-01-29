@@ -111,6 +111,74 @@ func TestPodmanDeployOptions(t *testing.T) {
 	}
 }
 
+func TestPodmanHasUserOption(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		expected bool
+	}{
+		{
+			name:     "empty args",
+			args:     []string{},
+			expected: false,
+		},
+		{
+			name:     "no user option",
+			args:     []string{"-e", "FOO=bar", "-v", "/host:/container"},
+			expected: false,
+		},
+		{
+			name:     "--user with space",
+			args:     []string{"--user", "1000:1000"},
+			expected: true,
+		},
+		{
+			name:     "--user=xxx",
+			args:     []string{"--user=1000:1000"},
+			expected: true,
+		},
+		{
+			name:     "-u with space",
+			args:     []string{"-u", "1000:1000"},
+			expected: true,
+		},
+		{
+			name:     "-u=xxx",
+			args:     []string{"-u=1000:1000"},
+			expected: true,
+		},
+		{
+			name:     "-u1000 combined",
+			args:     []string{"-u1000:1000"},
+			expected: true,
+		},
+		{
+			name:     "--user with other args",
+			args:     []string{"-e", "FOO=bar", "--user", "1000:1000", "-v", "/host:/container"},
+			expected: true,
+		},
+		{
+			name:     "-u with other args",
+			args:     []string{"-e", "FOO=bar", "-u", "root", "-v", "/host:/container"},
+			expected: true,
+		},
+		{
+			name:     "--user=0:0 root",
+			args:     []string{"--user=0:0"},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := hasUserOption(tt.args)
+			if result != tt.expected {
+				t.Errorf("hasUserOption(%v) = %v, expected %v", tt.args, result, tt.expected)
+			}
+		})
+	}
+}
+
 // Note: Tests for actual Podman operations (Pull, Run, Stop, etc.) are not
 // included in unit tests because they require a running Podman daemon.
 // These will be tested in integration tests instead.
