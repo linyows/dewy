@@ -328,7 +328,7 @@ func (o *OCI) getImageDigest(ctx context.Context, tag string) (string, *time.Tim
 	// Handle 401 Unauthorized - need to get bearer token
 	if resp.StatusCode == http.StatusUnauthorized {
 		authHeader := resp.Header.Get("WWW-Authenticate")
-		if authHeader != "" && o.token == "" {
+		if authHeader != "" {
 			if err := o.getBearerToken(ctx, authHeader); err != nil {
 				return "", nil, fmt.Errorf("failed to get bearer token: %w", err)
 			}
