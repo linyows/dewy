@@ -333,6 +333,152 @@ func TestOCI_loadCredentials(t *testing.T) {
 	}
 }
 
+// mockRegistryServerWithAuth creates a mock Docker Registry HTTP API V2 server
+// that requires authentication and simulates token expiry scenarios.
+func mockRegistryServerWithAuth(t *testing.T, validToken string) *httptest.Server {
+	t.Helper()
+
+	mux := http.NewServeMux()
+
+	// Token endpoint
+	mux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
+		response := map[string]interface{}{
+			"token":      validToken,
+			"expires_in": 300,
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(response)
+	})
+
+	// GET /v2/ - Registry API version check
+	mux.HandleFunc("/v2/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{}`))
+	})
+
+	// GET /v2/<name>/tags/list - List tags (requires auth)
+	mux.HandleFunc("/v2/testapp/tags/list", func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		expectedAuth := "Bearer " + validToken
+
+		if authHeader != expectedAuth {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="http://`+r.Host+`/token",service="registry",scope="repository:testapp:pull"`)
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"errors":[{"code":"UNAUTHORIZED","message":"authentication required"}]}`))
+			return
+		}
+
+		response := map[string]interface{}{
+			"name": "testapp",
+			"tags": []string{"v1.0.0", "v1.0.1", "v2.0.0"},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(response)
+	})
+
+	// GET /v2/<name>/manifests/<reference> - Get manifest (requires auth)
+	mux.HandleFunc("/v2/testapp/manifests/", func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		expectedAuth := "Bearer " + validToken
+
+		if authHeader != expectedAuth {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="http://`+r.Host+`/token",service="registry",scope="repository:testapp:pull"`)
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"errors":[{"code":"UNAUTHORIZED","message":"authentication required"}]}`))
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/vnd.docker.distribution.manifest.v2+json")
+		w.Header().Set("Docker-Content-Digest", "sha256:abc123def456")
+
+		manifest := map[string]interface{}{
+			"schemaVersion": 2,
+			"mediaType":     "application/vnd.docker.distribution.manifest.v2+json",
+			"config": map[string]string{
+				"digest": "sha256:config123",
+			},
+		}
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(manifest)
+	})
+
+	return httptest.NewServer(mux)
+}
+
+func TestOCI_getImageDigest_WithExpiredToken(t *testing.T) {
+	validToken := "new_valid_token_123"
+	server := mockRegistryServerWithAuth(t, validToken)
+	defer server.Close()
+
+	registryHost := strings.TrimPrefix(server.URL, "http://")
+
+	logger := logging.SetupLogger("ERROR", "text", os.Stderr)
+	oci := &OCI{
+		Registry:   registryHost,
+		Repository: "testapp",
+		client:     &http.Client{Timeout: 5 * time.Second},
+		logger:     logger,
+		username:   "testuser",
+		password:   "testpass",
+		token:      "expired_old_token", // Simulate expired token
+	}
+
+	ctx := context.Background()
+	digest, _, err := oci.getImageDigest(ctx, "v1.0.0")
+
+	if err != nil {
+		t.Fatalf("Expected success after token refresh, got error: %v", err)
+	}
+
+	expectedDigest := "sha256:abc123def456"
+	if digest != expectedDigest {
+		t.Errorf("Expected digest %s, got %s", expectedDigest, digest)
+	}
+
+	// Verify that token was refreshed
+	if oci.token != validToken {
+		t.Errorf("Expected token to be refreshed to %s, got %s", validToken, oci.token)
+	}
+}
+
+func TestOCI_listTags_WithExpiredToken(t *testing.T) {
+	validToken := "new_valid_token_456"
+	server := mockRegistryServerWithAuth(t, validToken)
+	defer server.Close()
+
+	registryHost := strings.TrimPrefix(server.URL, "http://")
+
+	logger := logging.SetupLogger("ERROR", "text", os.Stderr)
+	oci := &OCI{
+		Registry:   registryHost,
+		Repository: "testapp",
+		client:     &http.Client{Timeout: 5 * time.Second},
+		logger:     logger,
+		username:   "testuser",
+		password:   "testpass",
+		token:      "expired_old_token", // Simulate expired token
+	}
+
+	ctx := context.Background()
+	tags, err := oci.listTags(ctx)
+
+	if err != nil {
+		t.Fatalf("Expected success after token refresh, got error: %v", err)
+	}
+
+	if len(tags) != 3 {
+		t.Errorf("Expected 3 tags, got %d", len(tags))
+	}
+
+	// Verify that token was refreshed
+	if oci.token != validToken {
+		t.Errorf("Expected token to be refreshed to %s, got %s", validToken, oci.token)
+	}
+}
+
 func TestOCI_Report(t *testing.T) {
 	logger := logging.SetupLogger("ERROR", "text", os.Stderr)
 	oci := &OCI{
