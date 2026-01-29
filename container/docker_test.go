@@ -193,7 +193,7 @@ func TestHasUserOption(t *testing.T) {
 			expected: true,
 		},
 		{
-			name:     "-u alone (followed by value)",
+			name:     "-u alone without value",
 			args:     []string{"-u"},
 			expected: true,
 		},
