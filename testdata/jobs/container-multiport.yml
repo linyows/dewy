@@ -126,6 +126,31 @@ steps:
   outputs:
     ok: res.stdout == "200"
 
+- name: Verify containers are not running as root
+  id: notroot
+  uses: shell
+  with:
+    cmd: |
+      # Get all container IDs managed by dewy
+      containers=$(docker ps --filter "label=dewy.managed=true" --format '{{ "{{.ID}}" }}')
+      if [ -z "$containers" ]; then
+        echo "No dewy-managed containers found"
+        exit 1
+      fi
+      # Check each container's process user
+      for cid in $containers; do
+        uid=$(docker top "$cid" -o uid | tail -n +2 | head -1 | tr -d ' ')
+        if [ "$uid" = "0" ]; then
+          echo "Container $cid is running as root (UID=0)"
+          exit 1
+        fi
+        echo "Container $cid is running as UID=$uid (not root)"
+      done
+      echo "All containers are running as non-root user"
+  test: status == 0
+  outputs:
+    ok: status == 0
+
 - name: Stop dewy
   uses: shell
   with: # Use Process Group ID
@@ -153,7 +178,7 @@ steps:
     ok: int(res.stdout) == int(vars.replicas)
 
 - name: Show log
-  skipif: outputs.noerr.ok && outputs.proxy1.ok && outputs.proxy2.ok && outputs.allproxies.ok && outputs.backend1.ok && outputs.backend2.ok && outputs.conn1.ok && outputs.conn2.ok && outputs.nver.ok
+  skipif: outputs.noerr.ok && outputs.proxy1.ok && outputs.proxy2.ok && outputs.allproxies.ok && outputs.backend1.ok && outputs.backend2.ok && outputs.conn1.ok && outputs.conn2.ok && outputs.notroot.ok && outputs.nver.ok
   uses: shell
   with:
     cmd: "cat {{ outputs.container.log }}"
