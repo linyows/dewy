@@ -53,9 +53,10 @@ export SLACK_TOKEN=xoxb-xxxxxxxxxxxxxxxxxxxxx
 1. Slack Appの作成
    - [https://api.slack.com/apps](https://api.slack.com/apps) でアプリを作成
 2. 必要な権限（Scopes）
-   - `channels:join`: チャンネルへの参加
    - `chat:write`: メッセージの投稿
-3. トークンの取得
+3. 通知先チャンネルへのSlack Appの招待
+   - 通知を送信する前に、Slack GUIからアプリをチャンネルにinviteしておく必要があります
+4. トークンの取得
    - OAuth & Permissions → Bot User OAuth Token
 
 ### オプション付きの設定
@@ -264,15 +265,16 @@ Slack通知が届かない
      https://slack.com/api/auth.test
    ```
 2. **権限の確認**
-   - Bot Token Scopesで `channels:join` と `chat:write` が設定されているか
+   - Bot Token Scopesで `chat:write` が設定されているか
    - Appがワークスペースにインストールされているか
 3. **チャンネル名の確認**
    ```bash
    # パブリックチャンネルの場合は # を除く
    # ❌ slack://#deployments
    # ✅ slack://deployments
-   
-   # プライベートチャンネルの場合は事前にBotを招待
+   ```
+4. **Botの招待確認**
+   - Botがチャンネルに招待されているか（パブリック・プライベート両方で必要）
    ```
 
 メール通知が送信されない

@@ -282,7 +282,7 @@ The Notifier interface sends deployment status updates. Slack and Mail (SMTP) ar
 
 ### Slack
 
-To use Slack for notifications, configure as follows. Options include a title and url that can link to the repository name or URL. You’ll need to [create a Slack App](https://api.slack.com/apps), generate an OAuth Token, and set the required environment variables. The app should have `channels:join` and `chat:write` permissions.
+To use Slack for notifications, configure as follows. Options include a title and url that can link to the repository name or URL. You'll need to [create a Slack App](https://api.slack.com/apps), generate an OAuth Token, and set the required environment variables. The app requires the `chat:write` permission. You must also invite the Slack App to the notification channel in advance.
 
 ```sh
 # Format

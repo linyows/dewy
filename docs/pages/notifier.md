@@ -53,9 +53,10 @@ export SLACK_TOKEN=xoxb-xxxxxxxxxxxxxxxxxxxxx
 1. Create Slack App
    - Create app at [https://api.slack.com/apps](https://api.slack.com/apps)
 2. Required permissions (Scopes)
-   - `channels:join`: Join channels
    - `chat:write`: Post messages
-3. Get token
+3. Invite the Slack App to the notification channel
+   - You must invite the app to the channel via Slack GUI before sending notifications
+4. Get token
    - OAuth & Permissions → Bot User OAuth Token
 
 ### Configuration with Options
@@ -206,15 +207,16 @@ dewy server --registry "ghr://owner/repo?pre-release=true" \
      https://slack.com/api/auth.test
    ```
 2. **Check permissions**
-   - Are `channels:join` and `chat:write` set in Bot Token Scopes?
+   - Is `chat:write` set in Bot Token Scopes?
    - Is the App installed in the workspace?
 3. **Check channel name**
    ```bash
    # For public channels, exclude #
    # ❌ slack://#deployments
    # ✅ slack://deployments
-
-   # For private channels, invite Bot beforehand
+   ```
+4. **Check Bot invitation**
+   - Is the Bot invited to the channel? (required for both public and private channels)
    ```
 
 ### Email notifications not sending

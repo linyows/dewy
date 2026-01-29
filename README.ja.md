@@ -291,7 +291,7 @@ Notifier
 
 Slackを通知に使う場合は以下の設定をします。オプションには、通知に付加する `title` と そのリンクである `url` が設定できます。リポジトリ名やそのURLを設定すると良いでしょう。
 また、Slack APIを利用するために必要な環境変数の設定が必要です。
-[Slack Appを作成](https://api.slack.com/apps)し、 OAuth Tokenを発行して設定してください。OAuthのScopeは `channels:join` と `chat:write` が必要です。
+[Slack Appを作成](https://api.slack.com/apps)し、 OAuth Tokenを発行して設定してください。OAuthのScopeは `chat:write` が必要です。また、通知先のチャンネルには事前にSlack Appをinviteしておく必要があります。
 
 ```sh
 # 構造
