@@ -295,7 +295,7 @@ func (d *Docker) Pull(ctx context.Context, imageRef string) error {
 		} else {
 			// Retry pull after successful re-login
 			d.logger.Info("Retrying pull after re-login", slog.String("image", imageRef))
-			output, pullErr = d.pullImage(ctx, imageRef)
+			_, pullErr = d.pullImage(ctx, imageRef)
 		}
 	}
 

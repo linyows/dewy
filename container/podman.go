@@ -152,7 +152,7 @@ func (p *Podman) Pull(ctx context.Context, imageRef string) error {
 		} else {
 			// Retry pull after successful re-login
 			p.logger.Info("Retrying pull after re-login", slog.String("image", imageRef))
-			output, pullErr = p.pullImage(ctx, imageRef)
+			_, pullErr = p.pullImage(ctx, imageRef)
 		}
 	}
 
