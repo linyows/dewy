@@ -501,3 +501,142 @@ func TestOCI_Report(t *testing.T) {
 		t.Errorf("Expected Report to succeed, got error: %v", err)
 	}
 }
+
+func TestOCI_parseNextLink(t *testing.T) {
+	oci := &OCI{
+		Registry: "ghcr.io",
+	}
+
+	tests := []struct {
+		name       string
+		linkHeader string
+		expected   string
+	}{
+		{
+			name:       "valid next link with relative URL",
+			linkHeader: `</v2/testapp/tags/list?n=100&last=v1.0.0>; rel="next"`,
+			expected:   "https://ghcr.io/v2/testapp/tags/list?n=100&last=v1.0.0",
+		},
+		{
+			name:       "valid next link with absolute URL",
+			linkHeader: `<https://ghcr.io/v2/testapp/tags/list?n=100&last=v2.0.0>; rel="next"`,
+			expected:   "https://ghcr.io/v2/testapp/tags/list?n=100&last=v2.0.0",
+		},
+		{
+			name:       "empty link header",
+			linkHeader: "",
+			expected:   "",
+		},
+		{
+			name:       "link without rel=next",
+			linkHeader: `</v2/testapp/tags/list?n=100&last=v1.0.0>; rel="prev"`,
+			expected:   "",
+		},
+		{
+			name:       "malformed link header - no angle brackets",
+			linkHeader: `/v2/testapp/tags/list?n=100&last=v1.0.0; rel="next"`,
+			expected:   "",
+		},
+		{
+			name:       "malformed link header - no semicolon",
+			linkHeader: `</v2/testapp/tags/list?n=100&last=v1.0.0>`,
+			expected:   "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := oci.parseNextLink(tt.linkHeader)
+			if result != tt.expected {
+				t.Errorf("parseNextLink(%q) = %q, want %q", tt.linkHeader, result, tt.expected)
+			}
+		})
+	}
+}
+
+func mockRegistryServerWithPagination(t *testing.T) *httptest.Server {
+	t.Helper()
+
+	mux := http.NewServeMux()
+
+	// GET /v2/ - Registry API version check
+	mux.HandleFunc("/v2/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{}`))
+	})
+
+	// GET /v2/<name>/tags/list - List tags with pagination
+	mux.HandleFunc("/v2/testapp/tags/list", func(w http.ResponseWriter, r *http.Request) {
+		last := r.URL.Query().Get("last")
+
+		var response map[string]interface{}
+
+		switch last {
+		case "":
+			// First page
+			response = map[string]interface{}{
+				"name": "testapp",
+				"tags": []string{"v1.0.0", "v1.0.1", "v1.1.0"},
+			}
+			w.Header().Set("Link", `</v2/testapp/tags/list?n=3&last=v1.1.0>; rel="next"`)
+		case "v1.1.0":
+			// Second page
+			response = map[string]interface{}{
+				"name": "testapp",
+				"tags": []string{"v2.0.0", "v2.0.1", "v2.1.0"},
+			}
+			w.Header().Set("Link", `</v2/testapp/tags/list?n=3&last=v2.1.0>; rel="next"`)
+		case "v2.1.0":
+			// Third page (last page, no Link header)
+			response = map[string]interface{}{
+				"name": "testapp",
+				"tags": []string{"v3.0.0", "latest"},
+			}
+			// No Link header for last page
+		default:
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(response)
+	})
+
+	return httptest.NewServer(mux)
+}
+
+func TestOCI_listTags_WithPagination(t *testing.T) {
+	server := mockRegistryServerWithPagination(t)
+	defer server.Close()
+
+	registryHost := strings.TrimPrefix(server.URL, "http://")
+
+	logger := logging.SetupLogger("ERROR", "text", os.Stderr)
+	oci := &OCI{
+		Registry:   registryHost,
+		Repository: "testapp",
+		client:     &http.Client{Timeout: 5 * time.Second},
+		logger:     logger,
+	}
+
+	ctx := context.Background()
+	tags, err := oci.listTags(ctx)
+
+	if err != nil {
+		t.Fatalf("Failed to list tags: %v", err)
+	}
+
+	expectedTags := []string{"v1.0.0", "v1.0.1", "v1.1.0", "v2.0.0", "v2.0.1", "v2.1.0", "v3.0.0", "latest"}
+	if len(tags) != len(expectedTags) {
+		t.Errorf("Expected %d tags, got %d: %v", len(expectedTags), len(tags), tags)
+	}
+
+	for i, tag := range tags {
+		if i < len(expectedTags) && tag != expectedTags[i] {
+			t.Errorf("Expected tag %s at index %d, got %s", expectedTags[i], i, tag)
+		}
+	}
+}
+
