@@ -217,15 +217,34 @@ func (o *OCI) getBearerToken(ctx context.Context, authHeader string) error {
 	return nil
 }
 
-// listTags retrieves the list of tags from the registry.
+// listTags retrieves the list of tags from the registry with pagination support.
 func (o *OCI) listTags(ctx context.Context) ([]string, error) {
 	// Docker Registry HTTP API V2: GET /v2/<name>/tags/list
 	scheme := o.getScheme()
-	apiURL := fmt.Sprintf("%s://%s/v2/%s/tags/list", scheme, o.Registry, o.Repository)
+	baseURL := fmt.Sprintf("%s://%s/v2/%s/tags/list", scheme, o.Registry, o.Repository)
 
+	var allTags []string
+	nextURL := baseURL
+
+	for nextURL != "" {
+		tags, next, err := o.fetchTagsPage(ctx, nextURL)
+		if err != nil {
+			return nil, err
+		}
+		allTags = append(allTags, tags...)
+		nextURL = next
+	}
+
+	o.logger.Debug("Retrieved tags from registry", "registry", o.Registry, "repository", o.Repository, "tags", allTags, "count", len(allTags))
+
+	return allTags, nil
+}
+
+// fetchTagsPage fetches a single page of tags and returns the next page URL if available.
+func (o *OCI) fetchTagsPage(ctx context.Context, apiURL string) ([]string, string, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	// Add authentication if available
@@ -238,7 +257,7 @@ func (o *OCI) listTags(ctx context.Context) ([]string, error) {
 
 	resp, err := o.client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	defer resp.Body.Close()
 
@@ -247,19 +266,19 @@ func (o *OCI) listTags(ctx context.Context) ([]string, error) {
 		authHeader := resp.Header.Get("WWW-Authenticate")
 		if authHeader != "" {
 			if err := o.getBearerToken(ctx, authHeader); err != nil {
-				return nil, fmt.Errorf("failed to get bearer token: %w", err)
+				return nil, "", fmt.Errorf("failed to get bearer token: %w", err)
 			}
 
 			// Retry with bearer token
 			req, err = http.NewRequestWithContext(ctx, "GET", apiURL, nil)
 			if err != nil {
-				return nil, err
+				return nil, "", err
 			}
 			req.Header.Set("Authorization", "Bearer "+o.token)
 
 			resp, err = o.client.Do(req)
 			if err != nil {
-				return nil, err
+				return nil, "", err
 			}
 			defer resp.Body.Close()
 		}
@@ -267,7 +286,7 @@ func (o *OCI) listTags(ctx context.Context) ([]string, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to list tags: status %d: %s", resp.StatusCode, string(body))
+		return nil, "", fmt.Errorf("failed to list tags: status %d: %s", resp.StatusCode, string(body))
 	}
 
 	var result struct {
@@ -276,12 +295,49 @@ func (o *OCI) listTags(ctx context.Context) ([]string, error) {
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
-	o.logger.Debug("Retrieved tags from registry", "registry", o.Registry, "repository", o.Repository, "tags", result.Tags, "count", len(result.Tags))
+	// Parse Link header for pagination
+	// Format: </v2/repo/tags/list?n=100&last=tag>; rel="next"
+	nextURL := o.parseNextLink(resp.Header.Get("Link"))
 
-	return result.Tags, nil
+	return result.Tags, nextURL, nil
+}
+
+// parseNextLink extracts the next page URL from the Link header.
+func (o *OCI) parseNextLink(linkHeader string) string {
+	if linkHeader == "" {
+		return ""
+	}
+
+	// Parse Link header: </v2/repo/tags/list?n=100&last=tag>; rel="next"
+	parts := strings.Split(linkHeader, ";")
+	if len(parts) < 2 {
+		return ""
+	}
+
+	// Check if this is a "next" link
+	relPart := strings.TrimSpace(parts[1])
+	if !strings.Contains(relPart, `rel="next"`) {
+		return ""
+	}
+
+	// Extract URL from angle brackets
+	urlPart := strings.TrimSpace(parts[0])
+	if !strings.HasPrefix(urlPart, "<") || !strings.HasSuffix(urlPart, ">") {
+		return ""
+	}
+
+	relativeURL := urlPart[1 : len(urlPart)-1]
+
+	// If it's a relative URL, construct absolute URL
+	if strings.HasPrefix(relativeURL, "/") {
+		scheme := o.getScheme()
+		return fmt.Sprintf("%s://%s%s", scheme, o.Registry, relativeURL)
+	}
+
+	return relativeURL
 }
 
 // findLatestTag finds the latest tag based on semantic versioning.
