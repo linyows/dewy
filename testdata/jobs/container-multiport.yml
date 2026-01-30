@@ -29,7 +29,7 @@ steps:
 - name: Wait for new version to start
   uses: shell
   retry:
-    max_attempts: 120
+    max_attempts: 180
     interval: 5s
   with:
     cmd: |
