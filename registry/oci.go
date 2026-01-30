@@ -235,7 +235,7 @@ func (o *OCI) listTags(ctx context.Context) ([]string, error) {
 		nextURL = next
 	}
 
-	o.logger.Debug("Retrieved tags from registry", "registry", o.Registry, "repository", o.Repository, "tags", allTags, "count", len(allTags))
+	o.logger.Debug("Retrieved tags from registry", "registry", o.Registry, "repository", o.Repository, "count", len(allTags))
 
 	return allTags, nil
 }
@@ -306,38 +306,49 @@ func (o *OCI) fetchTagsPage(ctx context.Context, apiURL string) ([]string, strin
 }
 
 // parseNextLink extracts the next page URL from the Link header.
+// RFC 8288 allows multiple links separated by commas, so we split and find rel="next".
 func (o *OCI) parseNextLink(linkHeader string) string {
 	if linkHeader == "" {
 		return ""
 	}
 
-	// Parse Link header: </v2/repo/tags/list?n=100&last=tag>; rel="next"
-	parts := strings.Split(linkHeader, ";")
-	if len(parts) < 2 {
-		return ""
+	// RFC 8288: Multiple links can be separated by commas
+	// Example: </page2>; rel="next", </page1>; rel="prev"
+	links := strings.Split(linkHeader, ",")
+
+	for _, link := range links {
+		link = strings.TrimSpace(link)
+
+		// Parse each link: </v2/repo/tags/list?n=100&last=tag>; rel="next"
+		parts := strings.Split(link, ";")
+		if len(parts) < 2 {
+			continue
+		}
+
+		// Check if this is a "next" link
+		relPart := strings.TrimSpace(parts[1])
+		if !strings.Contains(relPart, `rel="next"`) {
+			continue
+		}
+
+		// Extract URL from angle brackets
+		urlPart := strings.TrimSpace(parts[0])
+		if !strings.HasPrefix(urlPart, "<") || !strings.HasSuffix(urlPart, ">") {
+			continue
+		}
+
+		relativeURL := urlPart[1 : len(urlPart)-1]
+
+		// If it's a relative URL, construct absolute URL
+		if strings.HasPrefix(relativeURL, "/") {
+			scheme := o.getScheme()
+			return fmt.Sprintf("%s://%s%s", scheme, o.Registry, relativeURL)
+		}
+
+		return relativeURL
 	}
 
-	// Check if this is a "next" link
-	relPart := strings.TrimSpace(parts[1])
-	if !strings.Contains(relPart, `rel="next"`) {
-		return ""
-	}
-
-	// Extract URL from angle brackets
-	urlPart := strings.TrimSpace(parts[0])
-	if !strings.HasPrefix(urlPart, "<") || !strings.HasSuffix(urlPart, ">") {
-		return ""
-	}
-
-	relativeURL := urlPart[1 : len(urlPart)-1]
-
-	// If it's a relative URL, construct absolute URL
-	if strings.HasPrefix(relativeURL, "/") {
-		scheme := o.getScheme()
-		return fmt.Sprintf("%s://%s%s", scheme, o.Registry, relativeURL)
-	}
-
-	return relativeURL
+	return ""
 }
 
 // findLatestTag finds the latest tag based on semantic versioning.

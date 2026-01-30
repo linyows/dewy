@@ -542,6 +542,21 @@ func TestOCI_parseNextLink(t *testing.T) {
 			linkHeader: `</v2/testapp/tags/list?n=100&last=v1.0.0>`,
 			expected:   "",
 		},
+		{
+			name:       "multiple links with next and prev",
+			linkHeader: `</v2/testapp/tags/list?n=100&last=v0.9.0>; rel="prev", </v2/testapp/tags/list?n=100&last=v2.0.0>; rel="next"`,
+			expected:   "https://ghcr.io/v2/testapp/tags/list?n=100&last=v2.0.0",
+		},
+		{
+			name:       "multiple links with next first",
+			linkHeader: `</v2/testapp/tags/list?n=100&last=v3.0.0>; rel="next", </v2/testapp/tags/list?n=100&last=v1.0.0>; rel="prev"`,
+			expected:   "https://ghcr.io/v2/testapp/tags/list?n=100&last=v3.0.0",
+		},
+		{
+			name:       "multiple links without next",
+			linkHeader: `</v2/testapp/tags/list?n=100&last=v0.9.0>; rel="prev", </v2/testapp/tags/list?n=100&last=v0.1.0>; rel="first"`,
+			expected:   "",
+		},
 	}
 
 	for _, tt := range tests {
