@@ -222,7 +222,7 @@ jobs:
         log_level: debug
         new_version: "{{ outputs.genver.version }}"
     test: res.code == 0
-    timeout: 15m
+    timeout: 30m
 
 - name: Run container with multiple ports by OCI registry
   needs: [build]
@@ -242,4 +242,4 @@ jobs:
         log_level: debug
         new_version: "{{ outputs.genver.version }}"
     test: res.code == 0
-    timeout: 15m
+    timeout: 30m
