@@ -16,9 +16,10 @@ import (
 
 // Podman implements Runtime interface using Podman CLI.
 type Podman struct {
-	cmd       string
-	logger    *slog.Logger
-	drainTime time.Duration
+	cmd                string
+	logger             *slog.Logger
+	drainTime          time.Duration
+	loggedInRegistries map[string]bool // Track registries we've logged into
 }
 
 // NewPodman creates a new Podman runtime.
@@ -29,10 +30,37 @@ func NewPodman(logger *slog.Logger, drainTime time.Duration) (*Podman, error) {
 	}
 
 	return &Podman{
-		cmd:       cmd,
-		logger:    logger,
-		drainTime: drainTime,
+		cmd:                cmd,
+		logger:             logger,
+		drainTime:          drainTime,
+		loggedInRegistries: make(map[string]bool),
 	}, nil
+}
+
+// Login authenticates with the specified registry using credentials from environment variables.
+func (p *Podman) Login(ctx context.Context, registry string) error {
+	username, password := getCredentials(registry)
+	if username == "" || password == "" {
+		p.logger.Debug("No credentials found for registry", slog.String("registry", registry))
+		return nil
+	}
+
+	p.logger.Info("Logging in to registry", slog.String("registry", registry))
+
+	// Use --password-stdin for security
+	// #nosec G204 - args are constructed internally from validated inputs
+	cmd := exec.CommandContext(ctx, p.cmd, "login", "-u", username, "--password-stdin", registry)
+	cmd.Stdin = strings.NewReader(password)
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("podman login failed for %s: %w: %s", registry, err, string(output))
+	}
+
+	p.loggedInRegistries[registry] = true
+	p.logger.Info("Successfully logged in to registry", slog.String("registry", registry))
+
+	return nil
 }
 
 // execCommand executes a podman command without returning output.
@@ -85,22 +113,51 @@ func (p *Podman) execCommandOutput(ctx context.Context, args ...string) (string,
 
 // Pull pulls an image from the registry.
 // If the image already exists locally, it will still attempt to pull to get the latest version.
+// Automatically handles authentication: logs in on first pull and retries on auth errors.
 func (p *Podman) Pull(ctx context.Context, imageRef string) error {
 	// Check if image exists locally first
-	_, err := p.execCommandOutput(ctx, "image", "inspect", imageRef)
-	if err == nil {
+	_, localErr := p.execCommandOutput(ctx, "image", "inspect", imageRef)
+	if localErr == nil {
 		// Image exists locally
 		p.logger.Info("Image already exists locally, pulling to check for updates",
 			slog.String("image", imageRef))
 	}
 
+	// Extract registry and attempt login if not already logged in
+	registry := extractRegistry(imageRef)
+	if !p.loggedInRegistries[registry] {
+		if err := p.Login(ctx, registry); err != nil {
+			p.logger.Warn("Initial login failed, will attempt pull anyway",
+				slog.String("registry", registry),
+				slog.String("error", err.Error()))
+		}
+	}
+
 	// Always try to pull to get the latest version
 	// For local-only images (not in a registry), this will fail but that's expected
 	p.logger.Info("Pulling image", slog.String("image", imageRef))
-	pullErr := p.execCommand(ctx, "pull", imageRef)
+	output, pullErr := p.pullImage(ctx, imageRef)
+
+	// If pull fails with auth error, retry login and pull again
+	if pullErr != nil && isAuthError(output) {
+		p.logger.Info("Authentication error detected, attempting re-login",
+			slog.String("registry", registry))
+
+		// Clear the logged-in status and retry login
+		delete(p.loggedInRegistries, registry)
+		if loginErr := p.Login(ctx, registry); loginErr != nil {
+			p.logger.Error("Re-login failed",
+				slog.String("registry", registry),
+				slog.String("error", loginErr.Error()))
+		} else {
+			// Retry pull after successful re-login
+			p.logger.Info("Retrying pull after re-login", slog.String("image", imageRef))
+			_, pullErr = p.pullImage(ctx, imageRef)
+		}
+	}
 
 	// If pull fails but image exists locally, we can use the local image
-	if pullErr != nil && err == nil {
+	if pullErr != nil && localErr == nil {
 		p.logger.Warn("Failed to pull image, but local image exists - using local version",
 			slog.String("image", imageRef),
 			slog.String("pull_error", pullErr.Error()))
@@ -108,6 +165,26 @@ func (p *Podman) Pull(ctx context.Context, imageRef string) error {
 	}
 
 	return pullErr
+}
+
+// pullImage executes podman pull and returns output and error.
+func (p *Podman) pullImage(ctx context.Context, imageRef string) (string, error) {
+	// #nosec G204 - args are constructed internally from validated inputs
+	cmd := exec.CommandContext(ctx, p.cmd, "pull", imageRef)
+	p.logger.Debug("Executing podman command",
+		slog.String("cmd", p.cmd),
+		slog.Any("args", []string{"pull", imageRef}))
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		p.logger.Error("Podman pull failed",
+			slog.String("image", imageRef),
+			slog.String("output", string(output)),
+			slog.String("error", err.Error()))
+		return string(output), fmt.Errorf("podman pull %s failed: %w: %s", imageRef, err, string(output))
+	}
+
+	return string(output), nil
 }
 
 // Run starts a new container and returns the container ID.

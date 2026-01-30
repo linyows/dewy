@@ -300,6 +300,232 @@ func TestValidateExtraArgs(t *testing.T) {
 	}
 }
 
+func TestExtractRegistry(t *testing.T) {
+	tests := []struct {
+		name     string
+		imageRef string
+		expected string
+	}{
+		{
+			name:     "Docker Hub official image",
+			imageRef: "nginx",
+			expected: "docker.io",
+		},
+		{
+			name:     "Docker Hub official image with tag",
+			imageRef: "nginx:latest",
+			expected: "docker.io",
+		},
+		{
+			name:     "Docker Hub user image",
+			imageRef: "library/nginx:latest",
+			expected: "docker.io",
+		},
+		{
+			name:     "GitHub Container Registry",
+			imageRef: "ghcr.io/owner/repo:v1.0.0",
+			expected: "ghcr.io",
+		},
+		{
+			name:     "GitHub Container Registry with digest",
+			imageRef: "ghcr.io/owner/repo@sha256:abc123",
+			expected: "ghcr.io",
+		},
+		{
+			name:     "AWS ECR",
+			imageRef: "123456789.dkr.ecr.us-east-1.amazonaws.com/myrepo:v1.0.0",
+			expected: "123456789.dkr.ecr.us-east-1.amazonaws.com",
+		},
+		{
+			name:     "Google Container Registry",
+			imageRef: "gcr.io/my-project/myimage:latest",
+			expected: "gcr.io",
+		},
+		{
+			name:     "Google Artifact Registry",
+			imageRef: "us-docker.pkg.dev/my-project/my-repo/myimage:latest",
+			expected: "us-docker.pkg.dev",
+		},
+		{
+			name:     "localhost registry",
+			imageRef: "localhost:5000/myimage:latest",
+			expected: "localhost:5000",
+		},
+		{
+			name:     "localhost without port",
+			imageRef: "localhost/myimage:latest",
+			expected: "localhost",
+		},
+		{
+			name:     "private registry with port",
+			imageRef: "registry.example.com:5000/myimage:v1.0.0",
+			expected: "registry.example.com:5000",
+		},
+		{
+			name:     "private registry without port",
+			imageRef: "registry.example.com/myimage:v1.0.0",
+			expected: "registry.example.com",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := extractRegistry(tt.imageRef)
+			if result != tt.expected {
+				t.Errorf("extractRegistry(%q) = %q, expected %q", tt.imageRef, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGetCredentials(t *testing.T) {
+	tests := []struct {
+		name             string
+		registry         string
+		envVars          map[string]string
+		expectedUsername string
+		expectedPassword string
+	}{
+		{
+			name:     "GitHub Container Registry with GITHUB_TOKEN",
+			registry: "ghcr.io",
+			envVars: map[string]string{
+				"GITHUB_TOKEN": "ghp_test_token",
+			},
+			expectedUsername: "token",
+			expectedPassword: "ghp_test_token",
+		},
+		{
+			name:     "Generic registry with DOCKER_USERNAME/PASSWORD",
+			registry: "docker.io",
+			envVars: map[string]string{
+				"DOCKER_USERNAME": "myuser",
+				"DOCKER_PASSWORD": "mypassword",
+			},
+			expectedUsername: "myuser",
+			expectedPassword: "mypassword",
+		},
+		{
+			name:     "AWS ECR with AWS_ECR_PASSWORD",
+			registry: "123456789.dkr.ecr.us-east-1.amazonaws.com",
+			envVars: map[string]string{
+				"AWS_ECR_PASSWORD": "ecr-token",
+			},
+			expectedUsername: "AWS",
+			expectedPassword: "ecr-token",
+		},
+		{
+			name:     "Google Container Registry with GCR_TOKEN",
+			registry: "gcr.io",
+			envVars: map[string]string{
+				"GCR_TOKEN": "gcr-json-key",
+			},
+			expectedUsername: "_json_key",
+			expectedPassword: "gcr-json-key",
+		},
+		{
+			name:             "No credentials",
+			registry:         "docker.io",
+			envVars:          map[string]string{},
+			expectedUsername: "",
+			expectedPassword: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Clear all relevant env vars first
+			envVarsToClean := []string{"GITHUB_TOKEN", "DOCKER_USERNAME", "DOCKER_PASSWORD", "AWS_ECR_PASSWORD", "GCR_TOKEN"}
+			for _, key := range envVarsToClean {
+				os.Unsetenv(key)
+			}
+
+			// Set test env vars
+			for key, value := range tt.envVars {
+				os.Setenv(key, value)
+			}
+
+			// Run test
+			username, password := getCredentials(tt.registry)
+
+			if username != tt.expectedUsername {
+				t.Errorf("getCredentials(%q) username = %q, expected %q", tt.registry, username, tt.expectedUsername)
+			}
+			if password != tt.expectedPassword {
+				t.Errorf("getCredentials(%q) password = %q, expected %q", tt.registry, password, tt.expectedPassword)
+			}
+
+			// Cleanup
+			for key := range tt.envVars {
+				os.Unsetenv(key)
+			}
+		})
+	}
+}
+
+func TestIsAuthError(t *testing.T) {
+	tests := []struct {
+		name     string
+		output   string
+		expected bool
+	}{
+		{
+			name:     "unauthorized error",
+			output:   "Error response from daemon: unauthorized: authentication required",
+			expected: true,
+		},
+		{
+			name:     "denied error",
+			output:   "Error response from daemon: denied: requested access to the resource is denied",
+			expected: true,
+		},
+		{
+			name:     "access forbidden error",
+			output:   "Error: access forbidden",
+			expected: true,
+		},
+		{
+			name:     "login required",
+			output:   "Error: login required",
+			expected: true,
+		},
+		{
+			name:     "not authorized",
+			output:   "Error: not authorized to access this resource",
+			expected: true,
+		},
+		{
+			name:     "network error (not auth)",
+			output:   "Error: dial tcp: lookup registry.example.com: no such host",
+			expected: false,
+		},
+		{
+			name:     "image not found (not auth)",
+			output:   "Error: manifest unknown: manifest unknown",
+			expected: false,
+		},
+		{
+			name:     "empty output",
+			output:   "",
+			expected: false,
+		},
+		{
+			name:     "success message",
+			output:   "Successfully pulled image nginx:latest",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isAuthError(tt.output)
+			if result != tt.expected {
+				t.Errorf("isAuthError(%q) = %v, expected %v", tt.output, result, tt.expected)
+			}
+		})
+	}
+}
+
 // Note: Tests for actual Docker operations (Pull, Run, Stop, etc.) are not
 // included in unit tests because they require a running Docker daemon.
 // These will be tested in integration tests instead.

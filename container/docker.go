@@ -16,9 +16,10 @@ import (
 
 // Docker implements Runtime interface using Docker CLI.
 type Docker struct {
-	cmd       string
-	logger    *slog.Logger
-	drainTime time.Duration
+	cmd                string
+	logger             *slog.Logger
+	drainTime          time.Duration
+	loggedInRegistries map[string]bool // Track registries we've logged into
 }
 
 // Forbidden options that conflict with Dewy management
@@ -39,10 +40,119 @@ func NewDocker(logger *slog.Logger, drainTime time.Duration) (*Docker, error) {
 	}
 
 	return &Docker{
-		cmd:       cmd,
-		logger:    logger,
-		drainTime: drainTime,
+		cmd:                cmd,
+		logger:             logger,
+		drainTime:          drainTime,
+		loggedInRegistries: make(map[string]bool),
 	}, nil
+}
+
+// extractRegistry extracts the registry host from an image reference.
+// For images without explicit registry (e.g., "nginx:latest"), returns "docker.io".
+// For images with registry (e.g., "ghcr.io/owner/repo:tag"), returns the registry host.
+func extractRegistry(imageRef string) string {
+	// Remove tag or digest
+	ref := imageRef
+	if idx := strings.LastIndex(ref, "@"); idx != -1 {
+		ref = ref[:idx]
+	}
+	if idx := strings.LastIndex(ref, ":"); idx != -1 {
+		// Check if this is a port number (e.g., localhost:5000/image)
+		slashIdx := strings.LastIndex(ref[:idx], "/")
+		if slashIdx == -1 || !strings.Contains(ref[slashIdx:idx], ".") {
+			ref = ref[:idx]
+		}
+	}
+
+	// Check if the first part contains a dot or colon (indicating a registry)
+	parts := strings.SplitN(ref, "/", 2)
+	if len(parts) == 1 {
+		// No slash, it's a Docker Hub official image (e.g., "nginx")
+		return "docker.io"
+	}
+
+	firstPart := parts[0]
+	if strings.Contains(firstPart, ".") || strings.Contains(firstPart, ":") || firstPart == "localhost" {
+		return firstPart
+	}
+
+	// No registry specified (e.g., "library/nginx"), use Docker Hub
+	return "docker.io"
+}
+
+// getCredentials returns username and password for the given registry from environment variables.
+func getCredentials(registry string) (username, password string) {
+	// GitHub Container Registry
+	if strings.Contains(registry, "ghcr.io") {
+		if token := os.Getenv("GITHUB_TOKEN"); token != "" {
+			return "token", token
+		}
+	}
+
+	// AWS ECR - check for ECR-specific credentials first
+	if strings.Contains(registry, ".ecr.") && strings.Contains(registry, ".amazonaws.com") {
+		if token := os.Getenv("AWS_ECR_PASSWORD"); token != "" {
+			return "AWS", token
+		}
+	}
+
+	// Google Artifact Registry / Container Registry
+	if strings.Contains(registry, "gcr.io") || strings.Contains(registry, "-docker.pkg.dev") {
+		if token := os.Getenv("GCR_TOKEN"); token != "" {
+			return "_json_key", token
+		}
+	}
+
+	// Generic credentials (fallback)
+	username = os.Getenv("DOCKER_USERNAME")
+	password = os.Getenv("DOCKER_PASSWORD")
+
+	return username, password
+}
+
+// isAuthError checks if the error message indicates an authentication failure.
+func isAuthError(output string) bool {
+	lowerOutput := strings.ToLower(output)
+	authIndicators := []string{
+		"unauthorized",
+		"authentication required",
+		"denied",
+		"access forbidden",
+		"not authorized",
+		"login required",
+	}
+	for _, indicator := range authIndicators {
+		if strings.Contains(lowerOutput, indicator) {
+			return true
+		}
+	}
+	return false
+}
+
+// Login authenticates with the specified registry using credentials from environment variables.
+func (d *Docker) Login(ctx context.Context, registry string) error {
+	username, password := getCredentials(registry)
+	if username == "" || password == "" {
+		d.logger.Debug("No credentials found for registry", slog.String("registry", registry))
+		return nil
+	}
+
+	d.logger.Info("Logging in to registry", slog.String("registry", registry))
+
+	// Use --password-stdin for security
+	// #nosec G204 - args are constructed internally from validated inputs
+	cmd := exec.CommandContext(ctx, d.cmd, "login", "-u", username, "--password-stdin", registry)
+	cmd.Stdin = strings.NewReader(password)
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("docker login failed for %s: %w: %s", registry, err, string(output))
+	}
+
+	d.loggedInRegistries[registry] = true
+	d.logger.Info("Successfully logged in to registry", slog.String("registry", registry))
+
+	return nil
 }
 
 // validateExtraArgs checks if any forbidden options are present in extra args.
@@ -146,22 +256,51 @@ func (d *Docker) execCommandOutput(ctx context.Context, args ...string) (string,
 
 // Pull pulls an image from the registry.
 // If the image already exists locally, it will still attempt to pull to get the latest version.
+// Automatically handles authentication: logs in on first pull and retries on auth errors.
 func (d *Docker) Pull(ctx context.Context, imageRef string) error {
 	// Check if image exists locally first
-	_, err := d.execCommandOutput(ctx, "image", "inspect", imageRef)
-	if err == nil {
+	_, localErr := d.execCommandOutput(ctx, "image", "inspect", imageRef)
+	if localErr == nil {
 		// Image exists locally
 		d.logger.Info("Image already exists locally, pulling to check for updates",
 			slog.String("image", imageRef))
 	}
 
+	// Extract registry and attempt login if not already logged in
+	registry := extractRegistry(imageRef)
+	if !d.loggedInRegistries[registry] {
+		if err := d.Login(ctx, registry); err != nil {
+			d.logger.Warn("Initial login failed, will attempt pull anyway",
+				slog.String("registry", registry),
+				slog.String("error", err.Error()))
+		}
+	}
+
 	// Always try to pull to get the latest version
 	// For local-only images (not in a registry), this will fail but that's expected
 	d.logger.Info("Pulling image", slog.String("image", imageRef))
-	pullErr := d.execCommand(ctx, "pull", imageRef)
+	output, pullErr := d.pullImage(ctx, imageRef)
+
+	// If pull fails with auth error, retry login and pull again
+	if pullErr != nil && isAuthError(output) {
+		d.logger.Info("Authentication error detected, attempting re-login",
+			slog.String("registry", registry))
+
+		// Clear the logged-in status and retry login
+		delete(d.loggedInRegistries, registry)
+		if loginErr := d.Login(ctx, registry); loginErr != nil {
+			d.logger.Error("Re-login failed",
+				slog.String("registry", registry),
+				slog.String("error", loginErr.Error()))
+		} else {
+			// Retry pull after successful re-login
+			d.logger.Info("Retrying pull after re-login", slog.String("image", imageRef))
+			_, pullErr = d.pullImage(ctx, imageRef)
+		}
+	}
 
 	// If pull fails but image exists locally, we can use the local image
-	if pullErr != nil && err == nil {
+	if pullErr != nil && localErr == nil {
 		d.logger.Warn("Failed to pull image, but local image exists - using local version",
 			slog.String("image", imageRef),
 			slog.String("pull_error", pullErr.Error()))
@@ -169,6 +308,26 @@ func (d *Docker) Pull(ctx context.Context, imageRef string) error {
 	}
 
 	return pullErr
+}
+
+// pullImage executes docker pull and returns output and error.
+func (d *Docker) pullImage(ctx context.Context, imageRef string) (string, error) {
+	// #nosec G204 - args are constructed internally from validated inputs
+	cmd := exec.CommandContext(ctx, d.cmd, "pull", imageRef)
+	d.logger.Debug("Executing docker command",
+		slog.String("cmd", d.cmd),
+		slog.Any("args", []string{"pull", imageRef}))
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		d.logger.Error("Docker pull failed",
+			slog.String("image", imageRef),
+			slog.String("output", string(output)),
+			slog.String("error", err.Error()))
+		return string(output), fmt.Errorf("docker pull %s failed: %w: %s", imageRef, err, string(output))
+	}
+
+	return string(output), nil
 }
 
 // Run starts a new container and returns the container ID.
