@@ -279,6 +279,15 @@ ghr://owner/repository
 ghr://owner/repository?pre-release=true
 ```
 
+**Authentication:**
+
+Dewy supports two authentication methods:
+
+1. **Personal Access Token (PAT)**: Set `GITHUB_TOKEN` or `GH_TOKEN` environment variable
+2. **GitHub App** (recommended for production): Set `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, and `GITHUB_APP_PRIVATE_KEY` or `GITHUB_APP_PRIVATE_KEY_PATH`
+
+See [Registry documentation](/registry#authentication) for detailed setup instructions.
+
 ### Amazon S3
 
 Registry URL format: `s3://`

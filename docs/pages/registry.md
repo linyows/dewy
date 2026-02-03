@@ -51,13 +51,126 @@ ghr://<owner>/<repo>
 dewy server --registry ghr://linyows/myapp -- /opt/myapp/current/myapp
 ```
 
-### Environment Variables
+### Authentication
+
+Dewy supports two authentication methods for GitHub: Personal Access Token (PAT) and GitHub App.
+
+#### Personal Access Token (PAT)
+
+The simplest authentication method. Set via environment variables:
 
 ```bash
+# GH_TOKEN takes precedence (recommended to avoid GitHub Actions auto-override)
+export GH_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxx
+
+# Or use GITHUB_TOKEN
 export GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxx
 ```
 
-Set GitHub Personal Access Token or `GITHUB_TOKEN` for GitHub Actions.
+{% callout type="note" %}
+PATs have a maximum validity of 1 year. For long-term operations, GitHub App authentication is recommended.
+{% /callout %}
+
+#### GitHub App Authentication (Recommended for Production)
+
+GitHub App authentication is recommended for production environments as it offers:
+
+- **Automatic token refresh**: No manual token rotation required
+- **Fine-grained permissions**: Only request necessary permissions
+- **Better security**: No long-lived tokens to manage
+- **Audit logs**: Better tracking of API usage
+
+**Environment Variables:**
+
+{% table %}
+* Variable
+* Description
+* Required
+---
+* `GITHUB_APP_ID`
+* GitHub App ID
+* Yes
+---
+* `GITHUB_APP_INSTALLATION_ID`
+* Installation ID
+* Yes
+---
+* `GITHUB_APP_PRIVATE_KEY`
+* PEM format private key (direct content)
+* Yes*
+---
+* `GITHUB_APP_PRIVATE_KEY_PATH`
+* Path to private key file
+* Yes*
+{% /table %}
+
+*Either `GITHUB_APP_PRIVATE_KEY` or `GITHUB_APP_PRIVATE_KEY_PATH` is required.
+
+**Example:**
+
+```bash
+export GITHUB_APP_ID=123456
+export GITHUB_APP_INSTALLATION_ID=789012
+export GITHUB_APP_PRIVATE_KEY_PATH=/path/to/private-key.pem
+
+dewy server --registry ghr://owner/repo -- /opt/app/current/app
+```
+
+#### Authentication Priority
+
+When multiple authentication methods are configured, Dewy uses the following priority:
+
+1. **GitHub App** (if `GITHUB_APP_ID` is set)
+2. **PAT** (`GH_TOKEN` > `GITHUB_TOKEN`)
+
+#### GitHub Enterprise Server
+
+For GitHub Enterprise Server, set the API endpoint:
+
+```bash
+export GITHUB_API_URL=https://github.example.com/api/v3/
+# or
+export GITHUB_ENDPOINT=https://github.example.com/api/v3/
+```
+
+### Creating a GitHub App
+
+To use GitHub App authentication, you need to create a GitHub App:
+
+#### 1. Create the App
+
+1. Go to **Settings** → **Developer settings** → **GitHub Apps** → **New GitHub App**
+2. Fill in basic settings:
+   - **GitHub App name**: e.g., `dewy-deployer`
+   - **Homepage URL**: Your repository URL or documentation
+3. Configure Webhook:
+   - **Active**: Uncheck (Dewy uses polling, not webhooks)
+4. Set Permissions:
+   - **Repository permissions**:
+     - **Contents**: Read-only (required for releases and assets)
+5. Choose installation scope:
+   - **Only on this account** or **Any account**
+
+#### 2. Generate Private Key
+
+1. After creating the App, go to the App settings page
+2. Scroll to **Private keys** section
+3. Click **Generate a private key**
+4. Save the downloaded `.pem` file securely
+
+#### 3. Install the App
+
+1. Go to App settings → **Install App**
+2. Select the organization/user account
+3. Choose **Only select repositories** and select target repositories
+4. Click **Install**
+
+#### 4. Get Required Values
+
+- **App ID**: Found on the App settings page under "App ID"
+- **Installation ID**: After installation, check the URL:
+  - `https://github.com/settings/installations/XXXXXX`
+  - The `XXXXXX` part is your Installation ID
 
 ### Examples with Options
 

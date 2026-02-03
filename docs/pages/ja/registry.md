@@ -51,13 +51,126 @@ ghr://<owner>/<repo>
 dewy server --registry ghr://linyows/myapp -- /opt/myapp/current/myapp
 ```
 
-### 環境変数
+### 認証
+
+DewyはGitHubの認証方式として、Personal Access Token（PAT）とGitHub Appの2つをサポートしています。
+
+#### Personal Access Token（PAT）
+
+最もシンプルな認証方式です。環境変数で設定します：
 
 ```bash
+# GH_TOKENが優先されます（GitHub Actionsの自動上書きを避けるため推奨）
+export GH_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxx
+
+# またはGITHUB_TOKENを使用
 export GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxx
 ```
 
-GitHubのPersonal Access Tokenまたは、GitHub Actionsの場合は`GITHUB_TOKEN`を設定します。
+{% callout type="note" %}
+PATの有効期限は最長1年です。長期運用にはGitHub App認証を推奨します。
+{% /callout %}
+
+#### GitHub App認証（本番環境推奨）
+
+本番環境ではGitHub App認証を推奨します。以下のメリットがあります：
+
+- **自動トークン更新**: 手動でのトークンローテーションが不要
+- **きめ細かな権限設定**: 必要な権限のみをリクエスト
+- **セキュリティ向上**: 長期間有効なトークンの管理が不要
+- **監査ログ**: API使用状況の追跡が容易
+
+**環境変数:**
+
+{% table %}
+* 変数名
+* 説明
+* 必須
+---
+* `GITHUB_APP_ID`
+* GitHub App ID
+* Yes
+---
+* `GITHUB_APP_INSTALLATION_ID`
+* Installation ID
+* Yes
+---
+* `GITHUB_APP_PRIVATE_KEY`
+* PEM形式の秘密鍵（直接指定）
+* Yes*
+---
+* `GITHUB_APP_PRIVATE_KEY_PATH`
+* 秘密鍵ファイルのパス
+* Yes*
+{% /table %}
+
+*`GITHUB_APP_PRIVATE_KEY`または`GITHUB_APP_PRIVATE_KEY_PATH`のいずれかが必要です。
+
+**使用例:**
+
+```bash
+export GITHUB_APP_ID=123456
+export GITHUB_APP_INSTALLATION_ID=789012
+export GITHUB_APP_PRIVATE_KEY_PATH=/path/to/private-key.pem
+
+dewy server --registry ghr://owner/repo -- /opt/app/current/app
+```
+
+#### 認証の優先順位
+
+複数の認証方式が設定されている場合、Dewyは以下の優先順位で使用します：
+
+1. **GitHub App**（`GITHUB_APP_ID`が設定されている場合）
+2. **PAT**（`GH_TOKEN` > `GITHUB_TOKEN`）
+
+#### GitHub Enterprise Server
+
+GitHub Enterprise Serverを使用する場合は、APIエンドポイントを設定します：
+
+```bash
+export GITHUB_API_URL=https://github.example.com/api/v3/
+# または
+export GITHUB_ENDPOINT=https://github.example.com/api/v3/
+```
+
+### GitHub Appの作成
+
+GitHub App認証を使用するには、GitHub Appを作成する必要があります。
+
+#### 1. Appの作成
+
+1. **Settings** → **Developer settings** → **GitHub Apps** → **New GitHub App** に移動
+2. 基本設定を入力：
+   - **GitHub App name**: 例: `dewy-deployer`
+   - **Homepage URL**: リポジトリURLまたはドキュメント
+3. Webhookの設定：
+   - **Active**: チェックを外す（DewyはWebhookではなくポーリングを使用）
+4. 権限の設定：
+   - **Repository permissions**:
+     - **Contents**: Read-only（リリースとアセットのアクセスに必要）
+5. インストール範囲を選択：
+   - **Only on this account** または **Any account**
+
+#### 2. 秘密鍵の生成
+
+1. App作成後、App設定ページに移動
+2. **Private keys** セクションまでスクロール
+3. **Generate a private key** をクリック
+4. ダウンロードされた `.pem` ファイルを安全に保管
+
+#### 3. Appのインストール
+
+1. App設定 → **Install App** に移動
+2. 組織またはユーザーアカウントを選択
+3. **Only select repositories** を選択し、対象リポジトリを選択
+4. **Install** をクリック
+
+#### 4. 必要な値の取得
+
+- **App ID**: App設定ページの「App ID」に記載
+- **Installation ID**: インストール後のURLを確認：
+  - `https://github.com/settings/installations/XXXXXX`
+  - `XXXXXX` の部分がInstallation ID
 
 ### オプション付きの例
 

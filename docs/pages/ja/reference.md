@@ -279,6 +279,15 @@ ghr://owner/repository
 ghr://owner/repository?pre-release=true
 ```
 
+**認証:**
+
+Dewyは2つの認証方式をサポートしています：
+
+1. **Personal Access Token（PAT）**: `GITHUB_TOKEN`または`GH_TOKEN`環境変数を設定
+2. **GitHub App**（本番環境推奨）: `GITHUB_APP_ID`、`GITHUB_APP_INSTALLATION_ID`、および`GITHUB_APP_PRIVATE_KEY`または`GITHUB_APP_PRIVATE_KEY_PATH`を設定
+
+詳細な設定方法は[レジストリのドキュメント](/ja/registry#認証)を参照してください。
+
 ### Amazon S3
 
 レジストリURL形式: `s3://`
