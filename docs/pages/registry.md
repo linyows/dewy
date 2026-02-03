@@ -147,9 +147,13 @@ To use GitHub App authentication, you need to create a GitHub App:
    - **Active**: Uncheck (Dewy uses polling, not webhooks)
 4. Set Permissions:
    - **Repository permissions**:
-     - **Contents**: Read-only (required for releases and assets)
+     - **Contents**: Read & Write (required for releases, assets, and deployment audit records)
 5. Choose installation scope:
    - **Only on this account** or **Any account**
+
+{% callout type="note" %}
+Write permission is required for the deployment audit feature, which records shipping information as release assets.
+{% /callout %}
 
 #### 2. Generate Private Key
 

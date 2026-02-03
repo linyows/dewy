@@ -147,9 +147,13 @@ GitHub App認証を使用するには、GitHub Appを作成する必要があり
    - **Active**: チェックを外す（DewyはWebhookではなくポーリングを使用）
 4. 権限の設定：
    - **Repository permissions**:
-     - **Contents**: Read-only（リリースとアセットのアクセスに必要）
+     - **Contents**: Read & Write（リリース、アセット、デプロイ監査記録に必要）
 5. インストール範囲を選択：
    - **Only on this account** または **Any account**
+
+{% callout type="note" %}
+Write権限はデプロイ監査機能に必要です。この機能はデプロイ情報をリリースアセットとして記録します。
+{% /callout %}
 
 #### 2. 秘密鍵の生成
 
