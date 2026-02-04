@@ -97,14 +97,14 @@ PATの有効期限は最長1年です。長期運用にはGitHub App認証を推
 ---
 * `GITHUB_APP_PRIVATE_KEY`
 * PEM形式の秘密鍵（直接指定）
-* Yes*
+* いずれか
 ---
 * `GITHUB_APP_PRIVATE_KEY_PATH`
 * 秘密鍵ファイルのパス
-* Yes*
+* いずれか
 {% /table %}
 
-*`GITHUB_APP_PRIVATE_KEY`または`GITHUB_APP_PRIVATE_KEY_PATH`のいずれかが必要です。
+`GITHUB_APP_PRIVATE_KEY`または`GITHUB_APP_PRIVATE_KEY_PATH`のいずれかが必要です。
 
 **使用例:**
 

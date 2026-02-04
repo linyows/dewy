@@ -1,6 +1,7 @@
 package client
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -375,7 +376,8 @@ func TestGitHubAppTransport_CreateJWT(t *testing.T) {
 	}
 
 	// Verify issuer is the app ID
-	if claims["iss"] != "123456" {
+	// Use fmt.Sprint for comparison as jwt.MapClaims may parse numeric strings as numbers
+	if fmt.Sprint(claims["iss"]) != "123456" {
 		t.Errorf("Expected issuer '123456', got '%v'", claims["iss"])
 	}
 

@@ -97,14 +97,14 @@ GitHub App authentication is recommended for production environments as it offer
 ---
 * `GITHUB_APP_PRIVATE_KEY`
 * PEM format private key (direct content)
-* Yes*
+* Either
 ---
 * `GITHUB_APP_PRIVATE_KEY_PATH`
 * Path to private key file
-* Yes*
+* Either
 {% /table %}
 
-*Either `GITHUB_APP_PRIVATE_KEY` or `GITHUB_APP_PRIVATE_KEY_PATH` is required.
+Either `GITHUB_APP_PRIVATE_KEY` or `GITHUB_APP_PRIVATE_KEY_PATH` is required.
 
 **Example:**
 
