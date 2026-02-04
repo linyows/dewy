@@ -11,6 +11,7 @@ require (
 	github.com/carlescere/scheduler v0.0.0-20170109141437-ee74d2f83d82
 	github.com/cli/safeexec v1.0.1
 	github.com/fatih/color v1.18.0
+	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/google/go-cmp v0.7.0
 	github.com/google/go-github/v73 v73.0.0
 	github.com/google/go-querystring v1.2.0

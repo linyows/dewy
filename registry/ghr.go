@@ -78,7 +78,7 @@ func NewGHR(ctx context.Context, u string, log *logging.Logger) (*GHR, error) {
 		}
 	}
 
-	ghr.cl, err = client.NewGitHub()
+	ghr.cl, err = client.NewGitHub(log.Logger)
 	if err != nil {
 		return nil, err
 	}

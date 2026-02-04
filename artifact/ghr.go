@@ -34,7 +34,7 @@ func NewGHR(ctx context.Context, url string, logger *slog.Logger) (*GHR, error) 
 		return nil, fmt.Errorf("invalid artifact url: %s, %#v", url, splitted)
 	}
 
-	cl, err := client.NewGitHub()
+	cl, err := client.NewGitHub(logger)
 	if err != nil {
 		return nil, err
 	}

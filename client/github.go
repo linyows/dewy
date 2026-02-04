@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -12,7 +13,54 @@ import (
 )
 
 // NewGitHub creates a new GitHub client with authentication.
-func NewGitHub() (*github.Client, error) {
+// Authentication priority:
+//  1. GitHub App (if GITHUB_APP_ID is set)
+//  2. PAT (GH_TOKEN > GITHUB_TOKEN)
+// The logger parameter is optional; if nil, logging is disabled.
+func NewGitHub(logger *slog.Logger) (*github.Client, error) {
+	// Get API URL for GitHub Enterprise Server support
+	apiURL := getAPIURL()
+
+	// Try GitHub App authentication first
+	appConfig, err := LoadGitHubAppConfig()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load GitHub App config: %w", err)
+	}
+
+	if appConfig != nil {
+		return newGitHubWithApp(appConfig, apiURL, logger)
+	}
+
+	// Fall back to PAT authentication
+	return newGitHubWithPAT(apiURL)
+}
+
+// newGitHubWithApp creates a GitHub client using GitHub App authentication.
+func newGitHubWithApp(config *GitHubAppConfig, apiURL string, logger *slog.Logger) (*github.Client, error) {
+	baseURLForTransport := ""
+	if apiURL != "" {
+		baseURLForTransport = apiURL
+	}
+
+	transport, err := NewGitHubAppTransport(config, baseURLForTransport, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	httpClient := &http.Client{Transport: transport}
+	client := github.NewClient(httpClient)
+
+	if apiURL != "" {
+		if err := setClientBaseURL(client, apiURL); err != nil {
+			return nil, err
+		}
+	}
+
+	return client, nil
+}
+
+// newGitHubWithPAT creates a GitHub client using Personal Access Token authentication.
+func newGitHubWithPAT(apiURL string) (*github.Client, error) {
 	// Check GH_TOKEN first to avoid GitHub Actions auto-override of GITHUB_TOKEN
 	token := os.Getenv("GH_TOKEN")
 	if token == "" {
@@ -29,26 +77,38 @@ func NewGitHub() (*github.Client, error) {
 
 	client := github.NewClient(tc)
 
-	// Handle custom API URL - support both GITHUB_ENDPOINT and GITHUB_API_URL
+	if apiURL != "" {
+		if err := setClientBaseURL(client, apiURL); err != nil {
+			return nil, err
+		}
+	}
+
+	return client, nil
+}
+
+// getAPIURL returns the GitHub API URL from environment variables.
+func getAPIURL() string {
 	apiURL := os.Getenv("GITHUB_API_URL")
 	if apiURL == "" {
 		apiURL = os.Getenv("GITHUB_ENDPOINT")
 	}
-	if apiURL != "" {
-		baseURL, err := url.Parse(apiURL)
-		if err != nil {
-			return nil, fmt.Errorf("invalid API URL: %w", err)
-		}
-		// Ensure the URL has a trailing slash as required by go-github
-		if baseURL.Path == "" {
-			baseURL.Path = "/"
-		} else if baseURL.Path[len(baseURL.Path)-1] != '/' {
-			baseURL.Path += "/"
-		}
-		client.BaseURL = baseURL
-	}
+	return apiURL
+}
 
-	return client, nil
+// setClientBaseURL sets the base URL for the GitHub client.
+func setClientBaseURL(client *github.Client, apiURL string) error {
+	baseURL, err := url.Parse(apiURL)
+	if err != nil {
+		return fmt.Errorf("invalid API URL: %w", err)
+	}
+	// Ensure the URL has a trailing slash as required by go-github
+	if baseURL.Path == "" {
+		baseURL.Path = "/"
+	} else if baseURL.Path[len(baseURL.Path)-1] != '/' {
+		baseURL.Path += "/"
+	}
+	client.BaseURL = baseURL
+	return nil
 }
 
 // NewMockGitHub creates a GitHub client with a mock HTTP client for testing.

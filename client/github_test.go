@@ -7,6 +7,8 @@ import (
 	"testing"
 )
 
+// testPrivateKey is defined in github_app_test.go and shared across tests
+
 func TestNewGitHub(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -98,7 +100,7 @@ func TestNewGitHub(t *testing.T) {
 				os.Setenv("GITHUB_ENDPOINT", tt.githubEndpoint)
 			}
 
-			client, err := NewGitHub()
+			client, err := NewGitHub(nil)
 
 			if tt.expectedError {
 				if err == nil {
@@ -139,7 +141,7 @@ func TestNewGitHub_TokenPrecedence(t *testing.T) {
 	os.Setenv("GITHUB_TOKEN", "github_token")
 	os.Setenv("GH_TOKEN", "gh_token")
 
-	client, err := NewGitHub()
+	client, err := NewGitHub(nil)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -182,7 +184,7 @@ func TestNewGitHub_EnvironmentIsolation(t *testing.T) {
 	}()
 
 	// Test with no tokens
-	_, err := NewGitHub()
+	_, err := NewGitHub(nil)
 	if err == nil {
 		t.Error("Expected error when no tokens are provided")
 	}
@@ -276,7 +278,7 @@ func TestNewGitHub_EdgeCases(t *testing.T) {
 				defer tt.cleanup()
 			}
 
-			client, err := NewGitHub()
+			client, err := NewGitHub(nil)
 
 			if tt.wantError && err == nil {
 				t.Error("Expected error but got none")
@@ -289,4 +291,126 @@ func TestNewGitHub_EdgeCases(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNewGitHub_GitHubAppAuth(t *testing.T) {
+	// Clear all auth environment variables
+	clearAllGitHubEnv()
+	defer clearAllGitHubEnv()
+
+	// Set up GitHub App configuration
+	os.Setenv("GITHUB_APP_ID", "123456")
+	os.Setenv("GITHUB_APP_INSTALLATION_ID", "789012")
+	os.Setenv("GITHUB_APP_PRIVATE_KEY", testPrivateKey)
+
+	client, err := NewGitHub(nil)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	if client == nil {
+		t.Fatal("Expected client but got nil")
+	}
+
+	// Verify default GitHub API URL is set
+	expectedURL := "https://api.github.com/"
+	if client.BaseURL.String() != expectedURL {
+		t.Errorf("Expected BaseURL %s, got %s", expectedURL, client.BaseURL.String())
+	}
+}
+
+func TestNewGitHub_GitHubAppAuthWithEnterpriseURL(t *testing.T) {
+	// Clear all auth environment variables
+	clearAllGitHubEnv()
+	defer clearAllGitHubEnv()
+
+	// Set up GitHub App configuration with Enterprise URL
+	os.Setenv("GITHUB_APP_ID", "123456")
+	os.Setenv("GITHUB_APP_INSTALLATION_ID", "789012")
+	os.Setenv("GITHUB_APP_PRIVATE_KEY", testPrivateKey)
+	os.Setenv("GITHUB_API_URL", "https://api.github.enterprise.com/")
+
+	client, err := NewGitHub(nil)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	if client == nil {
+		t.Fatal("Expected client but got nil")
+	}
+
+	// Verify Enterprise URL is set
+	expectedURL := "https://api.github.enterprise.com/"
+	if client.BaseURL.String() != expectedURL {
+		t.Errorf("Expected BaseURL %s, got %s", expectedURL, client.BaseURL.String())
+	}
+}
+
+func TestNewGitHub_FallbackToPAT(t *testing.T) {
+	// Clear all auth environment variables
+	clearAllGitHubEnv()
+	defer clearAllGitHubEnv()
+
+	// Set up only PAT (no GitHub App config)
+	os.Setenv("GITHUB_TOKEN", "ghp_test_token")
+
+	client, err := NewGitHub(nil)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	if client == nil {
+		t.Fatal("Expected client but got nil")
+	}
+}
+
+func TestNewGitHub_GitHubAppPrecedenceOverPAT(t *testing.T) {
+	// Clear all auth environment variables
+	clearAllGitHubEnv()
+	defer clearAllGitHubEnv()
+
+	// Set up both GitHub App and PAT
+	os.Setenv("GITHUB_APP_ID", "123456")
+	os.Setenv("GITHUB_APP_INSTALLATION_ID", "789012")
+	os.Setenv("GITHUB_APP_PRIVATE_KEY", testPrivateKey)
+	os.Setenv("GITHUB_TOKEN", "ghp_test_token")
+
+	client, err := NewGitHub(nil)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	if client == nil {
+		t.Fatal("Expected client but got nil")
+	}
+	// GitHub App should take precedence (we can't directly verify which was used,
+	// but we verify the client was created successfully)
+}
+
+func TestNewGitHub_InvalidGitHubAppConfig(t *testing.T) {
+	// Clear all auth environment variables
+	clearAllGitHubEnv()
+	defer clearAllGitHubEnv()
+
+	// Set up invalid GitHub App configuration (missing installation ID)
+	os.Setenv("GITHUB_APP_ID", "123456")
+	os.Setenv("GITHUB_APP_PRIVATE_KEY", testPrivateKey)
+	// Note: GITHUB_APP_INSTALLATION_ID is not set
+
+	_, err := NewGitHub(nil)
+	if err == nil {
+		t.Error("Expected error for invalid GitHub App config")
+	}
+}
+
+// clearAllGitHubEnv clears all GitHub related environment variables.
+func clearAllGitHubEnv() {
+	os.Unsetenv("GITHUB_TOKEN")
+	os.Unsetenv("GH_TOKEN")
+	os.Unsetenv("GITHUB_API_URL")
+	os.Unsetenv("GITHUB_ENDPOINT")
+	os.Unsetenv("GITHUB_APP_ID")
+	os.Unsetenv("GITHUB_APP_INSTALLATION_ID")
+	os.Unsetenv("GITHUB_APP_PRIVATE_KEY")
+	os.Unsetenv("GITHUB_APP_PRIVATE_KEY_PATH")
 }
