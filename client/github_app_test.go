@@ -3,11 +3,14 @@ package client
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/golang-jwt/jwt/v4"
 )
 
 // Test private key for testing purposes only (not a real key).
-// This is a PKCS#1 formatted RSA private key required by ghinstallation.
+// This is a PKCS#1 formatted RSA private key.
 //
 //nolint:gosec // G101: This is a test-only key, not real credentials
 const testPrivateKey = `-----BEGIN RSA PRIVATE KEY-----
@@ -257,7 +260,7 @@ func TestNewGitHubAppTransport(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			transport, err := NewGitHubAppTransport(tt.config, tt.baseURL)
+			transport, err := NewGitHubAppTransport(tt.config, tt.baseURL, nil)
 
 			if tt.wantError {
 				if err == nil {
@@ -284,4 +287,103 @@ func clearGitHubAppEnv() {
 	os.Unsetenv("GITHUB_APP_INSTALLATION_ID")
 	os.Unsetenv("GITHUB_APP_PRIVATE_KEY")
 	os.Unsetenv("GITHUB_APP_PRIVATE_KEY_PATH")
+}
+
+func TestParsePrivateKey(t *testing.T) {
+	tests := []struct {
+		name      string
+		pemBytes  []byte
+		wantError bool
+	}{
+		{
+			name:      "valid PKCS#1 key",
+			pemBytes:  []byte(testPrivateKey),
+			wantError: false,
+		},
+		{
+			name:      "invalid PEM",
+			pemBytes:  []byte("not a valid pem"),
+			wantError: true,
+		},
+		{
+			name:      "empty input",
+			pemBytes:  []byte{},
+			wantError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			key, err := parsePrivateKey(tt.pemBytes)
+
+			if tt.wantError {
+				if err == nil {
+					t.Error("Expected error but got none")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("Unexpected error: %v", err)
+				return
+			}
+
+			if key == nil {
+				t.Error("Expected non-nil key")
+			}
+		})
+	}
+}
+
+func TestGitHubAppTransport_CreateJWT(t *testing.T) {
+	privateKey, err := parsePrivateKey([]byte(testPrivateKey))
+	if err != nil {
+		t.Fatalf("Failed to parse private key: %v", err)
+	}
+
+	transport := &githubAppTransport{
+		appID:      123456,
+		privateKey: privateKey,
+	}
+
+	jwtToken, err := transport.createJWT()
+	if err != nil {
+		t.Fatalf("Failed to create JWT: %v", err)
+	}
+
+	if jwtToken == "" {
+		t.Error("Expected non-empty JWT")
+	}
+
+	// Verify the JWT structure (header.payload.signature)
+	parts := strings.Split(jwtToken, ".")
+	if len(parts) != 3 {
+		t.Errorf("Expected JWT with 3 parts, got %d", len(parts))
+	}
+
+	// Parse and verify the JWT claims
+	token, err := jwt.Parse(jwtToken, func(token *jwt.Token) (interface{}, error) {
+		return &privateKey.PublicKey, nil
+	})
+	if err != nil {
+		t.Fatalf("Failed to parse JWT: %v", err)
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		t.Fatal("Failed to get JWT claims")
+	}
+
+	// Verify issuer is the app ID
+	if claims["iss"] != "123456" {
+		t.Errorf("Expected issuer '123456', got '%v'", claims["iss"])
+	}
+
+	// Verify exp and iat are present
+	if claims["exp"] == nil {
+		t.Error("Expected exp claim")
+	}
+	if claims["iat"] == nil {
+		t.Error("Expected iat claim")
+	}
 }

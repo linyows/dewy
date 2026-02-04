@@ -100,7 +100,7 @@ func TestNewGitHub(t *testing.T) {
 				os.Setenv("GITHUB_ENDPOINT", tt.githubEndpoint)
 			}
 
-			client, err := NewGitHub()
+			client, err := NewGitHub(nil)
 
 			if tt.expectedError {
 				if err == nil {
@@ -141,7 +141,7 @@ func TestNewGitHub_TokenPrecedence(t *testing.T) {
 	os.Setenv("GITHUB_TOKEN", "github_token")
 	os.Setenv("GH_TOKEN", "gh_token")
 
-	client, err := NewGitHub()
+	client, err := NewGitHub(nil)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -184,7 +184,7 @@ func TestNewGitHub_EnvironmentIsolation(t *testing.T) {
 	}()
 
 	// Test with no tokens
-	_, err := NewGitHub()
+	_, err := NewGitHub(nil)
 	if err == nil {
 		t.Error("Expected error when no tokens are provided")
 	}
@@ -278,7 +278,7 @@ func TestNewGitHub_EdgeCases(t *testing.T) {
 				defer tt.cleanup()
 			}
 
-			client, err := NewGitHub()
+			client, err := NewGitHub(nil)
 
 			if tt.wantError && err == nil {
 				t.Error("Expected error but got none")
@@ -303,7 +303,7 @@ func TestNewGitHub_GitHubAppAuth(t *testing.T) {
 	os.Setenv("GITHUB_APP_INSTALLATION_ID", "789012")
 	os.Setenv("GITHUB_APP_PRIVATE_KEY", testPrivateKey)
 
-	client, err := NewGitHub()
+	client, err := NewGitHub(nil)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -330,7 +330,7 @@ func TestNewGitHub_GitHubAppAuthWithEnterpriseURL(t *testing.T) {
 	os.Setenv("GITHUB_APP_PRIVATE_KEY", testPrivateKey)
 	os.Setenv("GITHUB_API_URL", "https://api.github.enterprise.com/")
 
-	client, err := NewGitHub()
+	client, err := NewGitHub(nil)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -354,7 +354,7 @@ func TestNewGitHub_FallbackToPAT(t *testing.T) {
 	// Set up only PAT (no GitHub App config)
 	os.Setenv("GITHUB_TOKEN", "ghp_test_token")
 
-	client, err := NewGitHub()
+	client, err := NewGitHub(nil)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -375,7 +375,7 @@ func TestNewGitHub_GitHubAppPrecedenceOverPAT(t *testing.T) {
 	os.Setenv("GITHUB_APP_PRIVATE_KEY", testPrivateKey)
 	os.Setenv("GITHUB_TOKEN", "ghp_test_token")
 
-	client, err := NewGitHub()
+	client, err := NewGitHub(nil)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -397,7 +397,7 @@ func TestNewGitHub_InvalidGitHubAppConfig(t *testing.T) {
 	os.Setenv("GITHUB_APP_PRIVATE_KEY", testPrivateKey)
 	// Note: GITHUB_APP_INSTALLATION_ID is not set
 
-	_, err := NewGitHub()
+	_, err := NewGitHub(nil)
 	if err == nil {
 		t.Error("Expected error for invalid GitHub App config")
 	}

@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -15,7 +16,8 @@ import (
 // Authentication priority:
 //  1. GitHub App (if GITHUB_APP_ID is set)
 //  2. PAT (GH_TOKEN > GITHUB_TOKEN)
-func NewGitHub() (*github.Client, error) {
+// The logger parameter is optional; if nil, logging is disabled.
+func NewGitHub(logger *slog.Logger) (*github.Client, error) {
 	// Get API URL for GitHub Enterprise Server support
 	apiURL := getAPIURL()
 
@@ -26,7 +28,7 @@ func NewGitHub() (*github.Client, error) {
 	}
 
 	if appConfig != nil {
-		return newGitHubWithApp(appConfig, apiURL)
+		return newGitHubWithApp(appConfig, apiURL, logger)
 	}
 
 	// Fall back to PAT authentication
@@ -34,14 +36,13 @@ func NewGitHub() (*github.Client, error) {
 }
 
 // newGitHubWithApp creates a GitHub client using GitHub App authentication.
-func newGitHubWithApp(config *GitHubAppConfig, apiURL string) (*github.Client, error) {
-	// For GitHub Enterprise Server, strip trailing slash for ghinstallation
+func newGitHubWithApp(config *GitHubAppConfig, apiURL string, logger *slog.Logger) (*github.Client, error) {
 	baseURLForTransport := ""
 	if apiURL != "" {
 		baseURLForTransport = apiURL
 	}
 
-	transport, err := NewGitHubAppTransport(config, baseURLForTransport)
+	transport, err := NewGitHubAppTransport(config, baseURLForTransport, logger)
 	if err != nil {
 		return nil, err
 	}
