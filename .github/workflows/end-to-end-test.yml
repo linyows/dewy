@@ -86,8 +86,9 @@ jobs:
         path: testdata/e2e-test.yml
         version: v1.0.0
       env:
-        GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-        GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        GITHUB_APP_ID: ${{ secrets.GH_APP_ID }}
+        GITHUB_APP_INSTALLATION_ID: ${{ secrets.GH_APP_INSTALLATION_ID }}
+        GITHUB_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
