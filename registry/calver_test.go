@@ -81,10 +81,22 @@ func TestCalVerFormatParse(t *testing.T) {
 			&CalVer{Segments: []int{24, 1, 5}, Original: "24.1.5"},
 		},
 		{
+			"YY.MM.MICRO with 3-digit year",
+			"YY.MM.MICRO",
+			"106.1.5",
+			&CalVer{Segments: []int{106, 1, 5}, Original: "106.1.5"},
+		},
+		{
 			"0Y.0M.0D",
 			"0Y.0M.0D",
 			"24.01.09",
 			&CalVer{Segments: []int{24, 1, 9}, Original: "24.01.09"},
+		},
+		{
+			"0Y.0M.0D with 3-digit year",
+			"0Y.0M.0D",
+			"106.01.09",
+			&CalVer{Segments: []int{106, 1, 9}, Original: "106.01.09"},
 		},
 		{
 			"YYYY.0W.MICRO",
