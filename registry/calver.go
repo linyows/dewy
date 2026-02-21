@@ -82,6 +82,10 @@ func NewCalVerFormat(format string) (*CalVerFormat, error) {
 		return nil, fmt.Errorf("failed to compile calver regex: %w", err)
 	}
 
+	if len(segments) == 0 {
+		return nil, fmt.Errorf("calver format %q contains no valid specifiers (expected YYYY, YY, 0Y, MM, 0M, WW, 0W, DD, 0D, or MICRO)", format)
+	}
+
 	return &CalVerFormat{
 		Format:   format,
 		Regex:    re,

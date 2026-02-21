@@ -16,6 +16,8 @@ func TestNewCalVerFormat(t *testing.T) {
 		{"0Y.0M.0D", "0Y.0M.0D", false},
 		{"YYYY.0W.MICRO", "YYYY.0W.MICRO", false},
 		{"empty format", "", true},
+		{"no valid specifiers", "yyyy.MICR", true},
+		{"mixed valid and invalid", "foo.bar", true},
 	}
 
 	for _, tt := range tests {

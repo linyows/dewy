@@ -101,6 +101,9 @@ func New(c Config, log *logging.Logger) (*Dewy, error) {
 		return nil, err
 	}
 	if c.CalVer != "" {
+		if _, err := registry.NewCalVerFormat(c.CalVer); err != nil {
+			return nil, fmt.Errorf("invalid calver format: %w", err)
+		}
 		q := u.Query()
 		q.Set("calver", c.CalVer)
 		u.RawQuery = q.Encode()
