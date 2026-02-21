@@ -1,0 +1,92 @@
+name: Container Verify
+
+steps:
+- name: Wait for new version to start
+  uses: shell
+  retry:
+    max_attempts: 180
+    interval: 5s
+  with:
+    cmd: |
+      if [ -f "{{ vars.log }}" ]; then
+        grep "Starting new container" "{{ vars.log }}" | \
+          grep -q "{{ vars.new_version }}" && exit 0
+      fi
+      exit 1
+  test: status == 0
+
+- name: Wait for stabilization
+  wait: 60s
+  uses: shell
+  with:
+    cmd: "echo 'Waiting for system stabilization after new version detection'"
+  test: status == 0
+
+- name: Verify containers are not running as root
+  id: notroot
+  uses: shell
+  with:
+    cmd: |
+      # Get all container IDs managed by dewy
+      containers=$(docker ps --filter "label=dewy.managed=true" -q)
+      if [ -z "$containers" ]; then
+        echo "No dewy-managed containers found"
+        exit 1
+      fi
+      # Check each container's process user
+      for cid in $containers; do
+        uid=$(docker top "$cid" -o uid | tail -n +2 | head -1 | tr -d ' ')
+        if [ "$uid" = "0" ]; then
+          echo "Container $cid is running as root (UID=0)"
+          exit 1
+        fi
+        echo "Container $cid is running as UID=$uid (not root)"
+      done
+      echo "All containers are running as non-root user"
+  test: status == 0
+  outputs:
+    ok: status == 0
+
+- name: Stop dewy
+  uses: shell
+  with: # Use Process Group ID
+    cmd: "kill -TERM -{{ vars.pid }}"
+  test: status == 0
+
+- name: Verify no error
+  id: noerr
+  uses: shell
+  with:
+    cmd: "grep 'level=ERROR' {{ vars.log }}"
+  test: status == 1
+  outputs:
+    ok: status == 1
+
+- name: Verify current 3 containers creates
+  id: cver
+  uses: shell
+  with:
+    cmd: |
+      grep 'Starting new container' {{ vars.log }} | \
+        grep -vc {{ vars.new_version }} | tr -d '\n'
+  test: res.stdout == "3"
+  outputs:
+    ok: res.stdout == "3"
+
+- name: Verify new 3 containers creates
+  id: nver
+  uses: shell
+  with:
+    cmd: |
+      grep 'Starting new container' {{ vars.log }} | \
+        grep -c {{ vars.new_version }} | tr -d '\n'
+  test: res.stdout == "3"
+  outputs:
+    ok: res.stdout == "3"
+
+- name: Show log
+  skipif: outputs.noerr.ok && outputs.notroot.ok && outputs.cver.ok && outputs.nver.ok
+  uses: shell
+  with:
+    cmd: "cat {{ vars.log }}"
+  echo: "{{ res.stdout }}"
