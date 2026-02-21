@@ -26,6 +26,44 @@ steps:
     PID: {{ res.pid }}
     Log: {{ res.log }}
 
+- name: Wait for initial deployment
+  uses: shell
+  retry:
+    max_attempts: 180
+    interval: 5s
+  with:
+    cmd: |
+      if [ -f "{{ outputs.container.log }}" ]; then
+        grep -q 'Starting new container' "{{ outputs.container.log }}" && exit 0
+      fi
+      exit 1
+  test: status == 0
+
+- name: Create new version
+  uses: shell
+  with:
+    env:
+      GH_TOKEN: "{{ vars.github_token }}"
+    cmd: |
+      gh release create {{ vars.new_version }} \
+        --repo linyows/dewy-testapp \
+        --title {{ vars.new_version }} \
+        --notes "End-to-end Testing by Probe" 2>&1 || true
+  test: status == 0
+
+- name: Verify release exists
+  uses: shell
+  retry:
+    max_attempts: 10
+    interval: 2s
+  with:
+    env:
+      GH_TOKEN: "{{ vars.github_token }}"
+    cmd: |
+      gh release view {{ vars.new_version }} \
+        --repo linyows/dewy-testapp
+  test: status == 0
+
 - name: Wait for new version to start
   uses: shell
   retry:

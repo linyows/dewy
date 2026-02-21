@@ -56,36 +56,6 @@ jobs:
     - { command: 'container', registry: 'img' }
     - { command: 'container-multiport', registry: 'img' }
 
-- name: Create new version
-  id: create_release
-  needs: [build]
-  steps:
-  - name: Create release
-    uses: shell
-    with:
-      env:
-        GH_TOKEN: "{{ vars.github_token }}"
-      cmd: |
-        gh release create {{ outputs.genver.version }} \
-          --repo linyows/dewy-testapp \
-          --title {{ outputs.genver.version }} \
-          --notes "End-to-end Testing by Probe"
-    test: status == 0
-    echo: |
-      {{res.stdout}}
-  - name: Verify release exists
-    uses: shell
-    retry:
-      max_attempts: 10
-      interval: 2s
-    with:
-      env:
-        GH_TOKEN: "{{ vars.github_token }}"
-      cmd: |
-        gh release view {{ outputs.genver.version }} \
-          --repo linyows/dewy-testapp
-    test: status == 0
-
 - name: Run server by Github-Releases registry
   needs: [build]
   steps:
