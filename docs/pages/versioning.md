@@ -1,7 +1,7 @@
 ---
 title: Versioning
 description: |
-  Dewy automatically detects the latest version of applications based on semantic versioning
+  Dewy automatically detects the latest version of applications based on semantic versioning or calendar versioning
   and achieves continuous deployment. It provides comprehensive version management functionality including pre-release version management.
 ---
 
@@ -15,6 +15,7 @@ Versioning in Dewy is the core functionality of pull-based deployment. Based on 
 
 **Key Features:**
 - Complete support for Semantic Versioning (SemVer)
+- Calendar Versioning (CalVer) support with flexible format specifiers
 - Flexible management of pre-release versions
 - Support for multiple version formats (`v1.2.3` / `1.2.3`)
 - Support for environment-specific version strategies
@@ -107,18 +108,114 @@ dewy server --registry ghr://owner/repo --slot green -- /opt/myapp/current/myapp
 dewy server --registry ghr://owner/repo -- /opt/myapp/current/myapp
 ```
 
+## Calendar Versioning (CalVer) {% #calver %}
+
+In addition to SemVer, Dewy supports [Calendar Versioning (CalVer)](https://calver.org/)—a versioning scheme based on release dates rather than compatibility semantics.
+
+### CalVer Format {% #calver-format %}
+
+CalVer is enabled by specifying a format string via the `--calver` option. The format consists of specifiers separated by dots.
+
+**Supported specifiers:**
+
+{% table %}
+* Specifier
+* Description
+* Example
+---
+* YYYY
+* Full year
+* 2024
+---
+* YY
+* Short year (no padding)
+* 6, 16, 106
+---
+* 0Y
+* Zero-padded short year
+* 06, 16, 106
+---
+* MM
+* Month (no padding)
+* 1, 11
+---
+* 0M
+* Zero-padded month
+* 01, 11
+---
+* WW
+* Week (no padding)
+* 1, 33, 52
+---
+* 0W
+* Zero-padded week
+* 01, 33, 52
+---
+* DD
+* Day (no padding)
+* 1, 9, 31
+---
+* 0D
+* Zero-padded day
+* 01, 09, 31
+---
+* MICRO
+* Incremental number
+* 0, 1, 42
+{% /table %}
+
+**Format examples:**
+- `YYYY.0M.0D.MICRO` - Year, zero-padded month, zero-padded day, micro (e.g., `2024.01.15.3`)
+- `YYYY.MM.DD` - Year, month, day (e.g., `2024.1.9`)
+- `YYYY.0M.MICRO` - Year, zero-padded month, micro (e.g., `2024.06.3`)
+
+### CalVer Usage {% #calver-usage %}
+
+```bash
+# CalVer with GitHub Releases
+dewy server --registry ghr://owner/repo --calver YYYY.0M.0D.MICRO -- /opt/myapp/current/myapp
+
+# CalVer with S3
+dewy server --registry "s3://ap-northeast-1/releases/myapp" --calver YYYY.0M.MICRO -- /opt/myapp/current/myapp
+
+# CalVer with pre-release versions
+dewy server --registry "ghr://owner/repo?pre-release=true" --calver YYYY.0M.0D.MICRO -- /opt/myapp/current/myapp
+```
+
+### Pre-release and Build Metadata with CalVer {% #calver-metadata %}
+
+CalVer supports pre-release identifiers and build metadata just like SemVer:
+
+```
+<calver>-<pre-release>+<build-metadata>
+```
+
+**Examples:**
+- `2024.01.15.3-rc.1` - Release candidate
+- `2024.06.0+blue` - Blue deployment slot
+- `v2024.01.15.3-beta.2+green` - Pre-release for Green slot with v prefix
+
+{% callout type="note" title="CalVer and Blue/Green Deployment" %}
+Build metadata (`+blue`, `+green`) and pre-release identifiers work identically for both SemVer and CalVer. All deployment patterns (blue/green, staging, canary) are fully supported with CalVer.
+{% /callout %}
+
 ## Dewy's Version Detection Algorithm {% #version-detection %}
 
 ### Comparison Rules {% #comparison-rules %}
 
-Dewy implements its own semantic version comparison algorithm:
+Dewy implements version comparison algorithms for both SemVer and CalVer:
+
+**SemVer comparison:**
 
 1. **MAJOR version comparison** - Compare numerically, prioritize larger
 2. **MINOR version comparison** - When MAJOR is same, compare numerically
 3. **PATCH version comparison** - When MAJOR.MINOR is same, compare numerically
-4. **Pre-release version handling**:
-   - Official version > Pre-release version
-   - Pre-release versions are compared as strings
+4. **Pre-release version handling** - Official version > Pre-release version; pre-release versions are compared as strings
+
+**CalVer comparison:**
+
+1. **Segment-by-segment comparison** - Each segment is compared numerically from left to right
+2. **Pre-release version handling** - Same as SemVer: official version > pre-release version
 
 ### Latest Version Determination {% #latest-version %}
 
@@ -126,14 +223,18 @@ For all version tags retrieved from registry:
 
 ```go
 // Pseudo code
-func findLatest(versions []string, allowPreRelease bool) string {
+func findLatest(versions []string, allowPreRelease bool, calverFormat string) string {
+    if calverFormat != "" {
+        validVersions := filterValidCalVer(versions, calverFormat, allowPreRelease)
+        return findMaxVersion(validVersions)
+    }
     validVersions := filterValidSemVer(versions, allowPreRelease)
     return findMaxVersion(validVersions)
 }
 ```
 
 **Processing flow:**
-1. Semantic version format validation
+1. Version format validation (SemVer or CalVer based on `--calver` option)
 2. Filtering by pre-release settings
 3. Numerical comparison and sorting
 4. Maximum value selection
@@ -150,6 +251,9 @@ dewy server --registry ghr://owner/repo
 
 # Including pre-release versions
 dewy server --registry "ghr://owner/repo?pre-release=true"
+
+# Using CalVer format
+dewy server --registry ghr://owner/repo --calver YYYY.0M.0D.MICRO
 ```
 
 **Grace period consideration:**
@@ -165,20 +269,31 @@ Extracts versions from S3 object path structure.
 
 **Required path structure:**
 ```
-<path-prefix>/<semver>/<artifact>
+<path-prefix>/<version>/<artifact>
 ```
 
 **Configuration example:**
 ```bash
+# SemVer (default)
 dewy server --registry "s3://ap-northeast-1/releases/myapp?pre-release=true"
+
+# CalVer
+dewy server --registry "s3://ap-northeast-1/releases/myapp" --calver YYYY.0M.MICRO
 ```
 
-**S3 arrangement example:**
+**S3 arrangement example (SemVer):**
 ```
 releases/myapp/v1.2.4/myapp_linux_amd64.tar.gz
 releases/myapp/v1.2.4/myapp_darwin_arm64.tar.gz
 releases/myapp/v1.2.3/myapp_linux_amd64.tar.gz
 releases/myapp/v1.2.3-rc.1/myapp_linux_amd64.tar.gz
+```
+
+**S3 arrangement example (CalVer):**
+```
+releases/myapp/2024.06.15.0/myapp_linux_amd64.tar.gz
+releases/myapp/2024.06.15.1/myapp_linux_amd64.tar.gz
+releases/myapp/2024.07.01.0/myapp_linux_amd64.tar.gz
 ```
 
 ## Environment-specific Version Strategies {% #environment-strategies %}
@@ -276,8 +391,7 @@ git tag v1.2.4  # Security fix version for 1.2.3
 
 **Patterns to avoid:**
 ```bash
-# ❌ Non-compliant with semantic versioning
-git tag release-2024-03-15
+# ❌ Non-structured naming
 git tag latest
 git tag stable
 
@@ -285,6 +399,10 @@ git tag stable
 git tag v1.2.3-SNAPSHOT
 git tag 1.2.3-final
 ```
+
+{% callout type="note" title="Date-based Tags" %}
+Date-based tags like `2024.03.15.0` are now supported with the `--calver` option. See [Calendar Versioning](#calver) for details.
+{% /callout %}
 
 ### Release Strategy {% #release-strategy %}
 

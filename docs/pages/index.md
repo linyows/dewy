@@ -130,7 +130,7 @@ No. Dewy works with bare metal servers, VMs, and VPS without any container platf
 {% /item %}
 {% item %}
 ### Can I use Dewy for applications written in languages other than Go?
-Yes, absolutely. While Dewy itself is written in Go and examples often feature Go applications, you can deploy applications in any language. Use the server command for any compiled binary (Rust, C++, etc.) or interpreted languages (Node.js, Python, Ruby). Use the container command for containerized applications in any language. The only requirement is that your artifacts follow semantic versioning.
+Yes, absolutely. While Dewy itself is written in Go and examples often feature Go applications, you can deploy applications in any language. Use the server command for any compiled binary (Rust, C++, etc.) or interpreted languages (Node.js, Python, Ruby). Use the container command for containerized applications in any language. The only requirement is that your artifacts follow semantic versioning (SemVer) or calendar versioning (CalVer).
 {% /item %}
 {% item %}
 ### How do I deploy to multiple servers?

@@ -108,6 +108,22 @@ dewy server --port 9090 -- /opt/app/current/app
 dewy server --registry ghr://owner/repo -- /opt/worker/current/worker
 ```
 
+### --calver
+
+CalVer（カレンダーバージョニング）のフォーマットを指定します。設定すると、Dewyはセマンティックバージョニングの代わりにカレンダーバージョニングを使用して最新バージョンを検出します。
+
+**フォーマット指定子:** `YYYY`, `YY`, `0Y`, `MM`, `0M`, `WW`, `0W`, `DD`, `0D`, `MICRO`
+
+```bash
+# 4セグメントのCalVerフォーマット
+dewy server --registry ghr://owner/repo --calver YYYY.0M.0D.MICRO -- /opt/app/current/app
+
+# 3セグメントのCalVerフォーマット
+dewy server --registry ghr://owner/repo --calver YYYY.0M.MICRO -- /opt/app/current/app
+```
+
+詳しくは[バージョニング - カレンダーバージョニング](/ja/versioning#calver)を参照してください。
+
 ### --interval (-i)
 
 レジストリーをチェックする間隔を秒単位で指定します。デフォルトは600秒（10分）です。
@@ -277,6 +293,9 @@ GitHub Releasesからバージョン情報を取得する場合に使用しま�
 ```bash
 ghr://owner/repository
 ghr://owner/repository?pre-release=true
+
+# CalVerを使用する場合
+dewy server --registry ghr://owner/repository --calver YYYY.0M.0D.MICRO
 ```
 
 **認証:**
