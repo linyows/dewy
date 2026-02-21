@@ -1,27 +1,6 @@
-name: Container Test
+name: Container Verify
 
 steps:
-- name: Start dewy
-  id: container
-  uses: shell
-  with:
-    workdir: ./testdata/container/{{ vars.registry }}
-    background: true
-    env:
-      GITHUB_TOKEN: "{{ vars.github_token }}"
-    cmd: |
-      ./dewy container -p {{ vars.port }} -l {{ vars.log_level }} \
-      --registry "{{ vars.registry_url }}" \
-      --health-path /health \
-      --replicas {{ vars.replicas }}
-  test: status == -1
-  outputs:
-    pid: res.pid
-    log: res.log
-  echo: |
-    PID: {{ res.pid }}
-    Log: {{ res.log }}
-
 - name: Wait for new version to start
   uses: shell
   retry:
@@ -29,8 +8,8 @@ steps:
     interval: 5s
   with:
     cmd: |
-      if [ -f "{{ outputs.container.log }}" ]; then
-        grep "Starting new container" "{{ outputs.container.log }}" | \
+      if [ -f "{{ vars.log }}" ]; then
+        grep "Starting new container" "{{ vars.log }}" | \
           grep -q "{{ vars.new_version }}" && exit 0
       fi
       exit 1
@@ -71,14 +50,14 @@ steps:
 - name: Stop dewy
   uses: shell
   with: # Use Process Group ID
-    cmd: "kill -TERM -{{ outputs.container.pid }}"
+    cmd: "kill -TERM -{{ vars.pid }}"
   test: status == 0
 
 - name: Verify no error
   id: noerr
   uses: shell
   with:
-    cmd: "grep 'level=ERROR' {{ outputs.container.log }}"
+    cmd: "grep 'level=ERROR' {{ vars.log }}"
   test: status == 1
   outputs:
     ok: status == 1
@@ -88,7 +67,7 @@ steps:
   uses: shell
   with:
     cmd: |
-      grep 'Starting new container' {{ outputs.container.log }} | \
+      grep 'Starting new container' {{ vars.log }} | \
         grep -vc {{ vars.new_version }} | tr -d '\n'
   test: res.stdout == "3"
   outputs:
@@ -99,7 +78,7 @@ steps:
   uses: shell
   with:
     cmd: |
-      grep 'Starting new container' {{ outputs.container.log }} | \
+      grep 'Starting new container' {{ vars.log }} | \
         grep -c {{ vars.new_version }} | tr -d '\n'
   test: res.stdout == "3"
   outputs:
@@ -109,5 +88,5 @@ steps:
   skipif: outputs.noerr.ok && outputs.notroot.ok && outputs.cver.ok && outputs.nver.ok
   uses: shell
   with:
-    cmd: "cat {{ outputs.container.log }}"
+    cmd: "cat {{ vars.log }}"
   echo: "{{ res.stdout }}"

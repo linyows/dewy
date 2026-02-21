@@ -1,28 +1,6 @@
-name: Assets Test
+name: Assets Verify
 
 steps:
-- name: Start dewy
-  id: server
-  uses: shell
-  with:
-    workdir: ./testdata/assets/{{ vars.registry }}
-    background: true
-    env:
-      GITHUB_TOKEN: "{{ vars.github_token }}"
-      AWS_ACCESS_KEY_ID: "{{ vars.aws_access_key_id }}"
-      AWS_SECRET_ACCESS_KEY: "{{ vars.aws_secret_access_key }}"
-      GOOGLE_APPLICATION_CREDENTIALS: "{{ vars.google_application_credentials }}"
-    cmd: |
-      rm -rf .dewy;
-      ./dewy assets -l {{ vars.log_level }} --registry "{{ vars.registry_url }}"
-  test: status == -1
-  outputs:
-    pid: res.pid
-    log: res.log
-  echo: |
-    PID: {{ res.pid }}
-    Log: {{ res.log }}
-
 - name: Wait for new version download
   uses: shell
   retry:
@@ -30,8 +8,8 @@ steps:
     interval: 5s
   with:
     cmd: |
-      if [ -f "{{ outputs.server.log }}" ]; then
-        grep "Download notification" "{{ outputs.server.log }}" | \
+      if [ -f "{{ vars.log }}" ]; then
+        grep "Download notification" "{{ vars.log }}" | \
           grep -q "{{ replace(vars.new_version, 'v', '') }}" && exit 0
       fi
       exit 1
@@ -47,14 +25,14 @@ steps:
 - name: Stop dewy
   uses: shell
   with: # Use Process Group ID
-    cmd: "kill -TERM -{{ outputs.server.pid }}"
+    cmd: "kill -TERM -{{ vars.pid }}"
   test: status == 0
 
 - name: Verify no error
   id: noerr
   uses: shell
   with:
-    cmd: "grep -i error {{ outputs.server.log }}"
+    cmd: "grep -i error {{ vars.log }}"
   test: status == 1
   outputs:
     ok: status == 1
@@ -64,7 +42,7 @@ steps:
   uses: shell
   with:
     cmd: |
-      grep -c 'Create symlink' {{ outputs.server.log }} | tr -d '\n'
+      grep -c 'Create symlink' {{ vars.log }} | tr -d '\n'
   test: res.stdout == "2"
   outputs:
     ok: res.stdout == "2"
@@ -74,7 +52,7 @@ steps:
   uses: shell
   with:
     cmd: |
-      grep -c 'Download notification' {{ outputs.server.log }} | tr -d '\n'
+      grep -c 'Download notification' {{ vars.log }} | tr -d '\n'
   test: res.stdout == "2"
   outputs:
     ok: res.stdout == "2"
@@ -84,7 +62,7 @@ steps:
   uses: shell
   with:
     cmd: |
-      grep 'Download notification' {{ outputs.server.log }} | \
+      grep 'Download notification' {{ vars.log }} | \
         grep {{ replace(vars.new_version, 'v', '') }}
   test: status == 0
   outputs:
@@ -94,5 +72,5 @@ steps:
   skipif: outputs.noerr.ok && outputs.twosyml.ok && outputs.twover.ok && outputs.newver.ok
   uses: shell
   with:
-    cmd: "cat {{ outputs.server.log }}"
+    cmd: "cat {{ vars.log }}"
   echo: "{{ res.stdout }}"

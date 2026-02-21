@@ -1,31 +1,6 @@
-name: Container Multi-Port Test
+name: Container Multi-Port Verify
 
 steps:
-- name: Start dewy with multiple ports
-  id: container
-  uses: shell
-  with:
-    workdir: ./testdata/container-multiport/{{ vars.registry }}
-    background: true
-    env:
-      GITHUB_TOKEN: "{{ vars.github_token }}"
-    cmd: |
-      ./dewy container \
-      --name dewy-testapp-multiport \
-      -p {{ vars.port1 }}:{{ vars.container_port }} \
-      -p {{ vars.port2 }}:{{ vars.container_port }} \
-      -l {{ vars.log_level }} \
-      --registry "{{ vars.registry_url }}" \
-      --health-path /health \
-      --replicas {{ vars.replicas }}
-  test: status == -1
-  outputs:
-    pid: res.pid
-    log: res.log
-  echo: |
-    PID: {{ res.pid }}
-    Log: {{ res.log }}
-
 - name: Wait for new version to start
   uses: shell
   retry:
@@ -33,8 +8,8 @@ steps:
     interval: 5s
   with:
     cmd: |
-      if [ -f "{{ outputs.container.log }}" ]; then
-        grep "Starting new container" "{{ outputs.container.log }}" | \
+      if [ -f "{{ vars.log }}" ]; then
+        grep "Starting new container" "{{ vars.log }}" | \
           grep -q "{{ vars.new_version }}" && exit 0
       fi
       exit 1
@@ -52,7 +27,7 @@ steps:
   uses: shell
   with:
     cmd: |
-      grep 'TCP proxy started' {{ outputs.container.log }} | \
+      grep 'TCP proxy started' {{ vars.log }} | \
         grep -c 'proxy_port={{ vars.port1 }}' | tr -d '\n'
   test: res.stdout == "1"
   outputs:
@@ -63,7 +38,7 @@ steps:
   uses: shell
   with:
     cmd: |
-      grep 'TCP proxy started' {{ outputs.container.log }} | \
+      grep 'TCP proxy started' {{ vars.log }} | \
         grep -c 'proxy_port={{ vars.port2 }}' | tr -d '\n'
   test: res.stdout == "1"
   outputs:
@@ -74,7 +49,7 @@ steps:
   uses: shell
   with:
     cmd: |
-      grep 'All TCP proxies started successfully' {{ outputs.container.log }} | \
+      grep 'All TCP proxies started successfully' {{ vars.log }} | \
         grep -c 'count=2' | tr -d '\n'
   test: res.stdout == "1"
   outputs:
@@ -85,7 +60,7 @@ steps:
   uses: shell
   with:
     cmd: |
-      grep 'Backend added to TCP proxy' {{ outputs.container.log }} | \
+      grep 'Backend added to TCP proxy' {{ vars.log }} | \
         grep -c 'proxy_port={{ vars.port1 }}' | tr -d '\n'
   test: int(res.stdout) >= int(vars.replicas)
   outputs:
@@ -96,7 +71,7 @@ steps:
   uses: shell
   with:
     cmd: |
-      grep 'Backend added to TCP proxy' {{ outputs.container.log }} | \
+      grep 'Backend added to TCP proxy' {{ vars.log }} | \
         grep -c 'proxy_port={{ vars.port2 }}' | tr -d '\n'
   test: int(res.stdout) >= int(vars.replicas)
   outputs:
@@ -154,14 +129,14 @@ steps:
 - name: Stop dewy
   uses: shell
   with: # Use Process Group ID
-    cmd: "kill -TERM -{{ outputs.container.pid }}"
+    cmd: "kill -TERM -{{ vars.pid }}"
   test: status == 0
 
 - name: Verify no error
   id: noerr
   uses: shell
   with:
-    cmd: "grep 'level=ERROR' {{ outputs.container.log }}"
+    cmd: "grep 'level=ERROR' {{ vars.log }}"
   test: status == 1
   outputs:
     ok: status == 1
@@ -171,7 +146,7 @@ steps:
   uses: shell
   with:
     cmd: |
-      grep 'Starting new container' {{ outputs.container.log }} | \
+      grep 'Starting new container' {{ vars.log }} | \
         grep -c {{ vars.new_version }} | tr -d '\n'
   test: int(res.stdout) == int(vars.replicas)
   outputs:
@@ -181,5 +156,5 @@ steps:
   skipif: outputs.noerr.ok && outputs.proxy1.ok && outputs.proxy2.ok && outputs.allproxies.ok && outputs.backend1.ok && outputs.backend2.ok && outputs.conn1.ok && outputs.conn2.ok && outputs.notroot.ok && outputs.nver.ok
   uses: shell
   with:
-    cmd: "cat {{ outputs.container.log }}"
+    cmd: "cat {{ vars.log }}"
   echo: "{{ res.stdout }}"

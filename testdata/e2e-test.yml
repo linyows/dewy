@@ -56,160 +56,462 @@ jobs:
     - { command: 'container', registry: 'img' }
     - { command: 'container-multiport', registry: 'img' }
 
-- name: Run server by Github-Releases registry
+# Phase 1: Start all dewy instances and wait for initial deployment (parallel)
+
+- name: Start server by Github-Releases registry
+  id: start_srv_ghr
   needs: [build]
   steps:
-  - name: Server test
+  - name: Start dewy
+    id: srv_ghr
+    uses: shell
+    with:
+      workdir: ./testdata/server/ghr
+      background: true
+      env:
+        GITHUB_TOKEN: "{{ vars.github_token }}"
+        AWS_ACCESS_KEY_ID: "{{ vars.aws_access_key_id }}"
+        AWS_SECRET_ACCESS_KEY: "{{ vars.aws_secret_access_key }}"
+        GOOGLE_APPLICATION_CREDENTIALS: "{{ vars.google_application_credentials }}"
+      cmd: |
+        ./dewy server -p 8000 -l debug \
+        --registry "ghr://linyows/dewy-testapp?pre-release=true" \
+        -- $PWD/current/dewy-testapp
+    test: status == -1
+    outputs:
+      pid: res.pid
+      log: res.log
+    echo: |
+      PID: {{ res.pid }}
+      Log: {{ res.log }}
+  - name: Wait for initial deployment
+    uses: shell
+    retry:
+      max_attempts: 60
+      interval: 5s
+    with:
+      cmd: |
+        if [ -f "{{ outputs.srv_ghr.log }}" ]; then
+          grep -q 'Create symlink' "{{ outputs.srv_ghr.log }}" && exit 0
+        fi
+        exit 1
+    test: status == 0
+
+- name: Start server by AWS S3 registry
+  id: start_srv_s3
+  needs: [build]
+  steps:
+  - name: Start dewy
+    id: srv_s3
+    uses: shell
+    with:
+      workdir: ./testdata/server/s3
+      background: true
+      env:
+        GITHUB_TOKEN: "{{ vars.github_token }}"
+        AWS_ACCESS_KEY_ID: "{{ vars.aws_access_key_id }}"
+        AWS_SECRET_ACCESS_KEY: "{{ vars.aws_secret_access_key }}"
+        GOOGLE_APPLICATION_CREDENTIALS: "{{ vars.google_application_credentials }}"
+      cmd: |
+        ./dewy server -p 8001 -l debug \
+        --registry "s3://ap-northeast-3/dewy-testapp?pre-release=true" \
+        -- $PWD/current/dewy-testapp
+    test: status == -1
+    outputs:
+      pid: res.pid
+      log: res.log
+    echo: |
+      PID: {{ res.pid }}
+      Log: {{ res.log }}
+  - name: Wait for initial deployment
+    uses: shell
+    retry:
+      max_attempts: 60
+      interval: 5s
+    with:
+      cmd: |
+        if [ -f "{{ outputs.srv_s3.log }}" ]; then
+          grep -q 'Create symlink' "{{ outputs.srv_s3.log }}" && exit 0
+        fi
+        exit 1
+    test: status == 0
+
+- name: Start server by GCloud Storage registry
+  id: start_srv_gs
+  needs: [build]
+  steps:
+  - name: Start dewy
+    id: srv_gs
+    uses: shell
+    with:
+      workdir: ./testdata/server/gs
+      background: true
+      env:
+        GITHUB_TOKEN: "{{ vars.github_token }}"
+        AWS_ACCESS_KEY_ID: "{{ vars.aws_access_key_id }}"
+        AWS_SECRET_ACCESS_KEY: "{{ vars.aws_secret_access_key }}"
+        GOOGLE_APPLICATION_CREDENTIALS: "{{ vars.google_application_credentials }}"
+      cmd: |
+        ./dewy server -p 8002 -l debug \
+        --registry "gs://dewy-testapp?pre-release=true" \
+        -- $PWD/current/dewy-testapp
+    test: status == -1
+    outputs:
+      pid: res.pid
+      log: res.log
+    echo: |
+      PID: {{ res.pid }}
+      Log: {{ res.log }}
+  - name: Wait for initial deployment
+    uses: shell
+    retry:
+      max_attempts: 60
+      interval: 5s
+    with:
+      cmd: |
+        if [ -f "{{ outputs.srv_gs.log }}" ]; then
+          grep -q 'Create symlink' "{{ outputs.srv_gs.log }}" && exit 0
+        fi
+        exit 1
+    test: status == 0
+
+- name: Start assets by Github-Releases registry
+  id: start_ast_ghr
+  needs: [build]
+  steps:
+  - name: Start dewy
+    id: ast_ghr
+    uses: shell
+    with:
+      workdir: ./testdata/assets/ghr
+      background: true
+      env:
+        GITHUB_TOKEN: "{{ vars.github_token }}"
+        AWS_ACCESS_KEY_ID: "{{ vars.aws_access_key_id }}"
+        AWS_SECRET_ACCESS_KEY: "{{ vars.aws_secret_access_key }}"
+        GOOGLE_APPLICATION_CREDENTIALS: "{{ vars.google_application_credentials }}"
+      cmd: |
+        rm -rf .dewy;
+        ./dewy assets -l debug --registry "ghr://linyows/dewy-testapp?pre-release=true"
+    test: status == -1
+    outputs:
+      pid: res.pid
+      log: res.log
+    echo: |
+      PID: {{ res.pid }}
+      Log: {{ res.log }}
+  - name: Wait for initial deployment
+    uses: shell
+    retry:
+      max_attempts: 60
+      interval: 5s
+    with:
+      cmd: |
+        if [ -f "{{ outputs.ast_ghr.log }}" ]; then
+          grep -q 'Create symlink' "{{ outputs.ast_ghr.log }}" && exit 0
+        fi
+        exit 1
+    test: status == 0
+
+- name: Start assets by AWS S3 registry
+  id: start_ast_s3
+  needs: [build]
+  steps:
+  - name: Start dewy
+    id: ast_s3
+    uses: shell
+    with:
+      workdir: ./testdata/assets/s3
+      background: true
+      env:
+        GITHUB_TOKEN: "{{ vars.github_token }}"
+        AWS_ACCESS_KEY_ID: "{{ vars.aws_access_key_id }}"
+        AWS_SECRET_ACCESS_KEY: "{{ vars.aws_secret_access_key }}"
+        GOOGLE_APPLICATION_CREDENTIALS: "{{ vars.google_application_credentials }}"
+      cmd: |
+        rm -rf .dewy;
+        ./dewy assets -l debug --registry "s3://ap-northeast-3/dewy-testapp?pre-release=true"
+    test: status == -1
+    outputs:
+      pid: res.pid
+      log: res.log
+    echo: |
+      PID: {{ res.pid }}
+      Log: {{ res.log }}
+  - name: Wait for initial deployment
+    uses: shell
+    retry:
+      max_attempts: 60
+      interval: 5s
+    with:
+      cmd: |
+        if [ -f "{{ outputs.ast_s3.log }}" ]; then
+          grep -q 'Create symlink' "{{ outputs.ast_s3.log }}" && exit 0
+        fi
+        exit 1
+    test: status == 0
+
+- name: Start assets by GCloud Storage registry
+  id: start_ast_gs
+  needs: [build]
+  steps:
+  - name: Start dewy
+    id: ast_gs
+    uses: shell
+    with:
+      workdir: ./testdata/assets/gs
+      background: true
+      env:
+        GITHUB_TOKEN: "{{ vars.github_token }}"
+        AWS_ACCESS_KEY_ID: "{{ vars.aws_access_key_id }}"
+        AWS_SECRET_ACCESS_KEY: "{{ vars.aws_secret_access_key }}"
+        GOOGLE_APPLICATION_CREDENTIALS: "{{ vars.google_application_credentials }}"
+      cmd: |
+        rm -rf .dewy;
+        ./dewy assets -l debug --registry "gs://dewy-testapp?pre-release=true"
+    test: status == -1
+    outputs:
+      pid: res.pid
+      log: res.log
+    echo: |
+      PID: {{ res.pid }}
+      Log: {{ res.log }}
+  - name: Wait for initial deployment
+    uses: shell
+    retry:
+      max_attempts: 60
+      interval: 5s
+    with:
+      cmd: |
+        if [ -f "{{ outputs.ast_gs.log }}" ]; then
+          grep -q 'Create symlink' "{{ outputs.ast_gs.log }}" && exit 0
+        fi
+        exit 1
+    test: status == 0
+
+- name: Start container by OCI registry
+  id: start_ctr_oci
+  needs: [build]
+  steps:
+  - name: Start dewy
+    id: ctr_oci
+    uses: shell
+    with:
+      workdir: ./testdata/container/img
+      background: true
+      env:
+        GITHUB_TOKEN: "{{ vars.github_token }}"
+      cmd: |
+        ./dewy container -p 7000 -l debug \
+        --registry "img://ghcr.io/linyows/dewy-testapp?pre-release=true" \
+        --health-path /health \
+        --replicas 3
+    test: status == -1
+    outputs:
+      pid: res.pid
+      log: res.log
+    echo: |
+      PID: {{ res.pid }}
+      Log: {{ res.log }}
+  - name: Wait for initial deployment
+    uses: shell
+    retry:
+      max_attempts: 180
+      interval: 5s
+    with:
+      cmd: |
+        if [ -f "{{ outputs.ctr_oci.log }}" ]; then
+          grep -q 'Starting new container' "{{ outputs.ctr_oci.log }}" && exit 0
+        fi
+        exit 1
+    test: status == 0
+
+- name: Start container with multiple ports by OCI registry
+  id: start_ctr_mp_oci
+  needs: [build]
+  steps:
+  - name: Start dewy
+    id: ctr_mp_oci
+    uses: shell
+    with:
+      workdir: ./testdata/container-multiport/img
+      background: true
+      env:
+        GITHUB_TOKEN: "{{ vars.github_token }}"
+      cmd: |
+        ./dewy container \
+        --name dewy-testapp-multiport \
+        -p 7100:3333 \
+        -p 7101:3333 \
+        -l debug \
+        --registry "img://ghcr.io/linyows/dewy-testapp?pre-release=true" \
+        --health-path /health \
+        --replicas 2
+    test: status == -1
+    outputs:
+      pid: res.pid
+      log: res.log
+    echo: |
+      PID: {{ res.pid }}
+      Log: {{ res.log }}
+  - name: Wait for initial deployment
+    uses: shell
+    retry:
+      max_attempts: 180
+      interval: 5s
+    with:
+      cmd: |
+        if [ -f "{{ outputs.ctr_mp_oci.log }}" ]; then
+          grep -q 'Starting new container' "{{ outputs.ctr_mp_oci.log }}" && exit 0
+        fi
+        exit 1
+    test: status == 0
+
+# Phase 2: Create new version (after ALL dewy instances have deployed initial version)
+
+- name: Create new version
+  id: create_release
+  needs: [start_srv_ghr, start_srv_s3, start_srv_gs, start_ast_ghr, start_ast_s3, start_ast_gs, start_ctr_oci, start_ctr_mp_oci]
+  steps:
+  - name: Create release
+    uses: shell
+    with:
+      env:
+        GH_TOKEN: "{{ vars.github_token }}"
+      cmd: |
+        gh release create {{ outputs.genver.version }} \
+          --repo linyows/dewy-testapp \
+          --title {{ outputs.genver.version }} \
+          --notes "End-to-end Testing by Probe"
+    test: status == 0
+    echo: |
+      {{res.stdout}}
+  - name: Verify release exists
+    uses: shell
+    retry:
+      max_attempts: 10
+      interval: 2s
+    with:
+      env:
+        GH_TOKEN: "{{ vars.github_token }}"
+      cmd: |
+        gh release view {{ outputs.genver.version }} \
+          --repo linyows/dewy-testapp
+    test: status == 0
+
+# Phase 3: Wait for new version and verify (parallel)
+
+- name: Verify server by Github-Releases registry
+  needs: [create_release]
+  steps:
+  - name: Server verify
     uses: embedded
     with:
-      path: ./testdata/jobs/server.yml
+      path: ./testdata/jobs/server-verify.yml
       vars:
-        github_token: "{{ vars.github_token }}"
-        aws_access_key_id: "{{ vars.aws_access_key_id }}"
-        aws_secret_access_key: "{{ vars.aws_secret_access_key }}"
-        google_application_credentials: "{{ vars.google_application_credentials }}"
-        registry: ghr
-        registry_url: "ghr://linyows/dewy-testapp?pre-release=true"
-        port: 8000
-        log_level: debug
+        pid: "{{ outputs.srv_ghr.pid }}"
+        log: "{{ outputs.srv_ghr.log }}"
         new_version: "{{ outputs.genver.version }}"
     test: res.code == 0
     timeout: 15m
 
-- name: Run server by AWS S3 registry
-  needs: [build]
+- name: Verify server by AWS S3 registry
+  needs: [create_release]
   steps:
-  - name: Server test
+  - name: Server verify
     uses: embedded
     with:
-      path: ./testdata/jobs/server.yml
+      path: ./testdata/jobs/server-verify.yml
       vars:
-        github_token: "{{ vars.github_token }}"
-        aws_access_key_id: "{{ vars.aws_access_key_id }}"
-        aws_secret_access_key: "{{ vars.aws_secret_access_key }}"
-        google_application_credentials: "{{ vars.google_application_credentials }}"
-        registry: s3
-        registry_url: "s3://ap-northeast-3/dewy-testapp?pre-release=true"
-        port: 8001
-        log_level: debug
+        pid: "{{ outputs.srv_s3.pid }}"
+        log: "{{ outputs.srv_s3.log }}"
         new_version: "{{ outputs.genver.version }}"
     test: res.code == 0
     timeout: 15m
 
-- name: Run server by GCloud Storage registry
-  needs: [build]
+- name: Verify server by GCloud Storage registry
+  needs: [create_release]
   steps:
-  - name: Server test
+  - name: Server verify
     uses: embedded
     with:
-      path: ./testdata/jobs/server.yml
+      path: ./testdata/jobs/server-verify.yml
       vars:
-        github_token: "{{ vars.github_token }}"
-        aws_access_key_id: "{{ vars.aws_access_key_id }}"
-        aws_secret_access_key: "{{ vars.aws_secret_access_key }}"
-        google_application_credentials: "{{ vars.google_application_credentials }}"
-        registry: gs
-        registry_url: "gs://dewy-testapp?pre-release=true"
-        port: 8002
-        log_level: debug
+        pid: "{{ outputs.srv_gs.pid }}"
+        log: "{{ outputs.srv_gs.log }}"
         new_version: "{{ outputs.genver.version }}"
     test: res.code == 0
     timeout: 15m
 
-- name: Run assets by Github-Releases registry
-  needs: [build]
+- name: Verify assets by Github-Releases registry
+  needs: [create_release]
   steps:
-  - name: Assets test
+  - name: Assets verify
     uses: embedded
     with:
-      path: ./testdata/jobs/assets.yml
+      path: ./testdata/jobs/assets-verify.yml
       vars:
-        github_token: "{{ vars.github_token }}"
-        aws_access_key_id: "{{ vars.aws_access_key_id }}"
-        aws_secret_access_key: "{{ vars.aws_secret_access_key }}"
-        google_application_credentials: "{{ vars.google_application_credentials }}"
-        registry: ghr
-        registry_url: "ghr://linyows/dewy-testapp?pre-release=true"
-        port: 9000
-        log_level: debug
+        pid: "{{ outputs.ast_ghr.pid }}"
+        log: "{{ outputs.ast_ghr.log }}"
         new_version: "{{ outputs.genver.version }}"
     test: res.code == 0
     timeout: 15m
 
-- name: Run assets by AWS S3 registry
-  needs: [build]
+- name: Verify assets by AWS S3 registry
+  needs: [create_release]
   steps:
-  - name: Assets test
+  - name: Assets verify
     uses: embedded
     with:
-      path: ./testdata/jobs/assets.yml
+      path: ./testdata/jobs/assets-verify.yml
       vars:
-        github_token: "{{ vars.github_token }}"
-        aws_access_key_id: "{{ vars.aws_access_key_id }}"
-        aws_secret_access_key: "{{ vars.aws_secret_access_key }}"
-        google_application_credentials: "{{ vars.google_application_credentials }}"
-        registry: s3
-        registry_url: "s3://ap-northeast-3/dewy-testapp?pre-release=true"
-        port: 9001
-        log_level: debug
+        pid: "{{ outputs.ast_s3.pid }}"
+        log: "{{ outputs.ast_s3.log }}"
         new_version: "{{ outputs.genver.version }}"
     test: res.code == 0
     timeout: 15m
 
-- name: Run assets by GCloud Storage registry
-  needs: [build]
+- name: Verify assets by GCloud Storage registry
+  needs: [create_release]
   steps:
-  - name: Assets test
+  - name: Assets verify
     uses: embedded
     with:
-      path: ./testdata/jobs/assets.yml
+      path: ./testdata/jobs/assets-verify.yml
       vars:
-        github_token: "{{ vars.github_token }}"
-        aws_access_key_id: "{{ vars.aws_access_key_id }}"
-        aws_secret_access_key: "{{ vars.aws_secret_access_key }}"
-        google_application_credentials: "{{ vars.google_application_credentials }}"
-        registry: gs
-        registry_url: "gs://dewy-testapp?pre-release=true"
-        port: 9002
-        log_level: debug
+        pid: "{{ outputs.ast_gs.pid }}"
+        log: "{{ outputs.ast_gs.log }}"
         new_version: "{{ outputs.genver.version }}"
     test: res.code == 0
     timeout: 15m
 
-- name: Run container by OCI registry
-  needs: [build]
+- name: Verify container by OCI registry
+  needs: [create_release]
   steps:
-  - name: Container test
+  - name: Container verify
     uses: embedded
     with:
-      path: ./testdata/jobs/container.yml
+      path: ./testdata/jobs/container-verify.yml
       vars:
-        github_token: "{{ vars.github_token }}"
-        registry: img
-        registry_url: "img://ghcr.io/linyows/dewy-testapp?pre-release=true"
-        port: 7000
-        replicas: 3
-        log_level: debug
+        pid: "{{ outputs.ctr_oci.pid }}"
+        log: "{{ outputs.ctr_oci.log }}"
         new_version: "{{ outputs.genver.version }}"
     test: res.code == 0
     timeout: 30m
 
-- name: Run container with multiple ports by OCI registry
-  needs: [build]
+- name: Verify container with multiple ports by OCI registry
+  needs: [create_release]
   steps:
-  - name: Container multi-port test
+  - name: Container multi-port verify
     uses: embedded
     with:
-      path: ./testdata/jobs/container-multiport.yml
+      path: ./testdata/jobs/container-multiport-verify.yml
       vars:
-        github_token: "{{ vars.github_token }}"
-        registry: img
-        registry_url: "img://ghcr.io/linyows/dewy-testapp?pre-release=true"
+        pid: "{{ outputs.ctr_mp_oci.pid }}"
+        log: "{{ outputs.ctr_mp_oci.log }}"
         port1: 7100
         port2: 7101
-        container_port: 3333
         replicas: 2
-        log_level: debug
         new_version: "{{ outputs.genver.version }}"
     test: res.code == 0
     timeout: 30m
