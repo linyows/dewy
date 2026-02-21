@@ -50,6 +50,7 @@ type GHR struct {
 	Repo                  string `schema:"-"`
 	Artifact              string `schema:"artifact"`
 	PreRelease            bool   `schema:"pre-release"`
+	CalVer                string `schema:"calver"`
 	DisableRecordShipping bool   // FIXME: For testing. Remove this.
 	cl                    *github.Client
 	logger                *logging.Logger
@@ -157,10 +158,7 @@ func (g *GHR) Current(ctx context.Context) (*CurrentResponse, error) {
 	au := fmt.Sprintf("%s://%s/%s/tag/%s/%s", ghrScheme, g.Owner, g.Repo, release.GetTagName(), artifactName)
 
 	// Extract slot from build metadata
-	var slot string
-	if sv := ParseSemVer(release.GetTagName()); sv != nil {
-		slot = sv.BuildMetadata
-	}
+	slot := extractSlot(release.GetTagName(), g.CalVer)
 
 	return &CurrentResponse{
 		ID:          time.Now().Format(ISO8601),
@@ -209,13 +207,19 @@ func (g *GHR) latest(ctx context.Context) (*github.RepositoryRelease, error) {
 		releaseMap[tagName] = release
 	}
 
-	// Use semver to find the latest version
-	latestVersion, latestTag, err := FindLatestSemVer(tagNames, g.PreRelease)
-	if err != nil {
-		return nil, fmt.Errorf("failed to find latest semantic version: %w", err)
+	// Use calver or semver to find the latest version
+	var latestTag string
+	var findErr error
+	if g.CalVer != "" {
+		_, latestTag, findErr = FindLatestCalVer(tagNames, g.CalVer, g.PreRelease)
+	} else {
+		_, latestTag, findErr = FindLatestSemVer(tagNames, g.PreRelease)
+	}
+	if findErr != nil {
+		return nil, fmt.Errorf("failed to find latest version: %w", findErr)
 	}
 
-	g.logger.Debug("Selected release based on semver", slog.String("tag", latestTag), slog.Any("version", latestVersion))
+	g.logger.Debug("Selected release based on version", slog.String("tag", latestTag))
 
 	return releaseMap[latestTag], nil
 }

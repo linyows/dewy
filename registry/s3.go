@@ -29,6 +29,7 @@ type S3 struct {
 	Endpoint   string `schema:"endpoint"`
 	Artifact   string `schema:"artifact"`
 	PreRelease bool   `schema:"pre-release"`
+	CalVer     string `schema:"calver"`
 	cl         S3Client
 	pager      ListObjectsV2Pager
 	logger     *logging.Logger
@@ -160,7 +161,7 @@ func (s *S3) Current(ctx context.Context) (*CurrentResponse, error) {
 		Tag:         version.String(),
 		ArtifactURL: s.buildArtifactURL(prefix + artifactName),
 		CreatedAt:   createdAt,
-		Slot:        version.BuildMetadata,
+		Slot:        version.GetBuildMetadata(),
 	}, nil
 }
 
@@ -265,7 +266,7 @@ func (s *S3) getVersionDirectoryCreatedAt(ctx context.Context, prefix string) (*
 	return nil, fmt.Errorf("no objects found in version directory: %s", prefix)
 }
 
-func (s *S3) LatestVersion(ctx context.Context) (string, *SemVer, error) {
+func (s *S3) LatestVersion(ctx context.Context) (string, Version, error) {
 	pager := s.pager
 	if pager == nil {
 		pager = s3.NewListObjectsV2Paginator(s.cl, &s3.ListObjectsV2Input{
@@ -292,8 +293,15 @@ func (s *S3) LatestVersion(ctx context.Context) (string, *SemVer, error) {
 		}
 	}
 
-	// Use common latest version finding logic
-	latestVersion, latestName, err := FindLatestSemVer(versionNames, s.PreRelease)
+	// Use calver or semver to find the latest version
+	var latestVersion Version
+	var latestName string
+	var err error
+	if s.CalVer != "" {
+		latestVersion, latestName, err = FindLatestCalVer(versionNames, s.CalVer, s.PreRelease)
+	} else {
+		latestVersion, latestName, err = FindLatestSemVer(versionNames, s.PreRelease)
+	}
 	if err != nil {
 		return "", nil, err
 	}

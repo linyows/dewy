@@ -21,6 +21,7 @@ type OCI struct {
 	Repository string `schema:"-"`
 	Tag        string `schema:"-"` // Optional: specific tag to track
 	PreRelease bool   `schema:"pre-release"`
+	CalVer     string `schema:"calver"`
 	Constraint string `schema:"constraint"` // Semver constraint (e.g., "~1.0", "^2.0")
 	username   string
 	password   string
@@ -104,10 +105,7 @@ func (o *OCI) Current(ctx context.Context) (*CurrentResponse, error) {
 	imageRef := fmt.Sprintf("%s/%s:%s", o.Registry, o.Repository, latestTag)
 
 	// Extract slot from build metadata
-	var slot string
-	if sv := ParseSemVer(latestTag); sv != nil {
-		slot = sv.BuildMetadata
-	}
+	slot := extractSlot(latestTag, o.CalVer)
 
 	return &CurrentResponse{
 		ID:          digest,
@@ -351,17 +349,23 @@ func (o *OCI) parseNextLink(linkHeader string) string {
 	return ""
 }
 
-// findLatestTag finds the latest tag based on semantic versioning.
+// findLatestTag finds the latest tag based on semantic versioning or calendar versioning.
 func (o *OCI) findLatestTag(tags []string) (string, error) {
-	// TODO: Phase 2 - implement constraint support
-	// For Phase 1, use the existing FindLatestSemVer function
-	_, latestTag, err := FindLatestSemVer(tags, o.PreRelease)
+	var latestTag string
+	var err error
+
+	if o.CalVer != "" {
+		_, latestTag, err = FindLatestCalVer(tags, o.CalVer, o.PreRelease)
+	} else {
+		// TODO: Phase 2 - implement constraint support
+		_, latestTag, err = FindLatestSemVer(tags, o.PreRelease)
+	}
 	if err != nil {
-		o.logger.Warn("Failed to find semantic versioned tag", "error", err, "tags", tags, "pre-release", o.PreRelease)
+		o.logger.Warn("Failed to find versioned tag", "error", err, "tags", tags)
 		return "", fmt.Errorf("%w (available tags: %v)", err, tags)
 	}
 
-	o.logger.Debug("Found latest tag", "tag", latestTag, "pre-release", o.PreRelease)
+	o.logger.Debug("Found latest tag", "tag", latestTag)
 	return latestTag, nil
 }
 

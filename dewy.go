@@ -100,6 +100,11 @@ func New(c Config, log *logging.Logger) (*Dewy, error) {
 	if err != nil {
 		return nil, err
 	}
+	if c.CalVer != "" {
+		q := u.Query()
+		q.Set("calver", c.CalVer)
+		u.RawQuery = q.Encode()
+	}
 	c.Registry = fmt.Sprintf("%s://%s", su[0], u.String())
 
 	return &Dewy{

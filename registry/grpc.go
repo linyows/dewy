@@ -14,6 +14,7 @@ type GRPC struct {
 	Target   string `schema:"-"`
 	NoTLS    bool   `schema:"no-tls"`
 	Artifact string `schema:"artifact"`
+	CalVer   string `schema:"calver"`
 	cl       pb.RegistryServiceClient
 }
 
@@ -74,10 +75,7 @@ func (c *GRPC) Current(ctx context.Context) (*CurrentResponse, error) {
 	}
 
 	// Extract slot from build metadata
-	var slot string
-	if sv := ParseSemVer(cres.Tag); sv != nil {
-		slot = sv.BuildMetadata
-	}
+	slot := extractSlot(cres.Tag, c.CalVer)
 
 	res := &CurrentResponse{
 		ID:          cres.Id,
