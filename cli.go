@@ -52,6 +52,7 @@ type cli struct {
 	Cmd              []string `long:"cmd" description:"Command and arguments to pass to container (can be specified multiple times)"`
 	AdminPort        int      `long:"admin-port" description:"Admin API port for container command (default: 17539, auto-increments if in use)"`
 	Slot             string   `long:"slot" short:"s" description:"Deployment slot for blue/green deployment (e.g., blue, green). Only deploys if tag's build metadata matches."`
+	CalVer           string   `long:"calver" description:"CalVer format for version identification (e.g., YYYY.0M.0D.MICRO)"`
 	Help             bool     `long:"help" short:"h" description:"show this help message and exit"`
 	Version          bool     `long:"version" short:"v" description:"prints the version number"`
 }
@@ -139,6 +140,7 @@ func (c *cli) showHelp() {
 		"Interval",
 		"Registry",
 		"Slot",
+		"CalVer",
 		"Notifier",
 		"LogLevel",
 		"LogFormat",
@@ -260,6 +262,7 @@ func (c *cli) run() int {
 	conf.AfterDeployHook = c.AfterDeployHook
 	conf.AdminPort = c.AdminPort
 	conf.Slot = c.Slot
+	conf.CalVer = c.CalVer
 
 	switch c.command {
 	case "server":

@@ -108,6 +108,22 @@ dewy server --port 9090 -- /opt/app/current/app
 dewy server --registry ghr://owner/repo -- /opt/worker/current/worker
 ```
 
+### --calver
+
+Specifies the CalVer (Calendar Versioning) format for version identification. When set, Dewy uses calendar versioning instead of semantic versioning to detect the latest version.
+
+**Format specifiers:** `YYYY`, `YY`, `0Y`, `MM`, `0M`, `WW`, `0W`, `DD`, `0D`, `MICRO`
+
+```bash
+# Four-segment CalVer format
+dewy server --registry ghr://owner/repo --calver YYYY.0M.0D.MICRO -- /opt/app/current/app
+
+# Three-segment CalVer format
+dewy server --registry ghr://owner/repo --calver YYYY.0M.MICRO -- /opt/app/current/app
+```
+
+See [Versioning - Calendar Versioning](/versioning#calver) for full details.
+
 ### --interval (-i)
 
 Specifies the interval in seconds to check the registry. Default is 600 seconds (10 minutes).
@@ -277,6 +293,9 @@ Used to retrieve version information from GitHub Releases. Supports both public 
 ```bash
 ghr://owner/repository
 ghr://owner/repository?pre-release=true
+
+# With CalVer
+dewy server --registry ghr://owner/repository --calver YYYY.0M.0D.MICRO
 ```
 
 **Authentication:**

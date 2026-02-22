@@ -25,6 +25,7 @@ type GS struct {
 	Prefix     string `schema:"-"`
 	Artifact   string `schema:"artifact"`
 	PreRelease bool   `schema:"pre-release"`
+	CalVer     string `schema:"calver"`
 	client     GSClient
 	logger     *logging.Logger
 }
@@ -140,7 +141,7 @@ func (g *GS) Current(ctx context.Context) (*CurrentResponse, error) {
 		Tag:         version.String(),
 		ArtifactURL: g.buildArtifactURL(prefix + artifactName),
 		CreatedAt:   createdAt,
-		Slot:        version.BuildMetadata,
+		Slot:        version.GetBuildMetadata(),
 	}, nil
 }
 
@@ -228,7 +229,7 @@ func (g *GS) getVersionDirectoryCreatedAt(ctx context.Context, prefix string) (*
 	return &attrs.Created, nil
 }
 
-func (g *GS) LatestVersion(ctx context.Context) (string, *SemVer, error) {
+func (g *GS) LatestVersion(ctx context.Context) (string, Version, error) {
 	bucket := g.client.Bucket(g.Bucket)
 	query := &storage.Query{
 		Prefix:    g.Prefix,
@@ -259,8 +260,15 @@ func (g *GS) LatestVersion(ctx context.Context) (string, *SemVer, error) {
 		objectMap[name] = attrs.Prefix
 	}
 
-	// Use common latest version finding logic
-	latestVersion, latestName, err := FindLatestSemVer(versionNames, g.PreRelease)
+	// Use calver or semver to find the latest version
+	var latestVersion Version
+	var latestName string
+	var err error
+	if g.CalVer != "" {
+		latestVersion, latestName, err = FindLatestCalVer(versionNames, g.CalVer, g.PreRelease)
+	} else {
+		latestVersion, latestName, err = FindLatestSemVer(versionNames, g.PreRelease)
+	}
 	if err != nil {
 		return "", nil, err
 	}

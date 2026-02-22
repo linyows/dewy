@@ -77,6 +77,23 @@ func New(ctx context.Context, url string, log *logging.Logger) (Registry, error)
 	return nil, fmt.Errorf("unsupported registry: %s", url)
 }
 
+// extractSlot extracts the deployment slot (build metadata) from a version tag.
+// If calverFormat is non-empty, it tries CalVer parsing first, then falls back to SemVer.
+// If calverFormat is empty, it uses SemVer parsing.
+func extractSlot(tag, calverFormat string) string {
+	if calverFormat != "" {
+		if f, err := NewCalVerFormat(calverFormat); err == nil {
+			if cv := f.Parse(tag); cv != nil {
+				return cv.BuildMetadata
+			}
+		}
+	}
+	if sv := ParseSemVer(tag); sv != nil {
+		return sv.BuildMetadata
+	}
+	return ""
+}
+
 func addTrailingSlash(path string) string {
 	if strings.HasSuffix(path, "/") {
 		return path
