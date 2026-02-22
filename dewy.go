@@ -1726,14 +1726,14 @@ type timeoutConn struct {
 }
 
 func (c *timeoutConn) Read(b []byte) (int, error) {
-	if err := c.Conn.SetDeadline(time.Now().Add(c.idleTimeout)); err != nil {
+	if err := c.SetDeadline(time.Now().Add(c.idleTimeout)); err != nil {
 		return 0, err
 	}
 	return c.Conn.Read(b)
 }
 
 func (c *timeoutConn) Write(b []byte) (int, error) {
-	if err := c.Conn.SetDeadline(time.Now().Add(c.idleTimeout)); err != nil {
+	if err := c.SetDeadline(time.Now().Add(c.idleTimeout)); err != nil {
 		return 0, err
 	}
 	return c.Conn.Write(b)
