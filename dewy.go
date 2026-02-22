@@ -49,8 +49,8 @@ const (
 	// MaxArtifactSize is the maximum allowed artifact download size (512MB).
 	MaxArtifactSize int64 = 512 * 1024 * 1024
 
-	// proxyIdleTimeout is the idle timeout for TCP proxy connections.
-	proxyIdleTimeout = 5 * time.Minute
+	// defaultProxyIdleTimeout is the default idle timeout for TCP proxy connections.
+	defaultProxyIdleTimeout = 5 * time.Minute
 )
 
 // Dewy struct.
@@ -82,6 +82,7 @@ type tcpProxy struct {
 	mu           sync.RWMutex
 	done         chan struct{}
 	logger       *logging.Logger
+	idleTimeout  time.Duration // 0 means no timeout
 }
 
 // tcpBackend represents a backend server.
@@ -1150,7 +1151,7 @@ func (d *Dewy) startProxy(ctx context.Context) error {
 
 	// Start a TCP proxy for each port mapping
 	for _, mapping := range d.config.Container.PortMappings {
-		proxy, err := newTCPProxy(mapping.ProxyPort, d.logger)
+		proxy, err := newTCPProxy(mapping.ProxyPort, d.logger, d.config.Container.ProxyIdleTimeout)
 		if err != nil {
 			// Clean up already started proxies
 			if stopErr := d.stopProxy(ctx); stopErr != nil {
@@ -1174,7 +1175,7 @@ func (d *Dewy) startProxy(ctx context.Context) error {
 }
 
 // newTCPProxy creates and starts a new TCP proxy on the specified port.
-func newTCPProxy(port int, logger *logging.Logger) (*tcpProxy, error) {
+func newTCPProxy(port int, logger *logging.Logger, idleTimeout time.Duration) (*tcpProxy, error) {
 	addr := fmt.Sprintf(":%d", port)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -1182,11 +1183,12 @@ func newTCPProxy(port int, logger *logging.Logger) (*tcpProxy, error) {
 	}
 
 	proxy := &tcpProxy{
-		proxyPort: port,
-		listener:  listener,
-		backends:  make([]tcpBackend, 0),
-		done:      make(chan struct{}),
-		logger:    logger,
+		proxyPort:   port,
+		listener:    listener,
+		backends:    make([]tcpBackend, 0),
+		done:        make(chan struct{}),
+		logger:      logger,
+		idleTimeout: idleTimeout,
 	}
 
 	go proxy.acceptLoop()
@@ -1249,20 +1251,30 @@ func (p *tcpProxy) handleConnection(clientConn net.Conn) {
 		slog.String("backend", backendAddr),
 		slog.String("client", clientConn.RemoteAddr().String()))
 
-	// Wrap connections with idle timeout
-	tcClient := &timeoutConn{Conn: clientConn, idleTimeout: proxyIdleTimeout}
-	tcBackend := &timeoutConn{Conn: backendConn, idleTimeout: proxyIdleTimeout}
+	// Wrap connections with idle timeout (skip if timeout is 0)
+	var src io.Reader = clientConn
+	var dst io.Writer = backendConn
+	var srcBack io.Reader = backendConn
+	var dstBack io.Writer = clientConn
+	if p.idleTimeout > 0 {
+		tcClient := &timeoutConn{Conn: clientConn, idleTimeout: p.idleTimeout}
+		tcBackend := &timeoutConn{Conn: backendConn, idleTimeout: p.idleTimeout}
+		src = tcClient
+		dst = tcBackend
+		srcBack = tcBackend
+		dstBack = tcClient
+	}
 
 	// Bidirectional copy
 	done := make(chan struct{}, 2)
 
 	go func() {
-		_, _ = io.Copy(tcBackend, tcClient)
+		_, _ = io.Copy(dst, src)
 		done <- struct{}{}
 	}()
 
 	go func() {
-		_, _ = io.Copy(tcClient, tcBackend)
+		_, _ = io.Copy(dstBack, srcBack)
 		done <- struct{}{}
 	}()
 

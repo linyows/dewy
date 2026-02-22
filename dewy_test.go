@@ -1121,7 +1121,7 @@ func TestHookStdoutStderrTrimming(t *testing.T) {
 func TestTCPProxy(t *testing.T) {
 	t.Run("create_and_stop", func(t *testing.T) {
 		logger := testLogger()
-		proxy, err := newTCPProxy(0, logger) // port 0 = random available port
+		proxy, err := newTCPProxy(0, logger, defaultProxyIdleTimeout) // port 0 = random available port
 		if err != nil {
 			t.Fatalf("Failed to create TCP proxy: %v", err)
 		}
@@ -1143,7 +1143,7 @@ func TestTCPProxy(t *testing.T) {
 
 	t.Run("add_and_remove_backend", func(t *testing.T) {
 		logger := testLogger()
-		proxy, err := newTCPProxy(0, logger)
+		proxy, err := newTCPProxy(0, logger, defaultProxyIdleTimeout)
 		if err != nil {
 			t.Fatalf("Failed to create TCP proxy: %v", err)
 		}
@@ -1176,7 +1176,7 @@ func TestTCPProxy(t *testing.T) {
 
 	t.Run("round_robin", func(t *testing.T) {
 		logger := testLogger()
-		proxy, err := newTCPProxy(0, logger)
+		proxy, err := newTCPProxy(0, logger, defaultProxyIdleTimeout)
 		if err != nil {
 			t.Fatalf("Failed to create TCP proxy: %v", err)
 		}
@@ -1207,7 +1207,7 @@ func TestTCPProxy(t *testing.T) {
 
 	t.Run("no_backend_available", func(t *testing.T) {
 		logger := testLogger()
-		proxy, err := newTCPProxy(0, logger)
+		proxy, err := newTCPProxy(0, logger, defaultProxyIdleTimeout)
 		if err != nil {
 			t.Fatalf("Failed to create TCP proxy: %v", err)
 		}

@@ -68,15 +68,16 @@ type PortMapping struct {
 
 // ContainerConfig struct for container command.
 type ContainerConfig struct {
-	Name          string
-	PortMappings  []PortMapping // Port mappings between proxy and container
-	Replicas      int           // Number of container replicas to run (default: 1)
-	Command       []string      // Command and arguments to pass to container
-	ExtraArgs     []string      // Extra docker run arguments from -- separator
-	HealthPath    string
-	HealthTimeout time.Duration
-	DrainTime     time.Duration
-	Runtime       string // "docker" or "podman"
+	Name             string
+	PortMappings     []PortMapping // Port mappings between proxy and container
+	Replicas         int           // Number of container replicas to run (default: 1)
+	Command          []string      // Command and arguments to pass to container
+	ExtraArgs        []string      // Extra docker run arguments from -- separator
+	HealthPath       string
+	HealthTimeout    time.Duration
+	DrainTime        time.Duration
+	Runtime          string        // "docker" or "podman"
+	ProxyIdleTimeout time.Duration // Idle timeout for TCP proxy connections (0 = disabled)
 }
 
 // Config struct.

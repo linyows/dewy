@@ -49,6 +49,7 @@ type cli struct {
 	HealthTimeout    int      `long:"health-timeout" description:"Health check timeout in seconds (default: 30)"`
 	DrainTime        int      `long:"drain-time" description:"Drain time in seconds after traffic switch (default: 30 for container command)"`
 	ContainerRuntime string   `long:"runtime" description:"Container runtime (docker or podman, default: docker)"`
+	ProxyIdleTimeout int      `long:"proxy-idle-timeout" description:"Proxy idle timeout in seconds (default: 300, 0 to disable)"`
 	Cmd              []string `long:"cmd" description:"Command and arguments to pass to container (can be specified multiple times)"`
 	AdminPort        int      `long:"admin-port" description:"Admin API port for container command (default: 17539, auto-increments if in use)"`
 	Slot             string   `long:"slot" short:"s" description:"Deployment slot for blue/green deployment (e.g., blue, green). Only deploys if tag's build metadata matches."`
@@ -79,7 +80,7 @@ func (i *Info) ShortCommit() string {
 
 // RunCLI runs as cli.
 func RunCLI(env Env) int {
-	cli := &cli{env: env, Interval: -1}
+	cli := &cli{env: env, Interval: -1, ProxyIdleTimeout: -1}
 	return cli.run()
 }
 
@@ -159,6 +160,7 @@ func (c *cli) showHelp() {
 		"HealthTimeout",
 		"DrainTime",
 		"ContainerRuntime",
+		"ProxyIdleTimeout",
 	}), "\n")
 
 	help := `Usage: dewy [--version] [--help] command <options>
@@ -366,16 +368,25 @@ func (c *cli) configureContainerCommand(conf *Config) error {
 		}
 	}
 
+	// ProxyIdleTimeout: -1 means not specified (use default 5min), 0 means disabled, >0 means custom
+	proxyIdleTimeout := 5 * time.Minute
+	if c.ProxyIdleTimeout == 0 {
+		proxyIdleTimeout = 0 // Explicitly disabled
+	} else if c.ProxyIdleTimeout > 0 {
+		proxyIdleTimeout = time.Duration(c.ProxyIdleTimeout) * time.Second
+	}
+
 	conf.Container = &ContainerConfig{
-		Name:          appName,
-		PortMappings:  portMappings,
-		Replicas:      c.Replicas,
-		Command:       c.Cmd,
-		ExtraArgs:     c.args, // Arguments after -- separator (docker run options)
-		HealthPath:    c.HealthPath,
-		HealthTimeout: time.Duration(c.HealthTimeout) * time.Second,
-		DrainTime:     time.Duration(c.DrainTime) * time.Second,
-		Runtime:       c.ContainerRuntime,
+		Name:             appName,
+		PortMappings:     portMappings,
+		Replicas:         c.Replicas,
+		Command:          c.Cmd,
+		ExtraArgs:        c.args, // Arguments after -- separator (docker run options)
+		HealthPath:       c.HealthPath,
+		HealthTimeout:    time.Duration(c.HealthTimeout) * time.Second,
+		DrainTime:        time.Duration(c.DrainTime) * time.Second,
+		Runtime:          c.ContainerRuntime,
+		ProxyIdleTimeout: proxyIdleTimeout,
 	}
 	return nil
 }
