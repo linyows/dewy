@@ -37,7 +37,7 @@ func createPersistentCacheDir() string {
 	}
 
 	// Create directory if it doesn't exist
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0755); err != nil { //nolint:gosec // G703
 		// If creation fails, fall back to temp directory
 		tempDir, _ := os.MkdirTemp("", "dewy-")
 		return tempDir

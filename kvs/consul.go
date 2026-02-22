@@ -5,7 +5,7 @@ type Consul struct {
 	items    map[string]*item //nolint
 	Host     string
 	Port     int
-	Password string
+	Password string //nolint:gosec // G117
 }
 
 // Read data on Consul.

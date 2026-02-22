@@ -37,7 +37,7 @@ func (h *HealthChecker) CheckHTTP(ctx context.Context, url string) error {
 			return err
 		}
 
-		resp, err := client.Do(req)
+		resp, err := client.Do(req) //nolint:gosec // G704
 		if err != nil {
 			h.logger.Warn("Health check attempt failed",
 				slog.Int("attempt", i+1),

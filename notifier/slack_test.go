@@ -52,11 +52,9 @@ func TestNewSlack(t *testing.T) {
 		{
 			name:   "valid URL with channel",
 			schema: "/general?title=Test+Project&url=https://example.com",
-			envVars: map[string]string{
-				"SLACK_TOKEN": "xoxb-test-token",
+			envVars: map[string]string{				"SLACK_TOKEN": "xoxb-test-token",
 			},
-			want: &Slack{
-				Channel:  "/general",
+			want: &Slack{				Channel:  "/general",
 				Title:    "Test Project",
 				TitleURL: "https://example.com",
 				token:    "xoxb-test-token",
@@ -66,11 +64,9 @@ func TestNewSlack(t *testing.T) {
 		{
 			name:   "valid URL with default channel",
 			schema: "?title=Test",
-			envVars: map[string]string{
-				"SLACK_TOKEN": "xoxb-test-token",
+			envVars: map[string]string{				"SLACK_TOKEN": "xoxb-test-token",
 			},
-			want: &Slack{
-				Channel: defaultSlackChannel,
+			want: &Slack{				Channel: defaultSlackChannel,
 				Title:   "Test",
 				token:   "xoxb-test-token",
 			},
@@ -79,11 +75,9 @@ func TestNewSlack(t *testing.T) {
 		{
 			name:   "URL without query parameters",
 			schema: "/random",
-			envVars: map[string]string{
-				"SLACK_TOKEN": "xoxb-test-token",
+			envVars: map[string]string{				"SLACK_TOKEN": "xoxb-test-token",
 			},
-			want: &Slack{
-				Channel: "/random",
+			want: &Slack{				Channel: "/random",
 				token:   "xoxb-test-token",
 			},
 			wantErr: false,

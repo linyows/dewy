@@ -185,7 +185,7 @@ func (o *OCI) getBearerToken(ctx context.Context, authHeader string) error {
 		req.SetBasicAuth(o.username, o.password)
 	}
 
-	resp, err := o.client.Do(req)
+	resp, err := o.client.Do(req) //nolint:gosec // G704
 	if err != nil {
 		return err
 	}
@@ -198,7 +198,7 @@ func (o *OCI) getBearerToken(ctx context.Context, authHeader string) error {
 
 	var result struct {
 		Token       string `json:"token"`
-		AccessToken string `json:"access_token"`
+		AccessToken string `json:"access_token"` //nolint:gosec // G117
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
@@ -255,7 +255,7 @@ func (o *OCI) fetchTagsPage(ctx context.Context, apiURL string) ([]string, strin
 		req.Header.Set("Authorization", "Basic "+auth)
 	}
 
-	resp, err := o.client.Do(req)
+	resp, err := o.client.Do(req) //nolint:gosec // G704
 	if err != nil {
 		return nil, "", err
 	}
@@ -276,7 +276,7 @@ func (o *OCI) fetchTagsPage(ctx context.Context, apiURL string) ([]string, strin
 			}
 			req.Header.Set("Authorization", "Bearer "+o.token)
 
-			resp, err = o.client.Do(req)
+			resp, err = o.client.Do(req) //nolint:gosec // G704
 			if err != nil {
 				return nil, "", err
 			}
@@ -393,7 +393,7 @@ func (o *OCI) getImageDigest(ctx context.Context, tag string) (string, *time.Tim
 		"application/vnd.docker.distribution.manifest.v2+json",      // Docker Manifest v2
 	}, ", "))
 
-	resp, err := o.client.Do(req)
+	resp, err := o.client.Do(req) //nolint:gosec // G704
 	if err != nil {
 		return "", nil, err
 	}
@@ -420,7 +420,7 @@ func (o *OCI) getImageDigest(ctx context.Context, tag string) (string, *time.Tim
 				"application/vnd.docker.distribution.manifest.v2+json",
 			}, ", "))
 
-			resp, err = o.client.Do(req)
+			resp, err = o.client.Do(req) //nolint:gosec // G704
 			if err != nil {
 				return "", nil, err
 			}

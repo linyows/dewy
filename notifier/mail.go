@@ -23,7 +23,7 @@ type Mail struct {
 	Host     string     `schema:"host"`
 	Port     int        `schema:"port"`
 	Username string     `schema:"username"`
-	Password string     `schema:"password"`
+	Password string     `schema:"password"` //nolint:gosec // G117
 	From     string     `schema:"from"`
 	To       string     `schema:"to"`
 	Subject  string     `schema:"subject"`

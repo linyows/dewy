@@ -2,7 +2,7 @@ package notifier
 
 import (
 	"context"
-	"crypto/md5" //nolint:gosec
+	"crypto/md5" //nolint:gosec // G501
 	"fmt"
 	"log/slog"
 	"net/url"
@@ -202,7 +202,7 @@ func hslToRGB(h, s, l float64) (r, g, b uint8) {
 
 func (s *Slack) genColor() string {
 	// Generate initial color from hostname
-	hashBytes := md5.Sum([]byte(hostname())) //nolint:gosec
+	hashBytes := md5.Sum([]byte(hostname())) //nolint:gosec // G401
 	r := hashBytes[0]
 	g := hashBytes[1]
 	b := hashBytes[2]

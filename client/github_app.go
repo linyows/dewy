@@ -28,7 +28,7 @@ const (
 type GitHubAppConfig struct {
 	AppID          int64
 	InstallationID int64
-	PrivateKey     []byte
+	PrivateKey     []byte //nolint:gosec // G117
 }
 
 // LoadGitHubAppConfig loads GitHub App configuration from environment variables.
@@ -71,7 +71,7 @@ func LoadGitHubAppConfig() (*GitHubAppConfig, error) {
 			return nil, fmt.Errorf("either GITHUB_APP_PRIVATE_KEY or GITHUB_APP_PRIVATE_KEY_PATH is required")
 		}
 
-		privateKey, err = os.ReadFile(privateKeyPath)
+		privateKey, err = os.ReadFile(privateKeyPath) //nolint:gosec // G703
 		if err != nil {
 			return nil, fmt.Errorf("failed to read private key file: %w", err)
 		}

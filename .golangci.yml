@@ -18,6 +18,11 @@ linters:
           disabled: false
   exclusions:
     generated: lax
+    rules:
+      - linters:
+          - gosec
+        text: "G101:"
+        path: "_test\\.go$"
     presets:
       - comments
       - common-false-positives
