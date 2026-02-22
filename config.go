@@ -92,6 +92,7 @@ type Config struct {
 	BeforeDeployHook string
 	AfterDeployHook  string
 	Slot             string // Deployment slot for blue/green deployment (e.g., "blue", "green")
+	CalVer           string // CalVer format for version identification (e.g., "YYYY.0M.MICRO")
 	*Info
 }
 

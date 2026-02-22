@@ -21,7 +21,11 @@ type OCI struct {
 	Repository string `schema:"-"`
 	Tag        string `schema:"-"` // Optional: specific tag to track
 	PreRelease bool   `schema:"pre-release"`
-	Constraint string `schema:"constraint"` // Semver constraint (e.g., "~1.0", "^2.0")
+	CalVer     string `schema:"calver"`
+	// Constraint filters versions by semver range (e.g., "~1.0" means >=1.0.0 <1.1.0,
+	// "^2.0" means >=2.0.0 <3.0.0). This prevents automatic upgrades across major versions
+	// when a registry contains multiple major version lines (v1.x, v2.x, v3.x).
+	Constraint string `schema:"constraint"`
 	username   string
 	password   string
 	token      string // Bearer token for authentication
@@ -104,10 +108,7 @@ func (o *OCI) Current(ctx context.Context) (*CurrentResponse, error) {
 	imageRef := fmt.Sprintf("%s/%s:%s", o.Registry, o.Repository, latestTag)
 
 	// Extract slot from build metadata
-	var slot string
-	if sv := ParseSemVer(latestTag); sv != nil {
-		slot = sv.BuildMetadata
-	}
+	slot := extractSlot(latestTag, o.CalVer)
 
 	return &CurrentResponse{
 		ID:          digest,
@@ -351,17 +352,26 @@ func (o *OCI) parseNextLink(linkHeader string) string {
 	return ""
 }
 
-// findLatestTag finds the latest tag based on semantic versioning.
+// findLatestTag finds the latest tag based on semantic versioning or calendar versioning.
 func (o *OCI) findLatestTag(tags []string) (string, error) {
-	// TODO: Phase 2 - implement constraint support
-	// For Phase 1, use the existing FindLatestSemVer function
-	_, latestTag, err := FindLatestSemVer(tags, o.PreRelease)
+	var latestTag string
+	var err error
+
+	if o.CalVer != "" {
+		_, latestTag, err = FindLatestCalVer(tags, o.CalVer, o.PreRelease)
+	} else {
+		// TODO: Phase 2 - implement constraint support.
+		// When o.Constraint is set (e.g., "~1.0", "^2.0"), filter tags by the semver
+		// range before finding the latest, so only versions matching the constraint
+		// are considered. This avoids unintended major-version upgrades.
+		_, latestTag, err = FindLatestSemVer(tags, o.PreRelease)
+	}
 	if err != nil {
-		o.logger.Warn("Failed to find semantic versioned tag", "error", err, "tags", tags, "pre-release", o.PreRelease)
+		o.logger.Warn("Failed to find versioned tag", "error", err, "tags", tags)
 		return "", fmt.Errorf("%w (available tags: %v)", err, tags)
 	}
 
-	o.logger.Debug("Found latest tag", "tag", latestTag, "pre-release", o.PreRelease)
+	o.logger.Debug("Found latest tag", "tag", latestTag)
 	return latestTag, nil
 }
 

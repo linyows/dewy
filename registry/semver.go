@@ -63,6 +63,11 @@ func (v *SemVer) Compare(other *SemVer) int {
 	return strings.Compare(v.PreRelease, other.PreRelease)
 }
 
+// GetBuildMetadata returns the build metadata of the SemVer version.
+func (v *SemVer) GetBuildMetadata() string {
+	return v.BuildMetadata
+}
+
 func (v *SemVer) String() string {
 	var pre, build string
 	if v.PreRelease != "" {

@@ -1,7 +1,7 @@
 ---
 title: バージョニング
 description: |
-  Dewyは、セマンティックバージョニングに基づいてアプリケーションの最新バージョンを自動検出し、
+  Dewyは、セマンティックバージョニングまたはカレンダーバージョニングに基づいてアプリケーションの最新バージョンを自動検出し、
   継続的なデプロイメントを実現します。プリリリース版の管理も含めた包括的なバージョン管理機能を提供します。
 ---
 
@@ -15,6 +15,7 @@ Dewyにおけるバージョニングは、プル型デプロイメントの中�
 
 **主な特徴:**
 - セマンティックバージョニング（SemVer）の完全サポート
+- カレンダーバージョニング（CalVer）のサポート（柔軟なフォーマット指定子）
 - プリリリース版の柔軟な管理
 - 複数のバージョン形式に対応（`v1.2.3` / `1.2.3`）
 - 環境別のバージョン戦略をサポート
@@ -107,18 +108,114 @@ dewy server --registry ghr://owner/repo --slot green -- /opt/myapp/current/myapp
 dewy server --registry ghr://owner/repo -- /opt/myapp/current/myapp
 ```
 
+## カレンダーバージョニング（CalVer） {% #calver %}
+
+SemVerに加え、Dewyは[カレンダーバージョニング（CalVer）](https://calver.org/)もサポートしています。CalVerはリリース日に基づくバージョニング方式です。
+
+### CalVerフォーマット {% #calver-format %}
+
+`--calver`オプションでフォーマット文字列を指定すると、CalVerが有効になります。フォーマットはドットで区切られた指定子で構成されます。
+
+**サポートされる指定子:**
+
+{% table %}
+* 指定子
+* 説明
+* 例
+---
+* YYYY
+* フル年
+* 2024
+---
+* YY
+* 短縮年（パディングなし）
+* 6, 16, 106
+---
+* 0Y
+* ゼロ埋め短縮年
+* 06, 16, 106
+---
+* MM
+* 月（パディングなし）
+* 1, 11
+---
+* 0M
+* ゼロ埋め月
+* 01, 11
+---
+* WW
+* 週（パディングなし）
+* 1, 33, 52
+---
+* 0W
+* ゼロ埋め週
+* 01, 33, 52
+---
+* DD
+* 日（パディングなし）
+* 1, 9, 31
+---
+* 0D
+* ゼロ埋め日
+* 01, 09, 31
+---
+* MICRO
+* インクリメント番号
+* 0, 1, 42
+{% /table %}
+
+**フォーマット例:**
+- `YYYY.0M.0D.MICRO` - 年、ゼロ埋め月、ゼロ埋め日、マイクロ（例: `2024.01.15.3`）
+- `YYYY.MM.DD` - 年、月、日（例: `2024.1.9`）
+- `YYYY.0M.MICRO` - 年、ゼロ埋め月、マイクロ（例: `2024.06.3`）
+
+### CalVerの使い方 {% #calver-usage %}
+
+```bash
+# GitHub ReleasesでCalVerを使用
+dewy server --registry ghr://owner/repo --calver YYYY.0M.0D.MICRO -- /opt/myapp/current/myapp
+
+# S3でCalVerを使用
+dewy server --registry "s3://ap-northeast-1/releases/myapp" --calver YYYY.0M.MICRO -- /opt/myapp/current/myapp
+
+# CalVerでプリリリース版を含む
+dewy server --registry "ghr://owner/repo?pre-release=true" --calver YYYY.0M.0D.MICRO -- /opt/myapp/current/myapp
+```
+
+### CalVerでのプリリリースとビルドメタデータ {% #calver-metadata %}
+
+CalVerはSemVerと同様に、プリリリース識別子とビルドメタデータをサポートしています：
+
+```
+<calver>-<pre-release>+<build-metadata>
+```
+
+**例:**
+- `2024.01.15.3-rc.1` - リリース候補
+- `2024.06.0+blue` - Blueデプロイメントスロット
+- `v2024.01.15.3-beta.2+green` - Greenスロット用のプリリリース（vプレフィックス付き）
+
+{% callout type="note" title="CalVerとBlue/Greenデプロイメント" %}
+ビルドメタデータ（`+blue`、`+green`）とプリリリース識別子は、SemVerとCalVerの両方で同じように機能します。Blue/Green、ステージング、カナリアなどのすべてのデプロイメントパターンがCalVerで完全にサポートされています。
+{% /callout %}
+
 ## Dewyのバージョン検出アルゴリズム {% #version-detection %}
 
 ### バージョン比較規則 {% #comparison-rules %}
 
-Dewyは独自のセマンティックバージョン比較アルゴリズムを実装しています：
+DewyはSemVerとCalVerの両方に対応したバージョン比較アルゴリズムを実装しています：
+
+**SemVer比較:**
 
 1. **MAJOR版の比較** - 数値として比較し、大きい方を優先
 2. **MINOR版の比較** - MAJOR版が同じ場合、数値として比較
 3. **PATCH版の比較** - MAJOR.MINORが同じ場合、数値として比較
-4. **プリリリース版の処理**:
-   - 正式版 > プリリリース版
-   - プリリリース版同士は文字列比較
+4. **プリリリース版の処理** - 正式版 > プリリリース版、プリリリース版同士は文字列比較
+
+**CalVer比較:**
+
+1. **セグメントごとの比較** - 各セグメントを左から順に数値として比較
+2. **プリリリース版の処理** - SemVerと同じ: 正式版 > プリリリース版
 
 ### 最新バージョンの決定 {% #latest-version %}
 
@@ -126,15 +223,19 @@ Dewyは独自のセマンティックバージョン比較アルゴリズムを�
 
 ```go
 // 擬似コード
-func findLatest(versions []string, allowPreRelease bool) string {
+func findLatest(versions []string, allowPreRelease bool, calverFormat string) string {
+    if calverFormat != "" {
+        validVersions := filterValidCalVer(versions, calverFormat, allowPreRelease)
+        return findMaxVersion(validVersions)
+    }
     validVersions := filterValidSemVer(versions, allowPreRelease)
     return findMaxVersion(validVersions)
 }
 ```
 
 **処理フロー:**
-1. セマンティックバージョン形式の検証
-2. プリリリース設定による フィルタリング
+1. バージョン形式の検証（`--calver`オプションに基づきSemVerまたはCalVer）
+2. プリリリース設定によるフィルタリング
 3. 数値による比較とソート
 4. 最大値の選択
 
@@ -150,6 +251,9 @@ dewy server --registry ghr://owner/repo
 
 # プリリリース版を含む
 dewy server --registry "ghr://owner/repo?pre-release=true"
+
+# CalVerフォーマットを使用
+dewy server --registry ghr://owner/repo --calver YYYY.0M.0D.MICRO
 ```
 
 **グレースピリオドの考慮:**
@@ -165,20 +269,31 @@ S3のオブジェクトパス構造からバージョンを抽出します。
 
 **必須パス構造:**
 ```
-<path-prefix>/<semver>/<artifact>
+<path-prefix>/<version>/<artifact>
 ```
 
 **設定例:**
 ```bash
+# SemVer（デフォルト）
 dewy server --registry "s3://ap-northeast-1/releases/myapp?pre-release=true"
+
+# CalVer
+dewy server --registry "s3://ap-northeast-1/releases/myapp" --calver YYYY.0M.MICRO
 ```
 
-**S3内の配置例:**
+**S3内の配置例（SemVer）:**
 ```
 releases/myapp/v1.2.4/myapp_linux_amd64.tar.gz
 releases/myapp/v1.2.4/myapp_darwin_arm64.tar.gz
 releases/myapp/v1.2.3/myapp_linux_amd64.tar.gz
 releases/myapp/v1.2.3-rc.1/myapp_linux_amd64.tar.gz
+```
+
+**S3内の配置例（CalVer）:**
+```
+releases/myapp/2024.06.15.0/myapp_linux_amd64.tar.gz
+releases/myapp/2024.06.15.1/myapp_linux_amd64.tar.gz
+releases/myapp/2024.07.01.0/myapp_linux_amd64.tar.gz
 ```
 
 ### Google Cloud Storage {% #google-cloud-storage %}
@@ -306,8 +421,7 @@ git tag v1.2.4  # 1.2.3のセキュリティ修正版
 
 **避けるべきパターン:**
 ```bash
-# ❌ セマンティックバージョニングに非準拠
-git tag release-2024-03-15
+# ❌ 構造化されていない命名
 git tag latest
 git tag stable
 
@@ -315,6 +429,10 @@ git tag stable
 git tag v1.2.3-SNAPSHOT
 git tag 1.2.3-final
 ```
+
+{% callout type="note" title="日時ベースのタグ" %}
+`2024.03.15.0`のような日付ベースのタグは、`--calver`オプションを使用してサポートされています。詳しくは[カレンダーバージョニング](#calver)を参照してください。
+{% /callout %}
 
 ### リリース戦略 {% #release-strategy %}
 
@@ -399,31 +517,23 @@ echo $GITHUB_TOKEN | cut -c1-10  # 最初の10文字のみ表示
 gh auth status  # GitHub CLI での認証状態確認
 ```
 
-### 日時ベースのタグ使用時の注意 {% #datetime-tags-warning %}
+### 日時ベースのタグを使用するには {% #datetime-tags %}
 
-{% callout type="warning" title="日時ベースのタグ使用時の注意" %}
-Dewyはタグを数値として比較するため、日時ベースのタグを使用する場合は注意が必要です。
+{% callout type="note" title="CalVerの使用を推奨" %}
+日時ベースのタグを使用する場合は、`--calver`オプションを指定してください。CalVerフォーマットを使用することで、ゼロ埋めの月・日も正しくパースされます。
 
-**問題のあるパターン:**
+**CalVerを使用した例:**
 ```bash
-# ❌ 先頭の0が意図しない結果を招く
-v2025.0905.1005  # v2025.905.1005 として認識され、比較が正しく動作しない
-v2025.0101.0800  # v2025.101.800 として認識される
+# ✅ CalVerフォーマットで正しく動作
+dewy server --registry ghr://owner/repo --calver YYYY.0M.0D.MICRO
+
+# タグの例
+2025.09.05.0   # 2025年9月5日のリリース
+2025.01.01.0   # 2025年1月1日のリリース
+2025.12.25.0   # 2025年12月25日のリリース
 ```
 
-**推奨するパターン:**
-```bash
-# ✅ 先頭の0を除いた形式
-v2025.905.1005   # 9月5日 10時05分
-v2025.101.800    # 1月1日 8時00分
-v2025.1225.1500  # 12月25日 15時00分
-```
-
-または、セマンティックバージョニングに準拠した形式を使用してください：
-```bash
-# ✅ セマンティックバージョニング準拠
-v1.0.0, v1.1.0, v2.0.0
-```
+`--calver`オプションなしで日時ベースのタグを使用すると、SemVerとしてパースされるため意図しない結果になることがあります。
 {% /callout %}
 
 ### アップグレードの問題 {% #upgrade-issues %}
@@ -470,8 +580,7 @@ dewy server --registry "ghr://company/myapp?pre-release=false" \
 
 ### カスタムバージョンパターン {% #custom-patterns %}
 
-現在のDewyは標準的なセマンティックバージョニングのみをサポートしていますが、
-将来的には企業独自の命名規則にも対応予定です。
+Dewyはセマンティックバージョニング（SemVer）とカレンダーバージョニング（CalVer）の両方をサポートしています。CalVerの柔軟なフォーマット指定子を使用することで、日付ベースの命名規則に対応できます。詳しくは[カレンダーバージョニング](#calver)を参照してください。
 
 ## 関連項目 {% #related %}
 
