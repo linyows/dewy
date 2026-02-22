@@ -227,8 +227,9 @@ func ExtractArchive(src, dst string) error {
 			return fmt.Errorf("symlinks are not allowed in archive: %s", f.NameInArchive)
 		}
 
-		// Sanitize file permissions: strip setuid/setgid/sticky bits
-		sanitizedMode := f.Mode().Perm() &^ (os.ModeSetuid | os.ModeSetgid | os.ModeSticky)
+		// Sanitize file permissions: Perm() returns only the lower 9 permission bits (0o777),
+		// which inherently excludes setuid/setgid/sticky bits.
+		sanitizedMode := f.Mode().Perm()
 
 		// Handle directories
 		if f.IsDir() {

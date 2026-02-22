@@ -3,6 +3,7 @@ package registry
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -743,6 +744,40 @@ func TestValidateRealmURL_PrivateIP(t *testing.T) {
 				t.Errorf("Expected no error, got: %v", err)
 			}
 		})
+	}
+}
+
+func TestSSRF_SameHostBypass(t *testing.T) {
+	// Test that realm URLs matching the registry hostname bypass SSRF validation.
+	// This ensures localhost registries (e.g., in tests) can use localhost auth endpoints.
+	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"token": "test-token"})
+	}))
+	defer tokenServer.Close()
+
+	registryHost := strings.TrimPrefix(tokenServer.URL, "http://")
+
+	logger := logging.SetupLogger("ERROR", "text", os.Stderr)
+	oci := &OCI{
+		Registry:   registryHost,
+		Repository: "testapp",
+		client:     &http.Client{Timeout: 5 * time.Second},
+		logger:     logger,
+	}
+
+	// Same-host realm should be allowed (bypasses SSRF check)
+	authHeader := fmt.Sprintf(`Bearer realm="%s/token",service="registry",scope="repository:testapp:pull"`, tokenServer.URL)
+	err := oci.getBearerToken(context.Background(), authHeader)
+	if err != nil {
+		t.Errorf("Expected same-host realm to be allowed, got error: %v", err)
+	}
+
+	// Different-host private IP realm should be blocked
+	authHeader = `Bearer realm="http://10.0.0.1/token",service="registry",scope="repository:testapp:pull"`
+	err = oci.getBearerToken(context.Background(), authHeader)
+	if err == nil {
+		t.Error("Expected different-host private IP realm to be blocked, got nil")
 	}
 }
 
