@@ -77,9 +77,22 @@ func (f *File) SetLogger(logger *slog.Logger) {
 	f.logger = logger
 }
 
+// validateKeyPath validates that a key resolves to a path within the base directory.
+func validateKeyPath(base, key string) (string, error) {
+	p := filepath.Join(base, key)
+	cleanBase := filepath.Clean(base) + string(os.PathSeparator)
+	if !strings.HasPrefix(filepath.Clean(p)+string(os.PathSeparator), cleanBase) && filepath.Clean(p) != filepath.Clean(base) {
+		return "", fmt.Errorf("illegal key (path traversal detected): %s", key)
+	}
+	return p, nil
+}
+
 // Read data by key from file.
 func (f *File) Read(key string) ([]byte, error) {
-	p := filepath.Join(f.dir, key)
+	p, err := validateKeyPath(f.dir, key)
+	if err != nil {
+		return nil, err
+	}
 	if !IsFileExist(p) {
 		return nil, fmt.Errorf("File not found: %s", p)
 	}
@@ -106,7 +119,10 @@ func (f *File) Write(key string, data []byte) error {
 		return errors.New("max size has been reached")
 	}
 
-	p := filepath.Join(f.dir, key)
+	p, err := validateKeyPath(f.dir, key)
+	if err != nil {
+		return err
+	}
 	file, err := os.OpenFile(p, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
@@ -127,7 +143,10 @@ func (f *File) Write(key string, data []byte) error {
 
 // Delete data on file.
 func (f *File) Delete(key string) error {
-	p := filepath.Join(f.dir, key)
+	p, err := validateKeyPath(f.dir, key)
+	if err != nil {
+		return err
+	}
 	if !IsFileExist(p) {
 		return fmt.Errorf("File not found: %s", p)
 	}
@@ -194,13 +213,26 @@ func ExtractArchive(src, dst string) error {
 	}
 
 	// Extract the archive
+	cleanDst := filepath.Clean(dst) + string(os.PathSeparator)
+
 	return format.Extract(context.Background(), srcFile, func(ctx context.Context, f archives.FileInfo) error {
-		// Construct the destination path
+		// Construct the destination path and validate against path traversal (Zip Slip)
 		destPath := filepath.Join(dst, f.NameInArchive)
+		if !strings.HasPrefix(filepath.Clean(destPath)+string(os.PathSeparator), cleanDst) && filepath.Clean(destPath) != filepath.Clean(dst) {
+			return fmt.Errorf("illegal file path in archive (path traversal detected): %s", f.NameInArchive)
+		}
+
+		// Reject symlinks to prevent symlink-based path traversal attacks
+		if f.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("symlinks are not allowed in archive: %s", f.NameInArchive)
+		}
+
+		// Sanitize file permissions: strip setuid/setgid/sticky bits
+		sanitizedMode := f.Mode().Perm() &^ (os.ModeSetuid | os.ModeSetgid | os.ModeSticky)
 
 		// Handle directories
 		if f.IsDir() {
-			return os.MkdirAll(destPath, 0755)
+			return os.MkdirAll(destPath, sanitizedMode)
 		}
 
 		// Create parent directories if needed
@@ -208,8 +240,8 @@ func ExtractArchive(src, dst string) error {
 			return err
 		}
 
-		// Create and write the file with original permissions
-		outFile, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, f.Mode())
+		// Create and write the file with sanitized permissions
+		outFile, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, sanitizedMode)
 		if err != nil {
 			return err
 		}

@@ -227,6 +227,188 @@ func addDirToArchive(tw *tar.Writer, name string, mode os.FileMode) error {
 	return tw.WriteHeader(header)
 }
 
+func TestExtractArchiveZipSlip(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "zipslip-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create a malicious tar.gz archive with path traversal
+	archivePath := filepath.Join(tempDir, "malicious.tar.gz")
+	file, err := os.Create(archivePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gw := gzip.NewWriter(file)
+	tw := tar.NewWriter(gw)
+
+	// Add a file with path traversal
+	header := &tar.Header{
+		Name: "../../etc/evil.txt",
+		Mode: int64(0644),
+		Size: int64(len("pwned")),
+	}
+	if err := tw.WriteHeader(header); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tw.Write([]byte("pwned")); err != nil {
+		t.Fatal(err)
+	}
+	tw.Close()
+	gw.Close()
+	file.Close()
+
+	// Extract should fail with path traversal error
+	extractDir := filepath.Join(tempDir, "extracted")
+	err = ExtractArchive(archivePath, extractDir)
+	if err == nil {
+		t.Fatal("Expected error for path traversal, got nil")
+	}
+	if !strings.Contains(err.Error(), "path traversal detected") {
+		t.Errorf("Expected path traversal error, got: %v", err)
+	}
+}
+
+func TestExtractArchiveSymlink(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "symlink-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create a tar.gz archive with a symlink entry
+	archivePath := filepath.Join(tempDir, "symlink.tar.gz")
+	file, err := os.Create(archivePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gw := gzip.NewWriter(file)
+	tw := tar.NewWriter(gw)
+
+	// Add a symlink entry
+	header := &tar.Header{
+		Name:     "evil-link",
+		Typeflag: tar.TypeSymlink,
+		Linkname: "/etc/passwd",
+		Mode:     int64(0777),
+	}
+	if err := tw.WriteHeader(header); err != nil {
+		t.Fatal(err)
+	}
+	tw.Close()
+	gw.Close()
+	file.Close()
+
+	// Extract should fail with symlink error
+	extractDir := filepath.Join(tempDir, "extracted")
+	err = ExtractArchive(archivePath, extractDir)
+	if err == nil {
+		t.Fatal("Expected error for symlink, got nil")
+	}
+	if !strings.Contains(err.Error(), "symlinks are not allowed") {
+		t.Errorf("Expected symlink error, got: %v", err)
+	}
+}
+
+func TestExtractArchiveSetuidStripped(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "setuid-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create a tar.gz archive with setuid bit
+	archivePath := filepath.Join(tempDir, "setuid.tar.gz")
+	file, err := os.Create(archivePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gw := gzip.NewWriter(file)
+	tw := tar.NewWriter(gw)
+
+	// Add a file with setuid bit (04755)
+	content := "#!/bin/bash\necho hello"
+	header := &tar.Header{
+		Name: "setuid-binary",
+		Mode: 04755,
+		Size: int64(len(content)),
+	}
+	if err := tw.WriteHeader(header); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tw.Write([]byte(content)); err != nil {
+		t.Fatal(err)
+	}
+	tw.Close()
+	gw.Close()
+	file.Close()
+
+	// Extract should succeed but strip setuid bit
+	extractDir := filepath.Join(tempDir, "extracted")
+	err = ExtractArchive(archivePath, extractDir)
+	if err != nil {
+		t.Fatalf("Expected extraction to succeed, got: %v", err)
+	}
+
+	// Verify setuid bit is stripped, but executable bit remains
+	info, err := os.Stat(filepath.Join(extractDir, "setuid-binary"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode()&os.ModeSetuid != 0 {
+		t.Error("Expected setuid bit to be stripped")
+	}
+	if info.Mode().Perm() != 0755 {
+		t.Errorf("Expected permissions 0755, got %o", info.Mode().Perm())
+	}
+}
+
+func TestCacheKeyPathTraversal(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "cachekey-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	f := &File{}
+	f.dir = tempDir
+	f.MaxSize = DefaultMaxSize
+
+	// Write valid key should succeed
+	err = f.Write("valid-key", []byte("data"))
+	if err != nil {
+		t.Fatalf("Expected valid key to succeed, got: %v", err)
+	}
+
+	// Read with path traversal should fail
+	_, err = f.Read("../../../etc/passwd")
+	if err == nil {
+		t.Fatal("Expected error for path traversal in Read, got nil")
+	}
+	if !strings.Contains(err.Error(), "path traversal detected") {
+		t.Errorf("Expected path traversal error, got: %v", err)
+	}
+
+	// Write with path traversal should fail
+	err = f.Write("../../../tmp/evil", []byte("data"))
+	if err == nil {
+		t.Fatal("Expected error for path traversal in Write, got nil")
+	}
+	if !strings.Contains(err.Error(), "path traversal detected") {
+		t.Errorf("Expected path traversal error, got: %v", err)
+	}
+
+	// Delete with path traversal should fail
+	err = f.Delete("../../../tmp/important")
+	if err == nil {
+		t.Fatal("Expected error for path traversal in Delete, got nil")
+	}
+	if !strings.Contains(err.Error(), "path traversal detected") {
+		t.Errorf("Expected path traversal error, got: %v", err)
+	}
+}
+
 func TestCreatePersistentCacheDir(t *testing.T) {
 	tests := []struct {
 		name          string

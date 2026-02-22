@@ -285,6 +285,41 @@ func TestValidateExtraArgs(t *testing.T) {
 			args:        []string{"-p", "8080:80"},
 			expectError: true,
 		},
+		{
+			name:        "forbidden --privileged",
+			args:        []string{"--privileged", "-e", "FOO=bar"},
+			expectError: true,
+		},
+		{
+			name:        "forbidden --pid",
+			args:        []string{"--pid=host"},
+			expectError: true,
+		},
+		{
+			name:        "forbidden --cap-add",
+			args:        []string{"--cap-add=SYS_ADMIN"},
+			expectError: true,
+		},
+		{
+			name:        "forbidden --security-opt",
+			args:        []string{"--security-opt=seccomp=unconfined"},
+			expectError: true,
+		},
+		{
+			name:        "forbidden --device",
+			args:        []string{"--device=/dev/sda"},
+			expectError: true,
+		},
+		{
+			name:        "forbidden --userns",
+			args:        []string{"--userns=host"},
+			expectError: true,
+		},
+		{
+			name:        "forbidden --cgroupns",
+			args:        []string{"--cgroupns=host"},
+			expectError: true,
+		},
 	}
 
 	for _, tt := range tests {

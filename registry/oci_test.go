@@ -3,8 +3,10 @@ package registry
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -622,6 +624,59 @@ func mockRegistryServerWithPagination(t *testing.T) *httptest.Server {
 	return httptest.NewServer(mux)
 }
 
+func mockRegistryServerWithInfinitePagination(t *testing.T) *httptest.Server {
+	t.Helper()
+
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/v2/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{}`))
+	})
+
+	mux.HandleFunc("/v2/testapp/tags/list", func(w http.ResponseWriter, r *http.Request) {
+		// Always return a next page link (infinite pagination)
+		last := r.URL.Query().Get("last")
+		nextLast := "v" + last + "1"
+		response := map[string]interface{}{
+			"name": "testapp",
+			"tags": []string{"v1.0." + last},
+		}
+		w.Header().Set("Link", `</v2/testapp/tags/list?n=1&last=`+nextLast+`>; rel="next"`)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(response)
+	})
+
+	return httptest.NewServer(mux)
+}
+
+func TestOCI_listTags_PaginationLimit(t *testing.T) {
+	server := mockRegistryServerWithInfinitePagination(t)
+	defer server.Close()
+
+	registryHost := strings.TrimPrefix(server.URL, "http://")
+
+	logger := logging.SetupLogger("ERROR", "text", os.Stderr)
+	oci := &OCI{
+		Registry:   registryHost,
+		Repository: "testapp",
+		client:     &http.Client{Timeout: 5 * time.Second},
+		logger:     logger,
+	}
+
+	ctx := context.Background()
+	_, err := oci.listTags(ctx)
+
+	if err == nil {
+		t.Fatal("Expected error for infinite pagination, got nil")
+	}
+	if !strings.Contains(err.Error(), "exceeded maximum pagination pages") {
+		t.Errorf("Expected pagination limit error, got: %v", err)
+	}
+}
+
 func TestOCI_listTags_WithPagination(t *testing.T) {
 	server := mockRegistryServerWithPagination(t)
 	defer server.Close()
@@ -652,6 +707,72 @@ func TestOCI_listTags_WithPagination(t *testing.T) {
 		if i < len(expectedTags) && tag != expectedTags[i] {
 			t.Errorf("Expected tag %s at index %d, got %s", expectedTags[i], i, tag)
 		}
+	}
+}
+
+func TestValidateRealmURL_PrivateIP(t *testing.T) {
+	tests := []struct {
+		name        string
+		rawURL      string
+		expectError bool
+	}{
+		{
+			name:        "loopback address",
+			rawURL:      "http://127.0.0.1/token",
+			expectError: true,
+		},
+		{
+			name:        "localhost",
+			rawURL:      "http://localhost/token",
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			u, err := url.Parse(tt.rawURL)
+			if err != nil {
+				t.Fatalf("Failed to parse URL: %v", err)
+			}
+
+			err = validateRealmURL(u)
+			if tt.expectError && err == nil {
+				t.Error("Expected error for private IP, got nil")
+			}
+			if !tt.expectError && err != nil {
+				t.Errorf("Expected no error, got: %v", err)
+			}
+		})
+	}
+}
+
+func TestIsPrivateIP(t *testing.T) {
+	tests := []struct {
+		name     string
+		ip       string
+		expected bool
+	}{
+		{"loopback", "127.0.0.1", true},
+		{"private 10.x", "10.0.0.1", true},
+		{"private 172.16.x", "172.16.0.1", true},
+		{"private 192.168.x", "192.168.1.1", true},
+		{"link-local", "169.254.1.1", true},
+		{"public IP", "8.8.8.8", false},
+		{"public IP 2", "1.1.1.1", false},
+		{"IPv6 loopback", "::1", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ip := net.ParseIP(tt.ip)
+			if ip == nil {
+				t.Fatalf("Failed to parse IP: %s", tt.ip)
+			}
+			result := isPrivateIP(ip)
+			if result != tt.expected {
+				t.Errorf("isPrivateIP(%s) = %v, expected %v", tt.ip, result, tt.expected)
+			}
+		})
 	}
 }
 
