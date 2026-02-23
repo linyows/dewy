@@ -179,6 +179,67 @@ func TestPodmanHasUserOption(t *testing.T) {
 	}
 }
 
+func TestPodmanValidateExtraArgs(t *testing.T) {
+	tests := []struct {
+		name        string
+		args        []string
+		expectError bool
+	}{
+		{
+			name:        "valid args",
+			args:        []string{"-e", "FOO=bar", "-v", "/host:/container"},
+			expectError: false,
+		},
+		{
+			name:        "forbidden --privileged",
+			args:        []string{"--privileged", "-e", "FOO=bar"},
+			expectError: true,
+		},
+		{
+			name:        "forbidden --pid",
+			args:        []string{"--pid=host"},
+			expectError: true,
+		},
+		{
+			name:        "forbidden --cap-add",
+			args:        []string{"--cap-add=SYS_ADMIN"},
+			expectError: true,
+		},
+		{
+			name:        "forbidden --security-opt",
+			args:        []string{"--security-opt=seccomp=unconfined"},
+			expectError: true,
+		},
+		{
+			name:        "forbidden --device",
+			args:        []string{"--device=/dev/sda"},
+			expectError: true,
+		},
+		{
+			name:        "forbidden --userns",
+			args:        []string{"--userns=host"},
+			expectError: true,
+		},
+		{
+			name:        "forbidden --cgroupns",
+			args:        []string{"--cgroupns=host"},
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateExtraArgs(tt.args)
+			if tt.expectError && err == nil {
+				t.Errorf("validateExtraArgs(%v) expected error, got nil", tt.args)
+			}
+			if !tt.expectError && err != nil {
+				t.Errorf("validateExtraArgs(%v) expected no error, got %v", tt.args, err)
+			}
+		})
+	}
+}
+
 // Note: Tests for actual Podman operations (Pull, Run, Stop, etc.) are not
 // included in unit tests because they require a running Podman daemon.
 // These will be tested in integration tests instead.

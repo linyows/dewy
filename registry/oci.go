@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -13,6 +14,14 @@ import (
 	"time"
 
 	"github.com/linyows/dewy/logging"
+)
+
+const (
+	// maxPaginationPages is the maximum number of pages to follow during tag listing.
+	maxPaginationPages = 100
+
+	// maxResponseSize is the maximum allowed size for registry API responses (10MB).
+	maxResponseSize int64 = 10 * 1024 * 1024
 )
 
 // OCI implements Registry interface for OCI/Docker registries.
@@ -126,6 +135,15 @@ func (o *OCI) Report(ctx context.Context, req *ReportRequest) error {
 	return nil
 }
 
+// registryHostname returns the hostname part of the registry (without port).
+func (o *OCI) registryHostname() string {
+	host := o.Registry
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		return h
+	}
+	return host
+}
+
 // getScheme returns the appropriate URL scheme for the registry.
 // For local development (localhost, 127.0.0.1), use http.
 // For all other registries, use https.
@@ -166,6 +184,14 @@ func (o *OCI) getBearerToken(ctx context.Context, authHeader string) error {
 		return fmt.Errorf("invalid realm URL: %w", err)
 	}
 
+	// SSRF protection: block private/internal IP addresses
+	// Allow realm URL if its host matches the registry host (for localhost registries)
+	if tokenURL.Hostname() != o.registryHostname() {
+		if err := validateRealmURL(tokenURL); err != nil {
+			return fmt.Errorf("realm URL blocked: %w", err)
+		}
+	}
+
 	q := tokenURL.Query()
 	if service, ok := params["service"]; ok {
 		q.Set("service", service)
@@ -193,7 +219,7 @@ func (o *OCI) getBearerToken(ctx context.Context, authHeader string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, maxResponseSize))
 		return fmt.Errorf("failed to get token: status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -227,7 +253,10 @@ func (o *OCI) listTags(ctx context.Context) ([]string, error) {
 	var allTags []string
 	nextURL := baseURL
 
-	for nextURL != "" {
+	for page := 0; nextURL != ""; page++ {
+		if page >= maxPaginationPages {
+			return nil, fmt.Errorf("exceeded maximum pagination pages (%d)", maxPaginationPages)
+		}
 		tags, next, err := o.fetchTagsPage(ctx, nextURL)
 		if err != nil {
 			return nil, err
@@ -286,7 +315,7 @@ func (o *OCI) fetchTagsPage(ctx context.Context, apiURL string) ([]string, strin
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, maxResponseSize))
 		return nil, "", fmt.Errorf("failed to list tags: status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -439,7 +468,7 @@ func (o *OCI) getImageDigest(ctx context.Context, tag string) (string, *time.Tim
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, maxResponseSize))
 		return "", nil, fmt.Errorf("failed to get manifest: status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -460,7 +489,7 @@ func (o *OCI) getImageDigest(ctx context.Context, tag string) (string, *time.Tim
 		} `json:"config"`
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseSize))
 	if err == nil {
 		// Ignore unmarshal error as manifest parsing is optional
 		_ = json.Unmarshal(body, &manifest)
@@ -471,4 +500,49 @@ func (o *OCI) getImageDigest(ctx context.Context, tag string) (string, *time.Tim
 	now := time.Now()
 
 	return digest, &now, nil
+}
+
+// privateIPNets defines private/internal IP address ranges that should be blocked for SSRF protection.
+var privateIPNets = func() []*net.IPNet {
+	cidrs := []string{
+		"127.0.0.0/8",    // Loopback
+		"10.0.0.0/8",     // RFC 1918
+		"172.16.0.0/12",  // RFC 1918
+		"192.168.0.0/16", // RFC 1918
+		"169.254.0.0/16", // Link-local
+		"::1/128",        // IPv6 loopback
+		"fc00::/7",       // IPv6 unique local
+		"fe80::/10",      // IPv6 link-local
+	}
+	nets := make([]*net.IPNet, 0, len(cidrs))
+	for _, cidr := range cidrs {
+		_, ipNet, _ := net.ParseCIDR(cidr)
+		nets = append(nets, ipNet)
+	}
+	return nets
+}()
+
+// isPrivateIP checks if an IP address is in a private/internal range.
+func isPrivateIP(ip net.IP) bool {
+	for _, ipNet := range privateIPNets {
+		if ipNet.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// validateRealmURL validates that a realm URL does not point to a private/internal address.
+func validateRealmURL(u *url.URL) error {
+	host := u.Hostname()
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return fmt.Errorf("failed to resolve realm host %q: %w", host, err)
+	}
+	for _, ip := range ips {
+		if isPrivateIP(ip) {
+			return fmt.Errorf("realm URL %q resolves to private IP address %s", u.String(), ip.String())
+		}
+	}
+	return nil
 }

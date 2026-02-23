@@ -45,6 +45,12 @@ const (
 	// For example, if you are using a file for the cache store, running `cat current` will show `v1.2.3--app_linux_amd64.tar.gz`, which is a combination of the tag and artifact.
 	// dewy uses this value as a key (**cachekeyName**) to manage the artifacts in the cache store.
 	currentkeyName = "current"
+
+	// MaxArtifactSize is the maximum allowed artifact download size (512MB).
+	MaxArtifactSize int64 = 512 * 1024 * 1024
+
+	// defaultProxyIdleTimeout is the default idle timeout for TCP proxy connections.
+	defaultProxyIdleTimeout = 5 * time.Minute
 )
 
 // Dewy struct.
@@ -76,6 +82,7 @@ type tcpProxy struct {
 	mu           sync.RWMutex
 	done         chan struct{}
 	logger       *logging.Logger
+	idleTimeout  time.Duration // 0 means no timeout
 }
 
 // tcpBackend represents a backend server.
@@ -96,6 +103,9 @@ func New(c Config, log *logging.Logger) (*Dewy, error) {
 	}
 
 	su := strings.SplitN(c.Registry, "://", 2)
+	if len(su) != 2 || su[0] == "" || su[1] == "" {
+		return nil, fmt.Errorf("invalid registry format (expected scheme://host/path): %s", c.Registry)
+	}
 	u, err := url.Parse(su[1])
 	if err != nil {
 		return nil, err
@@ -281,7 +291,10 @@ func (d *Dewy) Run() error {
 		if string(currentkeyValue) == cachekeyName && key == cachekeyName {
 			d.logger.Debug("Deploy skipped")
 			if d.config.Command == SERVER {
-				if d.isServerRunning {
+				d.RLock()
+				running := d.isServerRunning
+				d.RUnlock()
+				if running {
 					return nil
 				}
 				// when the server fails to start (SERVER mode only)
@@ -311,7 +324,7 @@ func (d *Dewy) Run() error {
 				return fmt.Errorf("failed artifact.New: %w", err)
 			}
 		}
-		err := d.artifact.Download(ctx, buf)
+		err := d.artifact.Download(ctx, &limitedWriter{W: buf, N: MaxArtifactSize})
 		d.artifact = nil
 		if err != nil {
 			return fmt.Errorf("failed artifact.Download: %w", err)
@@ -340,7 +353,10 @@ func (d *Dewy) Run() error {
 	d.Unlock()
 
 	if d.config.Command == SERVER {
-		if d.isServerRunning {
+		d.RLock()
+		running := d.isServerRunning
+		d.RUnlock()
+		if running {
 			err = d.restartServer()
 			if err == nil {
 				msg := fmt.Sprintf("Server restarted for `%s`", d.cVer)
@@ -422,14 +438,19 @@ func (d *Dewy) deploy(key string) (err error) {
 	d.logger.Info("Extract archive", slog.String("path", linkFrom))
 
 	linkTo := filepath.Join(d.root, symlinkDir)
-	if _, err := os.Lstat(linkTo); err == nil {
-		os.Remove(linkTo)
+
+	// Atomic symlink replacement: create temp symlink, then rename
+	tmpLink := linkTo + ".tmp"
+	os.Remove(tmpLink) // Ensure no stale temp link exists
+	if err := os.Symlink(linkFrom, tmpLink); err != nil {
+		return err
 	}
 
 	d.logger.Info("Create symlink",
 		slog.String("from", linkFrom),
 		slog.String("to", linkTo))
-	if err := os.Symlink(linkFrom, linkTo); err != nil {
+	if err := os.Rename(tmpLink, linkTo); err != nil {
+		os.Remove(tmpLink) // Cleanup on failure
 		return err
 	}
 
@@ -1130,7 +1151,7 @@ func (d *Dewy) startProxy(ctx context.Context) error {
 
 	// Start a TCP proxy for each port mapping
 	for _, mapping := range d.config.Container.PortMappings {
-		proxy, err := newTCPProxy(mapping.ProxyPort, d.logger)
+		proxy, err := newTCPProxy(mapping.ProxyPort, d.logger, d.config.Container.ProxyIdleTimeout)
 		if err != nil {
 			// Clean up already started proxies
 			if stopErr := d.stopProxy(ctx); stopErr != nil {
@@ -1154,7 +1175,7 @@ func (d *Dewy) startProxy(ctx context.Context) error {
 }
 
 // newTCPProxy creates and starts a new TCP proxy on the specified port.
-func newTCPProxy(port int, logger *logging.Logger) (*tcpProxy, error) {
+func newTCPProxy(port int, logger *logging.Logger, idleTimeout time.Duration) (*tcpProxy, error) {
 	addr := fmt.Sprintf(":%d", port)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -1162,11 +1183,12 @@ func newTCPProxy(port int, logger *logging.Logger) (*tcpProxy, error) {
 	}
 
 	proxy := &tcpProxy{
-		proxyPort: port,
-		listener:  listener,
-		backends:  make([]tcpBackend, 0),
-		done:      make(chan struct{}),
-		logger:    logger,
+		proxyPort:   port,
+		listener:    listener,
+		backends:    make([]tcpBackend, 0),
+		done:        make(chan struct{}),
+		logger:      logger,
+		idleTimeout: idleTimeout,
 	}
 
 	go proxy.acceptLoop()
@@ -1229,16 +1251,30 @@ func (p *tcpProxy) handleConnection(clientConn net.Conn) {
 		slog.String("backend", backendAddr),
 		slog.String("client", clientConn.RemoteAddr().String()))
 
+	// Wrap connections with idle timeout (skip if timeout is 0)
+	var src io.Reader = clientConn
+	var dst io.Writer = backendConn
+	var srcBack io.Reader = backendConn
+	var dstBack io.Writer = clientConn
+	if p.idleTimeout > 0 {
+		tcClient := &timeoutConn{Conn: clientConn, idleTimeout: p.idleTimeout}
+		tcBackend := &timeoutConn{Conn: backendConn, idleTimeout: p.idleTimeout}
+		src = tcClient
+		dst = tcBackend
+		srcBack = tcBackend
+		dstBack = tcClient
+	}
+
 	// Bidirectional copy
 	done := make(chan struct{}, 2)
 
 	go func() {
-		_, _ = io.Copy(backendConn, clientConn)
+		_, _ = io.Copy(dst, src)
 		done <- struct{}{}
 	}()
 
 	go func() {
-		_, _ = io.Copy(clientConn, backendConn)
+		_, _ = io.Copy(dstBack, srcBack)
 		done <- struct{}{}
 	}()
 
@@ -1676,4 +1712,41 @@ func (d *Dewy) resolvePortMappings(ctx context.Context, dockerRuntime *container
 	}
 
 	return resolvedMappings, nil
+}
+
+// limitedWriter wraps an io.Writer and limits the total bytes written.
+// Returns an error when the limit is exceeded.
+type limitedWriter struct {
+	W       io.Writer
+	N       int64
+	written int64
+}
+
+func (lw *limitedWriter) Write(p []byte) (int, error) {
+	if lw.written+int64(len(p)) > lw.N {
+		return 0, fmt.Errorf("write limit exceeded: maximum %d bytes", lw.N)
+	}
+	n, err := lw.W.Write(p)
+	lw.written += int64(n)
+	return n, err
+}
+
+// timeoutConn wraps net.Conn and resets the deadline on every read/write.
+type timeoutConn struct {
+	net.Conn
+	idleTimeout time.Duration
+}
+
+func (c *timeoutConn) Read(b []byte) (int, error) {
+	if err := c.SetDeadline(time.Now().Add(c.idleTimeout)); err != nil {
+		return 0, err
+	}
+	return c.Conn.Read(b)
+}
+
+func (c *timeoutConn) Write(b []byte) (int, error) {
+	if err := c.SetDeadline(time.Now().Add(c.idleTimeout)); err != nil {
+		return 0, err
+	}
+	return c.Conn.Write(b)
 }

@@ -22,7 +22,7 @@ type Docker struct {
 	loggedInRegistries map[string]bool // Track registries we've logged into
 }
 
-// Forbidden options that conflict with Dewy management
+// Forbidden options that conflict with Dewy management or pose security risks
 var forbiddenOptions = []string{
 	"-d", "--detach",
 	"-it",
@@ -30,6 +30,13 @@ var forbiddenOptions = []string{
 	"-t", "--tty",
 	"-l", "--label",
 	"-p", "--publish",
+	"--privileged",
+	"--pid",
+	"--cap-add",
+	"--security-opt",
+	"--device",
+	"--userns",
+	"--cgroupns",
 }
 
 // NewDocker creates a new Docker runtime.
