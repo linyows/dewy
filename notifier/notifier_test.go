@@ -179,6 +179,16 @@ func TestParseQuietFlag(t *testing.T) {
 			expected: false,
 		},
 		{
+			name:     "quiet=T",
+			rawPart:  "/general?quiet=T",
+			expected: true,
+		},
+		{
+			name:     "quiet=TRUE",
+			rawPart:  "/general?quiet=TRUE",
+			expected: true,
+		},
+		{
 			name:     "quiet=0",
 			rawPart:  "/general?quiet=0",
 			expected: false,

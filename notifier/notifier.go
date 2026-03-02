@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"os/user"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -190,7 +191,8 @@ func parseQuietFlag(rawPart string) bool {
 		return false
 	}
 	v := u.Query().Get("quiet")
-	return v == "true" || v == "1"
+	b, _ := strconv.ParseBool(v)
+	return b
 }
 
 func hostname() string {
