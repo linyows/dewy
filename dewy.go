@@ -364,7 +364,7 @@ func (d *Dewy) Run() error {
 					msg += " without port"
 				}
 				d.logger.Info("Restart notification", slog.String("message", msg))
-				d.notifier.Send(ctx, msg)
+				d.notifier.SendImportant(ctx, msg)
 			}
 		} else {
 			err = d.startServer()
@@ -374,7 +374,7 @@ func (d *Dewy) Run() error {
 					msg += " without port"
 				}
 				d.logger.Info("Start notification", slog.String("message", msg))
-				d.notifier.Send(ctx, msg)
+				d.notifier.SendImportant(ctx, msg)
 			}
 		}
 		if err != nil {
@@ -799,7 +799,7 @@ func (d *Dewy) RunContainer() error {
 		slog.String("version", d.cVer),
 		slog.Int("replicas", deployedCount),
 		slog.Int("total", totalReplicas))
-	d.notifier.Send(ctx, msg)
+	d.notifier.SendImportant(ctx, msg)
 
 	// Clean up old images
 	d.logger.Info("Keep images", slog.Int("count", keepReleases))

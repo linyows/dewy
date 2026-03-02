@@ -141,6 +141,14 @@ func (n *mockNotify) Send(ctx context.Context, msg string) {
 	}
 }
 
+func (n *mockNotify) SendImportant(ctx context.Context, msg string) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.errorCount == 0 {
+		n.messages = append(n.messages, msg)
+	}
+}
+
 func (n *mockNotify) SendError(ctx context.Context, err error) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
