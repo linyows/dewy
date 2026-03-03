@@ -274,9 +274,6 @@ Notifier
 
 The Notifier interface sends deployment status updates. Slack and Mail (SMTP) are available as notification methods.
 
-> [!WARNING]
-> The `--notify` argument is deprecated and will be removed in a future version. Please use `--notifier` instead.
-
 > [!IMPORTANT]
 > **Error Notification Limiting**: Dewy automatically limits error notifications to prevent spam during persistent failures. After 3 error notifications, further notifications are suppressed until operations return to normal, at which point notification limiting is automatically reset.
 

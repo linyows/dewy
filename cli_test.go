@@ -93,98 +93,28 @@ func TestRunCLI(t *testing.T) {
 	}
 }
 
-func TestCLI_NotifierBackwardCompatibility(t *testing.T) {
-	tests := []struct {
-		name                string
-		args                []string
-		expectDeprecatedMsg bool
-		expectExit          int
-	}{
-		{
-			name:                "notifier argument (new)",
-			args:                []string{"--notifier", "slack://test", "--registry", "ghr://test/test", "assets"},
-			expectDeprecatedMsg: false,
-			expectExit:          ExitOK,
-		},
-		{
-			name:                "notify argument (deprecated)",
-			args:                []string{"--notify", "slack://test", "--registry", "ghr://test/test", "assets"},
-			expectDeprecatedMsg: true,
-			expectExit:          ExitOK,
-		},
-		{
-			name:                "both arguments (notifier takes precedence)",
-			args:                []string{"--notifier", "slack://new", "--notify", "slack://old", "--registry", "ghr://test/test", "assets"},
-			expectDeprecatedMsg: false,
-			expectExit:          ExitOK,
+func TestCLI_NotifierArgument(t *testing.T) {
+	var outBuf, errBuf bytes.Buffer
+	env := Env{
+		Out:  &outBuf,
+		Err:  &errBuf,
+		Args: []string{"--notifier", "slack://test", "--registry", "ghr://test/test", "assets"},
+		Info: &Info{
+			Version: "test-version",
+			Commit:  "test-commit",
+			Date:    "test-date",
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var outBuf, errBuf bytes.Buffer
-			env := Env{
-				Out:  &outBuf,
-				Err:  &errBuf,
-				Args: tt.args,
-				Info: &Info{
-					Version: "test-version",
-					Commit:  "test-commit",
-					Date:    "test-date",
-				},
-			}
+	cli := &cli{env: env, Interval: -1}
+	cli.Notifier = "slack://test"
+	cli.Registry = "ghr://test/test"
 
-			// We can't easily test the full CLI execution due to the Start() method
-			// which would run indefinitely, so we'll test the argument parsing logic
-			cli := &cli{env: env, Interval: -1}
+	conf := DefaultConfig()
+	conf.Notifier = cli.Notifier
 
-			// Mock the parsing by setting the fields directly as the parser would
-			for i, arg := range tt.args {
-				switch arg {
-				case "--notifier":
-					if i+1 < len(tt.args) {
-						cli.Notifier = tt.args[i+1]
-					}
-				case "--notify":
-					if i+1 < len(tt.args) {
-						cli.Notify = tt.args[i+1]
-					}
-				case "--registry":
-					if i+1 < len(tt.args) {
-						cli.Registry = tt.args[i+1]
-					}
-				}
-			}
-
-			// Test the configuration assignment logic
-			conf := DefaultConfig()
-			if cli.Notifier != "" {
-				conf.Notifier = cli.Notifier
-			} else if cli.Notify != "" {
-				conf.Notifier = cli.Notify
-				// This would print the deprecation warning in real execution
-			}
-
-			errOutput := errBuf.String()
-
-			// We can't easily test the deprecation message in this unit test
-			// since it's printed during the actual CLI run, but we can verify
-			// the configuration assignment logic
-			if tt.name == "notifier argument (new)" && conf.Notifier != "slack://test" {
-				t.Errorf("Expected notifier to be set to slack://test, got %s", conf.Notifier)
-			}
-			if tt.name == "notify argument (deprecated)" && conf.Notifier != "slack://test" {
-				t.Errorf("Expected notifier to be set to slack://test, got %s", conf.Notifier)
-			}
-			if tt.name == "both arguments (notifier takes precedence)" && conf.Notifier != "slack://new" {
-				t.Errorf("Expected notifier to be set to slack://new (precedence), got %s", conf.Notifier)
-			}
-
-			// Verify no error output for successful argument parsing
-			if errOutput != "" && !tt.expectDeprecatedMsg {
-				t.Errorf("Unexpected error output: %s", errOutput)
-			}
-		})
+	if conf.Notifier != "slack://test" {
+		t.Errorf("Expected notifier to be set to slack://test, got %s", conf.Notifier)
 	}
 }
 
