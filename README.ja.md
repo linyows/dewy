@@ -287,6 +287,14 @@ Notifier
 > [!IMPORTANT]
 > **エラー通知制限**: Dewyは継続的な障害時のスパム防止のため、エラー通知を自動的に制限します。3回のエラー通知後、正常に復旧するまで通知が抑制され、復旧時に通知制限は自動的にリセットされます。
 
+### Quiet Mode
+
+通知URLに `quiet=true` を追加すると、冗長な通知（開始、ダウンロード、フック成功）を抑制し、重要な通知（デプロイ成功、エラー、フック失敗）のみ送信します。
+
+```sh
+$ dewy --notifier "slack://general?title=myapp&quiet=true" ...
+```
+
 ### Slack
 
 Slackを通知に使う場合は以下の設定をします。オプションには、通知に付加する `title` と そのリンクである `url` が設定できます。リポジトリ名やそのURLを設定すると良いでしょう。
@@ -295,7 +303,7 @@ Slackを通知に使う場合は以下の設定をします。オプションに
 
 ```sh
 # 構造
-slack://<channel-name>?<options: title, url>
+slack://<channel-name>?<options: title, url, quiet>
 
 # 例
 $ export SLACK_TOKEN=****.....
@@ -308,8 +316,8 @@ Mailを通知に使う場合は以下の設定をします。SMTP設定はURLパ
 
 ```sh
 # 構造
-mail://<smtp-host>:<port>/<recipient-mail>?<options: username, password, from, subject, tls>
-smtp://<smtp-host>:<port>/<recipient-mail>?<options: username, password, from, subject, tls>
+mail://<smtp-host>:<port>/<recipient-mail>?<options: username, password, from, subject, tls, quiet>
+smtp://<smtp-host>:<port>/<recipient-mail>?<options: username, password, from, subject, tls, quiet>
 
 # URLパラメータを使用する例
 $ dewy --notifier mail://smtp.gmail.com:587/recipient@example.com?username=sender@gmail.com&password=app-password&from=sender@gmail.com&subject=Dewy+Deployment ...
