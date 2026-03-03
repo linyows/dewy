@@ -105,6 +105,22 @@ func TestNewMail(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:   "valid URL with quiet=true",
+			schema: "smtp.gmail.com:587/recipient@example.com?username=sender@gmail.com&password=secret&from=sender@gmail.com&quiet=true",
+			want: &Mail{
+				Host:     "smtp.gmail.com",
+				Port:     587,
+				Username: "sender@gmail.com",
+				Password: "secret",
+				From:     "sender@gmail.com",
+				To:       "recipient@example.com",
+				Subject:  "Dewy Notification",
+				TLS:      true,
+				Quiet:    true,
+			},
+			wantErr: false,
+		},
+		{
 			name:    "missing host",
 			schema:  ":587/recipient@example.com?username=user&password=pass&from=from@example.com",
 			wantErr: true,
@@ -203,6 +219,9 @@ func TestNewMail(t *testing.T) {
 			}
 			if got.TLS != tt.want.TLS {
 				t.Errorf("NewMail() TLS = %v, want %v", got.TLS, tt.want.TLS)
+			}
+			if got.Quiet != tt.want.Quiet {
+				t.Errorf("NewMail() Quiet = %v, want %v", got.Quiet, tt.want.Quiet)
 			}
 		})
 	}

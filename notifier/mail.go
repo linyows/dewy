@@ -28,6 +28,7 @@ type Mail struct {
 	To       string     `schema:"to"`
 	Subject  string     `schema:"subject"`
 	TLS      bool       `schema:"tls"`
+	Quiet    bool       `schema:"quiet"`
 	dialer   MailDialer // for testing
 	logger   *slog.Logger
 }

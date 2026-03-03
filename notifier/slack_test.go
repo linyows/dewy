@@ -83,6 +83,20 @@ func TestNewSlack(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:   "valid URL with quiet=true",
+			schema: "/general?title=Test+Project&quiet=true",
+			envVars: map[string]string{
+				"SLACK_TOKEN": "xoxb-test-token",
+			},
+			want: &Slack{
+				Channel: "/general",
+				Title:   "Test Project",
+				Quiet:   true,
+				token:   "xoxb-test-token",
+			},
+			wantErr: false,
+		},
+		{
 			name:   "missing slack token",
 			schema: "/general",
 			envVars: map[string]string{
@@ -141,6 +155,9 @@ func TestNewSlack(t *testing.T) {
 			}
 			if got.token != tt.want.token {
 				t.Errorf("NewSlack() token = %v, want %v", got.token, tt.want.token)
+			}
+			if got.Quiet != tt.want.Quiet {
+				t.Errorf("NewSlack() Quiet = %v, want %v", got.Quiet, tt.want.Quiet)
 			}
 		})
 	}

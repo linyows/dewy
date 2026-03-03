@@ -274,11 +274,16 @@ Notifier
 
 The Notifier interface sends deployment status updates. Slack and Mail (SMTP) are available as notification methods.
 
-> [!WARNING]
-> The `--notify` argument is deprecated and will be removed in a future version. Please use `--notifier` instead.
-
 > [!IMPORTANT]
 > **Error Notification Limiting**: Dewy automatically limits error notifications to prevent spam during persistent failures. After 3 error notifications, further notifications are suppressed until operations return to normal, at which point notification limiting is automatically reset.
+
+### Quiet Mode
+
+Adding `quiet=true` to the notifier URL suppresses verbose notifications (startup, download, successful hooks) while still delivering important ones (deploy success, errors, hook failures).
+
+```sh
+$ dewy --notifier "slack://general?title=myapp&quiet=true" ...
+```
 
 ### Slack
 
@@ -286,7 +291,7 @@ To use Slack for notifications, configure as follows. Options include a title an
 
 ```sh
 # Format
-# slack://<channel-name>?<options: title, url>
+# slack://<channel-name>?<options: title, url, quiet>
 
 # Example
 $ export SLACK_TOKEN=****.....
@@ -299,8 +304,8 @@ To use mail for notifications, configure as follows. You can specify SMTP settin
 
 ```sh
 # Format
-# mail://<smtp-host>:<port>/<recipient-mail>?<options: username, password, from, subject, tls>
-# smtp://<smtp-host>:<port>/<recipient-mail>?<options: username, password, from, subject, tls>
+# mail://<smtp-host>:<port>/<recipient-mail>?<options: username, password, from, subject, tls, quiet>
+# smtp://<smtp-host>:<port>/<recipient-mail>?<options: username, password, from, subject, tls, quiet>
 
 # Example with URL parameters
 $ dewy --notifier mail://smtp.gmail.com:587/recipient@example.com?username=sender@gmail.com&password=app-password&from=sender@gmail.com&subject=Dewy+Deployment ...

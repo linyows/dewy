@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"os/user"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -35,6 +37,7 @@ type AttachmentSender interface {
 type Notifier interface {
 	Sender
 	AttachmentSender
+	SendImportant(ctx context.Context, message string)
 	SendError(ctx context.Context, err error)
 	ResetErrorCount()
 }
@@ -48,12 +51,23 @@ const (
 type ErrorLimitingSender struct {
 	underlying Sender
 	errorCount int
+	quiet      bool
 	mu         sync.RWMutex
 	logger     *slog.Logger
 }
 
-// Send sends a message only if error count is 0.
+// Send sends a message only if error count is 0 and quiet mode is off.
 func (e *ErrorLimitingSender) Send(ctx context.Context, message string) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	if e.errorCount == 0 && !e.quiet {
+		e.underlying.Send(ctx, message)
+	}
+}
+
+// SendImportant sends a message regardless of quiet mode (but still respects error count).
+func (e *ErrorLimitingSender) SendImportant(ctx context.Context, message string) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
@@ -97,11 +111,15 @@ func (e *ErrorLimitingSender) ResetErrorCount() {
 }
 
 // SendHookResult sends hook result notification.
+// In quiet mode, only failed hook results are sent.
 func (e *ErrorLimitingSender) SendHookResult(ctx context.Context, hookType string, result *HookResult) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
 	if e.errorCount == 0 {
+		if e.quiet && result.Success {
+			return
+		}
 		if attachmentSender, ok := e.underlying.(AttachmentSender); ok {
 			attachmentSender.SendHookResult(ctx, hookType, result)
 		} else {
@@ -153,11 +171,28 @@ func New(ctx context.Context, url string, logger *slog.Logger) (Notifier, error)
 		return nil, fmt.Errorf("unsupported notify: %s", url)
 	}
 
+	var quiet bool
+	if len(splitted) > 1 {
+		quiet = parseQuietFlag(splitted[1])
+	}
+
 	return &ErrorLimitingSender{
 		underlying: underlying,
 		errorCount: 0,
+		quiet:      quiet,
 		logger:     logger,
 	}, nil
+}
+
+// parseQuietFlag parses the quiet parameter from a URL query string.
+func parseQuietFlag(rawPart string) bool {
+	u, err := url.Parse(rawPart)
+	if err != nil {
+		return false
+	}
+	v := u.Query().Get("quiet")
+	b, _ := strconv.ParseBool(v)
+	return b
 }
 
 func hostname() string {

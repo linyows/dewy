@@ -27,6 +27,15 @@ Dewyは以下のタイミングで通知を送信します：
 - **フック実行**: Before/Afterフックの実行結果
 - **停止時**: Dewyサービスの停止
 
+## Quiet Mode
+
+通知URLに `quiet=true` を追加すると、冗長な通知（開始、ダウンロード、フック成功）を抑制し、重要な通知（デプロイ成功、エラー、フック失敗）のみ送信します。
+
+```bash
+dewy server --registry ghr://owner/repo \
+  --notifier "slack://deployments?title=MyApp&quiet=true"
+```
+
 ## Slack通知
 
 基本設定

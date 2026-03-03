@@ -39,7 +39,6 @@ type cli struct {
 	Interval         int      `long:"interval" arg:"seconds" short:"i" description:"Polling interval in seconds for checking registry updates (default: 10)"`
 	Ports            []string `long:"port" short:"p" description:"For server: TCP ports to listen on. For container: port mappings in format 'proxy' or 'proxy:container' (multiple flags supported)"`
 	Registry         string   `long:"registry" description:"Registry URL (e.g., ghr://owner/repo, s3://region/bucket/prefix, docker://registry/repo)"`
-	Notify           string   `long:"notify" description:"[DEPRECATED] Use --notifier instead"`
 	Notifier         string   `long:"notifier" description:"Notifier URL for deployment notifications (e.g., slack://channel, mail://smtp:port/recipient)"`
 	BeforeDeployHook string   `long:"before-deploy-hook" description:"Shell command to execute before deployment begins"`
 	AfterDeployHook  string   `long:"after-deploy-hook" description:"Shell command to execute after successful deployment"`
@@ -253,13 +252,7 @@ func (c *cli) run() int {
 		return ExitErr
 	}
 	conf.Registry = c.Registry
-	// Handle notifier argument with backward compatibility
-	if c.Notifier != "" {
-		conf.Notifier = c.Notifier
-	} else if c.Notify != "" {
-		fmt.Fprintf(c.env.Err, "⚠️ notify argument is deprecated and will be removed. Use notifier instead.\n")
-		conf.Notifier = c.Notify
-	}
+	conf.Notifier = c.Notifier
 	conf.BeforeDeployHook = c.BeforeDeployHook
 	conf.AfterDeployHook = c.AfterDeployHook
 	conf.AdminPort = c.AdminPort

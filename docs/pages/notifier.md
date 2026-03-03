@@ -27,6 +27,15 @@ Dewy sends notifications at the following times:
 - **Hook execution**: Before/After hook execution results
 - **Shutdown**: Dewy service shutdown
 
+## Quiet Mode
+
+Adding `quiet=true` to the notifier URL suppresses verbose notifications (startup, download, successful hooks) while still delivering important ones (deploy success, errors, hook failures).
+
+```bash
+dewy server --registry ghr://owner/repo \
+  --notifier "slack://deployments?title=MyApp&quiet=true"
+```
+
 ## Slack Notifications
 
 Basic configuration

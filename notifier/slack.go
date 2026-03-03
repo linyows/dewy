@@ -37,6 +37,7 @@ type Slack struct {
 	Channel  string `schema:"-"`
 	Title    string `schema:"title"`
 	TitleURL string `schema:"url"`
+	Quiet    bool   `schema:"quiet"`
 	token    string
 	sender   SlackSender // for testing
 	logger   *slog.Logger
