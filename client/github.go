@@ -16,6 +16,7 @@ import (
 // Authentication priority:
 //  1. GitHub App (if GITHUB_APP_ID is set)
 //  2. PAT (GH_TOKEN > GITHUB_TOKEN)
+//
 // The logger parameter is optional; if nil, logging is disabled.
 func NewGitHub(logger *slog.Logger) (*github.Client, error) {
 	// Get API URL for GitHub Enterprise Server support

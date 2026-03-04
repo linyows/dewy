@@ -12,7 +12,6 @@ import (
 
 // Test private key for testing purposes only (not a real key).
 // This is a PKCS#1 formatted RSA private key.
-//
 const testPrivateKey = `-----BEGIN RSA PRIVATE KEY-----
 MIIEowIBAAKCAQEAutT7C/747czD2B+69fSiIbzJ0Fg1k5kPU9QVhCHmZR8ufHjG
 umf6gJgKSRixUk79eQX8HAJbUFYfPU9XqoGHenuZCJkorUWKXPacKBLsaiYfZjGm
