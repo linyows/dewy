@@ -245,6 +245,61 @@ func TestCalVerCompare(t *testing.T) {
 	}
 }
 
+func TestCalVerComparePreReleaseOrdering(t *testing.T) {
+	// Verify CalVer correctly orders pre-release versions per SemVer v2 spec
+	tests := []struct {
+		name     string
+		a, b     *CalVer
+		expected int
+	}{
+		{
+			"beta.2 < beta.11 (numeric comparison)",
+			&CalVer{Segments: []int{2024, 1, 0}, PreRelease: "beta.2"},
+			&CalVer{Segments: []int{2024, 1, 0}, PreRelease: "beta.11"},
+			-1,
+		},
+		{
+			"alpha < alpha.1 (fewer fields = lower precedence)",
+			&CalVer{Segments: []int{2024, 1, 0}, PreRelease: "alpha"},
+			&CalVer{Segments: []int{2024, 1, 0}, PreRelease: "alpha.1"},
+			-1,
+		},
+		{
+			"numeric < alphanumeric",
+			&CalVer{Segments: []int{2024, 1, 0}, PreRelease: "1"},
+			&CalVer{Segments: []int{2024, 1, 0}, PreRelease: "alpha"},
+			-1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.a.Compare(tt.b)
+			if (tt.expected > 0 && got <= 0) || (tt.expected < 0 && got >= 0) || (tt.expected == 0 && got != 0) {
+				t.Errorf("Compare: expected sign %d, got %d", tt.expected, got)
+			}
+		})
+	}
+}
+
+func TestFindLatestCalVerPreReleaseOrdering(t *testing.T) {
+	versions := []string{
+		"2024.06.0-beta.2",
+		"2024.06.0-alpha",
+		"2024.06.0-rc.1",
+		"2024.06.0-beta.11",
+		"2024.06.0-alpha.1",
+		"2024.06.0-beta",
+	}
+	got, _, err := FindLatestCalVer(versions, "YYYY.0M.MICRO", true)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.String() != "2024.06.0-rc.1" {
+		t.Errorf("FindLatestCalVer() = %s, want 2024.06.0-rc.1", got.String())
+	}
+}
+
 func TestCalVerGetBuildMetadata(t *testing.T) {
 	cv := &CalVer{
 		Segments:      []int{2024, 1, 0},

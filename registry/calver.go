@@ -157,7 +157,7 @@ func (v *CalVer) Compare(other *CalVer) int {
 	if v.PreRelease != "" && other.PreRelease == "" {
 		return -1
 	}
-	return strings.Compare(v.PreRelease, other.PreRelease)
+	return comparePreRelease(v.PreRelease, other.PreRelease)
 }
 
 // String returns the original version string.
