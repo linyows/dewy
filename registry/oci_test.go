@@ -31,7 +31,7 @@ func mockRegistryServer(t *testing.T) *httptest.Server {
 
 	// GET /v2/<name>/tags/list - List tags
 	mux.HandleFunc("/v2/testapp/tags/list", func(w http.ResponseWriter, r *http.Request) {
-		response := map[string]interface{}{
+		response := map[string]any{
 			"name": "testapp",
 			"tags": []string{
 				"v1.0.0",
@@ -56,7 +56,7 @@ func mockRegistryServer(t *testing.T) *httptest.Server {
 		w.Header().Set("Content-Type", "application/vnd.docker.distribution.manifest.v2+json")
 		w.Header().Set("Docker-Content-Digest", "sha256:abc123def456")
 
-		manifest := map[string]interface{}{
+		manifest := map[string]any{
 			"schemaVersion": 2,
 			"mediaType":     "application/vnd.docker.distribution.manifest.v2+json",
 			"config": map[string]string{
@@ -345,7 +345,7 @@ func mockRegistryServerWithAuth(t *testing.T, validToken string) *httptest.Serve
 
 	// Token endpoint
 	mux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
-		response := map[string]interface{}{
+		response := map[string]any{
 			"token":      validToken,
 			"expires_in": 300,
 		}
@@ -373,7 +373,7 @@ func mockRegistryServerWithAuth(t *testing.T, validToken string) *httptest.Serve
 			return
 		}
 
-		response := map[string]interface{}{
+		response := map[string]any{
 			"name": "testapp",
 			"tags": []string{"v1.0.0", "v1.0.1", "v2.0.0"},
 		}
@@ -397,7 +397,7 @@ func mockRegistryServerWithAuth(t *testing.T, validToken string) *httptest.Serve
 		w.Header().Set("Content-Type", "application/vnd.docker.distribution.manifest.v2+json")
 		w.Header().Set("Docker-Content-Digest", "sha256:abc123def456")
 
-		manifest := map[string]interface{}{
+		manifest := map[string]any{
 			"schemaVersion": 2,
 			"mediaType":     "application/vnd.docker.distribution.manifest.v2+json",
 			"config": map[string]string{
@@ -588,26 +588,26 @@ func mockRegistryServerWithPagination(t *testing.T) *httptest.Server {
 	mux.HandleFunc("/v2/testapp/tags/list", func(w http.ResponseWriter, r *http.Request) {
 		last := r.URL.Query().Get("last")
 
-		var response map[string]interface{}
+		var response map[string]any
 
 		switch last {
 		case "":
 			// First page
-			response = map[string]interface{}{
+			response = map[string]any{
 				"name": "testapp",
 				"tags": []string{"v1.0.0", "v1.0.1", "v1.1.0"},
 			}
 			w.Header().Set("Link", `</v2/testapp/tags/list?n=3&last=v1.1.0>; rel="next"`)
 		case "v1.1.0":
 			// Second page
-			response = map[string]interface{}{
+			response = map[string]any{
 				"name": "testapp",
 				"tags": []string{"v2.0.0", "v2.0.1", "v2.1.0"},
 			}
 			w.Header().Set("Link", `</v2/testapp/tags/list?n=3&last=v2.1.0>; rel="next"`)
 		case "v2.1.0":
 			// Third page (last page, no Link header)
-			response = map[string]interface{}{
+			response = map[string]any{
 				"name": "testapp",
 				"tags": []string{"v3.0.0", "latest"},
 			}
@@ -640,7 +640,7 @@ func mockRegistryServerWithInfinitePagination(t *testing.T) *httptest.Server {
 		// Always return a next page link (infinite pagination)
 		last := r.URL.Query().Get("last")
 		nextLast := "v" + last + "1"
-		response := map[string]interface{}{
+		response := map[string]any{
 			"name": "testapp",
 			"tags": []string{"v1.0." + last},
 		}

@@ -132,10 +132,7 @@ func (f *CalVerFormat) Parse(version string) *CalVer {
 // Returns positive if v > other, negative if v < other, 0 if equal.
 // Pre-release versions are considered lower than stable versions (same as SemVer).
 func (v *CalVer) Compare(other *CalVer) int {
-	maxLen := len(v.Segments)
-	if len(other.Segments) > maxLen {
-		maxLen = len(other.Segments)
-	}
+	maxLen := max(len(other.Segments), len(v.Segments))
 
 	for i := 0; i < maxLen; i++ {
 		var a, b int

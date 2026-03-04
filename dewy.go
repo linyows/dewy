@@ -1011,7 +1011,7 @@ func (d *Dewy) createHealthCheckFunc(dockerRuntime *container.Docker, resolvedMa
 		client := &http.Client{Timeout: 5 * time.Second}
 
 		retries := 5
-		for i := 0; i < retries; i++ {
+		for i := range retries {
 			resp, err := client.Get(healthURL)
 			if err == nil {
 				resp.Body.Close()
@@ -1513,7 +1513,7 @@ func (d *Dewy) startAdminAPI(ctx context.Context) error {
 	var err error
 	maxAttempts := 10
 
-	for i := 0; i < maxAttempts; i++ {
+	for i := range maxAttempts {
 		currentPort := adminPort + i
 		addr := fmt.Sprintf("localhost:%d", currentPort)
 		listener, err = net.Listen("tcp", addr)
@@ -1614,7 +1614,7 @@ func (d *Dewy) handleGetContainers(w http.ResponseWriter, r *http.Request) {
 
 	// Return JSON response
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]any{
 		"containers": containers,
 	}); err != nil {
 		d.logger.Error("Failed to encode response",
@@ -1637,7 +1637,7 @@ func (d *Dewy) handleGetStatus(w http.ResponseWriter, r *http.Request) {
 
 	// Return JSON response
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]any{
 		"name":            d.config.Container.Name,
 		"command":         d.config.Command,
 		"current_version": d.cVer,

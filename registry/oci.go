@@ -163,8 +163,8 @@ func (o *OCI) getBearerToken(ctx context.Context, authHeader string) error {
 	}
 
 	params := make(map[string]string)
-	parts := strings.Split(strings.TrimPrefix(authHeader, "Bearer "), ",")
-	for _, part := range parts {
+	parts := strings.SplitSeq(strings.TrimPrefix(authHeader, "Bearer "), ",")
+	for part := range parts {
 		kv := strings.SplitN(strings.TrimSpace(part), "=", 2)
 		if len(kv) == 2 {
 			key := kv[0]
@@ -344,9 +344,9 @@ func (o *OCI) parseNextLink(linkHeader string) string {
 
 	// RFC 8288: Multiple links can be separated by commas
 	// Example: </page2>; rel="next", </page1>; rel="prev"
-	links := strings.Split(linkHeader, ",")
+	links := strings.SplitSeq(linkHeader, ",")
 
-	for _, link := range links {
+	for link := range links {
 		link = strings.TrimSpace(link)
 
 		// Parse each link: </v2/repo/tags/list?n=100&last=tag>; rel="next"
