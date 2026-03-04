@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -397,7 +398,7 @@ func TestResetErrorCount(t *testing.T) {
 
 	// Set error count to 5
 	testErr := fmt.Errorf("test error")
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		dewy.notifier.SendError(ctx, testErr)
 	}
 
@@ -767,13 +768,7 @@ func TestCacheSkipBehavior(t *testing.T) {
 	}
 
 	expectedCacheKey := "cache_skip_test--artifact.zip"
-	found := false
-	for _, key := range cacheList {
-		if key == expectedCacheKey {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(cacheList, expectedCacheKey)
 	if !found {
 		t.Errorf("Expected cache key '%s' not found in cache. Cache contents: %v", expectedCacheKey, cacheList)
 	}
@@ -882,13 +877,7 @@ func TestDifferentVersionsDownload(t *testing.T) {
 
 	expectedKeys := []string{"v1.0.0--artifact.zip", "v2.0.0--artifact.zip", "current"}
 	for _, expectedKey := range expectedKeys {
-		found := false
-		for _, key := range cacheList {
-			if key == expectedKey {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(cacheList, expectedKey)
 		if !found {
 			t.Errorf("Expected cache key '%s' not found in cache. Cache contents: %v", expectedKey, cacheList)
 		}
@@ -1196,7 +1185,7 @@ func TestTCPProxy(t *testing.T) {
 
 		// Get backends multiple times and check round-robin
 		seen := make(map[string]int)
-		for i := 0; i < 6; i++ {
+		for range 6 {
 			backend, ok := proxy.getNextBackend()
 			if !ok {
 				t.Fatal("Expected to get backend")

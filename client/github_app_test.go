@@ -361,7 +361,7 @@ func TestGitHubAppTransport_CreateJWT(t *testing.T) {
 	}
 
 	// Parse and verify the JWT claims
-	token, err := jwt.Parse(jwtToken, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.Parse(jwtToken, func(token *jwt.Token) (any, error) {
 		return &privateKey.PublicKey, nil
 	})
 	if err != nil {

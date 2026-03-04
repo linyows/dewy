@@ -85,7 +85,7 @@ func RunCLI(env Env) int {
 
 func (c *cli) buildHelp(names []string) []string {
 	var help []string
-	t := reflect.TypeOf(cli{})
+	t := reflect.TypeFor[cli]()
 
 	for _, name := range names {
 		f, ok := t.FieldByName(name)
@@ -410,9 +410,9 @@ func parsePortSpec(spec string) ([]string, error) {
 	}
 
 	var ports []string
-	parts := strings.Split(spec, ",")
+	parts := strings.SplitSeq(spec, ",")
 
-	for _, part := range parts {
+	for part := range parts {
 		part = strings.TrimSpace(part)
 		if part == "" {
 			continue
@@ -636,7 +636,7 @@ func (c *cli) runContainerList() int {
 	var err error
 	var successPort int
 
-	for i := 0; i < maxAttempts; i++ {
+	for i := range maxAttempts {
 		currentPort := adminPort + i
 		url := fmt.Sprintf("http://localhost:%d/api/containers", currentPort)
 

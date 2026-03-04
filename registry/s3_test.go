@@ -214,7 +214,7 @@ func TestCustomLogger(t *testing.T) {
 			awsLogger.Logf(tt.classification, "%s", tt.message)
 
 			output := buf.String()
-			var logEntry map[string]interface{}
+			var logEntry map[string]any
 			if err := json.Unmarshal([]byte(strings.TrimSpace(output)), &logEntry); err != nil {
 				t.Errorf("Failed to parse JSON log output: %v", err)
 			}
