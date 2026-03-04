@@ -120,6 +120,67 @@ func TestSemVerString(t *testing.T) {
 	}
 }
 
+func TestSemVerComparePreRelease(t *testing.T) {
+	// SemVer v2 spec item 11:
+	// 1.0.0-alpha < 1.0.0-alpha.1 < 1.0.0-alpha.beta < 1.0.0-beta
+	// < 1.0.0-beta.2 < 1.0.0-beta.11 < 1.0.0-rc.1 < 1.0.0
+	tests := []struct {
+		name     string
+		a        string
+		b        string
+		expected int // negative if a < b, 0 if equal, positive if a > b
+	}{
+		{"alpha < alpha.1", "1.0.0-alpha", "1.0.0-alpha.1", -1},
+		{"alpha.1 < alpha.beta", "1.0.0-alpha.1", "1.0.0-alpha.beta", -1},
+		{"alpha.beta < beta", "1.0.0-alpha.beta", "1.0.0-beta", -1},
+		{"beta < beta.2", "1.0.0-beta", "1.0.0-beta.2", -1},
+		{"beta.2 < beta.11", "1.0.0-beta.2", "1.0.0-beta.11", -1},
+		{"beta.11 < rc.1", "1.0.0-beta.11", "1.0.0-rc.1", -1},
+		{"rc.1 < stable", "1.0.0-rc.1", "1.0.0", -1},
+		{"numeric comparison: 2 < 11", "1.0.0-1.2", "1.0.0-1.11", -1},
+		{"numeric < alphanumeric", "1.0.0-1", "1.0.0-alpha", -1},
+		{"equal pre-release", "1.0.0-alpha", "1.0.0-alpha", 0},
+		{"equal stable", "1.0.0", "1.0.0", 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := ParseSemVer(tt.a)
+			b := ParseSemVer(tt.b)
+			if a == nil {
+				t.Fatalf("ParseSemVer(%s) returned nil", tt.a)
+			}
+			if b == nil {
+				t.Fatalf("ParseSemVer(%s) returned nil", tt.b)
+			}
+			got := a.Compare(b)
+			if (tt.expected < 0 && got >= 0) || (tt.expected > 0 && got <= 0) || (tt.expected == 0 && got != 0) {
+				t.Errorf("Compare(%s, %s) = %d, want sign %d", tt.a, tt.b, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestFindLatestSemVerPreReleaseOrdering(t *testing.T) {
+	// Verify that FindLatestSemVer correctly orders pre-release versions per SemVer v2
+	versions := []string{
+		"v1.0.0-beta.2",
+		"v1.0.0-alpha",
+		"v1.0.0-rc.1",
+		"v1.0.0-beta.11",
+		"v1.0.0-alpha.1",
+		"v1.0.0-alpha.beta",
+		"v1.0.0-beta",
+	}
+	got, _, err := FindLatestSemVer(versions, true)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.String() != "v1.0.0-rc.1" {
+		t.Errorf("FindLatestSemVer() = %s, want v1.0.0-rc.1", got.String())
+	}
+}
+
 func TestFindLatestSemVerWithSlot(t *testing.T) {
 	tests := []struct {
 		name            string

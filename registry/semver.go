@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
-	"strings"
 )
 
 var (
@@ -60,7 +59,7 @@ func (v *SemVer) Compare(other *SemVer) int {
 	if v.PreRelease != "" && other.PreRelease == "" {
 		return -1
 	}
-	return strings.Compare(v.PreRelease, other.PreRelease)
+	return comparePreRelease(v.PreRelease, other.PreRelease)
 }
 
 // GetBuildMetadata returns the build metadata of the SemVer version.
