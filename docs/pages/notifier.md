@@ -63,6 +63,7 @@ export SLACK_TOKEN=xoxb-xxxxxxxxxxxxxxxxxxxxx
    - Create app at [https://api.slack.com/apps](https://api.slack.com/apps)
 2. Required permissions (Scopes)
    - `chat:write`: Post messages
+   - `chat:write.customize`: Customize bot name and icon per message
 3. Invite the Slack App to the notification channel
    - You must invite the app to the channel via Slack GUI before sending notifications
 4. Get token
@@ -216,7 +217,7 @@ dewy server --registry "ghr://owner/repo?pre-release=true" \
      https://slack.com/api/auth.test
    ```
 2. **Check permissions**
-   - Is `chat:write` set in Bot Token Scopes?
+   - Are `chat:write` and `chat:write.customize` set in Bot Token Scopes?
    - Is the App installed in the workspace?
 3. **Check channel name**
    ```bash
