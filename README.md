@@ -287,7 +287,7 @@ $ dewy --notifier "slack://general?title=myapp&quiet=true" ...
 
 ### Slack
 
-To use Slack for notifications, configure as follows. Options include a title and url that can link to the repository name or URL. You'll need to [create a Slack App](https://api.slack.com/apps), generate an OAuth Token, and set the required environment variables. The app requires the `chat:write` permission. You must also invite the Slack App to the notification channel in advance.
+To use Slack for notifications, configure as follows. Options include a title and url that can link to the repository name or URL. You'll need to [create a Slack App](https://api.slack.com/apps), generate an OAuth Token, and set the required environment variables. The app requires the `chat:write` and `chat:write.customize` permissions. You must also invite the Slack App to the notification channel in advance.
 
 ```sh
 # Format
