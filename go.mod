@@ -25,7 +25,7 @@ require (
 	github.com/migueleliasweb/go-github-mock v1.5.0
 	golang.org/x/oauth2 v0.35.0
 	google.golang.org/api v0.269.0
-	google.golang.org/grpc v1.79.1
+	google.golang.org/grpc v1.79.2
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/mail.v2 v2.3.1
 )
