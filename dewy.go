@@ -31,7 +31,10 @@ import (
 	"github.com/linyows/dewy/logging"
 	"github.com/linyows/dewy/notifier"
 	"github.com/linyows/dewy/registry"
+	"github.com/linyows/dewy/telemetry"
 	starter "github.com/linyows/server-starter"
+	"go.opentelemetry.io/otel/attribute"
+	otelmetric "go.opentelemetry.io/otel/metric"
 )
 
 const (
@@ -70,6 +73,7 @@ type Dewy struct {
 	adminServer      *http.Server // Admin API server for CLI communication
 	containerRuntime container.Runtime
 	cVer             string // Current deployed version (tag)
+	telemetry        *telemetry.Provider
 	sync.RWMutex
 }
 
@@ -83,6 +87,7 @@ type tcpProxy struct {
 	done         chan struct{}
 	logger       *logging.Logger
 	idleTimeout  time.Duration // 0 means no timeout
+	metrics      *telemetry.Metrics
 }
 
 // tcpBackend represents a backend server.
@@ -127,6 +132,11 @@ func New(c Config, log *logging.Logger) (*Dewy, error) {
 		root:            wd,
 		logger:          log,
 	}, nil
+}
+
+// SetTelemetry sets the telemetry provider.
+func (d *Dewy) SetTelemetry(tp *telemetry.Provider) {
+	d.telemetry = tp
 }
 
 // Start dewy.
@@ -226,6 +236,15 @@ func (d *Dewy) waitSigs(ctx context.Context) {
 				if err := d.stopAdminAPI(ctx); err != nil {
 					d.logger.Error("Failed to stop admin API", slog.String("error", err.Error()))
 				}
+			}
+
+			// Shutdown telemetry
+			if d.telemetry != nil {
+				shutdownCtx, shutdownCancel := context.WithTimeout(ctx, 5*time.Second)
+				if err := d.telemetry.Shutdown(shutdownCtx); err != nil {
+					d.logger.Error("Failed to shutdown telemetry", slog.String("error", err.Error()))
+				}
+				shutdownCancel()
 			}
 
 			msg := fmt.Sprintf("Stop receiving by `%s` signal", sig)
@@ -754,12 +773,21 @@ func (d *Dewy) RunContainer() error {
 	}
 
 	// Perform Blue-Green deployment
+	deployStart := time.Now()
 	deployedCount, err := d.deployContainer(ctx, res)
 	if err != nil {
 		d.logger.Error("Container deployment failed",
 			slog.Int("deployed", deployedCount),
 			slog.String("error", err.Error()))
+		if d.telemetry != nil && d.telemetry.Enabled() {
+			d.telemetry.Metrics().DeploymentErrors.Add(ctx, 1)
+		}
 		return err
+	}
+	if d.telemetry != nil && d.telemetry.Enabled() {
+		m := d.telemetry.Metrics()
+		m.DeploymentsTotal.Add(ctx, 1)
+		m.DeploymentDuration.Record(ctx, time.Since(deployStart).Seconds())
 	}
 
 	// Save current version
@@ -1019,12 +1047,20 @@ func (d *Dewy) createHealthCheckFunc(dockerRuntime *container.Docker, resolvedMa
 					d.logger.Debug("Health check passed",
 						slog.String("url", healthURL),
 						slog.Int("status", resp.StatusCode))
+					if d.telemetry != nil && d.telemetry.Enabled() {
+						d.telemetry.Metrics().HealthChecksTotal.Add(ctx, 1)
+					}
 					return nil
 				}
 			}
 			if i < retries-1 {
 				time.Sleep(2 * time.Second)
 			}
+		}
+		if d.telemetry != nil && d.telemetry.Enabled() {
+			m := d.telemetry.Metrics()
+			m.HealthChecksTotal.Add(ctx, 1)
+			m.HealthCheckFailures.Add(ctx, 1)
 		}
 		return fmt.Errorf("health check failed after %d retries", retries)
 	}
@@ -1150,8 +1186,12 @@ func (d *Dewy) startProxy(ctx context.Context) error {
 	d.proxyMutex.Unlock()
 
 	// Start a TCP proxy for each port mapping
+	var metrics *telemetry.Metrics
+	if d.telemetry != nil && d.telemetry.Enabled() {
+		metrics = d.telemetry.Metrics()
+	}
 	for _, mapping := range d.config.Container.PortMappings {
-		proxy, err := newTCPProxy(mapping.ProxyPort, d.logger, d.config.Container.ProxyIdleTimeout)
+		proxy, err := newTCPProxy(mapping.ProxyPort, d.logger, d.config.Container.ProxyIdleTimeout, metrics)
 		if err != nil {
 			// Clean up already started proxies
 			if stopErr := d.stopProxy(ctx); stopErr != nil {
@@ -1175,7 +1215,7 @@ func (d *Dewy) startProxy(ctx context.Context) error {
 }
 
 // newTCPProxy creates and starts a new TCP proxy on the specified port.
-func newTCPProxy(port int, logger *logging.Logger, idleTimeout time.Duration) (*tcpProxy, error) {
+func newTCPProxy(port int, logger *logging.Logger, idleTimeout time.Duration, metrics *telemetry.Metrics) (*tcpProxy, error) {
 	addr := fmt.Sprintf(":%d", port)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -1189,6 +1229,7 @@ func newTCPProxy(port int, logger *logging.Logger, idleTimeout time.Duration) (*
 		done:        make(chan struct{}),
 		logger:      logger,
 		idleTimeout: idleTimeout,
+		metrics:     metrics,
 	}
 
 	go proxy.acceptLoop()
@@ -1226,22 +1267,48 @@ func (p *tcpProxy) acceptLoop() {
 func (p *tcpProxy) handleConnection(clientConn net.Conn) {
 	defer clientConn.Close()
 
+	ctx := context.Background()
+	portAttr := otelmetric.WithAttributes(attribute.Int("proxy_port", p.proxyPort))
+
 	// Get backend using round-robin
 	backend, ok := p.getNextBackend()
 	if !ok {
 		p.logger.Debug("No backend available",
 			slog.Int("proxy_port", p.proxyPort))
+		if p.metrics != nil {
+			p.metrics.ProxyErrorsTotal.Add(ctx, 1, portAttr)
+		}
 		return
 	}
 
-	// Connect to backend
+	// Record connection metrics
+	if p.metrics != nil {
+		p.metrics.ProxyConnectionsTotal.Add(ctx, 1, portAttr)
+		p.metrics.ProxyActiveConnections.Add(ctx, 1, portAttr)
+	}
+	connStart := time.Now()
+	defer func() {
+		if p.metrics != nil {
+			p.metrics.ProxyActiveConnections.Add(ctx, -1, portAttr)
+			p.metrics.ProxyConnectionDuration.Record(ctx, time.Since(connStart).Seconds(), portAttr)
+		}
+	}()
+
+	// Connect to backend with latency measurement
 	backendAddr := net.JoinHostPort(backend.host, strconv.Itoa(backend.port))
+	dialStart := time.Now()
 	backendConn, err := net.DialTimeout("tcp", backendAddr, 5*time.Second)
+	if p.metrics != nil {
+		p.metrics.ProxyConnectLatency.Record(ctx, time.Since(dialStart).Seconds(), portAttr)
+	}
 	if err != nil {
 		p.logger.Error("Failed to connect to backend",
 			slog.Int("proxy_port", p.proxyPort),
 			slog.String("backend", backendAddr),
 			slog.String("error", err.Error()))
+		if p.metrics != nil {
+			p.metrics.ProxyErrorsTotal.Add(ctx, 1, portAttr)
+		}
 		return
 	}
 	defer backendConn.Close()
@@ -1269,18 +1336,25 @@ func (p *tcpProxy) handleConnection(clientConn net.Conn) {
 	done := make(chan struct{}, 2)
 
 	go func() {
-		_, _ = io.Copy(dst, src)
+		n, _ := io.Copy(dst, src)
+		if p.metrics != nil && n > 0 {
+			p.metrics.ProxyBytesTransferred.Add(ctx, n, portAttr)
+		}
 		done <- struct{}{}
 	}()
 
 	go func() {
-		_, _ = io.Copy(dstBack, srcBack)
+		n, _ := io.Copy(dstBack, srcBack)
+		if p.metrics != nil && n > 0 {
+			p.metrics.ProxyBytesTransferred.Add(ctx, n, portAttr)
+		}
 		done <- struct{}{}
 	}()
 
 	// Wait for either direction to complete
 	<-done
 }
+
 
 // getNextBackend returns the next backend using round-robin.
 func (p *tcpProxy) getNextBackend() (tcpBackend, bool) {
@@ -1306,6 +1380,11 @@ func (p *tcpProxy) addBackend(host string, port int) {
 		slog.String("backend_host", host),
 		slog.Int("backend_port", port),
 		slog.Int("total_backends", len(p.backends)))
+
+	if p.metrics != nil {
+		p.metrics.ProxyBackendCount.Add(context.Background(), 1,
+			otelmetric.WithAttributes(attribute.Int("proxy_port", p.proxyPort)))
+	}
 }
 
 // removeBackend removes a backend from this proxy.
@@ -1321,6 +1400,11 @@ func (p *tcpProxy) removeBackend(host string, port int) bool {
 				slog.String("backend_host", host),
 				slog.Int("backend_port", port),
 				slog.Int("remaining_backends", len(p.backends)))
+
+			if p.metrics != nil {
+				p.metrics.ProxyBackendCount.Add(context.Background(), -1,
+					otelmetric.WithAttributes(attribute.Int("proxy_port", p.proxyPort)))
+			}
 			return true
 		}
 	}
@@ -1537,6 +1621,12 @@ func (d *Dewy) startAdminAPI(ctx context.Context) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/containers", d.handleGetContainers)
 	mux.HandleFunc("/api/status", d.handleGetStatus)
+
+	// Add Prometheus metrics endpoint if telemetry is enabled
+	if d.telemetry != nil && d.telemetry.Enabled() {
+		mux.Handle("/metrics", d.telemetry.PrometheusHandler())
+		d.logger.Info("Prometheus metrics endpoint enabled", slog.String("path", "/metrics"))
+	}
 
 	d.adminServer = &http.Server{
 		Handler:           mux,

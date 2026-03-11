@@ -2,6 +2,7 @@ package dewy
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,6 +17,7 @@ import (
 	"github.com/fatih/color"
 	flags "github.com/jessevdk/go-flags"
 	"github.com/linyows/dewy/container"
+	"github.com/linyows/dewy/telemetry"
 )
 
 const (
@@ -53,6 +55,8 @@ type cli struct {
 	AdminPort        int      `long:"admin-port" description:"Admin API port for container command (default: 17539, auto-increments if in use)"`
 	Slot             string   `long:"slot" short:"s" description:"Deployment slot for blue/green deployment (e.g., blue, green). Only deploys if tag's build metadata matches."`
 	CalVer           string   `long:"calver" description:"CalVer format for version identification (e.g., YYYY.0M.0D.MICRO)"`
+	Telemetry        bool     `long:"telemetry" description:"Enable telemetry (Prometheus metrics on admin API /metrics endpoint)"`
+	OTLPEndpoint     string   `long:"otlp-endpoint" description:"OTLP gRPC endpoint for exporting metrics (e.g., localhost:4317)"`
 	Help             bool     `long:"help" short:"h" description:"show this help message and exit"`
 	Version          bool     `long:"version" short:"v" description:"prints the version number"`
 }
@@ -146,6 +150,8 @@ func (c *cli) showHelp() {
 		"LogFormat",
 		"BeforeDeployHook",
 		"AfterDeployHook",
+		"Telemetry",
+		"OTLPEndpoint",
 	}), "\n")
 
 	serverOpts := strings.Join(c.buildHelp([]string{
@@ -279,6 +285,24 @@ func (c *cli) run() int {
 	if err != nil {
 		fmt.Fprintf(c.env.Err, "Error: %s\n", err)
 		return ExitErr
+	}
+
+	// Initialize telemetry if enabled
+	if c.Telemetry || c.OTLPEndpoint != "" {
+		tp, err := telemetry.New(context.Background(), telemetry.Config{
+			Enabled:      true,
+			OTLPEndpoint: c.OTLPEndpoint,
+			ServiceName:  "dewy",
+			Version:      c.env.Version,
+		})
+		if err != nil {
+			fmt.Fprintf(c.env.Err, "Error: failed to initialize telemetry: %s\n", err)
+			return ExitErr
+		}
+		d.SetTelemetry(tp)
+		slogger.Info("Telemetry enabled",
+			slog.Bool("prometheus", true),
+			slog.String("otlp_endpoint", c.OTLPEndpoint))
 	}
 
 	d.Start(c.Interval)
