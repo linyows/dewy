@@ -57,6 +57,7 @@ type cli struct {
 	CalVer           string   `long:"calver" description:"CalVer format for version identification (e.g., YYYY.0M.0D.MICRO)"`
 	Telemetry        bool     `long:"telemetry" description:"Enable telemetry (Prometheus metrics on admin API /metrics endpoint)"`
 	OTLPEndpoint     string   `long:"otlp-endpoint" description:"OTLP gRPC endpoint for exporting metrics (e.g., localhost:4317)"`
+	OTLPInsecure     bool     `long:"otlp-insecure" description:"Use insecure (plaintext) gRPC for OTLP export (default: TLS)"`
 	Help             bool     `long:"help" short:"h" description:"show this help message and exit"`
 	Version          bool     `long:"version" short:"v" description:"prints the version number"`
 }
@@ -152,6 +153,7 @@ func (c *cli) showHelp() {
 		"AfterDeployHook",
 		"Telemetry",
 		"OTLPEndpoint",
+		"OTLPInsecure",
 	}), "\n")
 
 	serverOpts := strings.Join(c.buildHelp([]string{
@@ -292,6 +294,7 @@ func (c *cli) run() int {
 		tp, err := telemetry.New(context.Background(), telemetry.Config{
 			Enabled:      true,
 			OTLPEndpoint: c.OTLPEndpoint,
+			OTLPInsecure: c.OTLPInsecure,
 			ServiceName:  "dewy",
 			Version:      c.env.Version,
 		})

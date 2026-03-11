@@ -216,3 +216,4 @@ WantedBy=multi-user.target
 |--------|-------------|
 | `--telemetry` | Enable telemetry (Prometheus metrics on Admin API `/metrics` endpoint) |
 | `--otlp-endpoint` | OTLP gRPC endpoint for exporting metrics (e.g., `localhost:4317`). Automatically enables telemetry. |
+| `--otlp-insecure` | Use insecure (plaintext) gRPC for OTLP export. Default is TLS. Use this for local or internal collectors without TLS. |

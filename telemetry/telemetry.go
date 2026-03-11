@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	promclient "github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
@@ -14,12 +15,15 @@ import (
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 // Config holds telemetry configuration.
 type Config struct {
 	Enabled      bool
 	OTLPEndpoint string // OTLP gRPC endpoint (e.g., "localhost:4317"), empty to disable
+	OTLPInsecure bool   // Use insecure (plaintext) gRPC for OTLP. Default is TLS.
 	ServiceName  string
 	Version      string
 }
@@ -51,8 +55,11 @@ func New(ctx context.Context, cfg Config) (*Provider, error) {
 		return nil, fmt.Errorf("failed to create resource: %w", err)
 	}
 
-	// Prometheus exporter (always enabled when telemetry is on)
-	promExporter, err := prometheus.New()
+	// Prometheus exporter with dedicated registry
+	promRegistry := promclient.NewRegistry()
+	promExporter, err := prometheus.New(
+		prometheus.WithRegisterer(promRegistry),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create prometheus exporter: %w", err)
 	}
@@ -64,10 +71,18 @@ func New(ctx context.Context, cfg Config) (*Provider, error) {
 
 	// OTLP exporter (optional)
 	if cfg.OTLPEndpoint != "" {
-		otlpExporter, err := otlpmetricgrpc.New(ctx,
+		otlpOpts := []otlpmetricgrpc.Option{
 			otlpmetricgrpc.WithEndpoint(cfg.OTLPEndpoint),
-			otlpmetricgrpc.WithInsecure(),
-		)
+		}
+		if cfg.OTLPInsecure {
+			otlpOpts = append(otlpOpts,
+				otlpmetricgrpc.WithTLSCredentials(insecure.NewCredentials()))
+		} else {
+			otlpOpts = append(otlpOpts,
+				otlpmetricgrpc.WithTLSCredentials(credentials.NewClientTLSFromCert(nil, "")))
+		}
+
+		otlpExporter, err := otlpmetricgrpc.New(ctx, otlpOpts...)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create OTLP exporter: %w", err)
 		}
@@ -80,17 +95,21 @@ func New(ctx context.Context, cfg Config) (*Provider, error) {
 	}
 
 	mp := sdkmetric.NewMeterProvider(opts...)
-	otel.SetMeterProvider(mp)
 
 	meter := mp.Meter("github.com/linyows/dewy")
 	metrics, err := newMetrics(meter)
 	if err != nil {
+		// Shutdown the provider since we won't be using it
+		_ = mp.Shutdown(ctx)
 		return nil, fmt.Errorf("failed to create metrics: %w", err)
 	}
 
+	// Set global provider only after all initialization succeeds
+	otel.SetMeterProvider(mp)
+
 	return &Provider{
 		meterProvider: mp,
-		promHandler:   promhttp.Handler(),
+		promHandler:   promhttp.HandlerFor(promRegistry, promhttp.HandlerOpts{}),
 		metrics:       metrics,
 	}, nil
 }

@@ -238,9 +238,9 @@ func (d *Dewy) waitSigs(ctx context.Context) {
 				}
 			}
 
-			// Shutdown telemetry
+			// Shutdown telemetry with fresh context to ensure flush completes
 			if d.telemetry != nil {
-				shutdownCtx, shutdownCancel := context.WithTimeout(ctx, 5*time.Second)
+				shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 				if err := d.telemetry.Shutdown(shutdownCtx); err != nil {
 					d.logger.Error("Failed to shutdown telemetry", slog.String("error", err.Error()))
 				}
@@ -968,6 +968,10 @@ func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentRespons
 		d.logger.Info("Container added to load balancer",
 			slog.String("container", containerID),
 			slog.Int("port_mappings", len(mappedPorts)))
+
+		if d.telemetry != nil && d.telemetry.Enabled() {
+			d.telemetry.Metrics().ContainerReplicas.Add(ctx, 1)
+		}
 	}
 
 	// Remove old containers one by one
@@ -1001,6 +1005,10 @@ func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentRespons
 			d.logger.Error("Failed to remove old container",
 				slog.String("container", oldContainerID),
 				slog.String("error", err.Error()))
+		}
+
+		if d.telemetry != nil && d.telemetry.Enabled() {
+			d.telemetry.Metrics().ContainerReplicas.Add(ctx, -1)
 		}
 	}
 
@@ -1040,6 +1048,9 @@ func (d *Dewy) createHealthCheckFunc(dockerRuntime *container.Docker, resolvedMa
 
 		retries := 5
 		for i := range retries {
+			if d.telemetry != nil && d.telemetry.Enabled() {
+				d.telemetry.Metrics().HealthChecksTotal.Add(ctx, 1)
+			}
 			resp, err := client.Get(healthURL)
 			if err == nil {
 				resp.Body.Close()
@@ -1047,20 +1058,15 @@ func (d *Dewy) createHealthCheckFunc(dockerRuntime *container.Docker, resolvedMa
 					d.logger.Debug("Health check passed",
 						slog.String("url", healthURL),
 						slog.Int("status", resp.StatusCode))
-					if d.telemetry != nil && d.telemetry.Enabled() {
-						d.telemetry.Metrics().HealthChecksTotal.Add(ctx, 1)
-					}
 					return nil
 				}
+			}
+			if d.telemetry != nil && d.telemetry.Enabled() {
+				d.telemetry.Metrics().HealthCheckFailures.Add(ctx, 1)
 			}
 			if i < retries-1 {
 				time.Sleep(2 * time.Second)
 			}
-		}
-		if d.telemetry != nil && d.telemetry.Enabled() {
-			m := d.telemetry.Metrics()
-			m.HealthChecksTotal.Add(ctx, 1)
-			m.HealthCheckFailures.Add(ctx, 1)
 		}
 		return fmt.Errorf("health check failed after %d retries", retries)
 	}
@@ -1270,18 +1276,7 @@ func (p *tcpProxy) handleConnection(clientConn net.Conn) {
 	ctx := context.Background()
 	portAttr := otelmetric.WithAttributes(attribute.Int("proxy_port", p.proxyPort))
 
-	// Get backend using round-robin
-	backend, ok := p.getNextBackend()
-	if !ok {
-		p.logger.Debug("No backend available",
-			slog.Int("proxy_port", p.proxyPort))
-		if p.metrics != nil {
-			p.metrics.ProxyErrorsTotal.Add(ctx, 1, portAttr)
-		}
-		return
-	}
-
-	// Record connection metrics
+	// Record connection accepted metrics immediately
 	if p.metrics != nil {
 		p.metrics.ProxyConnectionsTotal.Add(ctx, 1, portAttr)
 		p.metrics.ProxyActiveConnections.Add(ctx, 1, portAttr)
@@ -1293,6 +1288,17 @@ func (p *tcpProxy) handleConnection(clientConn net.Conn) {
 			p.metrics.ProxyConnectionDuration.Record(ctx, time.Since(connStart).Seconds(), portAttr)
 		}
 	}()
+
+	// Get backend using round-robin
+	backend, ok := p.getNextBackend()
+	if !ok {
+		p.logger.Debug("No backend available",
+			slog.Int("proxy_port", p.proxyPort))
+		if p.metrics != nil {
+			p.metrics.ProxyErrorsTotal.Add(ctx, 1, portAttr)
+		}
+		return
+	}
 
 	// Connect to backend with latency measurement
 	backendAddr := net.JoinHostPort(backend.host, strconv.Itoa(backend.port))

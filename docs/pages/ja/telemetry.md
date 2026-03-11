@@ -216,3 +216,4 @@ WantedBy=multi-user.target
 |-----------|------|
 | `--telemetry` | テレメトリを有効化（Admin APIの `/metrics` エンドポイントでPrometheusメトリクスを公開） |
 | `--otlp-endpoint` | メトリクスをエクスポートするOTLP gRPCエンドポイント（例：`localhost:4317`）。指定するとテレメトリが自動的に有効化されます。 |
+| `--otlp-insecure` | OTLPエクスポートにinsecure（平文）gRPCを使用。デフォルトはTLS。TLSなしのローカルまたは内部Collectorに使用します。 |

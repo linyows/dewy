@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -66,6 +67,16 @@ func TestPrometheusHandler(t *testing.T) {
 	body := rec.Body.String()
 	if len(body) == 0 {
 		t.Error("expected non-empty metrics response")
+	}
+
+	// Verify dewy-specific metrics are present (Prometheus format uses _ instead of .)
+	expectedMetrics := []string{
+		"dewy_proxy_connections_total",
+	}
+	for _, name := range expectedMetrics {
+		if !strings.Contains(body, name) {
+			t.Errorf("expected metrics response to contain %q", name)
+		}
 	}
 }
 
