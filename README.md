@@ -47,6 +47,7 @@ Features
 - Support for Docker Hub, GHCR, GAR, ECR, and other OCI registries
 - Deployment status notifications
 - Structured logging with JSON format support
+- OpenTelemetry-based observability (Prometheus metrics + OTLP export)
 - Audit logging
 
 Usage
