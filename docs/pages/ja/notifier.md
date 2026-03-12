@@ -85,6 +85,57 @@ dewy server --registry ghr://owner/repo \
   --notifier "slack://prod-deploy?title=MyApp&url=https://myapp.example.com"
 ```
 
+### Slackスレッド通知
+
+複数サーバーにデプロイする際、デプロイ通知がSlackチャンネルを埋め尽くすことがあります。スレッド通知を使うと、同一バージョンのデプロイ通知を1つのSlackスレッドにまとめ、メインチャンネルのフィードをすっきり保てます。
+
+**仕組み：**
+
+1. CIシステム（GitHub Actions等）がSlackに親メッセージを投稿し、メッセージのタイムスタンプ（`ts`）を `.slack-thread-ts` ファイルとしてアーティファクト内に含める
+2. Dewyがアーティファクトを展開し、`.slack-thread-ts` を読み取り、以降の通知をスレッド返信として送信
+3. エラーや重要な通知は `reply_broadcast` を使い、メインチャンネルにも表示される
+
+**スレッドモードの有効化** — 通知URLに `thread=true` を追加：
+
+```bash
+dewy server --registry ghr://owner/repo \
+  --notifier "slack://deploy-notify?title=MyApp&url=https://github.com/owner/repo&thread=true" \
+  -- /opt/app/current/app
+```
+
+**CI側の設定（GitHub Actionsの例）：**
+
+```yaml
+- name: Post Slack parent message
+  run: |
+    TS=$(curl -s -X POST https://slack.com/api/chat.postMessage \
+      -H "Authorization: Bearer $SLACK_TOKEN" \
+      -d channel=$CHANNEL -d text="Deploying v1.2.3" | jq -r '.ts')
+    echo "$TS" > .slack-thread-ts
+
+- name: Build artifact
+  run: tar czf app.tar.gz app .slack-thread-ts
+
+- name: Upload to GitHub Release
+  run: gh release upload v1.2.3 app.tar.gz
+```
+
+**動作まとめ：**
+
+{% table %}
+* 条件
+* 動作
+---
+* `thread=true` + `.slack-thread-ts` あり
+* すべての通知がスレッド返信として送信。エラーと重要メッセージはチャンネルにもブロードキャスト。
+---
+* `thread=true` + `.slack-thread-ts` なし
+* 通常のチャンネル投稿にフォールバック（スレッドモードなしと同じ）
+---
+* `thread=false`（デフォルト）
+* `.slack-thread-ts` ファイルがあっても無視。すべての通知はチャンネルに投稿。
+{% /table %}
+
 ### 通知内容例
 
 ```
