@@ -19,11 +19,11 @@ require (
 	github.com/jessevdk/go-flags v1.6.1
 	github.com/k1LoW/grpcstub v0.26.2
 	github.com/lestrrat-go/server-starter v0.0.0-20210101230921-50cd1900b5bc
-	github.com/lestrrat-go/slack v0.0.0-20190827134815-1aaae719550a
 	github.com/linyows/server-starter v0.1.0
 	github.com/mholt/archives v0.1.5
 	github.com/migueleliasweb/go-github-mock v1.5.0
 	github.com/prometheus/client_golang v1.23.2
+	github.com/slack-go/slack v0.19.0
 	go.opentelemetry.io/otel v1.42.0
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v1.42.0
 	go.opentelemetry.io/otel/exporters/prometheus v0.64.0
@@ -196,6 +196,7 @@ require (
 	github.com/googleapis/gax-go/v2 v2.17.0 // indirect
 	github.com/gordonklaus/ineffassign v0.1.0 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect
+	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/gostaticanalysis/analysisutil v0.7.1 // indirect
 	github.com/gostaticanalysis/comment v1.5.0 // indirect
 	github.com/gostaticanalysis/forcetypeassert v0.2.0 // indirect
@@ -228,7 +229,6 @@ require (
 	github.com/ldez/tagliatelle v0.7.1 // indirect
 	github.com/ldez/usetesting v0.4.3 // indirect
 	github.com/leonklingele/grouper v1.1.2 // indirect
-	github.com/lestrrat-go/pdebug v0.0.0-20210111095411-35b07dbf089b // indirect
 	github.com/lucasb-eyer/go-colorful v1.3.0 // indirect
 	github.com/macabu/inamedparam v0.2.0 // indirect
 	github.com/manuelarte/funcorder v0.2.1 // indirect

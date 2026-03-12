@@ -8,37 +8,23 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lestrrat-go/slack/objects"
+	slackgo "github.com/slack-go/slack"
 )
 
-// Mock implementations for testing
-
-type MockSlackSender struct {
-	SendMessageFunc func(ctx context.Context, channel, username, iconURL, text string, attachment *objects.Attachment) error
-	LastCall        *SlackSendCall
+// MockSlackClient implements SlackSender for testing.
+type MockSlackClient struct {
+	PostMessageFunc func(ctx context.Context, channelID string, options ...slackgo.MsgOption) (string, string, error)
+	LastChannel     string
+	CallCount       int
 }
 
-type SlackSendCall struct {
-	Channel    string
-	Username   string
-	IconURL    string
-	Text       string
-	Attachment *objects.Attachment
-}
-
-func (mss *MockSlackSender) SendMessage(ctx context.Context, channel, username, iconURL, text string, attachment *objects.Attachment) error {
-	mss.LastCall = &SlackSendCall{
-		Channel:    channel,
-		Username:   username,
-		IconURL:    iconURL,
-		Text:       text,
-		Attachment: attachment,
+func (m *MockSlackClient) PostMessageContext(ctx context.Context, channelID string, options ...slackgo.MsgOption) (string, string, error) {
+	m.LastChannel = channelID
+	m.CallCount++
+	if m.PostMessageFunc != nil {
+		return m.PostMessageFunc(ctx, channelID, options...)
 	}
-
-	if mss.SendMessageFunc != nil {
-		return mss.SendMessageFunc(ctx, channel, username, iconURL, text, attachment)
-	}
-	return nil
+	return channelID, "1234567890.123456", nil
 }
 
 func TestNewSlack(t *testing.T) {
@@ -89,6 +75,20 @@ func TestNewSlack(t *testing.T) {
 				Channel: "/general",
 				Title:   "Test Project",
 				Quiet:   true,
+				token:   "xoxb-test-token",
+			},
+			wantErr: false,
+		},
+		{
+			name:   "valid URL with thread=true",
+			schema: "/general?title=Test+Project&thread=true",
+			envVars: map[string]string{
+				"SLACK_TOKEN": "xoxb-test-token",
+			},
+			want: &Slack{
+				Channel: "/general",
+				Title:   "Test Project",
+				Thread:  true,
 				token:   "xoxb-test-token",
 			},
 			wantErr: false,
@@ -156,17 +156,20 @@ func TestNewSlack(t *testing.T) {
 			if got.Quiet != tt.want.Quiet {
 				t.Errorf("NewSlack() Quiet = %v, want %v", got.Quiet, tt.want.Quiet)
 			}
+			if got.Thread != tt.want.Thread {
+				t.Errorf("NewSlack() Thread = %v, want %v", got.Thread, tt.want.Thread)
+			}
 		})
 	}
 }
 
 func TestSlack_Send(t *testing.T) {
 	tests := []struct {
-		name     string
-		slack    *Slack
-		message  string
-		mockFunc func(ctx context.Context, channel, username, iconURL, text string, attachment *objects.Attachment) error
-		wantErr  bool
+		name    string
+		slack   *Slack
+		message string
+		mockFn  func(ctx context.Context, channelID string, options ...slackgo.MsgOption) (string, string, error)
+		wantErr bool
 	}{
 		{
 			name: "successful send",
@@ -177,9 +180,7 @@ func TestSlack_Send(t *testing.T) {
 				logger:  testLogger(),
 			},
 			message: "Test message",
-			mockFunc: func(ctx context.Context, channel, username, iconURL, text string, attachment *objects.Attachment) error {
-				return nil
-			},
+			mockFn:  nil,
 			wantErr: false,
 		},
 		{
@@ -191,46 +192,123 @@ func TestSlack_Send(t *testing.T) {
 				logger:  testLogger(),
 			},
 			message: "Test message",
-			mockFunc: func(ctx context.Context, channel, username, iconURL, text string, attachment *objects.Attachment) error {
-				return errors.New("API error")
+			mockFn: func(ctx context.Context, channelID string, options ...slackgo.MsgOption) (string, string, error) {
+				return "", "", errors.New("API error")
 			},
-			wantErr: false, // Send method logs errors but doesn't return them
+			wantErr: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockSender := &MockSlackSender{
-				SendMessageFunc: tt.mockFunc,
-			}
-			tt.slack.SetSender(mockSender)
+			mock := &MockSlackClient{PostMessageFunc: tt.mockFn}
+			tt.slack.SetClient(mock)
 
 			ctx := context.Background()
 			tt.slack.Send(ctx, tt.message)
 
-			// Verify that the correct values were passed to the mock
-			if mockSender.LastCall == nil {
-				t.Error("SendMessage should have been called")
-				return
+			if mock.CallCount != 1 {
+				t.Errorf("PostMessageContext should have been called once, got %d", mock.CallCount)
 			}
-
-			call := mockSender.LastCall
-			if call.Channel != tt.slack.Channel {
-				t.Errorf("SendMessage called with channel = %v, want %v", call.Channel, tt.slack.Channel)
-			}
-			if call.Username != SlackUsername {
-				t.Errorf("Username set to %v, want %v", call.Username, SlackUsername)
-			}
-			if call.IconURL != SlackIconURL {
-				t.Errorf("IconURL set to %v, want %v", call.IconURL, SlackIconURL)
-			}
-			if call.Attachment == nil {
-				t.Error("Attachment should not be nil")
-			}
-			if call.Text != "" {
-				t.Errorf("Text set to %v, want empty string", call.Text)
+			if mock.LastChannel != tt.slack.Channel {
+				t.Errorf("PostMessageContext called with channel = %v, want %v", mock.LastChannel, tt.slack.Channel)
 			}
 		})
+	}
+}
+
+func TestSlack_SendWithThread(t *testing.T) {
+	mock := &MockSlackClient{}
+	s := &Slack{
+		Channel: "/deploy",
+		Title:   "Test",
+		Thread:  true,
+		token:   "xoxb-test-token",
+		logger:  testLogger(),
+	}
+	s.SetClient(mock)
+	s.SetThreadTS("1234567890.123456")
+
+	ctx := context.Background()
+	s.Send(ctx, "deploy started")
+
+	if mock.CallCount != 1 {
+		t.Errorf("expected 1 call, got %d", mock.CallCount)
+	}
+}
+
+func TestSlack_SendWithThreadFallback(t *testing.T) {
+	// thread=true but no threadTS should still post normally
+	mock := &MockSlackClient{}
+	s := &Slack{
+		Channel: "/deploy",
+		Title:   "Test",
+		Thread:  true,
+		token:   "xoxb-test-token",
+		logger:  testLogger(),
+	}
+	s.SetClient(mock)
+	// Don't set threadTS
+
+	ctx := context.Background()
+	s.Send(ctx, "deploy started")
+
+	if mock.CallCount != 1 {
+		t.Errorf("expected 1 call, got %d", mock.CallCount)
+	}
+}
+
+func TestSlack_SendBroadcast(t *testing.T) {
+	mock := &MockSlackClient{}
+	s := &Slack{
+		Channel: "/deploy",
+		Title:   "Test",
+		Thread:  true,
+		token:   "xoxb-test-token",
+		logger:  testLogger(),
+	}
+	s.SetClient(mock)
+	s.SetThreadTS("1234567890.123456")
+
+	ctx := context.Background()
+	s.SendBroadcast(ctx, "important message")
+
+	if mock.CallCount != 1 {
+		t.Errorf("expected 1 call, got %d", mock.CallCount)
+	}
+}
+
+func TestSlack_SetThreadTS_ThreadDisabled(t *testing.T) {
+	s := &Slack{
+		Channel: "/deploy",
+		Thread:  false,
+		token:   "xoxb-test-token",
+		logger:  testLogger(),
+	}
+
+	s.SetThreadTS("1234567890.123456")
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.threadTS != "" {
+		t.Errorf("SetThreadTS should be no-op when Thread=false, got %q", s.threadTS)
+	}
+}
+
+func TestSlack_SetThreadTS_ThreadEnabled(t *testing.T) {
+	s := &Slack{
+		Channel: "/deploy",
+		Thread:  true,
+		token:   "xoxb-test-token",
+		logger:  testLogger(),
+	}
+
+	s.SetThreadTS("1234567890.123456")
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.threadTS != "1234567890.123456" {
+		t.Errorf("SetThreadTS should set threadTS when Thread=true, got %q", s.threadTS)
 	}
 }
 
@@ -239,7 +317,7 @@ func TestSlack_BuildAttachment(t *testing.T) {
 		name    string
 		slack   *Slack
 		message string
-		want    func(attachment objects.Attachment) bool
+		want    func(attachment slackgo.Attachment) bool
 	}{
 		{
 			name: "attachment with title and URL",
@@ -249,12 +327,12 @@ func TestSlack_BuildAttachment(t *testing.T) {
 				TitleURL: "https://example.com",
 			},
 			message: "Test message",
-			want: func(attachment objects.Attachment) bool {
+			want: func(attachment slackgo.Attachment) bool {
 				return strings.Contains(attachment.Text, "Test message") &&
 					strings.Contains(attachment.Footer, "Test Project") &&
 					strings.Contains(attachment.Footer, "https://example.com") &&
 					attachment.Footer != "" &&
-					attachment.Timestamp != 0
+					attachment.Ts != ""
 			},
 		},
 		{
@@ -264,11 +342,11 @@ func TestSlack_BuildAttachment(t *testing.T) {
 				Title:   "Test Project",
 			},
 			message: "Test message",
-			want: func(attachment objects.Attachment) bool {
+			want: func(attachment slackgo.Attachment) bool {
 				return strings.Contains(attachment.Text, "Test message") &&
 					strings.Contains(attachment.Footer, "Test Project") &&
 					attachment.Footer != "" &&
-					attachment.Timestamp != 0
+					attachment.Ts != ""
 			},
 		},
 		{
@@ -277,10 +355,10 @@ func TestSlack_BuildAttachment(t *testing.T) {
 				Channel: "/general",
 			},
 			message: "Test message",
-			want: func(attachment objects.Attachment) bool {
+			want: func(attachment slackgo.Attachment) bool {
 				return strings.Contains(attachment.Text, "Test message") &&
 					attachment.Footer != "" &&
-					attachment.Timestamp != 0
+					attachment.Ts != ""
 			},
 		},
 	}
@@ -320,14 +398,14 @@ func TestSlack_genColor(t *testing.T) {
 	}
 }
 
-func TestSlack_SetSender(t *testing.T) {
-	slack := &Slack{}
-	mockSender := &MockSlackSender{}
+func TestSlack_SetClient(t *testing.T) {
+	s := &Slack{}
+	mock := &MockSlackClient{}
 
-	slack.SetSender(mockSender)
+	s.SetClient(mock)
 
-	if slack.sender != mockSender {
-		t.Error("SetSender() didn't set the sender correctly")
+	if s.client != mock {
+		t.Error("SetClient() didn't set the client correctly")
 	}
 }
 
@@ -419,9 +497,6 @@ func TestRGBToHSLAndBack(t *testing.T) {
 }
 
 func TestGenColor_AvoidsRed(t *testing.T) {
-	// We can't easily test with actual hostnames since genColor uses hostname()
-	// But we can test the color avoidance logic by checking that the result
-	// is a valid color and properly formatted
 	slack := &Slack{}
 	color := slack.genColor()
 
@@ -444,6 +519,12 @@ func TestGenColor_AvoidsRed(t *testing.T) {
 	if isRed(r, g, b) {
 		t.Errorf("genColor() = %v (RGB: %d,%d,%d) is red, should avoid red colors", color, r, g, b)
 	}
+}
+
+func TestNullSetThreadTS(t *testing.T) {
+	n := &Null{}
+	// Should not panic
+	n.SetThreadTS("1234567890.123456")
 }
 
 func abs(x int) int {
