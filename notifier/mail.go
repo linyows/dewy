@@ -187,6 +187,10 @@ func (m *Mail) SendHookResult(ctx context.Context, hookType string, result *Hook
 	}
 }
 
+// SetThreadTS is a no-op for mail notifier (no thread concept).
+func (m *Mail) SetThreadTS(ts string) {
+}
+
 func (m *Mail) formatHookResult(hookType string, result *HookResult) string {
 	status := "SUCCESS"
 	if !result.Success {
