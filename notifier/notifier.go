@@ -33,6 +33,11 @@ type AttachmentSender interface {
 	SendHookResult(ctx context.Context, hookType string, result *HookResult)
 }
 
+// BroadcastSender interface for sending messages with broadcast (thread + channel).
+type BroadcastSender interface {
+	SendBroadcast(ctx context.Context, message string)
+}
+
 // Notifier interface extends Sender with error handling and hook result notifications.
 type Notifier interface {
 	Sender
@@ -40,6 +45,7 @@ type Notifier interface {
 	SendImportant(ctx context.Context, message string)
 	SendError(ctx context.Context, err error)
 	ResetErrorCount()
+	SetThreadTS(ts string)
 }
 
 const (
@@ -67,12 +73,17 @@ func (e *ErrorLimitingSender) Send(ctx context.Context, message string) {
 }
 
 // SendImportant sends a message regardless of quiet mode (but still respects error count).
+// If the underlying sender supports BroadcastSender, it uses broadcast (thread + channel).
 func (e *ErrorLimitingSender) SendImportant(ctx context.Context, message string) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
 	if e.errorCount == 0 {
-		e.underlying.Send(ctx, message)
+		if bs, ok := e.underlying.(BroadcastSender); ok {
+			bs.SendBroadcast(ctx, message)
+		} else {
+			e.underlying.Send(ctx, message)
+		}
 	}
 }
 
@@ -87,12 +98,21 @@ func (e *ErrorLimitingSender) SendError(ctx context.Context, err error) {
 	}
 
 	// Send notification if error count is within the limit
+	// Error notifications use broadcast so they appear in the main channel feed
+	sendMsg := func(msg string) {
+		if bs, ok := e.underlying.(BroadcastSender); ok {
+			bs.SendBroadcast(ctx, msg)
+		} else {
+			e.underlying.Send(ctx, msg)
+		}
+	}
+
 	if e.errorCount < maxNotifyErrors {
 		msg := fmt.Sprintf("Error occurred (count: %d): %v", e.errorCount, err)
-		e.underlying.Send(ctx, msg)
+		sendMsg(msg)
 	} else if e.errorCount == maxNotifyErrors {
 		msg := fmt.Sprintf("⚠️ No more error notifications will be sent until errors are resolved.\n\nError occurred (count: %d): %v", e.errorCount, err)
-		e.underlying.Send(ctx, msg)
+		sendMsg(msg)
 	}
 
 	// Log all errors regardless of notification count
@@ -107,6 +127,13 @@ func (e *ErrorLimitingSender) ResetErrorCount() {
 	if e.errorCount > 0 {
 		e.logger.Info("Error count reset", slog.Int("from", e.errorCount), slog.Int("to", 0))
 		e.errorCount = 0
+	}
+}
+
+// SetThreadTS delegates to the underlying sender if it supports SetThreadTS.
+func (e *ErrorLimitingSender) SetThreadTS(ts string) {
+	if setter, ok := e.underlying.(interface{ SetThreadTS(string) }); ok {
+		setter.SetThreadTS(ts)
 	}
 }
 
