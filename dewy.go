@@ -456,6 +456,18 @@ func (d *Dewy) deploy(key string) (err error) {
 	}
 	d.logger.Info("Extract archive", slog.String("path", linkFrom))
 
+	// Load Slack thread timestamp from artifact if present
+	tsFile := filepath.Join(linkFrom, ".slack-thread-ts")
+	if data, err := os.ReadFile(tsFile); err == nil {
+		ts := strings.TrimSpace(string(data))
+		if ts != "" {
+			d.notifier.SetThreadTS(ts)
+			d.logger.Info("Slack thread TS loaded", slog.String("ts", ts))
+		}
+	} else {
+		d.logger.Debug("No slack thread TS file found", slog.String("path", tsFile))
+	}
+
 	linkTo := filepath.Join(d.root, symlinkDir)
 
 	// Atomic symlink replacement: create temp symlink, then rename
