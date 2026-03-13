@@ -3,16 +3,17 @@ package notifier
 import (
 	"context"
 	"crypto/md5" //nolint:gosec // G501
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gorilla/schema"
-	"github.com/lestrrat-go/slack"
-	"github.com/lestrrat-go/slack/objects"
+	slackgo "github.com/slack-go/slack"
 )
 
 var (
@@ -29,18 +30,22 @@ var (
 
 // SlackSender interface for dependency injection and testing.
 type SlackSender interface {
-	SendMessage(ctx context.Context, channel, username, iconURL, text string, attachment *objects.Attachment) error
+	PostMessageContext(ctx context.Context, channelID string, options ...slackgo.MsgOption) (string, string, error)
 }
 
 // Slack struct.
 type Slack struct {
-	Channel  string `schema:"-"`
-	Title    string `schema:"title"`
-	TitleURL string `schema:"url"`
-	Quiet    bool   `schema:"quiet"`
-	token    string
-	sender   SlackSender // for testing
-	logger   *slog.Logger
+	Channel    string `schema:"-"`
+	Title      string `schema:"title"`
+	TitleURL   string `schema:"url"`
+	Quiet      bool   `schema:"quiet"`
+	Thread     bool   `schema:"thread"`
+	token      string
+	client     SlackSender
+	clientOnce sync.Once
+	logger     *slog.Logger
+	threadTS   string
+	mu         sync.RWMutex
 }
 
 func NewSlack(schema string, logger *slog.Logger) (*Slack, error) {
@@ -67,24 +72,80 @@ func NewSlack(schema string, logger *slog.Logger) (*Slack, error) {
 	return s, nil
 }
 
-// SetSender sets the slack sender for testing purposes.
-func (s *Slack) SetSender(sender SlackSender) {
-	s.sender = sender
+// SetClient sets the slack client for testing purposes.
+func (s *Slack) SetClient(client SlackSender) {
+	s.client = client
+}
+
+// getClient returns the slack client, lazily creating one if needed.
+func (s *Slack) getClient() SlackSender {
+	if s.client != nil {
+		return s.client
+	}
+	s.clientOnce.Do(func() {
+		s.client = slackgo.New(s.token)
+	})
+	return s.client
+}
+
+// SetThreadTS sets the thread timestamp for subsequent messages.
+// If Thread mode is not enabled, this is a no-op.
+func (s *Slack) SetThreadTS(ts string) {
+	if !s.Thread {
+		return
+	}
+	s.mu.Lock()
+	s.threadTS = ts
+	s.mu.Unlock()
+}
+
+// buildBaseOptions returns common message options.
+func (s *Slack) buildBaseOptions() []slackgo.MsgOption {
+	return []slackgo.MsgOption{
+		slackgo.MsgOptionUsername(SlackUsername),
+		slackgo.MsgOptionIconURL(SlackIconURL),
+	}
+}
+
+// appendThreadOptions appends thread_ts option if thread mode is active.
+// If broadcast is true and thread mode is active, reply_broadcast is also appended.
+func (s *Slack) appendThreadOptions(opts []slackgo.MsgOption, broadcast bool) []slackgo.MsgOption {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.Thread && s.threadTS != "" {
+		opts = append(opts, slackgo.MsgOptionTS(s.threadTS))
+		if broadcast {
+			opts = append(opts, slackgo.MsgOptionBroadcast())
+		}
+	}
+	return opts
 }
 
 // Send posts message to Slack channel.
 func (s *Slack) Send(ctx context.Context, message string) {
 	at := s.BuildAttachment(message)
 
-	var err error
-	if s.sender != nil {
-		err = s.sender.SendMessage(ctx, s.Channel, SlackUsername, SlackIconURL, "", &at)
-	} else {
-		cl := slack.New(s.token)
-		_, err = cl.Chat().PostMessage(s.Channel).Username(SlackUsername).
-			IconURL(SlackIconURL).Attachment(&at).Text("").Do(ctx)
-	}
+	opts := s.buildBaseOptions()
+	opts = append(opts, slackgo.MsgOptionAttachments(at))
+	opts = s.appendThreadOptions(opts, false)
 
+	_, _, err := s.getClient().PostMessageContext(ctx, s.Channel, opts...)
+	if err != nil {
+		s.logger.Error("Slack postMessage failure", slog.String("error", err.Error()))
+	}
+}
+
+// SendBroadcast posts a message as a thread reply with broadcast to the channel.
+// If not in thread mode or no threadTS is set, falls back to a regular channel post.
+func (s *Slack) SendBroadcast(ctx context.Context, message string) {
+	at := s.BuildAttachment(message)
+
+	opts := s.buildBaseOptions()
+	opts = append(opts, slackgo.MsgOptionAttachments(at))
+	opts = s.appendThreadOptions(opts, true)
+
+	_, _, err := s.getClient().PostMessageContext(ctx, s.Channel, opts...)
 	if err != nil {
 		s.logger.Error("Slack postMessage failure", slog.String("error", err.Error()))
 	}
@@ -226,23 +287,19 @@ func (s *Slack) genColor() string {
 func (s *Slack) SendHookResult(ctx context.Context, hookType string, result *HookResult) {
 	at := s.BuildHookAttachment(hookType, result)
 
-	var err error
-	if s.sender != nil {
-		err = s.sender.SendMessage(ctx, s.Channel, SlackUsername, SlackIconURL, "", &at)
-	} else {
-		cl := slack.New(s.token)
-		_, err = cl.Chat().PostMessage(s.Channel).Username(SlackUsername).
-			IconURL(SlackIconURL).Attachment(&at).Text("").Do(ctx)
-	}
+	opts := s.buildBaseOptions()
+	opts = append(opts, slackgo.MsgOptionAttachments(at))
+	opts = s.appendThreadOptions(opts, false)
 
+	_, _, err := s.getClient().PostMessageContext(ctx, s.Channel, opts...)
 	if err != nil {
 		s.logger.Error("Slack hook result notification failure", slog.String("error", err.Error()))
 	}
 }
 
 // BuildHookAttachment returns attachment for hook result.
-func (s *Slack) BuildHookAttachment(hookType string, result *HookResult) objects.Attachment {
-	var at objects.Attachment
+func (s *Slack) BuildHookAttachment(hookType string, result *HookResult) slackgo.Attachment {
+	var at slackgo.Attachment
 
 	// Set color based on success/failure
 	if result.Success {
@@ -259,7 +316,7 @@ func (s *Slack) BuildHookAttachment(hookType string, result *HookResult) objects
 
 	// Add fields for stdout and stderr first if they exist
 	if result.Stdout != "" {
-		at.Fields = append(at.Fields, &objects.AttachmentField{
+		at.Fields = append(at.Fields, slackgo.AttachmentField{
 			Title: "Stdout",
 			Value: s.formatOutput(result.Stdout),
 			Short: false,
@@ -267,7 +324,7 @@ func (s *Slack) BuildHookAttachment(hookType string, result *HookResult) objects
 	}
 
 	if result.Stderr != "" {
-		at.Fields = append(at.Fields, &objects.AttachmentField{
+		at.Fields = append(at.Fields, slackgo.AttachmentField{
 			Title: "Stderr",
 			Value: s.formatOutput(result.Stderr),
 			Short: false,
@@ -275,13 +332,13 @@ func (s *Slack) BuildHookAttachment(hookType string, result *HookResult) objects
 	}
 
 	// Add exit code and duration fields (short)
-	at.Fields = append(at.Fields, &objects.AttachmentField{
+	at.Fields = append(at.Fields, slackgo.AttachmentField{
 		Title: "Exit Code",
 		Value: fmt.Sprintf("`%d`", result.ExitCode),
 		Short: true,
 	})
 
-	at.Fields = append(at.Fields, &objects.AttachmentField{
+	at.Fields = append(at.Fields, slackgo.AttachmentField{
 		Title: "Duration",
 		Value: result.Duration.String(),
 		Short: true,
@@ -297,7 +354,7 @@ func (s *Slack) BuildHookAttachment(hookType string, result *HookResult) objects
 	}
 
 	at.FooterIcon = SlackFooterIcon
-	at.Timestamp = objects.Timestamp(time.Now().Unix())
+	at.Ts = json.Number(fmt.Sprintf("%d", time.Now().Unix()))
 
 	return at
 }
@@ -337,8 +394,8 @@ func (s *Slack) formatOutput(output string) string {
 }
 
 // BuildAttachment returns attachment for slack.
-func (s *Slack) BuildAttachment(message string) objects.Attachment {
-	var at objects.Attachment
+func (s *Slack) BuildAttachment(message string) slackgo.Attachment {
+	var at slackgo.Attachment
 	at.Color = s.genColor()
 	at.Text = message
 
@@ -352,7 +409,7 @@ func (s *Slack) BuildAttachment(message string) objects.Attachment {
 	}
 
 	at.FooterIcon = SlackFooterIcon
-	at.Timestamp = objects.Timestamp(time.Now().Unix())
+	at.Ts = json.Number(fmt.Sprintf("%d", time.Now().Unix()))
 
 	return at
 }

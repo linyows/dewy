@@ -456,6 +456,16 @@ func (d *Dewy) deploy(key string) (err error) {
 	}
 	d.logger.Info("Extract archive", slog.String("path", linkFrom))
 
+	// Load Slack thread timestamp from artifact if present
+	tsFile := filepath.Join(linkFrom, ".slack-thread-ts")
+	if data, err := os.ReadFile(tsFile); err == nil {
+		ts := strings.TrimSpace(string(data))
+		if ts != "" {
+			d.notifier.SetThreadTS(ts)
+			d.logger.Debug("Thread TS file found", slog.String("ts", ts))
+		}
+	}
+
 	linkTo := filepath.Join(d.root, symlinkDir)
 
 	// Atomic symlink replacement: create temp symlink, then rename
@@ -1360,7 +1370,6 @@ func (p *tcpProxy) handleConnection(clientConn net.Conn) {
 	// Wait for either direction to complete
 	<-done
 }
-
 
 // getNextBackend returns the next backend using round-robin.
 func (p *tcpProxy) getNextBackend() (tcpBackend, bool) {

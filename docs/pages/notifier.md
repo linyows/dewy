@@ -85,6 +85,82 @@ dewy server --registry ghr://owner/repo \
   --notifier "slack://prod-deploy?title=MyApp&url=https://myapp.example.com"
 ```
 
+### Slack Thread Notifications
+
+When deploying to multiple servers, deploy notifications can flood a Slack channel. Thread notifications group all notifications for the same version into a single Slack thread, keeping the main channel feed clean.
+
+**How it works:**
+
+1. Your CI system (e.g., GitHub Actions) posts a parent message to Slack and saves the message timestamp (`ts`) to a file named `.slack-thread-ts` inside the artifact
+2. Dewy extracts the artifact, reads `.slack-thread-ts`, and sends all subsequent notifications as thread replies
+3. Error and important notifications use `reply_broadcast` so they also appear in the main channel feed
+
+**Enable thread mode** by adding `thread=true` to the notifier URL:
+
+```bash
+dewy server --registry ghr://owner/repo \
+  --notifier "slack://deploy-notify?title=MyApp&url=https://github.com/owner/repo&thread=true" \
+  -- /opt/app/current/app
+```
+
+**CI-side setup (GitHub Actions + GoReleaser example):**
+
+In your GitHub Actions workflow, post the Slack parent message before running GoReleaser. Then configure GoReleaser to include the `.slack-thread-ts` file in the archive.
+
+`.github/workflows/release.yml`:
+
+```yaml
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Post Slack parent message
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          SLACK_TOKEN: ${{ secrets.SLACK_TOKEN }}
+          SLACK_CHANNEL: deploy-notify
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          TS=$(curl -s -X POST https://slack.com/api/chat.postMessage \
+            -H "Authorization: Bearer $SLACK_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"channel\":\"$SLACK_CHANNEL\",\"text\":\"Deploying $TAG\"}" \
+            | jq -r '.ts')
+          echo "$TS" > .slack-thread-ts
+
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          args: release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+`.goreleaser.yml`:
+
+```yaml
+archives:
+  - files:
+      - .slack-thread-ts
+```
+
+**Behavior summary:**
+
+{% table %}
+* Condition
+* Behavior
+---
+* `thread=true` + `.slack-thread-ts` present
+* All notifications sent as thread replies. Errors and important messages also broadcast to channel.
+---
+* `thread=true` + `.slack-thread-ts` absent
+* Fallback to regular channel posts (same as without thread mode)
+---
+* `thread=false` (default)
+* `.slack-thread-ts` file is ignored even if present. All notifications go to channel.
+{% /table %}
+
 ### Example Notification Content
 
 ```

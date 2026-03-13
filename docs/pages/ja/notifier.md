@@ -85,6 +85,82 @@ dewy server --registry ghr://owner/repo \
   --notifier "slack://prod-deploy?title=MyApp&url=https://myapp.example.com"
 ```
 
+### Slackスレッド通知
+
+複数サーバーにデプロイする際、デプロイ通知がSlackチャンネルを埋め尽くすことがあります。スレッド通知を使うと、同一バージョンのデプロイ通知を1つのSlackスレッドにまとめ、メインチャンネルのフィードをすっきり保てます。
+
+**仕組み：**
+
+1. CIシステム（GitHub Actions等）がSlackに親メッセージを投稿し、メッセージのタイムスタンプ（`ts`）を `.slack-thread-ts` ファイルとしてアーティファクト内に含める
+2. Dewyがアーティファクトを展開し、`.slack-thread-ts` を読み取り、以降の通知をスレッド返信として送信
+3. エラーや重要な通知は `reply_broadcast` を使い、メインチャンネルにも表示される
+
+**スレッドモードの有効化** — 通知URLに `thread=true` を追加：
+
+```bash
+dewy server --registry ghr://owner/repo \
+  --notifier "slack://deploy-notify?title=MyApp&url=https://github.com/owner/repo&thread=true" \
+  -- /opt/app/current/app
+```
+
+**CI側の設定（GitHub Actions + GoReleaserの例）：**
+
+GitHub Actionsのワークフローで、GoReleaser実行前にSlackの親メッセージを投稿します。GoReleaserの設定で `.slack-thread-ts` ファイルをアーカイブに同梱します。
+
+`.github/workflows/release.yml`:
+
+```yaml
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Post Slack parent message
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          SLACK_TOKEN: ${{ secrets.SLACK_TOKEN }}
+          SLACK_CHANNEL: deploy-notify
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          TS=$(curl -s -X POST https://slack.com/api/chat.postMessage \
+            -H "Authorization: Bearer $SLACK_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"channel\":\"$SLACK_CHANNEL\",\"text\":\"Deploying $TAG\"}" \
+            | jq -r '.ts')
+          echo "$TS" > .slack-thread-ts
+
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          args: release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+`.goreleaser.yml`:
+
+```yaml
+archives:
+  - files:
+      - .slack-thread-ts
+```
+
+**動作まとめ：**
+
+{% table %}
+* 条件
+* 動作
+---
+* `thread=true` + `.slack-thread-ts` あり
+* すべての通知がスレッド返信として送信。エラーと重要メッセージはチャンネルにもブロードキャスト。
+---
+* `thread=true` + `.slack-thread-ts` なし
+* 通常のチャンネル投稿にフォールバック（スレッドモードなしと同じ）
+---
+* `thread=false`（デフォルト）
+* `.slack-thread-ts` ファイルがあっても無視。すべての通知はチャンネルに投稿。
+{% /table %}
+
 ### 通知内容例
 
 ```

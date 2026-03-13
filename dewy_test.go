@@ -190,6 +190,9 @@ func (n *mockNotify) SendHookResult(ctx context.Context, hookType string, result
 	}
 }
 
+func (n *mockNotify) SetThreadTS(ts string) {
+}
+
 func (n *mockNotify) GetMessages() []string {
 	n.mu.Lock()
 	defer n.mu.Unlock()
