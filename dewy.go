@@ -1371,7 +1371,6 @@ func (p *tcpProxy) handleConnection(clientConn net.Conn) {
 	<-done
 }
 
-
 // getNextBackend returns the next backend using round-robin.
 func (p *tcpProxy) getNextBackend() (tcpBackend, bool) {
 	p.mu.RLock()

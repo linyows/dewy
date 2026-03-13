@@ -35,11 +35,11 @@ type SlackSender interface {
 
 // Slack struct.
 type Slack struct {
-	Channel  string `schema:"-"`
-	Title    string `schema:"title"`
-	TitleURL string `schema:"url"`
-	Quiet    bool   `schema:"quiet"`
-	Thread   bool   `schema:"thread"`
+	Channel    string `schema:"-"`
+	Title      string `schema:"title"`
+	TitleURL   string `schema:"url"`
+	Quiet      bool   `schema:"quiet"`
+	Thread     bool   `schema:"thread"`
 	token      string
 	client     SlackSender
 	clientOnce sync.Once
