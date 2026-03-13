@@ -103,21 +103,46 @@ dewy server --registry ghr://owner/repo \
   -- /opt/app/current/app
 ```
 
-**CI-side setup (GitHub Actions example):**
+**CI-side setup (GitHub Actions + GoReleaser example):**
+
+In your GitHub Actions workflow, post the Slack parent message before running GoReleaser. Then configure GoReleaser to include the `.slack-thread-ts` file in the archive.
+
+`.github/workflows/release.yml`:
 
 ```yaml
-- name: Post Slack parent message
-  run: |
-    TS=$(curl -s -X POST https://slack.com/api/chat.postMessage \
-      -H "Authorization: Bearer $SLACK_TOKEN" \
-      -d channel=$CHANNEL -d text="Deploying v1.2.3" | jq -r '.ts')
-    echo "$TS" > .slack-thread-ts
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-- name: Build artifact
-  run: tar czf app.tar.gz app .slack-thread-ts
+      - name: Post Slack parent message
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          SLACK_TOKEN: ${{ secrets.SLACK_TOKEN }}
+          SLACK_CHANNEL: deploy-notify
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          TS=$(curl -s -X POST https://slack.com/api/chat.postMessage \
+            -H "Authorization: Bearer $SLACK_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"channel\":\"$SLACK_CHANNEL\",\"text\":\"Deploying $TAG\"}" \
+            | jq -r '.ts')
+          echo "$TS" > .slack-thread-ts
 
-- name: Upload to GitHub Release
-  run: gh release upload v1.2.3 app.tar.gz
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          args: release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+`.goreleaser.yml`:
+
+```yaml
+archives:
+  - files:
+      - .slack-thread-ts
 ```
 
 **Behavior summary:**
