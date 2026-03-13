@@ -15,11 +15,13 @@ import (
 type MockSlackClient struct {
 	PostMessageFunc func(ctx context.Context, channelID string, options ...slackgo.MsgOption) (string, string, error)
 	LastChannel     string
+	LastOptionCount int
 	CallCount       int
 }
 
 func (m *MockSlackClient) PostMessageContext(ctx context.Context, channelID string, options ...slackgo.MsgOption) (string, string, error) {
 	m.LastChannel = channelID
+	m.LastOptionCount = len(options)
 	m.CallCount++
 	if m.PostMessageFunc != nil {
 		return m.PostMessageFunc(ctx, channelID, options...)
@@ -169,7 +171,6 @@ func TestSlack_Send(t *testing.T) {
 		slack   *Slack
 		message string
 		mockFn  func(ctx context.Context, channelID string, options ...slackgo.MsgOption) (string, string, error)
-		wantErr bool
 	}{
 		{
 			name: "successful send",
@@ -181,7 +182,6 @@ func TestSlack_Send(t *testing.T) {
 			},
 			message: "Test message",
 			mockFn:  nil,
-			wantErr: false,
 		},
 		{
 			name: "send with error (should not panic)",
@@ -195,7 +195,6 @@ func TestSlack_Send(t *testing.T) {
 			mockFn: func(ctx context.Context, channelID string, options ...slackgo.MsgOption) (string, string, error) {
 				return "", "", errors.New("API error")
 			},
-			wantErr: false,
 		},
 	}
 
@@ -218,6 +217,20 @@ func TestSlack_Send(t *testing.T) {
 }
 
 func TestSlack_SendWithThread(t *testing.T) {
+	// First, get baseline option count without thread
+	mockBase := &MockSlackClient{}
+	sBase := &Slack{
+		Channel: "/deploy",
+		Title:   "Test",
+		Thread:  false,
+		token:   "xoxb-test-token",
+		logger:  testLogger(),
+	}
+	sBase.SetClient(mockBase)
+	sBase.Send(context.Background(), "deploy started")
+	baseOptionCount := mockBase.LastOptionCount
+
+	// Now test with thread enabled
 	mock := &MockSlackClient{}
 	s := &Slack{
 		Channel: "/deploy",
@@ -228,17 +241,32 @@ func TestSlack_SendWithThread(t *testing.T) {
 	}
 	s.SetClient(mock)
 	s.SetThreadTS("1234567890.123456")
-
-	ctx := context.Background()
-	s.Send(ctx, "deploy started")
+	s.Send(context.Background(), "deploy started")
 
 	if mock.CallCount != 1 {
 		t.Errorf("expected 1 call, got %d", mock.CallCount)
+	}
+	// Thread mode adds thread_ts option (+1)
+	if mock.LastOptionCount != baseOptionCount+1 {
+		t.Errorf("expected %d options (base %d + thread_ts), got %d",
+			baseOptionCount+1, baseOptionCount, mock.LastOptionCount)
 	}
 }
 
 func TestSlack_SendWithThreadFallback(t *testing.T) {
-	// thread=true but no threadTS should still post normally
+	// thread=true but no threadTS should still post normally (no extra options)
+	mockBase := &MockSlackClient{}
+	sBase := &Slack{
+		Channel: "/deploy",
+		Title:   "Test",
+		Thread:  false,
+		token:   "xoxb-test-token",
+		logger:  testLogger(),
+	}
+	sBase.SetClient(mockBase)
+	sBase.Send(context.Background(), "deploy started")
+	baseOptionCount := mockBase.LastOptionCount
+
 	mock := &MockSlackClient{}
 	s := &Slack{
 		Channel: "/deploy",
@@ -248,17 +276,33 @@ func TestSlack_SendWithThreadFallback(t *testing.T) {
 		logger:  testLogger(),
 	}
 	s.SetClient(mock)
-	// Don't set threadTS
-
-	ctx := context.Background()
-	s.Send(ctx, "deploy started")
+	// Don't set threadTS — should fallback to normal post
+	s.Send(context.Background(), "deploy started")
 
 	if mock.CallCount != 1 {
 		t.Errorf("expected 1 call, got %d", mock.CallCount)
 	}
+	// No thread_ts should be added when threadTS is empty
+	if mock.LastOptionCount != baseOptionCount {
+		t.Errorf("expected %d options (same as base), got %d", baseOptionCount, mock.LastOptionCount)
+	}
 }
 
 func TestSlack_SendBroadcast(t *testing.T) {
+	// Get baseline option count with Send (no thread)
+	mockBase := &MockSlackClient{}
+	sBase := &Slack{
+		Channel: "/deploy",
+		Title:   "Test",
+		Thread:  false,
+		token:   "xoxb-test-token",
+		logger:  testLogger(),
+	}
+	sBase.SetClient(mockBase)
+	sBase.Send(context.Background(), "msg")
+	baseOptionCount := mockBase.LastOptionCount
+
+	// SendBroadcast with thread enabled should add thread_ts + broadcast (+2)
 	mock := &MockSlackClient{}
 	s := &Slack{
 		Channel: "/deploy",
@@ -269,12 +313,15 @@ func TestSlack_SendBroadcast(t *testing.T) {
 	}
 	s.SetClient(mock)
 	s.SetThreadTS("1234567890.123456")
-
-	ctx := context.Background()
-	s.SendBroadcast(ctx, "important message")
+	s.SendBroadcast(context.Background(), "important message")
 
 	if mock.CallCount != 1 {
 		t.Errorf("expected 1 call, got %d", mock.CallCount)
+	}
+	// Broadcast mode adds thread_ts + broadcast options (+2)
+	if mock.LastOptionCount != baseOptionCount+2 {
+		t.Errorf("expected %d options (base %d + thread_ts + broadcast), got %d",
+			baseOptionCount+2, baseOptionCount, mock.LastOptionCount)
 	}
 }
 
@@ -309,6 +356,39 @@ func TestSlack_SetThreadTS_ThreadEnabled(t *testing.T) {
 	defer s.mu.RUnlock()
 	if s.threadTS != "1234567890.123456" {
 		t.Errorf("SetThreadTS should set threadTS when Thread=true, got %q", s.threadTS)
+	}
+}
+
+func TestSlack_ThreadDisabledIgnoresTS(t *testing.T) {
+	// Even if threadTS file exists, thread=false should not add thread options
+	mockBase := &MockSlackClient{}
+	sBase := &Slack{
+		Channel: "/deploy",
+		Title:   "Test",
+		Thread:  false,
+		token:   "xoxb-test-token",
+		logger:  testLogger(),
+	}
+	sBase.SetClient(mockBase)
+	sBase.Send(context.Background(), "msg")
+	baseOptionCount := mockBase.LastOptionCount
+
+	mock := &MockSlackClient{}
+	s := &Slack{
+		Channel: "/deploy",
+		Title:   "Test",
+		Thread:  false,
+		token:   "xoxb-test-token",
+		logger:  testLogger(),
+	}
+	s.SetClient(mock)
+	s.SetThreadTS("1234567890.123456") // should be ignored
+
+	s.Send(context.Background(), "msg")
+
+	if mock.LastOptionCount != baseOptionCount {
+		t.Errorf("thread=false should not add thread options: expected %d, got %d",
+			baseOptionCount, mock.LastOptionCount)
 	}
 }
 

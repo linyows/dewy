@@ -462,10 +462,8 @@ func (d *Dewy) deploy(key string) (err error) {
 		ts := strings.TrimSpace(string(data))
 		if ts != "" {
 			d.notifier.SetThreadTS(ts)
-			d.logger.Info("Slack thread TS loaded", slog.String("ts", ts))
+			d.logger.Debug("Thread TS file found", slog.String("ts", ts))
 		}
-	} else {
-		d.logger.Debug("No slack thread TS file found", slog.String("path", tsFile))
 	}
 
 	linkTo := filepath.Join(d.root, symlinkDir)

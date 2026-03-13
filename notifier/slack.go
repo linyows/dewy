@@ -40,11 +40,12 @@ type Slack struct {
 	TitleURL string `schema:"url"`
 	Quiet    bool   `schema:"quiet"`
 	Thread   bool   `schema:"thread"`
-	token    string
-	client   SlackSender
-	logger   *slog.Logger
-	threadTS string
-	mu       sync.RWMutex
+	token      string
+	client     SlackSender
+	clientOnce sync.Once
+	logger     *slog.Logger
+	threadTS   string
+	mu         sync.RWMutex
 }
 
 func NewSlack(schema string, logger *slog.Logger) (*Slack, error) {
@@ -76,12 +77,15 @@ func (s *Slack) SetClient(client SlackSender) {
 	s.client = client
 }
 
-// getClient returns the slack client, creating one if needed.
+// getClient returns the slack client, lazily creating one if needed.
 func (s *Slack) getClient() SlackSender {
 	if s.client != nil {
 		return s.client
 	}
-	return slackgo.New(s.token)
+	s.clientOnce.Do(func() {
+		s.client = slackgo.New(s.token)
+	})
+	return s.client
 }
 
 // SetThreadTS sets the thread timestamp for subsequent messages.
@@ -104,7 +108,7 @@ func (s *Slack) buildBaseOptions() []slackgo.MsgOption {
 }
 
 // appendThreadOptions appends thread_ts option if thread mode is active.
-// Returns the options and whether broadcast should be added.
+// If broadcast is true and thread mode is active, reply_broadcast is also appended.
 func (s *Slack) appendThreadOptions(opts []slackgo.MsgOption, broadcast bool) []slackgo.MsgOption {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
