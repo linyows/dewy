@@ -6,6 +6,7 @@ vars:
   aws_access_key_id: "{{ AWS_ACCESS_KEY_ID ?? '' }}"
   aws_secret_access_key: "{{ AWS_SECRET_ACCESS_KEY ?? '' }}"
   google_application_credentials: "{{ GOOGLE_APPLICATION_CREDENTIALS ?? '' }}"
+  slack_token: "{{ SLACK_TOKEN ?? '' }}"
 
 jobs:
 - name: Check credentials
@@ -23,6 +24,9 @@ jobs:
   - name: GOOGLE_APPLICATION_CREDENTIALS is not empty
     uses: hello
     test: vars.google_application_credentials != ''
+  - name: SLACK_TOKEN is not empty
+    uses: hello
+    test: vars.slack_token != ''
 
 - name: Generate version
   id: generate_version
@@ -58,7 +62,7 @@ jobs:
 
 # Phase 1: Start all dewy instances and wait for initial deployment (parallel)
 
-- name: Start server by Github-Releases registry
+- name: Start server by Github-Releases registry with Slack notification
   id: start_srv_ghr
   needs: [build]
   steps:
@@ -73,9 +77,11 @@ jobs:
         AWS_ACCESS_KEY_ID: "{{ vars.aws_access_key_id }}"
         AWS_SECRET_ACCESS_KEY: "{{ vars.aws_secret_access_key }}"
         GOOGLE_APPLICATION_CREDENTIALS: "{{ vars.google_application_credentials }}"
+        SLACK_TOKEN: "{{ vars.slack_token }}"
       cmd: |
         ./dewy server -p 8000 -l debug \
         --registry "ghr://linyows/dewy-testapp?pre-release=true" \
+        --notifier "slack://random?title=Dewy&url=https://github.com/linyows/dewy-testapp&thread=true" \
         -- $PWD/current/dewy-testapp
     test: status == -1
     outputs:
@@ -97,7 +103,7 @@ jobs:
         exit 1
     test: status == 0
 
-- name: Start server by AWS S3 registry
+- name: Start server by AWS S3 registry with Slack notification
   id: start_srv_s3
   needs: [build]
   steps:
@@ -112,9 +118,11 @@ jobs:
         AWS_ACCESS_KEY_ID: "{{ vars.aws_access_key_id }}"
         AWS_SECRET_ACCESS_KEY: "{{ vars.aws_secret_access_key }}"
         GOOGLE_APPLICATION_CREDENTIALS: "{{ vars.google_application_credentials }}"
+        SLACK_TOKEN: "{{ vars.slack_token }}"
       cmd: |
         ./dewy server -p 8001 -l debug \
         --registry "s3://ap-northeast-3/dewy-testapp?pre-release=true" \
+        --notifier "slack://random?title=Dewy&url=https://github.com/linyows/dewy-testapp&thread=true" \
         -- $PWD/current/dewy-testapp
     test: status == -1
     outputs:
@@ -136,7 +144,7 @@ jobs:
         exit 1
     test: status == 0
 
-- name: Start server by GCloud Storage registry
+- name: Start server by GCloud Storage registry with Slack notification
   id: start_srv_gs
   needs: [build]
   steps:
@@ -151,9 +159,11 @@ jobs:
         AWS_ACCESS_KEY_ID: "{{ vars.aws_access_key_id }}"
         AWS_SECRET_ACCESS_KEY: "{{ vars.aws_secret_access_key }}"
         GOOGLE_APPLICATION_CREDENTIALS: "{{ vars.google_application_credentials }}"
+        SLACK_TOKEN: "{{ vars.slack_token }}"
       cmd: |
         ./dewy server -p 8002 -l debug \
         --registry "gs://dewy-testapp?pre-release=true" \
+        --notifier "slack://random?title=Dewy&url=https://github.com/linyows/dewy-testapp&thread=true" \
         -- $PWD/current/dewy-testapp
     test: status == -1
     outputs:
