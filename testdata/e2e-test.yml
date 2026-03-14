@@ -81,7 +81,7 @@ jobs:
       cmd: |
         ./dewy server -p 8000 -l debug \
         --registry "ghr://linyows/dewy-testapp?pre-release=true" \
-        --notifier "slack://random?title=Dewy&url=https://github.com/linyows/dewy-testapp&thread=true" \
+        --notifier "slack://random?title=ghr&url=https://github.com/linyows/dewy-testapp&thread=true" \
         -- $PWD/current/dewy-testapp
     test: status == -1
     outputs:
@@ -122,7 +122,7 @@ jobs:
       cmd: |
         ./dewy server -p 8001 -l debug \
         --registry "s3://ap-northeast-3/dewy-testapp?pre-release=true" \
-        --notifier "slack://random?title=Dewy&url=https://github.com/linyows/dewy-testapp&thread=true" \
+        --notifier "slack://random?title=s3&url=https://github.com/linyows/dewy-testapp&thread=true" \
         -- $PWD/current/dewy-testapp
     test: status == -1
     outputs:
@@ -163,7 +163,7 @@ jobs:
       cmd: |
         ./dewy server -p 8002 -l debug \
         --registry "gs://dewy-testapp?pre-release=true" \
-        --notifier "slack://random?title=Dewy&url=https://github.com/linyows/dewy-testapp&thread=true" \
+        --notifier "slack://random?title=gcs&url=https://github.com/linyows/dewy-testapp&thread=true" \
         -- $PWD/current/dewy-testapp
     test: status == -1
     outputs:
