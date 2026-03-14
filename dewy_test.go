@@ -190,7 +190,7 @@ func (n *mockNotify) SendHookResult(ctx context.Context, hookType string, result
 	}
 }
 
-func (n *mockNotify) SetThreadTS(ts string) {
+func (n *mockNotify) OnDeploy(dir string) {
 }
 
 func (n *mockNotify) GetMessages() []string {

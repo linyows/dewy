@@ -45,7 +45,7 @@ type Notifier interface {
 	SendImportant(ctx context.Context, message string)
 	SendError(ctx context.Context, err error)
 	ResetErrorCount()
-	SetThreadTS(ts string)
+	OnDeploy(dir string)
 }
 
 const (
@@ -126,12 +126,13 @@ func (e *ErrorLimitingSender) ResetErrorCount() {
 	}
 }
 
-// SetThreadTS delegates to the underlying sender if it supports SetThreadTS.
-func (e *ErrorLimitingSender) SetThreadTS(ts string) {
-	if setter, ok := e.underlying.(interface{ SetThreadTS(string) }); ok {
-		setter.SetThreadTS(ts)
+// OnDeploy delegates to the underlying sender if it supports OnDeploy.
+func (e *ErrorLimitingSender) OnDeploy(dir string) {
+	if deployer, ok := e.underlying.(interface{ OnDeploy(string) }); ok {
+		deployer.OnDeploy(dir)
 	}
 }
+
 
 // SendHookResult sends hook result notification.
 // In quiet mode, only failed hook results are sent.

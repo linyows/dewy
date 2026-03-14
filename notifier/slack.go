@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -17,6 +18,8 @@ import (
 )
 
 var (
+	// SlackThreadTSFile is the filename for Slack thread timestamp in artifacts.
+	SlackThreadTSFile   = ".slack-thread-ts"
 	defaultSlackChannel = "randam"
 	// SlackUsername variable.
 	SlackUsername = "Dewy"
@@ -88,12 +91,25 @@ func (s *Slack) getClient() SlackSender {
 	return s.client
 }
 
-// SetThreadTS sets the thread timestamp for subsequent messages.
-// If Thread mode is not enabled, this is a no-op.
-func (s *Slack) SetThreadTS(ts string) {
+// OnDeploy loads thread timestamp from the deployed artifact directory.
+func (s *Slack) OnDeploy(dir string) {
 	if !s.Thread {
 		return
 	}
+	tsFile := filepath.Join(dir, SlackThreadTSFile)
+	data, err := os.ReadFile(tsFile)
+	if err != nil {
+		return
+	}
+	ts := strings.TrimSpace(string(data))
+	if ts != "" {
+		s.setThreadTS(ts)
+		s.logger.Debug("Thread TS loaded from artifact", slog.String("ts", ts))
+	}
+}
+
+// setThreadTS sets the thread timestamp for subsequent messages.
+func (s *Slack) setThreadTS(ts string) {
 	s.mu.Lock()
 	s.threadTS = ts
 	s.mu.Unlock()

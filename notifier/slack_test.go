@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -240,7 +241,7 @@ func TestSlack_SendWithThread(t *testing.T) {
 		logger:  testLogger(),
 	}
 	s.SetClient(mock)
-	s.SetThreadTS("1234567890.123456")
+	s.setThreadTS("1234567890.123456")
 	s.Send(context.Background(), "deploy started")
 
 	if mock.CallCount != 1 {
@@ -312,7 +313,7 @@ func TestSlack_SendBroadcast(t *testing.T) {
 		logger:  testLogger(),
 	}
 	s.SetClient(mock)
-	s.SetThreadTS("1234567890.123456")
+	s.setThreadTS("1234567890.123456")
 	s.SendBroadcast(context.Background(), "important message")
 
 	if mock.CallCount != 1 {
@@ -325,7 +326,10 @@ func TestSlack_SendBroadcast(t *testing.T) {
 	}
 }
 
-func TestSlack_SetThreadTS_ThreadDisabled(t *testing.T) {
+func TestSlack_OnDeploy_ThreadDisabled(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, SlackThreadTSFile), []byte("1234567890.123456"), 0644)
+
 	s := &Slack{
 		Channel: "/deploy",
 		Thread:  false,
@@ -333,16 +337,19 @@ func TestSlack_SetThreadTS_ThreadDisabled(t *testing.T) {
 		logger:  testLogger(),
 	}
 
-	s.SetThreadTS("1234567890.123456")
+	s.OnDeploy(dir)
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if s.threadTS != "" {
-		t.Errorf("SetThreadTS should be no-op when Thread=false, got %q", s.threadTS)
+		t.Errorf("OnDeploy should be no-op when Thread=false, got %q", s.threadTS)
 	}
 }
 
-func TestSlack_SetThreadTS_ThreadEnabled(t *testing.T) {
+func TestSlack_OnDeploy_ThreadEnabled(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, SlackThreadTSFile), []byte("1234567890.123456"), 0644)
+
 	s := &Slack{
 		Channel: "/deploy",
 		Thread:  true,
@@ -350,12 +357,31 @@ func TestSlack_SetThreadTS_ThreadEnabled(t *testing.T) {
 		logger:  testLogger(),
 	}
 
-	s.SetThreadTS("1234567890.123456")
+	s.OnDeploy(dir)
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if s.threadTS != "1234567890.123456" {
-		t.Errorf("SetThreadTS should set threadTS when Thread=true, got %q", s.threadTS)
+		t.Errorf("OnDeploy should set threadTS when Thread=true, got %q", s.threadTS)
+	}
+}
+
+func TestSlack_OnDeploy_FileNotFound(t *testing.T) {
+	dir := t.TempDir()
+
+	s := &Slack{
+		Channel: "/deploy",
+		Thread:  true,
+		token:   "xoxb-test-token",
+		logger:  testLogger(),
+	}
+
+	s.OnDeploy(dir)
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.threadTS != "" {
+		t.Errorf("OnDeploy should not set threadTS when file is absent, got %q", s.threadTS)
 	}
 }
 
@@ -382,7 +408,7 @@ func TestSlack_ThreadDisabledIgnoresTS(t *testing.T) {
 		logger:  testLogger(),
 	}
 	s.SetClient(mock)
-	s.SetThreadTS("1234567890.123456") // should be ignored
+	s.setThreadTS("1234567890.123456") // should be ignored
 
 	s.Send(context.Background(), "msg")
 
@@ -601,10 +627,10 @@ func TestGenColor_AvoidsRed(t *testing.T) {
 	}
 }
 
-func TestNullSetThreadTS(t *testing.T) {
+func TestNullOnDeploy(t *testing.T) {
 	n := &Null{}
 	// Should not panic
-	n.SetThreadTS("1234567890.123456")
+	n.OnDeploy(t.TempDir())
 }
 
 func abs(x int) int {
