@@ -93,7 +93,11 @@ dewy server --registry ghr://owner/repo \
 
 1. CIシステム（GitHub Actions等）がSlackに親メッセージを投稿し、メッセージのタイムスタンプ（`ts`）を `.slack-thread-ts` ファイルとしてアーティファクト内に含める
 2. Dewyがアーティファクトを展開し、`.slack-thread-ts` を読み取り、以降の通知をスレッド返信として送信
-3. エラーや重要な通知は `reply_broadcast` を使い、メインチャンネルにも表示される
+3. エラー通知は `reply_broadcast` を使い、メインチャンネルにも表示される
+
+{% callout type="info" %}
+スレッドのタイムスタンプはアーティファクト単位です。初回デプロイ時は、アーティファクトのダウンロード前に送信される通知（起動メッセージなど）はスレッドではなくチャンネルに直接投稿されます。再起動時は、前回デプロイされたアーティファクトからタイムスタンプが読み込まれるため、起動メッセージを含むすべての通知がスレッドに投稿されます。
+{% /callout %}
 
 **スレッドモードの有効化** — 通知URLに `thread=true` を追加：
 
@@ -126,7 +130,7 @@ jobs:
           TS=$(curl -s -X POST https://slack.com/api/chat.postMessage \
             -H "Authorization: Bearer $SLACK_TOKEN" \
             -H "Content-Type: application/json" \
-            -d "{\"channel\":\"$SLACK_CHANNEL\",\"text\":\"Deploying $TAG\"}" \
+            -d "{\"channel\":\"$SLACK_CHANNEL\",\"text\":\"Release \`$TAG\`\"}" \
             | jq -r '.ts')
           echo "$TS" > .slack-thread-ts
 
@@ -145,6 +149,10 @@ archives:
       - .slack-thread-ts
 ```
 
+{% callout type="important" %}
+GoReleaserはワーキングディレクトリに未コミットの変更があるとビルドに失敗します。`.slack-thread-ts` はCI中に生成されるファイルのため、GoReleaserがダーティファイルとして検出しないよう `.gitignore` に追加しておく必要があります。
+{% /callout %}
+
 **動作まとめ：**
 
 {% table %}
@@ -152,7 +160,7 @@ archives:
 * 動作
 ---
 * `thread=true` + `.slack-thread-ts` あり
-* すべての通知がスレッド返信として送信。エラーと重要メッセージはチャンネルにもブロードキャスト。
+* すべての通知がスレッド返信として送信。エラー通知のみチャンネルにもブロードキャスト。
 ---
 * `thread=true` + `.slack-thread-ts` なし
 * 通常のチャンネル投稿にフォールバック（スレッドモードなしと同じ）

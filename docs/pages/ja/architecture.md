@@ -22,7 +22,7 @@ Dewyは、プラグガブルな抽象化として、Registry, Artifact, Cache, N
 
 以下はDewyのデプロイプロセスと構成を図にしたものです。
 
-![Hi-level Architecture](https://github.com/linyows/dewy/blob/main/misc/dewy-architecture.svg?raw=true)
+![Hi-level Architecture](/images/dewy-architecture.svg)
 
 1. Registryは、指定したレジストリをポーリングし、アプリケーションの最新バージョンを検知する
 2. Artifactは、指定したアーティファクトストアからアーティファクトをダウンロードし展開する
@@ -35,7 +35,7 @@ Dewyは、プラグガブルな抽象化として、Registry, Artifact, Cache, N
 
 Supervisor型では、Dewyがメインプロセスとなり、アプリケーションを子プロセスとして起動します。このモードは、VMやベアメタルサーバー上でバイナリアプリケーションを直接デプロイする場合に最適です。
 
-![Supervisor Architecture](https://github.com/linyows/dewy/blob/main/misc/supervisor-architecture.svg?raw=true)
+![Supervisor Architecture](/images/supervisor-architecture.svg)
 
 ### グレースフルリスタート
 
@@ -50,7 +50,7 @@ Supervisor型では、Dewyがメインプロセスとなり、アプリケーシ
 
 プロキシ型では、DewyがDockerまたはPodmanを使用してコンテナ化されたアプリケーションを管理します。内蔵のTCPリバースプロキシがコンテナバックエンドにトラフィックをルーティングし、ゼロダウンタイムのローリングアップデートを可能にします。
 
-![Proxy Architecture](https://github.com/linyows/dewy/blob/main/misc/proxy-architecture.svg?raw=true)
+![Proxy Architecture](/images/proxy-architecture.svg)
 
 ### コンポーネント
 

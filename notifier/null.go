@@ -14,5 +14,5 @@ func (n *Null) SendImportant(ctx context.Context, message string) {
 func (n *Null) SendHookResult(ctx context.Context, hookType string, result *HookResult) {
 }
 
-func (n *Null) SetThreadTS(ts string) {
+func (n *Null) OnDeploy(dir string) {
 }

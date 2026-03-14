@@ -93,7 +93,11 @@ When deploying to multiple servers, deploy notifications can flood a Slack chann
 
 1. Your CI system (e.g., GitHub Actions) posts a parent message to Slack and saves the message timestamp (`ts`) to a file named `.slack-thread-ts` inside the artifact
 2. Dewy extracts the artifact, reads `.slack-thread-ts`, and sends all subsequent notifications as thread replies
-3. Error and important notifications use `reply_broadcast` so they also appear in the main channel feed
+3. Error notifications use `reply_broadcast` so they also appear in the main channel feed
+
+{% callout type="info" %}
+Thread timestamps are per-artifact. On the initial deployment, notifications sent before artifact download (e.g., startup message) will be posted to the channel directly, not as thread replies. On subsequent restarts, the thread timestamp is loaded from the previously deployed artifact, so all notifications including the startup message will be sent as thread replies.
+{% /callout %}
 
 **Enable thread mode** by adding `thread=true` to the notifier URL:
 
@@ -126,7 +130,7 @@ jobs:
           TS=$(curl -s -X POST https://slack.com/api/chat.postMessage \
             -H "Authorization: Bearer $SLACK_TOKEN" \
             -H "Content-Type: application/json" \
-            -d "{\"channel\":\"$SLACK_CHANNEL\",\"text\":\"Deploying $TAG\"}" \
+            -d "{\"channel\":\"$SLACK_CHANNEL\",\"text\":\"Release \`$TAG\`\"}" \
             | jq -r '.ts')
           echo "$TS" > .slack-thread-ts
 
@@ -145,6 +149,10 @@ archives:
       - .slack-thread-ts
 ```
 
+{% callout type="important" %}
+GoReleaser fails to build if there are uncommitted changes in the working directory. Since `.slack-thread-ts` is generated during CI, you must add it to `.gitignore` to prevent GoReleaser from detecting it as a dirty file.
+{% /callout %}
+
 **Behavior summary:**
 
 {% table %}
@@ -152,7 +160,7 @@ archives:
 * Behavior
 ---
 * `thread=true` + `.slack-thread-ts` present
-* All notifications sent as thread replies. Errors and important messages also broadcast to channel.
+* All notifications sent as thread replies. Error notifications are also broadcast to channel.
 ---
 * `thread=true` + `.slack-thread-ts` absent
 * Fallback to regular channel posts (same as without thread mode)

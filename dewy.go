@@ -159,6 +159,9 @@ func (d *Dewy) Start(i int) {
 		d.logger.Error("Notifier failure", slog.String("error", err.Error()))
 	}
 
+	// Load notifier context from current deployment if present (for restarts)
+	d.notifier.OnDeploy(filepath.Join(d.root, symlinkDir))
+
 	msg := fmt.Sprintf("Automatic shipping started by *Dewy* (v%s: %s)", d.config.Version, d.config.Command.String())
 	d.logger.Info("Dewy start notification", slog.String("message", msg))
 	d.notifier.Send(ctx, msg)
@@ -456,15 +459,7 @@ func (d *Dewy) deploy(key string) (err error) {
 	}
 	d.logger.Info("Extract archive", slog.String("path", linkFrom))
 
-	// Load Slack thread timestamp from artifact if present
-	tsFile := filepath.Join(linkFrom, ".slack-thread-ts")
-	if data, err := os.ReadFile(tsFile); err == nil {
-		ts := strings.TrimSpace(string(data))
-		if ts != "" {
-			d.notifier.SetThreadTS(ts)
-			d.logger.Debug("Thread TS file found", slog.String("ts", ts))
-		}
-	}
+	d.notifier.OnDeploy(linkFrom)
 
 	linkTo := filepath.Join(d.root, symlinkDir)
 
