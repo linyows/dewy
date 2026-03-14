@@ -328,7 +328,9 @@ func TestSlack_SendBroadcast(t *testing.T) {
 
 func TestSlack_OnDeploy_ThreadDisabled(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, SlackThreadTSFile), []byte("1234567890.123456"), 0644)
+	if err := os.WriteFile(filepath.Join(dir, SlackThreadTSFile), []byte("1234567890.123456"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	s := &Slack{
 		Channel: "/deploy",
@@ -348,7 +350,9 @@ func TestSlack_OnDeploy_ThreadDisabled(t *testing.T) {
 
 func TestSlack_OnDeploy_ThreadEnabled(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, SlackThreadTSFile), []byte("1234567890.123456"), 0644)
+	if err := os.WriteFile(filepath.Join(dir, SlackThreadTSFile), []byte("1234567890.123456"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	s := &Slack{
 		Channel: "/deploy",
