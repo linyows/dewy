@@ -95,6 +95,10 @@ When deploying to multiple servers, deploy notifications can flood a Slack chann
 2. Dewy extracts the artifact, reads `.slack-thread-ts`, and sends all subsequent notifications as thread replies
 3. Error notifications use `reply_broadcast` so they also appear in the main channel feed
 
+{% callout type="info" %}
+Thread timestamps are per-artifact. On the initial deployment, notifications sent before artifact download (e.g., startup message) will be posted to the channel directly, not as thread replies. On subsequent restarts, the thread timestamp is loaded from the previously deployed artifact, so all notifications including the startup message will be sent as thread replies.
+{% /callout %}
+
 **Enable thread mode** by adding `thread=true` to the notifier URL:
 
 ```bash

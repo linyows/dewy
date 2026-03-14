@@ -95,6 +95,10 @@ dewy server --registry ghr://owner/repo \
 2. Dewyがアーティファクトを展開し、`.slack-thread-ts` を読み取り、以降の通知をスレッド返信として送信
 3. エラー通知は `reply_broadcast` を使い、メインチャンネルにも表示される
 
+{% callout type="info" %}
+スレッドのタイムスタンプはアーティファクト単位です。初回デプロイ時は、アーティファクトのダウンロード前に送信される通知（起動メッセージなど）はスレッドではなくチャンネルに直接投稿されます。再起動時は、前回デプロイされたアーティファクトからタイムスタンプが読み込まれるため、起動メッセージを含むすべての通知がスレッドに投稿されます。
+{% /callout %}
+
 **スレッドモードの有効化** — 通知URLに `thread=true` を追加：
 
 ```bash
@@ -126,7 +130,7 @@ jobs:
           TS=$(curl -s -X POST https://slack.com/api/chat.postMessage \
             -H "Authorization: Bearer $SLACK_TOKEN" \
             -H "Content-Type: application/json" \
-            -d "{\"channel\":\"$SLACK_CHANNEL\",\"text\":\"Deploying \`$TAG\`\"}" \
+            -d "{\"channel\":\"$SLACK_CHANNEL\",\"text\":\"Release \`$TAG\`\"}" \
             | jq -r '.ts')
           echo "$TS" > .slack-thread-ts
 
