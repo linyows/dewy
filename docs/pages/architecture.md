@@ -22,7 +22,7 @@ Dewy is composed of four interfaces as pluggable abstractions: Registry, Artifac
 
 The following diagram illustrates Dewy's deployment process and configuration.
 
-![Hi-level Architecture](https://github.com/linyows/dewy/blob/main/misc/dewy-architecture.svg?raw=true)
+![Hi-level Architecture](/images/dewy-architecture.svg)
 
 1. Registry polls the specified registry to detect the latest version of the application
 2. Artifact downloads and extracts artifacts from the specified artifact store
@@ -35,7 +35,7 @@ The following diagram illustrates Dewy's deployment process and configuration.
 
 In Supervisor Mode, Dewy acts as the main process and launches applications as child processes. This mode is ideal for deploying binary applications directly on VMs or bare-metal servers.
 
-![Supervisor Architecture](https://github.com/linyows/dewy/blob/main/misc/supervisor-architecture.svg?raw=true)
+![Supervisor Architecture](/images/supervisor-architecture.svg)
 
 ### Graceful Restart
 
@@ -50,7 +50,7 @@ For the `server` command, Dewy uses [server-starter](https://github.com/lestrrat
 
 In Proxy Mode, Dewy manages containerized applications using Docker or Podman. It runs a built-in TCP reverse proxy that routes traffic to container backends, enabling zero-downtime rolling updates.
 
-![Proxy Architecture](https://github.com/linyows/dewy/blob/main/misc/proxy-architecture.svg?raw=true)
+![Proxy Architecture](/images/proxy-architecture.svg)
 
 ### Components
 
