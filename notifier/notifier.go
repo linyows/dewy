@@ -73,17 +73,13 @@ func (e *ErrorLimitingSender) Send(ctx context.Context, message string) {
 }
 
 // SendImportant sends a message regardless of quiet mode (but still respects error count).
-// If the underlying sender supports BroadcastSender, it uses broadcast (thread + channel).
+// Messages are sent within the thread only; reply_broadcast is reserved for errors.
 func (e *ErrorLimitingSender) SendImportant(ctx context.Context, message string) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
 	if e.errorCount == 0 {
-		if bs, ok := e.underlying.(BroadcastSender); ok {
-			bs.SendBroadcast(ctx, message)
-		} else {
-			e.underlying.Send(ctx, message)
-		}
+		e.underlying.Send(ctx, message)
 	}
 }
 
