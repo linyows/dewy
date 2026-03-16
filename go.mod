@@ -3,7 +3,7 @@ module github.com/linyows/dewy
 go 1.26.0
 
 require (
-	cloud.google.com/go/storage v1.60.0
+	cloud.google.com/go/storage v1.61.3
 	github.com/aws/aws-sdk-go-v2 v1.41.3
 	github.com/aws/aws-sdk-go-v2/config v1.32.11
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.96.4
@@ -355,7 +355,7 @@ require (
 	golang.org/x/mod v0.32.0 // indirect
 	golang.org/x/net v0.51.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/sys v0.41.0 // indirect
+	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/term v0.40.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
