@@ -32,7 +32,7 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.42.0
 	golang.org/x/oauth2 v0.36.0
 	google.golang.org/api v0.271.0
-	google.golang.org/grpc v1.79.2
+	google.golang.org/grpc v1.79.3
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/mail.v2 v2.3.1
 )
