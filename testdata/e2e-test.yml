@@ -7,6 +7,8 @@ vars:
   aws_secret_access_key: "{{ AWS_SECRET_ACCESS_KEY ?? '' }}"
   google_application_credentials: "{{ GOOGLE_APPLICATION_CREDENTIALS ?? '' }}"
   slack_token: "{{ SLACK_TOKEN ?? '' }}"
+  dockerhub_username: "{{ DOCKERHUB_USERNAME ?? '' }}"
+  dockerhub_token: "{{ DOCKERHUB_TOKEN ?? '' }}"
 
 jobs:
 - name: Check credentials
@@ -58,6 +60,7 @@ jobs:
     - { command: 'assets', registry: 's3' }
     - { command: 'assets', registry: 'gs' }
     - { command: 'container', registry: 'img' }
+    - { command: 'container', registry: 'dockerhub' }
     - { command: 'container-multiport', registry: 'img' }
 
 # Phase 1: Start all dewy instances and wait for initial deployment (parallel)
@@ -336,6 +339,44 @@ jobs:
         exit 1
     test: status == 0
 
+- name: Start container by Docker Hub registry
+  id: start_ctr_dockerhub
+  needs: [build]
+  steps:
+  - name: Start dewy
+    id: ctr_dockerhub
+    uses: shell
+    with:
+      workdir: ./testdata/container/dockerhub
+      background: true
+      env:
+        DOCKER_USERNAME: "{{ vars.dockerhub_username }}"
+        DOCKER_PASSWORD: "{{ vars.dockerhub_token }}"
+      cmd: |
+        ./dewy container -p 7200 -l debug \
+        --registry "img://docker.io/linyows/dewy-testapp?pre-release=true" \
+        --health-path /health \
+        --replicas 3
+    test: status == -1
+    outputs:
+      pid: res.pid
+      log: res.log
+    echo: |
+      PID: {{ res.pid }}
+      Log: {{ res.log }}
+  - name: Wait for initial deployment
+    uses: shell
+    retry:
+      max_attempts: 180
+      interval: 5s
+    with:
+      cmd: |
+        if [ -f "{{ outputs.ctr_dockerhub.log }}" ]; then
+          grep -q 'Starting new container' "{{ outputs.ctr_dockerhub.log }}" && exit 0
+        fi
+        exit 1
+    test: status == 0
+
 - name: Start container with multiple ports by OCI registry
   id: start_ctr_mp_oci
   needs: [build]
@@ -381,7 +422,7 @@ jobs:
 
 - name: Create new version
   id: create_release
-  needs: [start_srv_ghr, start_srv_s3, start_srv_gs, start_ast_ghr, start_ast_s3, start_ast_gs, start_ctr_oci, start_ctr_mp_oci]
+  needs: [start_srv_ghr, start_srv_s3, start_srv_gs, start_ast_ghr, start_ast_s3, start_ast_gs, start_ctr_oci, start_ctr_dockerhub, start_ctr_mp_oci]
   steps:
   - name: Create release
     uses: shell
@@ -505,6 +546,20 @@ jobs:
       vars:
         pid: "{{ outputs.ctr_oci.pid }}"
         log: "{{ outputs.ctr_oci.log }}"
+        new_version: "{{ outputs.genver.version }}"
+    test: res.code == 0
+    timeout: 30m
+
+- name: Verify container by Docker Hub registry
+  needs: [create_release]
+  steps:
+  - name: Container verify
+    uses: embedded
+    with:
+      path: ./testdata/jobs/container-verify.yml
+      vars:
+        pid: "{{ outputs.ctr_dockerhub.pid }}"
+        log: "{{ outputs.ctr_dockerhub.log }}"
         new_version: "{{ outputs.genver.version }}"
     test: res.code == 0
     timeout: 30m
