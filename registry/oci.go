@@ -49,9 +49,11 @@ func NewOCI(ctx context.Context, u string, log *logging.Logger) (*OCI, error) {
 		return nil, err
 	}
 
+	registry, repository := normalizeDockerHub(ur.Host, strings.TrimPrefix(ur.Path, "/"))
+
 	oci := &OCI{
-		Registry:   ur.Host,
-		Repository: strings.TrimPrefix(ur.Path, "/"),
+		Registry:   registry,
+		Repository: repository,
 		client:     &http.Client{Timeout: 30 * time.Second},
 		logger:     log,
 	}
@@ -88,6 +90,19 @@ func (o *OCI) loadCredentials() {
 	// AWS ECR - will use aws-cli credentials
 	// Google Artifact Registry - will use gcloud credentials
 	// TODO: Phase 2 implementation
+}
+
+// normalizeDockerHub rewrites Docker Hub hostnames to the actual registry API host.
+// Docker Hub uses "docker.io" as a canonical namespace but the V2 API is served at
+// "registry-1.docker.io". Official images (single-name like "nginx") need the "library/" prefix.
+func normalizeDockerHub(host, repository string) (string, string) {
+	if host == "docker.io" || host == "index.docker.io" {
+		host = "registry-1.docker.io"
+		if !strings.Contains(repository, "/") {
+			repository = "library/" + repository
+		}
+	}
+	return host, repository
 }
 
 // Current returns the current artifact from the OCI registry.
