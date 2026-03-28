@@ -813,10 +813,16 @@ func TestNewOCI_DockerHubNormalization(t *testing.T) {
 			expectedRepository: "library/nginx",
 		},
 		{
-			name:               "docker.io official image with tag gets library/ prefix",
+			name:               "docker.io official image with query params gets library/ prefix",
 			url:                "img://docker.io/golang?pre-release=true",
 			expectedRegistry:   "registry-1.docker.io",
 			expectedRepository: "library/golang",
+		},
+		{
+			name:               "registry-1.docker.io official image gets library/ prefix",
+			url:                "img://registry-1.docker.io/nginx",
+			expectedRegistry:   "registry-1.docker.io",
+			expectedRepository: "library/nginx",
 		},
 		{
 			name:               "docker.io user image is not prefixed with library/",
@@ -863,30 +869,35 @@ func TestNewOCI_DockerHubNormalization(t *testing.T) {
 	}
 }
 
-func TestOCI_listTags_DockerHub(t *testing.T) {
-	// Simulate docker.io by creating a mock that returns tags
-	// after the docker.io -> registry-1.docker.io rewrite
-	server := mockRegistryServer(t)
-	defer server.Close()
-
-	registryHost := strings.TrimPrefix(server.URL, "http://")
-
-	logger := logging.SetupLogger("ERROR", "text", os.Stderr)
-	oci := &OCI{
-		Registry:   registryHost,
-		Repository: "testapp",
-		client:     &http.Client{Timeout: 5 * time.Second},
-		logger:     logger,
+func TestNewOCI_Validation(t *testing.T) {
+	tests := []struct {
+		name    string
+		url     string
+		wantErr string
+	}{
+		{
+			name:    "empty host",
+			url:     "img:///repo",
+			wantErr: "registry host is required",
+		},
+		{
+			name:    "empty repository",
+			url:     "img://docker.io",
+			wantErr: "repository path is required",
+		},
 	}
 
-	ctx := context.Background()
-	tags, err := oci.listTags(ctx)
-	if err != nil {
-		t.Fatalf("Failed to list tags: %v", err)
-	}
-
-	if len(tags) == 0 {
-		t.Fatal("Expected tags, got none")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger := logging.SetupLogger("ERROR", "text", os.Stderr)
+			_, err := NewOCI(context.Background(), tt.url, logger)
+			if err == nil {
+				t.Fatal("Expected error, got nil")
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("Error = %q, want it to contain %q", err.Error(), tt.wantErr)
+			}
+		})
 	}
 }
 

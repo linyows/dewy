@@ -49,7 +49,15 @@ func NewOCI(ctx context.Context, u string, log *logging.Logger) (*OCI, error) {
 		return nil, err
 	}
 
-	registry, repository := normalizeDockerHub(ur.Host, strings.TrimPrefix(ur.Path, "/"))
+	if ur.Host == "" {
+		return nil, fmt.Errorf("invalid OCI URL %q: registry host is required", u)
+	}
+	repoPath := strings.TrimPrefix(ur.Path, "/")
+	if repoPath == "" {
+		return nil, fmt.Errorf("invalid OCI URL %q: repository path is required", u)
+	}
+
+	registry, repository := normalizeDockerHub(ur.Host, repoPath)
 
 	oci := &OCI{
 		Registry:   registry,
@@ -96,12 +104,16 @@ func (o *OCI) loadCredentials() {
 // Docker Hub uses "docker.io" as a canonical namespace but the V2 API is served at
 // "registry-1.docker.io". Official images (single-name like "nginx") need the "library/" prefix.
 func normalizeDockerHub(host, repository string) (string, string) {
+	isDockerHub := host == "docker.io" || host == "index.docker.io" || host == "registry-1.docker.io"
+
 	if host == "docker.io" || host == "index.docker.io" {
 		host = "registry-1.docker.io"
-		if !strings.Contains(repository, "/") {
-			repository = "library/" + repository
-		}
 	}
+
+	if isDockerHub && !strings.Contains(repository, "/") {
+		repository = "library/" + repository
+	}
+
 	return host, repository
 }
 
