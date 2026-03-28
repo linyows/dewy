@@ -781,6 +781,115 @@ func TestSSRF_SameHostBypass(t *testing.T) {
 	}
 }
 
+func TestNewOCI_DockerHubNormalization(t *testing.T) {
+	tests := []struct {
+		name               string
+		url                string
+		expectedRegistry   string
+		expectedRepository string
+	}{
+		{
+			name:               "docker.io is rewritten to registry-1.docker.io",
+			url:                "img://docker.io/linyows/dewy-testapp",
+			expectedRegistry:   "registry-1.docker.io",
+			expectedRepository: "linyows/dewy-testapp",
+		},
+		{
+			name:               "index.docker.io is rewritten to registry-1.docker.io",
+			url:                "img://index.docker.io/linyows/dewy-testapp",
+			expectedRegistry:   "registry-1.docker.io",
+			expectedRepository: "linyows/dewy-testapp",
+		},
+		{
+			name:               "registry-1.docker.io is kept as-is",
+			url:                "img://registry-1.docker.io/linyows/dewy-testapp",
+			expectedRegistry:   "registry-1.docker.io",
+			expectedRepository: "linyows/dewy-testapp",
+		},
+		{
+			name:               "docker.io official image gets library/ prefix",
+			url:                "img://docker.io/nginx",
+			expectedRegistry:   "registry-1.docker.io",
+			expectedRepository: "library/nginx",
+		},
+		{
+			name:               "docker.io official image with tag gets library/ prefix",
+			url:                "img://docker.io/golang?pre-release=true",
+			expectedRegistry:   "registry-1.docker.io",
+			expectedRepository: "library/golang",
+		},
+		{
+			name:               "docker.io user image is not prefixed with library/",
+			url:                "img://docker.io/linyows/myapp",
+			expectedRegistry:   "registry-1.docker.io",
+			expectedRepository: "linyows/myapp",
+		},
+		{
+			name:               "ghcr.io is not rewritten",
+			url:                "img://ghcr.io/owner/myapp",
+			expectedRegistry:   "ghcr.io",
+			expectedRepository: "owner/myapp",
+		},
+		{
+			name:               "private registry is not rewritten",
+			url:                "img://registry.example.com/myapp",
+			expectedRegistry:   "registry.example.com",
+			expectedRepository: "myapp",
+		},
+		{
+			name:               "localhost registry is not rewritten",
+			url:                "img://localhost:5000/myapp",
+			expectedRegistry:   "localhost:5000",
+			expectedRepository: "myapp",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger := logging.SetupLogger("ERROR", "text", os.Stderr)
+			oci, err := NewOCI(context.Background(), tt.url, logger)
+			if err != nil {
+				t.Fatalf("NewOCI() returned error: %v", err)
+			}
+
+			if oci.Registry != tt.expectedRegistry {
+				t.Errorf("Registry = %q, want %q", oci.Registry, tt.expectedRegistry)
+			}
+
+			if oci.Repository != tt.expectedRepository {
+				t.Errorf("Repository = %q, want %q", oci.Repository, tt.expectedRepository)
+			}
+		})
+	}
+}
+
+func TestOCI_listTags_DockerHub(t *testing.T) {
+	// Simulate docker.io by creating a mock that returns tags
+	// after the docker.io -> registry-1.docker.io rewrite
+	server := mockRegistryServer(t)
+	defer server.Close()
+
+	registryHost := strings.TrimPrefix(server.URL, "http://")
+
+	logger := logging.SetupLogger("ERROR", "text", os.Stderr)
+	oci := &OCI{
+		Registry:   registryHost,
+		Repository: "testapp",
+		client:     &http.Client{Timeout: 5 * time.Second},
+		logger:     logger,
+	}
+
+	ctx := context.Background()
+	tags, err := oci.listTags(ctx)
+	if err != nil {
+		t.Fatalf("Failed to list tags: %v", err)
+	}
+
+	if len(tags) == 0 {
+		t.Fatal("Expected tags, got none")
+	}
+}
+
 func TestIsPrivateIP(t *testing.T) {
 	tests := []struct {
 		name     string
