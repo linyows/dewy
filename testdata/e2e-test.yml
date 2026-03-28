@@ -353,7 +353,9 @@ jobs:
         DOCKER_USERNAME: "{{ vars.dockerhub_username }}"
         DOCKER_PASSWORD: "{{ vars.dockerhub_token }}"
       cmd: |
-        ./dewy container -p 7200 -l debug \
+        ./dewy container \
+        --name dewy-testapp-dockerhub \
+        -p 7200 -l debug \
         --registry "img://docker.io/linyows/dewy-testapp?pre-release=true" \
         --health-path /health \
         --replicas 3
