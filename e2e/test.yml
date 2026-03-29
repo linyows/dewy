@@ -62,6 +62,7 @@ jobs:
     - { command: 'container', variant: 'img' }
     - { command: 'container', variant: 'dockerhub' }
     - { command: 'container', variant: 'multiport' }
+    - { command: 'container', variant: 'podman' }
 
 # Phase 1: Start all dewy instances and wait for initial deployment (parallel)
 
@@ -339,6 +340,43 @@ jobs:
         exit 1
     test: status == 0
 
+- name: Start container by OCI registry with Podman runtime
+  id: start_ctr_podman
+  needs: [build]
+  steps:
+  - name: Start dewy
+    id: ctr_podman
+    uses: shell
+    with:
+      workdir: ./e2e/container/podman
+      background: true
+      env:
+        GITHUB_TOKEN: "{{ vars.github_token }}"
+      cmd: |
+        ./dewy container --runtime podman -p 7300 -l debug \
+        --registry "img://ghcr.io/linyows/dewy-testapp?pre-release=true" \
+        --health-path /health \
+        --replicas 3
+    test: status == -1
+    outputs:
+      pid: res.pid
+      log: res.log
+    echo: |
+      PID: {{ res.pid }}
+      Log: {{ res.log }}
+  - name: Wait for initial deployment
+    uses: shell
+    retry:
+      max_attempts: 180
+      interval: 5s
+    with:
+      cmd: |
+        if [ -f "{{ outputs.ctr_podman.log }}" ]; then
+          grep -q 'Starting new container' "{{ outputs.ctr_podman.log }}" && exit 0
+        fi
+        exit 1
+    test: status == 0
+
 - name: Start container by Docker Hub registry
   id: start_ctr_dockerhub
   needs: [build]
@@ -424,7 +462,7 @@ jobs:
 
 - name: Create new version
   id: create_release
-  needs: [start_srv_ghr, start_srv_s3, start_srv_gs, start_ast_ghr, start_ast_s3, start_ast_gs, start_ctr_oci, start_ctr_dockerhub, start_ctr_mp_oci]
+  needs: [start_srv_ghr, start_srv_s3, start_srv_gs, start_ast_ghr, start_ast_s3, start_ast_gs, start_ctr_oci, start_ctr_podman, start_ctr_dockerhub, start_ctr_mp_oci]
   steps:
   - name: Create release
     uses: shell
@@ -549,6 +587,21 @@ jobs:
         pid: "{{ outputs.ctr_oci.pid }}"
         log: "{{ outputs.ctr_oci.log }}"
         new_version: "{{ outputs.genver.version }}"
+    test: res.code == 0
+    timeout: 30m
+
+- name: Verify container by OCI registry with Podman runtime
+  needs: [create_release]
+  steps:
+  - name: Container verify
+    uses: embedded
+    with:
+      path: ./e2e/jobs/container-verify.yml
+      vars:
+        pid: "{{ outputs.ctr_podman.pid }}"
+        log: "{{ outputs.ctr_podman.log }}"
+        new_version: "{{ outputs.genver.version }}"
+        runtime: podman
     test: res.code == 0
     timeout: 30m
 
