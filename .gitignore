@@ -6,6 +6,6 @@
 dist/
 /docs/out
 .dewy/
-/testdata/server
-/testdata/assets
-/testdata/container
+/e2e/server
+/e2e/assets
+/e2e/container

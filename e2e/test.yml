@@ -47,21 +47,21 @@ jobs:
   id: build
   needs: [generate_version]
   steps:
-  - name: Go build for {{ vars.command }}-{{ vars.registry }}
+  - name: Go build for {{ vars.command }}-{{ vars.variant }}
     uses: shell
     with:
-      cmd: go build -o ./testdata/{{ vars.command }}/{{ vars.registry }}/dewy ./cmd/dewy
+      cmd: go build -o ./e2e/{{ vars.command }}/{{ vars.variant }}/dewy ./cmd/dewy
     test: status == 0
     iteration:
-    - { command: 'server', registry: 'ghr' }
-    - { command: 'server', registry: 's3' }
-    - { command: 'server', registry: 'gs' }
-    - { command: 'assets', registry: 'ghr' }
-    - { command: 'assets', registry: 's3' }
-    - { command: 'assets', registry: 'gs' }
-    - { command: 'container', registry: 'img' }
-    - { command: 'container', registry: 'dockerhub' }
-    - { command: 'container-multiport', registry: 'img' }
+    - { command: 'server', variant: 'ghr' }
+    - { command: 'server', variant: 's3' }
+    - { command: 'server', variant: 'gs' }
+    - { command: 'assets', variant: 'ghr' }
+    - { command: 'assets', variant: 's3' }
+    - { command: 'assets', variant: 'gs' }
+    - { command: 'container', variant: 'img' }
+    - { command: 'container', variant: 'dockerhub' }
+    - { command: 'container', variant: 'multiport' }
 
 # Phase 1: Start all dewy instances and wait for initial deployment (parallel)
 
@@ -73,7 +73,7 @@ jobs:
     id: srv_ghr
     uses: shell
     with:
-      workdir: ./testdata/server/ghr
+      workdir: ./e2e/server/ghr
       background: true
       env:
         GITHUB_TOKEN: "{{ vars.github_token }}"
@@ -114,7 +114,7 @@ jobs:
     id: srv_s3
     uses: shell
     with:
-      workdir: ./testdata/server/s3
+      workdir: ./e2e/server/s3
       background: true
       env:
         GITHUB_TOKEN: "{{ vars.github_token }}"
@@ -155,7 +155,7 @@ jobs:
     id: srv_gs
     uses: shell
     with:
-      workdir: ./testdata/server/gs
+      workdir: ./e2e/server/gs
       background: true
       env:
         GITHUB_TOKEN: "{{ vars.github_token }}"
@@ -196,7 +196,7 @@ jobs:
     id: ast_ghr
     uses: shell
     with:
-      workdir: ./testdata/assets/ghr
+      workdir: ./e2e/assets/ghr
       background: true
       env:
         GITHUB_TOKEN: "{{ vars.github_token }}"
@@ -234,7 +234,7 @@ jobs:
     id: ast_s3
     uses: shell
     with:
-      workdir: ./testdata/assets/s3
+      workdir: ./e2e/assets/s3
       background: true
       env:
         GITHUB_TOKEN: "{{ vars.github_token }}"
@@ -272,7 +272,7 @@ jobs:
     id: ast_gs
     uses: shell
     with:
-      workdir: ./testdata/assets/gs
+      workdir: ./e2e/assets/gs
       background: true
       env:
         GITHUB_TOKEN: "{{ vars.github_token }}"
@@ -310,7 +310,7 @@ jobs:
     id: ctr_oci
     uses: shell
     with:
-      workdir: ./testdata/container/img
+      workdir: ./e2e/container/img
       background: true
       env:
         GITHUB_TOKEN: "{{ vars.github_token }}"
@@ -347,7 +347,7 @@ jobs:
     id: ctr_dockerhub
     uses: shell
     with:
-      workdir: ./testdata/container/dockerhub
+      workdir: ./e2e/container/dockerhub
       background: true
       env:
         DOCKER_USERNAME: "{{ vars.dockerhub_username }}"
@@ -387,7 +387,7 @@ jobs:
     id: ctr_mp_oci
     uses: shell
     with:
-      workdir: ./testdata/container-multiport/img
+      workdir: ./e2e/container/multiport
       background: true
       env:
         GITHUB_TOKEN: "{{ vars.github_token }}"
@@ -460,7 +460,7 @@ jobs:
   - name: Server verify
     uses: embedded
     with:
-      path: ./testdata/jobs/server-verify.yml
+      path: ./e2e/jobs/server-verify.yml
       vars:
         pid: "{{ outputs.srv_ghr.pid }}"
         log: "{{ outputs.srv_ghr.log }}"
@@ -474,7 +474,7 @@ jobs:
   - name: Server verify
     uses: embedded
     with:
-      path: ./testdata/jobs/server-verify.yml
+      path: ./e2e/jobs/server-verify.yml
       vars:
         pid: "{{ outputs.srv_s3.pid }}"
         log: "{{ outputs.srv_s3.log }}"
@@ -488,7 +488,7 @@ jobs:
   - name: Server verify
     uses: embedded
     with:
-      path: ./testdata/jobs/server-verify.yml
+      path: ./e2e/jobs/server-verify.yml
       vars:
         pid: "{{ outputs.srv_gs.pid }}"
         log: "{{ outputs.srv_gs.log }}"
@@ -502,7 +502,7 @@ jobs:
   - name: Assets verify
     uses: embedded
     with:
-      path: ./testdata/jobs/assets-verify.yml
+      path: ./e2e/jobs/assets-verify.yml
       vars:
         pid: "{{ outputs.ast_ghr.pid }}"
         log: "{{ outputs.ast_ghr.log }}"
@@ -516,7 +516,7 @@ jobs:
   - name: Assets verify
     uses: embedded
     with:
-      path: ./testdata/jobs/assets-verify.yml
+      path: ./e2e/jobs/assets-verify.yml
       vars:
         pid: "{{ outputs.ast_s3.pid }}"
         log: "{{ outputs.ast_s3.log }}"
@@ -530,7 +530,7 @@ jobs:
   - name: Assets verify
     uses: embedded
     with:
-      path: ./testdata/jobs/assets-verify.yml
+      path: ./e2e/jobs/assets-verify.yml
       vars:
         pid: "{{ outputs.ast_gs.pid }}"
         log: "{{ outputs.ast_gs.log }}"
@@ -544,7 +544,7 @@ jobs:
   - name: Container verify
     uses: embedded
     with:
-      path: ./testdata/jobs/container-verify.yml
+      path: ./e2e/jobs/container-verify.yml
       vars:
         pid: "{{ outputs.ctr_oci.pid }}"
         log: "{{ outputs.ctr_oci.log }}"
@@ -558,7 +558,7 @@ jobs:
   - name: Container verify
     uses: embedded
     with:
-      path: ./testdata/jobs/container-verify.yml
+      path: ./e2e/jobs/container-verify.yml
       vars:
         pid: "{{ outputs.ctr_dockerhub.pid }}"
         log: "{{ outputs.ctr_dockerhub.log }}"
@@ -572,7 +572,7 @@ jobs:
   - name: Container multi-port verify
     uses: embedded
     with:
-      path: ./testdata/jobs/container-multiport-verify.yml
+      path: ./e2e/jobs/container-multiport-verify.yml
       vars:
         pid: "{{ outputs.ctr_mp_oci.pid }}"
         log: "{{ outputs.ctr_mp_oci.log }}"
