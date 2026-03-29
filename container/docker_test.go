@@ -569,7 +569,7 @@ func TestNew(t *testing.T) {
 	}{
 		{
 			name:        "unsupported runtime",
-			runtime:     "containerd",
+			runtime:     "no-such-runtime-cmd",
 			expectError: true,
 		},
 		{
