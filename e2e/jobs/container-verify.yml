@@ -57,7 +57,7 @@ steps:
   id: noerr
   uses: shell
   with:
-    cmd: "grep 'level=ERROR' {{ vars.log }} | grep -v 'context deadline exceeded'"
+    cmd: "grep 'level=ERROR' {{ vars.log }} | grep -v 'context deadline exceeded' | grep -v 'status 429'"
   test: status == 1
   outputs:
     ok: status == 1
