@@ -276,5 +276,5 @@ e2e/
 
 The tests are triggered by GitHub Actions in two ways:
 
-- **Issue comment**: posting `/e2e` on an issue or pull request
+- **PR comment**: posting `/e2e` on a pull request (maintainers only)
 - **Workflow dispatch**: manually from the Actions tab
