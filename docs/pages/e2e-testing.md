@@ -36,7 +36,7 @@ The E2E test suite covers all combinations of commands and registries:
 The E2E test workflow can be visualized using Probe's DAG output:
 
 ```bash
-probe --dag-mermaid e2e/test.yml
+probe dag --mermaid e2e/test.yml
 ```
 
 This generates a Mermaid diagram showing the test execution flow:
