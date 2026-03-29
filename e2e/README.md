@@ -62,7 +62,7 @@ flowchart TD
         generate_version_step0["Generate version string"]
     end
     subgraph build["Build dewy"]
-        build_step0["Go build for {{ vars.command }}-{{ vars.registry }}"]
+        build_step0["Go build for {{ vars.command }}-{{ vars.variant }}"]
     end
     subgraph start_srv_ghr["Start server by Github-Releases registry with Slack notification"]
         start_srv_ghr_step0["Start dewy"]
@@ -268,8 +268,7 @@ e2e/
 │   └── container-multiport-verify.yml # Multi-port verification steps
 ├── server/{ghr,s3,gs}/                # Working directories for server tests
 ├── assets/{ghr,s3,gs}/                # Working directories for assets tests
-├── container/{img,dockerhub}/         # Working directories for container tests
-└── container-multiport/img/           # Working directory for multi-port test
+└── container/{img,dockerhub,multiport}/ # Working directories for container tests
 ```
 
 ## Running

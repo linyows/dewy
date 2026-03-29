@@ -5,7 +5,7 @@ steps:
   id: container
   uses: shell
   with:
-    workdir: ./e2e/container/{{ vars.registry }}
+    workdir: ./e2e/container/{{ vars.variant }}
     background: true
     env:
       GITHUB_TOKEN: "{{ vars.github_token }}"
