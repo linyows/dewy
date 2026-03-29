@@ -5,7 +5,7 @@ steps:
   id: container
   uses: shell
   with:
-    workdir: ./testdata/container-multiport/{{ vars.registry }}
+    workdir: ./e2e/container-multiport/{{ vars.registry }}
     background: true
     env:
       GITHUB_TOKEN: "{{ vars.github_token }}"

@@ -36,7 +36,7 @@ The E2E test suite covers all combinations of commands and registries:
 The E2E test workflow can be visualized using Probe's DAG output:
 
 ```bash
-probe --dag-mermaid testdata/e2e-test.yml
+probe --dag-mermaid e2e/test.yml
 ```
 
 This generates a Mermaid diagram showing the test execution flow:
@@ -187,7 +187,7 @@ Dewy binaries are built for each test scenario:
 - name: Go build for {{ vars.command }}-{{ vars.registry }}
   uses: shell
   with:
-    cmd: go build -o ./testdata/{{ vars.command }}/{{ vars.registry }}/dewy ./cmd/dewy
+    cmd: go build -o ./e2e/{{ vars.command }}/{{ vars.registry }}/dewy ./cmd/dewy
 ```
 
 ### 3. Release Creation
