@@ -3,9 +3,16 @@ package container
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 )
+
+// supportedRuntimes is the allowlist of container runtime commands.
+var supportedRuntimes = map[string]bool{
+	"docker": true,
+	"podman": true,
+}
 
 var (
 	// ErrContainerNotFound is returned when a container is not found.
@@ -16,6 +23,9 @@ var (
 
 // New creates a new container runtime for the specified command (e.g., "docker", "podman").
 func New(runtime string, logger *slog.Logger, drainTime time.Duration) (*Runtime, error) {
+	if !supportedRuntimes[runtime] {
+		return nil, fmt.Errorf("unsupported runtime %q: must be one of docker, podman", runtime)
+	}
 	return newCLIRuntime(runtime, logger, drainTime)
 }
 
