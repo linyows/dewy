@@ -262,8 +262,13 @@ func (r *Runtime) execCommandOutput(ctx context.Context, args ...string) (string
 // If the image already exists locally, it will still attempt to pull to get the latest version.
 // Automatically handles authentication: logs in on first pull and retries on auth errors.
 func (r *Runtime) Pull(ctx context.Context, imageRef string) error {
-	// Check if image exists locally first
-	_, localErr := r.execCommandOutput(ctx, "image", "inspect", imageRef)
+	// Check if image exists locally first (using direct exec to avoid ERROR log for expected miss)
+	// #nosec G204 - imageRef is validated by caller
+	inspectCmd := exec.CommandContext(ctx, r.cmd, "image", "inspect", imageRef)
+	r.logger.Debug("Executing command",
+		slog.String("cmd", r.cmd),
+		slog.Any("args", []string{"image", "inspect", imageRef}))
+	localErr := inspectCmd.Run()
 	if localErr == nil {
 		r.logger.Info("Image already exists locally, pulling to check for updates",
 			slog.String("image", imageRef))
