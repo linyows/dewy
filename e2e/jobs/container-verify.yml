@@ -46,7 +46,7 @@ steps:
       echo "All containers are running as non-root user"
   test: status == 0
   outputs:
-    ok: status == 0
+    ok: status == 0 || vars.runtime == 'podman'
 
 - name: Stop dewy
   uses: shell
@@ -86,7 +86,7 @@ steps:
     ok: res.stdout == "3"
 
 - name: Show log
-  skipif: outputs.noerr.ok && (outputs.notroot.ok || vars.runtime == 'podman') && outputs.cver.ok && outputs.nver.ok
+  skipif: outputs.noerr.ok && outputs.notroot.ok && outputs.cver.ok && outputs.nver.ok
   uses: shell
   with:
     cmd: "cat {{ vars.log }}"
