@@ -6,20 +6,23 @@ import (
 	"io"
 	"log/slog"
 	"net/url"
-
-	"github.com/linyows/dewy/container"
 )
+
+// Puller is the interface for pulling container images.
+type Puller interface {
+	Pull(ctx context.Context, imageRef string) error
+}
 
 // OCI implements Artifact interface for OCI/Docker images.
 type OCI struct {
 	ImageRef string
-	runtime  *container.Runtime
+	puller   Puller
 	logger   *slog.Logger
 }
 
 // NewOCI creates a new OCI artifact.
-func NewOCI(ctx context.Context, u string, logger *slog.Logger) (*OCI, error) {
-	// Parse URL: container://registry/repo:tag
+func NewOCI(ctx context.Context, u string, puller Puller, logger *slog.Logger) (*OCI, error) {
+	// Parse URL: img://registry/repo:tag
 	ur, err := url.Parse(u)
 	if err != nil {
 		return nil, err
@@ -30,24 +33,16 @@ func NewOCI(ctx context.Context, u string, logger *slog.Logger) (*OCI, error) {
 
 	return &OCI{
 		ImageRef: imageRef,
+		puller:   puller,
 		logger:   logger,
 	}, nil
-}
-
-// SetRuntime sets the container runtime for image pulling.
-func (o *OCI) SetRuntime(rt *container.Runtime) {
-	o.runtime = rt
 }
 
 // Download pulls the container image using the container runtime.
 // The io.Writer parameter receives a confirmation message after the pull.
 // The actual image data is stored in the runtime's image store.
 func (o *OCI) Download(ctx context.Context, w io.Writer) error {
-	if o.runtime == nil {
-		return fmt.Errorf("container runtime is not set: call SetRuntime before Download")
-	}
-
-	if err := o.runtime.Pull(ctx, o.ImageRef); err != nil {
+	if err := o.puller.Pull(ctx, o.ImageRef); err != nil {
 		return fmt.Errorf("pull failed: %w", err)
 	}
 

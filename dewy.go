@@ -751,13 +751,9 @@ func (d *Dewy) RunContainer() error {
 
 	// Pull the image (this will be cached by the runtime itself)
 	if d.artifact == nil {
-		d.artifact, err = artifact.New(ctx, res.ArtifactURL, d.logger.Logger)
+		d.artifact, err = artifact.New(ctx, res.ArtifactURL, d.logger.Logger, artifact.WithPuller(rt))
 		if err != nil {
 			return fmt.Errorf("failed artifact.New: %w", err)
-		}
-		// Set container runtime for OCI artifacts
-		if oci, ok := d.artifact.(*artifact.OCI); ok {
-			oci.SetRuntime(rt)
 		}
 	}
 

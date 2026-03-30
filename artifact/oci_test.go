@@ -1,14 +1,22 @@
 package artifact
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"strings"
 	"testing"
-
-	"github.com/linyows/dewy/container"
 )
+
+type mockPuller struct {
+	err error
+}
+
+func (m *mockPuller) Pull(ctx context.Context, imageRef string) error {
+	return m.err
+}
 
 func TestNewOCI(t *testing.T) {
 	tests := []struct {
@@ -42,7 +50,7 @@ func TestNewOCI(t *testing.T) {
 			logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
 
 			ctx := context.Background()
-			oci, err := NewOCI(ctx, tt.url, logger)
+			oci, err := NewOCI(ctx, tt.url, &mockPuller{}, logger)
 
 			if tt.expectError {
 				if err == nil {
@@ -94,7 +102,7 @@ func TestOCI_ImageRefParsing(t *testing.T) {
 			logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
 			ctx := context.Background()
 
-			oci, err := NewOCI(ctx, tt.url, logger)
+			oci, err := NewOCI(ctx, tt.url, &mockPuller{}, logger)
 			if err != nil {
 				t.Fatalf("Failed to create OCI: %v", err)
 			}
@@ -106,29 +114,43 @@ func TestOCI_ImageRefParsing(t *testing.T) {
 	}
 }
 
-func TestOCI_Download_NoRuntime(t *testing.T) {
+func TestOCI_Download_Success(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
 	ctx := context.Background()
 
-	oci, err := NewOCI(ctx, "img://ghcr.io/test/app:v1", logger)
+	oci, err := NewOCI(ctx, "img://ghcr.io/test/app:v1", &mockPuller{}, logger)
+	if err != nil {
+		t.Fatalf("Failed to create OCI: %v", err)
+	}
+
+	var buf bytes.Buffer
+	err = oci.Download(ctx, &buf)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if !strings.Contains(buf.String(), "Pulled image: ghcr.io/test/app:v1") {
+		t.Errorf("Expected confirmation message, got: %s", buf.String())
+	}
+}
+
+func TestOCI_Download_PullError(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
+	ctx := context.Background()
+
+	puller := &mockPuller{err: fmt.Errorf("auth failed")}
+	oci, err := NewOCI(ctx, "img://ghcr.io/test/app:v1", puller, logger)
 	if err != nil {
 		t.Fatalf("Failed to create OCI: %v", err)
 	}
 
 	err = oci.Download(ctx, nil)
 	if err == nil {
-		t.Fatal("Expected error when runtime is not set, got nil")
+		t.Fatal("Expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "container runtime is not set") {
-		t.Errorf("Expected 'container runtime is not set' error, got: %v", err)
+	if !strings.Contains(err.Error(), "pull failed") {
+		t.Errorf("Expected 'pull failed' error, got: %v", err)
 	}
-}
-
-func TestOCI_Download_InvalidRuntime(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
-
-	_, err := container.New("no-such-runtime-cmd", logger, 0)
-	if err == nil {
-		t.Fatal("Expected error for unsupported runtime")
+	if !strings.Contains(err.Error(), "auth failed") {
+		t.Errorf("Expected wrapped 'auth failed' error, got: %v", err)
 	}
 }
