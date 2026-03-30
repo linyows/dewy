@@ -88,7 +88,7 @@ jobs:
       uses: linyows/probe-action@0164e23555aacbaaea03169102262dafeb1ff631 # v1
       with:
         path: e2e/test.yml
-        version: v1.0.0
+        version: v1.5.0
       env:
         # For gh CLI to create releases
         GH_TOKEN: ${{ secrets.GH_TOKEN }}
