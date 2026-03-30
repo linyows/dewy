@@ -6,20 +6,23 @@ import (
 	"io"
 	"log/slog"
 	"net/url"
-	"os/exec"
-	"strings"
 )
+
+// Puller is the interface for pulling container images.
+type Puller interface {
+	Pull(ctx context.Context, imageRef string) error
+}
 
 // OCI implements Artifact interface for OCI/Docker images.
 type OCI struct {
-	ImageRef   string
-	RuntimeCmd string // Container runtime command (e.g., "docker", "podman")
-	logger     *slog.Logger
+	ImageRef string
+	puller   Puller
+	logger   *slog.Logger
 }
 
 // NewOCI creates a new OCI artifact.
-func NewOCI(ctx context.Context, u string, logger *slog.Logger) (*OCI, error) {
-	// Parse URL: container://registry/repo:tag
+func NewOCI(ctx context.Context, u string, puller Puller, logger *slog.Logger) (*OCI, error) {
+	// Parse URL: img://registry/repo:tag
 	ur, err := url.Parse(u)
 	if err != nil {
 		return nil, err
@@ -30,45 +33,19 @@ func NewOCI(ctx context.Context, u string, logger *slog.Logger) (*OCI, error) {
 
 	return &OCI{
 		ImageRef: imageRef,
+		puller:   puller,
 		logger:   logger,
 	}, nil
 }
 
-// Download pulls the container image using the configured runtime command.
-// The io.Writer parameter is not used for container images,
-// as they are pulled directly into the runtime's image store.
+// Download pulls the container image using the container runtime.
+// The io.Writer parameter receives a confirmation message after the pull.
+// The actual image data is stored in the runtime's image store.
 func (o *OCI) Download(ctx context.Context, w io.Writer) error {
-	runtimeCmd := o.RuntimeCmd
-	if runtimeCmd == "" {
-		runtimeCmd = "docker"
+	if err := o.puller.Pull(ctx, o.ImageRef); err != nil {
+		return fmt.Errorf("pull failed: %w", err)
 	}
 
-	o.logger.Info("Pulling container image",
-		slog.String("image", o.ImageRef),
-		slog.String("runtime", runtimeCmd))
-
-	// Check if runtime command exists
-	if _, err := exec.LookPath(runtimeCmd); err != nil {
-		return fmt.Errorf("%s command not found: %w", runtimeCmd, err)
-	}
-
-	// Execute pull
-	// #nosec G204 - ImageRef is validated during URL parsing in NewOCI
-	cmd := exec.CommandContext(ctx, runtimeCmd, "pull", o.ImageRef)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		o.logger.Error("Failed to pull image",
-			slog.String("image", o.ImageRef),
-			slog.String("output", string(output)),
-			slog.String("error", err.Error()))
-		return fmt.Errorf("%s pull failed: %w: %s", runtimeCmd, err, string(output))
-	}
-
-	o.logger.Info("Successfully pulled image",
-		slog.String("image", o.ImageRef),
-		slog.String("output", strings.TrimSpace(string(output))))
-
-	// Write confirmation to writer (optional)
 	if w != nil {
 		fmt.Fprintf(w, "Pulled image: %s\n", o.ImageRef)
 	}

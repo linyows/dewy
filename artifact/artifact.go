@@ -21,7 +21,26 @@ type Artifact interface {
 	Download(ctx context.Context, w io.Writer) error
 }
 
-func New(ctx context.Context, url string, logger *slog.Logger) (Artifact, error) {
+// Option configures artifact creation.
+type Option func(*options)
+
+type options struct {
+	puller Puller
+}
+
+// WithPuller sets the container image puller for OCI artifacts.
+func WithPuller(p Puller) Option {
+	return func(o *options) {
+		o.puller = p
+	}
+}
+
+func New(ctx context.Context, url string, logger *slog.Logger, opts ...Option) (Artifact, error) {
+	var o options
+	for _, opt := range opts {
+		opt(&o)
+	}
+
 	splitted := strings.SplitN(url, "://", 2)
 
 	switch splitted[0] {
@@ -35,7 +54,7 @@ func New(ctx context.Context, url string, logger *slog.Logger) (Artifact, error)
 		return NewGS(ctx, url, logger)
 
 	case imgScheme:
-		return NewOCI(ctx, url, logger)
+		return NewOCI(ctx, url, o.puller, logger)
 	}
 
 	return nil, fmt.Errorf("unsupported scheme: %s", url)
