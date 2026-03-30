@@ -466,7 +466,7 @@ func (r *Runtime) FindContainersByLabel(ctx context.Context, labels map[string]s
 // Deploy performs a rolling deployment of containers.
 // It starts new containers one by one, runs health checks, updates backends via callback,
 // and then removes old containers.
-func (r *Runtime) Deploy(ctx context.Context, opts RollingDeployOptions, cb BackendCallback) ([]DeployResult, error) {
+func (r *Runtime) Deploy(ctx context.Context, opts RollingDeployOptions, cb BackendCallback) (*DeployReport, error) {
 	replicas := opts.Replicas
 	if replicas <= 0 {
 		replicas = 1
@@ -501,7 +501,7 @@ func (r *Runtime) Deploy(ctx context.Context, opts RollingDeployOptions, cb Back
 				slog.Int("replica", i+1),
 				slog.String("error", err.Error()))
 			r.rollback(ctx, results, cb)
-			return results, err
+			return nil, err
 		}
 
 		// Add all port mappings to proxy backends
@@ -512,8 +512,9 @@ func (r *Runtime) Deploy(ctx context.Context, opts RollingDeployOptions, cb Back
 						slog.Int("proxy_port", proxyPort),
 						slog.Int("mapped_port", mappedPort),
 						slog.String("error", err.Error()))
-					r.rollback(ctx, results, cb)
-					return results, err
+					// Include current result in rollback to clean up its container and backends
+					r.rollback(ctx, append(results, result), cb)
+					return nil, err
 				}
 			}
 		}
@@ -526,6 +527,7 @@ func (r *Runtime) Deploy(ctx context.Context, opts RollingDeployOptions, cb Back
 	}
 
 	// Remove old containers one by one
+	removedCount := 0
 	for i, oldContainerID := range existingContainers {
 		r.logger.Info("Removing old container",
 			slog.Int("index", i+1),
@@ -558,13 +560,17 @@ func (r *Runtime) Deploy(ctx context.Context, opts RollingDeployOptions, cb Back
 				slog.String("container", oldContainerID),
 				slog.String("error", err.Error()))
 		}
+		removedCount++
 	}
 
 	r.logger.Info("Container deployment completed",
 		slog.Int("new_containers", len(results)),
-		slog.Int("removed_containers", len(existingContainers)))
+		slog.Int("removed_containers", removedCount))
 
-	return results, nil
+	return &DeployReport{
+		Results:      results,
+		RemovedCount: removedCount,
+	}, nil
 }
 
 // startAndCheck starts a single container, resolves port mappings, and runs health check.
@@ -736,13 +742,40 @@ func (r *Runtime) StopManagedContainers(ctx context.Context, appName string) (in
 	return stopped, removed, nil
 }
 
+// imageRepositoryFromRef derives the repository part of an image reference.
+// It removes any digest component (after '@') and then strips a tag (after ':')
+// only if the colon appears after the last slash, to avoid confusing registry ports
+// with tag separators.
+func imageRepositoryFromRef(imageRef string) string {
+	ref := imageRef
+
+	// Strip digest if present (e.g., "repo@sha256:abcdef...")
+	if at := strings.Index(ref, "@"); at != -1 {
+		ref = ref[:at]
+	}
+
+	lastSlash := strings.LastIndex(ref, "/")
+	lastColon := strings.LastIndex(ref, ":")
+
+	if lastSlash == -1 {
+		// No slash: any colon is a tag separator
+		if lastColon != -1 {
+			return ref[:lastColon]
+		}
+		return ref
+	}
+
+	// Only treat colon as tag separator if it appears after the last slash
+	if lastColon > lastSlash {
+		return ref[:lastColon]
+	}
+
+	return ref
+}
+
 // CleanupOldImages removes old container images, keeping only the most recent ones.
 func (r *Runtime) CleanupOldImages(ctx context.Context, imageRef string, keepCount int) error {
-	// Extract repository from imageRef (remove tag if present)
-	repository := imageRef
-	if idx := strings.LastIndex(imageRef, ":"); idx != -1 {
-		repository = imageRef[:idx]
-	}
+	repository := imageRepositoryFromRef(imageRef)
 
 	images, err := r.ListImages(ctx, repository)
 	if err != nil {

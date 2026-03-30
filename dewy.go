@@ -832,7 +832,7 @@ func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentRespons
 	healthCheck := d.createHealthCheckFunc(runtime, resolvedMappings)
 
 	// Deploy via container runtime
-	results, err := runtime.Deploy(ctx, container.RollingDeployOptions{
+	report, err := runtime.Deploy(ctx, container.RollingDeployOptions{
 		ImageRef:     imageRef,
 		AppName:      appName,
 		Replicas:     d.config.Container.Replicas,
@@ -848,17 +848,17 @@ func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentRespons
 			return d.removeProxyBackend(host, mappedPort, proxyPort)
 		},
 	})
-
-	// Record telemetry
-	if d.telemetry != nil && d.telemetry.Enabled() {
-		d.telemetry.Metrics().ContainerReplicas.Add(ctx, int64(len(results)))
-	}
-
 	if err != nil {
-		return len(results), err
+		return 0, err
 	}
 
-	return len(results), nil
+	// Record telemetry: net change = new containers - removed containers
+	if d.telemetry != nil && d.telemetry.Enabled() {
+		delta := int64(len(report.Results)) - int64(report.RemovedCount)
+		d.telemetry.Metrics().ContainerReplicas.Add(ctx, delta)
+	}
+
+	return len(report.Results), nil
 }
 
 // createHealthCheckFunc creates a health check function based on configuration.

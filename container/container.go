@@ -101,6 +101,12 @@ type DeployResult struct {
 	ReplicaIndex int
 }
 
+// DeployReport contains the overall result of a rolling deployment.
+type DeployReport struct {
+	Results      []DeployResult
+	RemovedCount int
+}
+
 // BackendCallback provides hooks for proxy backend management during deployment.
 type BackendCallback struct {
 	OnAdd    func(host string, mappedPort int, proxyPort int) error
