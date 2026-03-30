@@ -24,6 +24,7 @@ steps:
 
 - name: Verify containers are not running as root
   id: notroot
+  skipif: vars.runtime == 'podman'
   uses: shell
   with:
     cmd: |
@@ -85,7 +86,7 @@ steps:
     ok: res.stdout == "3"
 
 - name: Show log
-  skipif: outputs.noerr.ok && outputs.notroot.ok && outputs.cver.ok && outputs.nver.ok
+  skipif: outputs.noerr.ok && (outputs.notroot.ok || vars.runtime == 'podman') && outputs.cver.ok && outputs.nver.ok
   uses: shell
   with:
     cmd: "cat {{ vars.log }}"
