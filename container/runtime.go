@@ -492,6 +492,7 @@ func (r *Runtime) Deploy(ctx context.Context, opts RollingDeployOptions, cb Back
 
 	for i := 0; i < replicas; i++ {
 		r.logger.Info("Starting new container",
+			slog.String("image", opts.ImageRef),
 			slog.Int("replica", i+1),
 			slog.Int("total", replicas))
 
