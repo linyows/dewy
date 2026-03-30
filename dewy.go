@@ -755,9 +755,9 @@ func (d *Dewy) RunContainer() error {
 		if err != nil {
 			return fmt.Errorf("failed artifact.New: %w", err)
 		}
-		// Set runtime command for OCI artifacts
+		// Set container runtime for OCI artifacts
 		if oci, ok := d.artifact.(*artifact.OCI); ok {
-			oci.RuntimeCmd = d.config.Container.Runtime
+			oci.SetRuntime(rt)
 		}
 	}
 
@@ -889,12 +889,6 @@ func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentRespons
 			lastPart := parts[len(parts)-1]
 			appName = strings.Split(lastPart, ":")[0]
 		}
-	}
-
-	// Pull the new image first
-	d.logger.Info("Pulling new image", slog.String("image", imageRef))
-	if err := runtime.Pull(ctx, imageRef); err != nil {
-		return 0, fmt.Errorf("pull failed: %w", err)
 	}
 
 	// Resolve port mappings (auto-detect container ports if needed)

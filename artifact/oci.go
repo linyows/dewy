@@ -6,15 +6,15 @@ import (
 	"io"
 	"log/slog"
 	"net/url"
-	"os/exec"
-	"strings"
+
+	"github.com/linyows/dewy/container"
 )
 
 // OCI implements Artifact interface for OCI/Docker images.
 type OCI struct {
-	ImageRef   string
-	RuntimeCmd string // Container runtime command (e.g., "docker", "podman")
-	logger     *slog.Logger
+	ImageRef string
+	runtime  *container.Runtime
+	logger   *slog.Logger
 }
 
 // NewOCI creates a new OCI artifact.
@@ -34,41 +34,23 @@ func NewOCI(ctx context.Context, u string, logger *slog.Logger) (*OCI, error) {
 	}, nil
 }
 
-// Download pulls the container image using the configured runtime command.
-// The io.Writer parameter is not used for container images,
-// as they are pulled directly into the runtime's image store.
+// SetRuntime sets the container runtime for image pulling.
+func (o *OCI) SetRuntime(rt *container.Runtime) {
+	o.runtime = rt
+}
+
+// Download pulls the container image using the container runtime.
+// The io.Writer parameter receives a confirmation message after the pull.
+// The actual image data is stored in the runtime's image store.
 func (o *OCI) Download(ctx context.Context, w io.Writer) error {
-	runtimeCmd := o.RuntimeCmd
-	if runtimeCmd == "" {
-		runtimeCmd = "docker"
+	if o.runtime == nil {
+		return fmt.Errorf("container runtime is not set: call SetRuntime before Download")
 	}
 
-	o.logger.Info("Pulling container image",
-		slog.String("image", o.ImageRef),
-		slog.String("runtime", runtimeCmd))
-
-	// Check if runtime command exists
-	if _, err := exec.LookPath(runtimeCmd); err != nil {
-		return fmt.Errorf("%s command not found: %w", runtimeCmd, err)
+	if err := o.runtime.Pull(ctx, o.ImageRef); err != nil {
+		return fmt.Errorf("pull failed: %w", err)
 	}
 
-	// Execute pull
-	// #nosec G204 - ImageRef is validated during URL parsing in NewOCI
-	cmd := exec.CommandContext(ctx, runtimeCmd, "pull", o.ImageRef)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		o.logger.Error("Failed to pull image",
-			slog.String("image", o.ImageRef),
-			slog.String("output", string(output)),
-			slog.String("error", err.Error()))
-		return fmt.Errorf("%s pull failed: %w: %s", runtimeCmd, err, string(output))
-	}
-
-	o.logger.Info("Successfully pulled image",
-		slog.String("image", o.ImageRef),
-		slog.String("output", strings.TrimSpace(string(output))))
-
-	// Write confirmation to writer (optional)
 	if w != nil {
 		fmt.Fprintf(w, "Pulled image: %s\n", o.ImageRef)
 	}
