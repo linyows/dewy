@@ -107,14 +107,14 @@ steps:
   with:
     cmd: |
       # Get all container IDs managed by dewy
-      containers=$(docker ps --filter "label=dewy.managed=true" -q)
+      containers=$({{ vars.runtime ?? 'docker' }} ps --filter "label=dewy.managed=true" -q)
       if [ -z "$containers" ]; then
         echo "No dewy-managed containers found"
         exit 1
       fi
       # Check each container's process user
       for cid in $containers; do
-        uid=$(docker top "$cid" -o uid | tail -n +2 | head -1 | tr -d ' ')
+        uid=$({{ vars.runtime ?? 'docker' }} top "$cid" -o uid | tail -n +2 | head -1 | tr -d ' ')
         if [ "$uid" = "0" ]; then
           echo "Container $cid is running as root (UID=0)"
           exit 1

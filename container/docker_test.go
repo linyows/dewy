@@ -13,7 +13,7 @@ func TestNewDocker(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
 	drainTime := 30 * time.Second
 
-	docker, err := NewDocker(logger, drainTime)
+	rt, err := New("docker", logger, drainTime)
 
 	// This test may fail if docker is not installed
 	// In CI environments without docker, this is expected
@@ -24,15 +24,15 @@ func TestNewDocker(t *testing.T) {
 		t.Fatalf("Failed to create Docker runtime: %v", err)
 	}
 
-	if docker.cmd != "docker" {
-		t.Errorf("Expected cmd to be 'docker', got %s", docker.cmd)
+	if rt.cmd != "docker" {
+		t.Errorf("Expected cmd to be 'docker', got %s", rt.cmd)
 	}
 
-	if docker.drainTime != drainTime {
-		t.Errorf("Expected drainTime to be %v, got %v", drainTime, docker.drainTime)
+	if rt.drainTime != drainTime {
+		t.Errorf("Expected drainTime to be %v, got %v", drainTime, rt.drainTime)
 	}
 
-	if docker.logger == nil {
+	if rt.logger == nil {
 		t.Error("Expected logger to be set")
 	}
 }
@@ -556,6 +556,38 @@ func TestIsAuthError(t *testing.T) {
 			result := isAuthError(tt.output)
 			if result != tt.expected {
 				t.Errorf("isAuthError(%q) = %v, expected %v", tt.output, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestNew(t *testing.T) {
+	tests := []struct {
+		name        string
+		runtime     string
+		expectError bool
+	}{
+		{
+			name:        "unsupported runtime",
+			runtime:     "containerd",
+			expectError: true,
+		},
+		{
+			name:        "empty runtime",
+			runtime:     "",
+			expectError: true,
+		},
+	}
+
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := New(tt.runtime, logger, 30*time.Second)
+			if tt.expectError && err == nil {
+				t.Errorf("New(%q) expected error, got nil", tt.runtime)
+			}
+			if !tt.expectError && err != nil {
+				t.Errorf("New(%q) expected no error, got %v", tt.runtime, err)
 			}
 		})
 	}

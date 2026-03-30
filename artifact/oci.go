@@ -12,8 +12,9 @@ import (
 
 // OCI implements Artifact interface for OCI/Docker images.
 type OCI struct {
-	ImageRef string
-	logger   *slog.Logger
+	ImageRef   string
+	RuntimeCmd string // Container runtime command (e.g., "docker", "podman")
+	logger     *slog.Logger
 }
 
 // NewOCI creates a new OCI artifact.
@@ -33,28 +34,34 @@ func NewOCI(ctx context.Context, u string, logger *slog.Logger) (*OCI, error) {
 	}, nil
 }
 
-// Download pulls the Docker image.
-// For OCI artifacts, we use docker pull command.
+// Download pulls the container image using the configured runtime command.
 // The io.Writer parameter is not used for container images,
-// as they are pulled directly into Docker's image store.
+// as they are pulled directly into the runtime's image store.
 func (o *OCI) Download(ctx context.Context, w io.Writer) error {
-	o.logger.Info("Pulling Docker image", slog.String("image", o.ImageRef))
-
-	// Check if docker command exists
-	if _, err := exec.LookPath("docker"); err != nil {
-		return fmt.Errorf("docker command not found: %w", err)
+	runtimeCmd := o.RuntimeCmd
+	if runtimeCmd == "" {
+		runtimeCmd = "docker"
 	}
 
-	// Execute docker pull
+	o.logger.Info("Pulling container image",
+		slog.String("image", o.ImageRef),
+		slog.String("runtime", runtimeCmd))
+
+	// Check if runtime command exists
+	if _, err := exec.LookPath(runtimeCmd); err != nil {
+		return fmt.Errorf("%s command not found: %w", runtimeCmd, err)
+	}
+
+	// Execute pull
 	// #nosec G204 - ImageRef is validated during URL parsing in NewOCI
-	cmd := exec.CommandContext(ctx, "docker", "pull", o.ImageRef)
+	cmd := exec.CommandContext(ctx, runtimeCmd, "pull", o.ImageRef)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		o.logger.Error("Failed to pull image",
 			slog.String("image", o.ImageRef),
 			slog.String("output", string(output)),
 			slog.String("error", err.Error()))
-		return fmt.Errorf("docker pull failed: %w: %s", err, string(output))
+		return fmt.Errorf("%s pull failed: %w: %s", runtimeCmd, err, string(output))
 	}
 
 	o.logger.Info("Successfully pulled image",

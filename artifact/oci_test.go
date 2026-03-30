@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -103,6 +104,21 @@ func TestOCI_ImageRefParsing(t *testing.T) {
 	}
 }
 
-// Note: TestOCI_Download is not included in unit tests because it requires
-// actual docker daemon and would execute 'docker pull' command.
-// This will be tested in integration tests instead.
+func TestOCI_Download_RuntimeCmdNotFound(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
+	ctx := context.Background()
+
+	oci, err := NewOCI(ctx, "img://ghcr.io/test/app:v1", logger)
+	if err != nil {
+		t.Fatalf("Failed to create OCI: %v", err)
+	}
+	oci.RuntimeCmd = "no-such-runtime-cmd"
+
+	err = oci.Download(ctx, nil)
+	if err == nil {
+		t.Fatal("Expected error for non-existent runtime command, got nil")
+	}
+	if !strings.Contains(err.Error(), "no-such-runtime-cmd command not found") {
+		t.Errorf("Expected 'command not found' error, got: %v", err)
+	}
+}
