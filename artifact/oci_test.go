@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/linyows/dewy/container"
 )
 
 func TestNewOCI(t *testing.T) {
@@ -104,7 +106,7 @@ func TestOCI_ImageRefParsing(t *testing.T) {
 	}
 }
 
-func TestOCI_Download_RuntimeCmdNotFound(t *testing.T) {
+func TestOCI_Download_NoRuntime(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
 	ctx := context.Background()
 
@@ -112,13 +114,21 @@ func TestOCI_Download_RuntimeCmdNotFound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create OCI: %v", err)
 	}
-	oci.RuntimeCmd = "no-such-runtime-cmd"
 
 	err = oci.Download(ctx, nil)
 	if err == nil {
-		t.Fatal("Expected error for non-existent runtime command, got nil")
+		t.Fatal("Expected error when runtime is not set, got nil")
 	}
-	if !strings.Contains(err.Error(), "no-such-runtime-cmd command not found") {
-		t.Errorf("Expected 'command not found' error, got: %v", err)
+	if !strings.Contains(err.Error(), "container runtime is not set") {
+		t.Errorf("Expected 'container runtime is not set' error, got: %v", err)
+	}
+}
+
+func TestOCI_Download_InvalidRuntime(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	_, err := container.New("no-such-runtime-cmd", logger, 0)
+	if err == nil {
+		t.Fatal("Expected error for unsupported runtime")
 	}
 }
