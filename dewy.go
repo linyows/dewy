@@ -574,57 +574,7 @@ func (d *Dewy) cleanupOldImages(ctx context.Context, imageRef string) error {
 		return fmt.Errorf("container runtime not initialized")
 	}
 
-	// Extract repository from imageRef (remove tag if present)
-	// Example: "ghcr.io/linyows/myapp:v1.0.0" -> "ghcr.io/linyows/myapp"
-	repository := imageRef
-	if idx := strings.LastIndex(imageRef, ":"); idx != -1 {
-		repository = imageRef[:idx]
-	}
-
-	// List all images for this repository
-	images, err := d.containerRuntime.ListImages(ctx, repository)
-	if err != nil {
-		return fmt.Errorf("failed to list images: %w", err)
-	}
-
-	if len(images) <= keepReleases {
-		d.logger.Debug("No old images to clean up",
-			slog.String("repository", repository),
-			slog.Int("count", len(images)),
-			slog.Int("keep", keepReleases))
-		return nil
-	}
-
-	// Sort images by creation time (newest first)
-	sort.Slice(images, func(i, j int) bool {
-		return images[i].Created.After(images[j].Created)
-	})
-
-	// Remove old images (keep only the most recent keepReleases)
-	for i, img := range images {
-		if i < keepReleases {
-			d.logger.Debug("Keeping image",
-				slog.String("id", img.ID),
-				slog.String("tag", img.Tag),
-				slog.Time("created", img.Created))
-			continue
-		}
-
-		d.logger.Info("Removing old image",
-			slog.String("id", img.ID),
-			slog.String("tag", img.Tag),
-			slog.Time("created", img.Created))
-
-		if err := d.containerRuntime.RemoveImage(ctx, img.ID); err != nil {
-			d.logger.Warn("Failed to remove image",
-				slog.String("id", img.ID),
-				slog.String("error", err.Error()))
-			// Continue with other images even if one fails
-			continue
-		}
-	}
-
-	return nil
+	return d.containerRuntime.CleanupOldImages(ctx, imageRef, keepReleases)
 }
 
 func (d *Dewy) execHook(cmd string) (*notifier.HookResult, error) {
@@ -844,27 +794,12 @@ func (d *Dewy) RunContainer() error {
 	return nil
 }
 
-// containerBackends stores container ID and its port mappings.
-type containerBackends struct {
-	containerID string
-	backends    map[int]int // map[proxyPort]mappedPort
-}
-
 // deployContainer performs the actual container deployment using rolling update strategy.
 // Returns the number of successfully deployed containers and any error encountered.
 func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentResponse) (int, error) {
 	if d.config.Container == nil {
 		return 0, fmt.Errorf("container config is nil")
 	}
-
-	// Get replicas count (default: 1)
-	replicas := d.config.Container.Replicas
-	if replicas <= 0 {
-		replicas = 1
-	}
-
-	d.logger.Info("Starting container deployment",
-		slog.Int("replicas", replicas))
 
 	// Create container runtime
 	runtime, err := container.New(d.config.Container.Runtime, d.logger.Logger, d.config.Container.DrainTime)
@@ -879,7 +814,6 @@ func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentRespons
 	// Determine app name from config or image
 	appName := d.config.Container.Name
 	if appName == "" {
-		// Use repository name as app name
 		parts := strings.Split(imageRef, "/")
 		if len(parts) > 0 {
 			lastPart := parts[len(parts)-1]
@@ -887,123 +821,49 @@ func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentRespons
 		}
 	}
 
-	// Resolve port mappings (auto-detect container ports if needed)
-	resolvedMappings, err := d.resolvePortMappings(ctx, runtime, imageRef)
+	// Convert and resolve port mappings
+	configMappings := convertPortMappings(d.config.Container.PortMappings)
+	resolvedMappings, err := runtime.ResolvePortMappings(ctx, imageRef, configMappings)
 	if err != nil {
 		return 0, fmt.Errorf("failed to resolve port mappings: %w", err)
 	}
 
-	// Find existing containers
-	existingContainers, err := runtime.FindContainersByLabel(ctx, map[string]string{
-		"dewy.managed": "true",
-		"dewy.app":     appName,
-	})
-	if err != nil {
-		return 0, fmt.Errorf("failed to find existing containers: %w", err)
-	}
-
-	d.logger.Info("Found existing containers",
-		slog.Int("count", len(existingContainers)))
-
-	// Create health check function for the first port mapping
+	// Create health check function (telemetry-aware, stays in dewy.go)
 	healthCheck := d.createHealthCheckFunc(runtime, resolvedMappings)
 
-	// Rolling update: start new containers one by one
-	newContainers := make([]string, 0, replicas)
-	newContainerBackends := make([]containerBackends, 0, replicas)
-
-	for i := 0; i < replicas; i++ {
-		d.logger.Info("Starting new container",
-			slog.String("version", res.Tag),
-			slog.Int("replica", i+1),
-			slog.Int("total", replicas))
-
-		// Start new container with all port mappings
-		containerID, mappedPorts, err := d.startSingleContainer(ctx, runtime, imageRef, appName, i, resolvedMappings, healthCheck)
-		if err != nil {
-			// Rollback: remove newly created containers
-			d.logger.Error("Failed to start container, rolling back",
-				slog.Int("replica", i+1),
-				slog.String("error", err.Error()))
-			d.rollbackContainers(ctx, runtime, newContainers, resolvedMappings, newContainerBackends)
-			return len(newContainers), err
-		}
-
-		newContainers = append(newContainers, containerID)
-		newContainerBackends = append(newContainerBackends, containerBackends{
-			containerID: containerID,
-			backends:    mappedPorts,
-		})
-
-		// Add all port mappings to proxy backends
-		for proxyPort, mappedPort := range mappedPorts {
-			if err := d.addProxyBackend("localhost", mappedPort, proxyPort); err != nil {
-				d.logger.Error("Failed to add proxy backend",
-					slog.Int("proxy_port", proxyPort),
-					slog.Int("mapped_port", mappedPort),
-					slog.String("error", err.Error()))
-				d.rollbackContainers(ctx, runtime, newContainers, resolvedMappings, newContainerBackends)
-				return len(newContainers), err
-			}
-		}
-
-		d.logger.Info("Container added to load balancer",
-			slog.String("container", containerID),
-			slog.Int("port_mappings", len(mappedPorts)))
-
-		if d.telemetry != nil && d.telemetry.Enabled() {
-			d.telemetry.Metrics().ContainerReplicas.Add(ctx, 1)
-		}
+	// Deploy via container runtime
+	report, err := runtime.Deploy(ctx, container.RollingDeployOptions{
+		ImageRef:     imageRef,
+		AppName:      appName,
+		Replicas:     d.config.Container.Replicas,
+		PortMappings: resolvedMappings,
+		Command:      d.config.Container.Command,
+		ExtraArgs:    d.config.Container.ExtraArgs,
+		HealthCheck:  healthCheck,
+	}, container.BackendCallback{
+		OnAdd: func(host string, mappedPort, proxyPort int) error {
+			return d.addProxyBackend(host, mappedPort, proxyPort)
+		},
+		OnRemove: func(host string, mappedPort, proxyPort int) error {
+			return d.removeProxyBackend(host, mappedPort, proxyPort)
+		},
+	})
+	if err != nil {
+		return 0, err
 	}
 
-	// Remove old containers one by one
-	for i, oldContainerID := range existingContainers {
-		d.logger.Info("Removing old container",
-			slog.Int("index", i+1),
-			slog.Int("total", len(existingContainers)),
-			slog.String("container", oldContainerID))
-
-		// Get old container ports to remove from proxy
-		for _, mapping := range resolvedMappings {
-			oldPort, err := runtime.GetMappedPort(ctx, oldContainerID, *mapping.ContainerPort)
-			if err == nil {
-				// Remove from proxy backends
-				if err := d.removeProxyBackend("localhost", oldPort, mapping.ProxyPort); err != nil {
-					d.logger.Warn("Failed to remove old backend from proxy",
-						slog.Int("proxy_port", mapping.ProxyPort),
-						slog.Int("mapped_port", oldPort),
-						slog.String("error", err.Error()))
-				}
-			}
-		}
-
-		// Stop and remove old container
-		if err := runtime.Stop(ctx, oldContainerID, 10*time.Second); err != nil {
-			d.logger.Error("Failed to stop old container",
-				slog.String("container", oldContainerID),
-				slog.String("error", err.Error()))
-		}
-		if err := runtime.Remove(ctx, oldContainerID); err != nil {
-			d.logger.Error("Failed to remove old container",
-				slog.String("container", oldContainerID),
-				slog.String("error", err.Error()))
-		}
-
-		if d.telemetry != nil && d.telemetry.Enabled() {
-			d.telemetry.Metrics().ContainerReplicas.Add(ctx, -1)
-		}
+	// Record telemetry: net change = new containers - removed containers
+	if d.telemetry != nil && d.telemetry.Enabled() {
+		delta := int64(len(report.Results)) - int64(report.RemovedCount)
+		d.telemetry.Metrics().ContainerReplicas.Add(ctx, delta)
 	}
 
-	d.logger.Info("Container deployment completed",
-		slog.Int("new_containers", len(newContainers)),
-		slog.Int("removed_containers", len(existingContainers)))
-
-	return len(newContainers), nil
+	return len(report.Results), nil
 }
 
 // createHealthCheckFunc creates a health check function based on configuration.
 // Health check is performed on the first port mapping.
-func (d *Dewy) createHealthCheckFunc(rt *container.Runtime, resolvedMappings []PortMapping) container.HealthCheckFunc {
+func (d *Dewy) createHealthCheckFunc(rt *container.Runtime, resolvedMappings []container.PortMapping) container.HealthCheckFunc {
 	if d.config.Container.HealthPath == "" {
 		d.logger.Info("Health check disabled - container will start without health verification")
 		return nil
@@ -1018,13 +878,11 @@ func (d *Dewy) createHealthCheckFunc(rt *container.Runtime, resolvedMappings []P
 	firstMapping := resolvedMappings[0]
 
 	return func(ctx context.Context, containerID string) error {
-		// Get mapped port
-		mappedPort, err := rt.GetMappedPort(ctx, containerID, *firstMapping.ContainerPort)
+		mappedPort, err := rt.GetMappedPort(ctx, containerID, firstMapping.ContainerPort)
 		if err != nil {
 			return fmt.Errorf("failed to get mapped port for health check: %w", err)
 		}
 
-		// Check HTTP endpoint on localhost
 		healthURL := fmt.Sprintf("http://localhost:%d%s", mappedPort, d.config.Container.HealthPath)
 		client := &http.Client{Timeout: 5 * time.Second}
 
@@ -1054,113 +912,18 @@ func (d *Dewy) createHealthCheckFunc(rt *container.Runtime, resolvedMappings []P
 	}
 }
 
-// startSingleContainer starts a single container and returns its ID and mapped ports.
-// Returns: containerID, map[proxyPort]mappedPort, error.
-func (d *Dewy) startSingleContainer(ctx context.Context, rt *container.Runtime, imageRef, appName string, replicaIndex int, resolvedMappings []PortMapping, healthCheck container.HealthCheckFunc) (string, map[int]int, error) {
-	// Prepare port mappings for localhost-only access (deduplicate container ports)
-	uniqueContainerPorts := make(map[int]bool)
-	var ports []string
-	for _, mapping := range resolvedMappings {
-		if !uniqueContainerPorts[*mapping.ContainerPort] {
-			uniqueContainerPorts[*mapping.ContainerPort] = true
-			ports = append(ports, fmt.Sprintf("127.0.0.1::%d", *mapping.ContainerPort))
+// convertPortMappings converts dewy PortMappings to container PortMappings.
+// dewy.PortMapping uses *int for ContainerPort (nil = auto-detect),
+// container.PortMapping uses int (0 = auto-detect).
+func convertPortMappings(mappings []PortMapping) []container.PortMapping {
+	result := make([]container.PortMapping, len(mappings))
+	for i, m := range mappings {
+		result[i] = container.PortMapping{ProxyPort: m.ProxyPort}
+		if m.ContainerPort != nil {
+			result[i].ContainerPort = *m.ContainerPort
 		}
 	}
-
-	// Start container
-	containerID, err := rt.Run(ctx, container.RunOptions{
-		Image:        imageRef,
-		AppName:      appName,
-		ReplicaIndex: replicaIndex,
-		Ports:        ports,
-		Labels: map[string]string{
-			"dewy.managed":     "true",
-			"dewy.app":         appName,
-			"dewy.deployed_at": time.Now().Format(time.RFC3339),
-		},
-		Detach:    true,
-		Command:   d.config.Container.Command,
-		ExtraArgs: d.config.Container.ExtraArgs,
-	})
-	if err != nil {
-		return "", nil, fmt.Errorf("failed to start container: %w", err)
-	}
-
-	// Get all mapped ports (cache to avoid duplicate lookups for same container port)
-	containerPortToMapped := make(map[int]int)
-	mappedPorts := make(map[int]int) // map[proxyPort]mappedPort
-	for _, mapping := range resolvedMappings {
-		// Check if we already looked up this container port
-		if mappedPort, exists := containerPortToMapped[*mapping.ContainerPort]; exists {
-			mappedPorts[mapping.ProxyPort] = mappedPort
-			continue
-		}
-
-		mappedPort, err := rt.GetMappedPort(ctx, containerID, *mapping.ContainerPort)
-		if err != nil {
-			rErr := rt.Remove(ctx, containerID)
-			return "", nil, errors.Join(
-				fmt.Errorf("failed to get mapped port for container port %d: %w", *mapping.ContainerPort, err),
-				fmt.Errorf("runtime remove failed: %w", rErr),
-			)
-		}
-		containerPortToMapped[*mapping.ContainerPort] = mappedPort
-		mappedPorts[mapping.ProxyPort] = mappedPort
-	}
-
-	d.logger.Info("Container started",
-		slog.String("container", containerID),
-		slog.Any("port_mappings", mappedPorts))
-
-	// Perform health check if configured
-	if healthCheck != nil {
-		// Give the container a moment to start
-		time.Sleep(3 * time.Second)
-
-		d.logger.Info("Performing health check", slog.String("container", containerID))
-		if err := healthCheck(ctx, containerID); err != nil {
-			sErr := rt.Stop(ctx, containerID, 5*time.Second)
-			rErr := rt.Remove(ctx, containerID)
-			return "", nil, errors.Join(
-				fmt.Errorf("health check failed: %w", err),
-				fmt.Errorf("runtime stop failed: %w", sErr),
-				fmt.Errorf("runtime remove failed: %w", rErr),
-			)
-		}
-	}
-
-	return containerID, mappedPorts, nil
-}
-
-// rollbackContainers removes all containers in the list (used for rollback).
-func (d *Dewy) rollbackContainers(ctx context.Context, rt *container.Runtime, containerIDs []string, resolvedMappings []PortMapping, backendsList []containerBackends) {
-	d.logger.Info("Rolling back containers", slog.Int("count", len(containerIDs)))
-
-	// Remove from proxy backends first
-	for _, cb := range backendsList {
-		for proxyPort, mappedPort := range cb.backends {
-			if err := d.removeProxyBackend("localhost", mappedPort, proxyPort); err != nil {
-				d.logger.Warn("Failed to remove backend during rollback",
-					slog.Int("proxy_port", proxyPort),
-					slog.Int("mapped_port", mappedPort),
-					slog.String("error", err.Error()))
-			}
-		}
-	}
-
-	// Stop and remove containers
-	for _, containerID := range containerIDs {
-		if err := rt.Stop(ctx, containerID, 5*time.Second); err != nil {
-			d.logger.Error("Failed to stop container during rollback",
-				slog.String("container", containerID),
-				slog.String("error", err.Error()))
-		}
-		if err := rt.Remove(ctx, containerID); err != nil {
-			d.logger.Error("Failed to remove container during rollback",
-				slog.String("container", containerID),
-				slog.String("error", err.Error()))
-		}
-	}
+	return result
 }
 
 // startProxy starts TCP proxies for all configured port mappings.
@@ -1492,7 +1255,6 @@ func (d *Dewy) stopManagedContainers(ctx context.Context) error {
 	// Determine app name from config or registry
 	appName := d.config.Container.Name
 	if appName == "" {
-		// Use repository name from registry as app name
 		registryURL := d.config.Registry
 		parts := strings.SplitN(registryURL, "://", 2)
 		if len(parts) == 2 {
@@ -1505,64 +1267,8 @@ func (d *Dewy) stopManagedContainers(ctx context.Context) error {
 		}
 	}
 
-	// Find all containers with dewy.managed=true and matching app name
-	labels := map[string]string{
-		"dewy.managed": "true",
-	}
-	if appName != "" {
-		labels["dewy.app"] = appName
-	}
-
-	containerIDs, err := d.containerRuntime.FindContainersByLabel(ctx, labels)
-	if err != nil {
-		return fmt.Errorf("failed to find managed containers: %w", err)
-	}
-
-	if len(containerIDs) == 0 {
-		d.logger.Debug("No managed containers found to stop")
-		return nil
-	}
-
-	d.logger.Info("Found managed containers to stop", slog.Int("count", len(containerIDs)))
-
-	// Stop and remove all containers
-	timeout := 10 * time.Second
-	stoppedCount := 0
-	removedCount := 0
-
-	for _, containerID := range containerIDs {
-		// Stop the container with graceful timeout
-		if err := d.containerRuntime.Stop(ctx, containerID, timeout); err != nil {
-			d.logger.Error("Failed to stop container",
-				slog.String("container", containerID),
-				slog.String("error", err.Error()))
-			// Continue to try stopping other containers
-			continue
-		}
-
-		d.logger.Info("Managed container stopped",
-			slog.String("container", containerID))
-		stoppedCount++
-
-		// Remove the container
-		if err := d.containerRuntime.Remove(ctx, containerID); err != nil {
-			d.logger.Warn("Failed to remove container",
-				slog.String("container", containerID),
-				slog.String("error", err.Error()))
-			// Don't return error as the important part (stopping) succeeded
-		} else {
-			d.logger.Info("Managed container removed",
-				slog.String("container", containerID))
-			removedCount++
-		}
-	}
-
-	d.logger.Info("Cleanup completed",
-		slog.Int("stopped", stoppedCount),
-		slog.Int("removed", removedCount),
-		slog.Int("total", len(containerIDs)))
-
-	return nil
+	_, _, err := d.containerRuntime.StopManagedContainers(ctx, appName)
+	return err
 }
 
 // startAdminAPI starts the admin API server on TCP localhost.
@@ -1722,68 +1428,6 @@ func (d *Dewy) handleGetStatus(w http.ResponseWriter, r *http.Request) {
 
 // resolvePortMappings resolves port mappings by auto-detecting container ports if needed.
 // Returns fully resolved port mappings with both proxy and container ports specified.
-func (d *Dewy) resolvePortMappings(ctx context.Context, rt *container.Runtime, imageRef string) ([]PortMapping, error) {
-	if len(d.config.Container.PortMappings) == 0 {
-		return nil, fmt.Errorf("no port mappings configured")
-	}
-
-	// Check if any mapping needs auto-detection
-	needsAutoDetect := false
-	for _, mapping := range d.config.Container.PortMappings {
-		if mapping.ContainerPort == nil {
-			needsAutoDetect = true
-			break
-		}
-	}
-
-	// If all mappings are explicit, return as-is
-	if !needsAutoDetect {
-		d.logger.Debug("All port mappings are explicit",
-			slog.Int("count", len(d.config.Container.PortMappings)))
-		return d.config.Container.PortMappings, nil
-	}
-
-	// Auto-detect exposed ports from image
-	exposedPorts, err := rt.GetImageExposedPorts(ctx, imageRef)
-	if err != nil {
-		return nil, fmt.Errorf("failed to detect exposed ports: %w", err)
-	}
-
-	d.logger.Info("Detected exposed ports from image",
-		slog.String("image", imageRef),
-		slog.Any("ports", exposedPorts))
-
-	// Validate: if auto-detect is needed, image must expose exactly one port
-	if len(exposedPorts) == 0 {
-		return nil, fmt.Errorf("container does not expose any ports. Please specify port mappings explicitly using --port proxy:container")
-	}
-
-	if len(exposedPorts) > 1 {
-		return nil, fmt.Errorf("container exposes multiple ports %v. Please specify port mappings explicitly using --port proxy:container", exposedPorts)
-	}
-
-	// Resolve mappings
-	resolvedMappings := make([]PortMapping, len(d.config.Container.PortMappings))
-	detectedPort := exposedPorts[0]
-
-	for i, mapping := range d.config.Container.PortMappings {
-		if mapping.ContainerPort == nil {
-			// Auto-detect: use the single exposed port
-			resolvedMappings[i] = PortMapping{
-				ProxyPort:     mapping.ProxyPort,
-				ContainerPort: &detectedPort,
-			}
-			d.logger.Info("Auto-detected container port for proxy",
-				slog.Int("proxy_port", mapping.ProxyPort),
-				slog.Int("container_port", detectedPort))
-		} else {
-			// Explicit mapping
-			resolvedMappings[i] = mapping
-		}
-	}
-
-	return resolvedMappings, nil
-}
 
 // limitedWriter wraps an io.Writer and limits the total bytes written.
 // Returns an error when the limit is exceeded.
