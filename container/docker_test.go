@@ -72,18 +72,21 @@ func TestRunOptions(t *testing.T) {
 	}
 }
 
-func TestDeployOptions(t *testing.T) {
+func TestRollingDeployOptions(t *testing.T) {
 	healthCheck := func(ctx context.Context, containerID string) error {
 		return nil
 	}
 
-	opts := DeployOptions{
-		ImageRef:      "ghcr.io/linyows/myapp:v1.0.0",
-		AppName:       "myapp",
-		ContainerPort: 8080,
-		Command:       []string{"node", "server.js"},
-		ExtraArgs:     []string{"-e", "APP_ENV=production", "-v", "/data:/app/data"},
-		HealthCheck:   healthCheck,
+	opts := RollingDeployOptions{
+		ImageRef: "ghcr.io/linyows/myapp:v1.0.0",
+		AppName:  "myapp",
+		Replicas: 2,
+		PortMappings: []PortMapping{
+			{ProxyPort: 8080, ContainerPort: 80},
+		},
+		Command:     []string{"node", "server.js"},
+		ExtraArgs:   []string{"-e", "APP_ENV=production", "-v", "/data:/app/data"},
+		HealthCheck: healthCheck,
 	}
 
 	if opts.ImageRef != "ghcr.io/linyows/myapp:v1.0.0" {
@@ -94,8 +97,12 @@ func TestDeployOptions(t *testing.T) {
 		t.Errorf("Expected appName myapp, got %s", opts.AppName)
 	}
 
-	if opts.ContainerPort != 8080 {
-		t.Errorf("Expected containerPort 8080, got %d", opts.ContainerPort)
+	if opts.Replicas != 2 {
+		t.Errorf("Expected replicas 2, got %d", opts.Replicas)
+	}
+
+	if len(opts.PortMappings) != 1 || opts.PortMappings[0].ContainerPort != 80 {
+		t.Errorf("Expected port mapping with container port 80, got %v", opts.PortMappings)
 	}
 
 	if len(opts.Command) != 2 {

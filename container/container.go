@@ -73,19 +73,36 @@ type ImageInfo struct {
 	Size       int64
 }
 
-// DeployOptions contains options for deploying a container.
-type DeployOptions struct {
-	ImageRef      string
-	AppName       string
-	ContainerPort int      // Container port to expose (will be mapped to random localhost port)
-	Ports         []string // Explicit port mappings in format "host:container" (e.g., "8080:8080")
-	Command       []string // Command and arguments to pass to container
-	ExtraArgs     []string // Extra docker run arguments (from -- separator)
-	HealthCheck   HealthCheckFunc
-}
-
 // HealthCheckFunc is a function type for health checking.
 type HealthCheckFunc func(ctx context.Context, containerID string) error
 
-// DeployContainerCallback is called after health check passes but before stopping old container.
-type DeployContainerCallback func(containerID string) error
+// PortMapping represents a port mapping between proxy and container.
+// ContainerPort == 0 means auto-detect from image EXPOSE.
+type PortMapping struct {
+	ProxyPort     int
+	ContainerPort int
+}
+
+// RollingDeployOptions contains options for rolling deployment.
+type RollingDeployOptions struct {
+	ImageRef     string
+	AppName      string
+	Replicas     int
+	PortMappings []PortMapping
+	Command      []string
+	ExtraArgs    []string
+	HealthCheck  HealthCheckFunc
+}
+
+// DeployResult represents the result of a single container deployment.
+type DeployResult struct {
+	ContainerID  string
+	MappedPorts  map[int]int // map[proxyPort]mappedHostPort
+	ReplicaIndex int
+}
+
+// BackendCallback provides hooks for proxy backend management during deployment.
+type BackendCallback struct {
+	OnAdd    func(host string, mappedPort int, proxyPort int) error
+	OnRemove func(host string, mappedPort int, proxyPort int) error
+}
