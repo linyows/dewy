@@ -1,4 +1,4 @@
-name: End-to-end Testing
+name: End-to-end Tests
 
 on:
   workflow_dispatch:
@@ -22,7 +22,7 @@ permissions:
 
 jobs:
   test:
-    name: Test
+    name: Deployment
     runs-on: ubuntu-latest
     # Run if:
     # 1. push to main or workflow_dispatch
