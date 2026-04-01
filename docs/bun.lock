@@ -6,7 +6,7 @@
       "dependencies": {
         "@docsearch/css": "^4.6.2",
         "@docsearch/react": "^4.6.0",
-        "@markdoc/markdoc": "^0.5.6",
+        "@markdoc/markdoc": "^0.5.7",
         "@markdoc/next.js": "^0.5.0",
         "autoprefixer": "^10.4.27",
         "mermaid": "^11.13.0",
@@ -139,7 +139,7 @@
 
     "@img/sharp-win32-x64": ["@img/sharp-win32-x64@0.34.5", "", { "os": "win32", "cpu": "x64" }, "sha512-+29YMsqY2/9eFEiW93eqWnuLcWcufowXewwSNIT6UwZdUUCrM3oFjMWH/Z6/TMmb4hlFenmfAVbpWeup2jryCw=="],
 
-    "@markdoc/markdoc": ["@markdoc/markdoc@0.5.6", "", { "optionalDependencies": { "@types/linkify-it": "^3.0.1", "@types/markdown-it": "12.2.3" }, "peerDependencies": { "@types/react": "*", "react": "*" }, "optionalPeers": ["@types/react", "react"] }, "sha512-Qs7L5YKYHADWhpOP1JthE3E5ut4Mby/UsJKsGla3g8OXBLWDImTsG5H+Mzq5h3J6a8CNnGtp+Kz9JcGtHRpoKA=="],
+    "@markdoc/markdoc": ["@markdoc/markdoc@0.5.7", "", { "optionalDependencies": { "@types/linkify-it": "^3.0.1", "@types/markdown-it": "12.2.3" }, "peerDependencies": { "@types/react": "*", "react": "*" }, "optionalPeers": ["@types/react", "react"] }, "sha512-NxreNThm7foFgMMQD6zgk7rKkcFMmdC8J5r+Zn4FKoN75F5YjvwdihwF11VhrBfL3CXnD4+YG1VYwvBL+igzvw=="],
 
     "@markdoc/next.js": ["@markdoc/next.js@0.5.0", "", { "dependencies": { "js-yaml": "^4.1.0" }, "peerDependencies": { "@markdoc/markdoc": "*", "next": "*", "react": "*" } }, "sha512-gzWvRc2dlxArQn1mDS4SHed46vkAoKBbXkELihQRYv1eVSA0u9eoNEdJXNuBL4Ajn9j2dPpwZp6nAVjN4nzZlA=="],
 
