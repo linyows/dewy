@@ -11,8 +11,12 @@ on:
   issue_comment:
     types: [created]
 
+# IMPORTANT: All E2E runs share a single concurrency group to ensure serial execution.
+# Concurrent runs create releases on the same test repository (dewy-testapp),
+# causing each run's dewy processes to detect releases from other runs,
+# which leads to flaky assertion failures (e.g., 3 symlinks instead of 2).
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.issue.number || github.ref }}
+  group: ${{ github.workflow }}
   cancel-in-progress: false
 
 permissions:
