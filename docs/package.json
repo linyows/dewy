@@ -7,7 +7,7 @@
     "postbuild": "next-sitemap"
   },
   "dependencies": {
-    "@docsearch/css": "^4.6.2",
+    "@docsearch/css": "^4.6.3",
     "@docsearch/react": "^4.6.2",
     "@markdoc/markdoc": "^0.5.7",
     "@markdoc/next.js": "^0.5.0",
