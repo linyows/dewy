@@ -39,6 +39,40 @@ description: |
 - `.tar`
 - `.zip`
 
+### AWS S3 {% #s3-cache %}
+
+Amazon S3（およびS3互換オブジェクトストレージ）をbackendとする共有キャッシュです。S3 bucketがnode間で共有される真実のソースとなり、各Dewyインスタンスはアーカイブ展開のためのローカルstagingコピーを保持します。
+
+**特徴:**
+- 多数のDewyインスタンス間でキャッシュを共有
+- 上流registryへのartifactダウンロードトラフィックを大幅に削減
+- registry sourceとして使用しているAWS認証情報をそのまま流用可能
+- ローカルstagingにより、展開処理はfile backendと同一
+
+**URL形式:**
+
+```sh
+# s3://<region>/<bucket>/<prefix>?<options: endpoint>
+dewy server --registry ghr://owner/repo \
+  --cache s3://ap-northeast-1/mybucket/myapp -- /opt/myapp/current/myapp
+```
+
+S3互換サービス向けに`endpoint`クエリパラメーターをサポートしています。AWS認証は標準のcredential chain（環境変数、shared config、IAM roleなど）を使用します。
+
+### Google Cloud Storage {% #gcs-cache %}
+
+Google Cloud Storageをbackendとする共有キャッシュです。S3 backendと同じハイブリッドモデル（cloudが真実のソース、ローカルstagingで展開）です。
+
+**URL形式:**
+
+```sh
+# gs://<bucket>/<prefix>
+dewy server --registry ghr://owner/repo \
+  --cache gs://mybucket/myapp -- /opt/myapp/current/myapp
+```
+
+認証はGoogle Cloud標準の方式（`GOOGLE_APPLICATION_CREDENTIALS`、workload identity、ADC）に従います。
+
 ### メモリ（Memory）{% #memory-cache %}
 
 {% callout type="warning" title="未実装" %}
@@ -181,13 +215,15 @@ cat /var/cache/dewy/current
 ```sh
 # ポーリング間隔を長くする（デフォルト: 10秒）
 dewy server --registry ghr://owner/repo \
-  --interval 60s -- /opt/myapp/current/myapp
+  --interval 60 -- /opt/myapp/current/myapp
 
-# 将来的には分散キャッシュ（Consul/Redis）でキャッシュ共有
-# dewy server --registry ghr://owner/repo \
-#   --cache consul://localhost:8500 \
-#   --interval 30s -- /opt/myapp/current/myapp
+# S3/GCS共有キャッシュにより、各インスタンスが同じartifactを重複ダウンロードしないようにする
+dewy server --registry ghr://owner/repo \
+  --cache s3://ap-northeast-1/dewy-cache/myapp \
+  --interval 30 -- /opt/myapp/current/myapp
 ```
+
+> 補足: 共有キャッシュは上流registryへのartifactダウンロードトラフィックを削減します。各インスタンスのmetadata polling回数自体は減りません（こちらは別レイヤの課題で、registry層でのstale-while-revalidateとして将来対応予定）。
 
 ### ストレージ管理
 
@@ -274,14 +310,21 @@ dewy server --registry ghr://owner/repo \
 
 ### 高可用性構成での戦略
 
-将来の分散キャッシュ対応時の想定設定：
+複数のDewyインスタンスを同じS3/GCS bucketに向けることで、artifactキャッシュを共有できます：
 
 ```sh
-# 複数インスタンスでConsulキャッシュ共有（予定）
-# dewy server --registry ghr://owner/repo \
-#   --cache consul://consul-cluster:8500 \
-#   --interval 60s -- /opt/myapp/current/myapp
+# AWS S3（endpoint optionでS3互換ストレージにも対応）
+dewy server --registry ghr://owner/repo \
+  --cache s3://ap-northeast-1/dewy-cache/myapp \
+  --interval 60 -- /opt/myapp/current/myapp
+
+# Google Cloud Storage
+dewy server --registry ghr://owner/repo \
+  --cache gs://dewy-cache/myapp \
+  --interval 60 -- /opt/myapp/current/myapp
 ```
+
+数十〜数百台のインスタンスが同じregistryをpollしても、新しいリリースを最初に検知したインスタンスだけがartifactダウンロードのコストを払い、残りは共有キャッシュから取得します。
 
 ## 関連項目 {% #related %}
 

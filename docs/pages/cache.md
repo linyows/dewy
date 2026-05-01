@@ -39,6 +39,40 @@ The most basic implementation that stores artifacts in the local file system.
 - `.tar`
 - `.zip`
 
+### AWS S3 {% #s3-cache %}
+
+Shared cache backed by Amazon S3 (or any S3-compatible object storage). The S3 bucket is the source of truth across nodes, while each Dewy instance keeps a local staging copy for archive extraction.
+
+**Features:**
+- Cache sharing across many Dewy instances
+- Greatly reduced artifact download traffic against the upstream registry
+- Reuses AWS credentials already used for S3 registry sources
+- Local staging makes extraction identical to the file backend
+
+**URL Format:**
+
+```sh
+# s3://<region>/<bucket>/<prefix>?<options: endpoint>
+dewy server --registry ghr://owner/repo \
+  --cache s3://ap-northeast-1/mybucket/myapp -- /opt/myapp/current/myapp
+```
+
+The `endpoint` query parameter is supported for S3-compatible services. AWS authentication uses the standard credential chain (env vars, shared config, IAM role, etc.).
+
+### Google Cloud Storage {% #gcs-cache %}
+
+Shared cache backed by Google Cloud Storage. Same hybrid model as the S3 backend (cloud as source of truth, local staging for extraction).
+
+**URL Format:**
+
+```sh
+# gs://<bucket>/<prefix>
+dewy server --registry ghr://owner/repo \
+  --cache gs://mybucket/myapp -- /opt/myapp/current/myapp
+```
+
+Authentication follows the standard Google Cloud authentication methods (`GOOGLE_APPLICATION_CREDENTIALS`, workload identity, ADC).
+
 ### Memory {% #memory-cache %}
 
 {% callout type="warning" title="Not Implemented" %}
@@ -181,13 +215,15 @@ When operating multiple Dewy instances, the following strategies can reduce requ
 ```sh
 # Increase polling interval (default: 10 seconds)
 dewy server --registry ghr://owner/repo \
-  --interval 60s -- /opt/myapp/current/myapp
+  --interval 60 -- /opt/myapp/current/myapp
 
-# Future distributed cache (Consul/Redis) for cache sharing
-# dewy server --registry ghr://owner/repo \
-#   --cache consul://localhost:8500 \
-#   --interval 30s -- /opt/myapp/current/myapp
+# Use a shared S3/GCS cache to avoid each instance downloading the same artifact
+dewy server --registry ghr://owner/repo \
+  --cache s3://ap-northeast-1/dewy-cache/myapp \
+  --interval 30 -- /opt/myapp/current/myapp
 ```
+
+> Note: a shared cache reduces artifact download traffic against the upstream registry. It does not by itself reduce the number of metadata polls each instance makes; that is a separate concern (planned: stale-while-revalidate at the registry layer).
 
 ### Storage Management
 
@@ -274,14 +310,21 @@ dewy server --registry ghr://owner/repo \
 
 ### High Availability Configuration Strategy
 
-Expected configuration for future distributed cache support:
+Share artifact cache across many Dewy instances by pointing them at the same S3/GCS bucket:
 
 ```sh
-# Consul cache sharing across multiple instances (planned)
-# dewy server --registry ghr://owner/repo \
-#   --cache consul://consul-cluster:8500 \
-#   --interval 60s -- /opt/myapp/current/myapp
+# AWS S3 (any S3-compatible storage works with the endpoint option)
+dewy server --registry ghr://owner/repo \
+  --cache s3://ap-northeast-1/dewy-cache/myapp \
+  --interval 60 -- /opt/myapp/current/myapp
+
+# Google Cloud Storage
+dewy server --registry ghr://owner/repo \
+  --cache gs://dewy-cache/myapp \
+  --interval 60 -- /opt/myapp/current/myapp
 ```
+
+When dozens or hundreds of instances poll the same registry, only the first instance to detect a new release pays the artifact-download cost; the rest fetch from the shared cache.
 
 ## Related Topics {% #related %}
 

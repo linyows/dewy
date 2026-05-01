@@ -80,10 +80,17 @@ dewy server --artifact s3://bucket/path/to/artifact -- /opt/app/current/app
 
 ### --cache (-c)
 
-アーティファクトのキャッシュ設定を指定します。ローカルファイルシステムやRedisをキャッシュストレージとして使用できます。
+URLでキャッシュbackendを選択します。サポートscheme: `file://`（デフォルトのローカルファイルシステム）、`s3://<region>/<bucket>/<prefix>`（Amazon S3およびS3互換ストレージ）、`gs://<bucket>/<prefix>`（Google Cloud Storage）。S3またはGCSを使用する場合、複数のDewyインスタンスを同じbucketに向けることでartifactダウンロードを共有でき、上流registryへのトラフィックが大幅に削減できます。
 
 ```bash
+# ローカルファイルシステム（デフォルト）
 dewy server --cache file:///tmp/dewy-cache -- /opt/app/current/app
+
+# Amazon S3
+dewy server --cache s3://ap-northeast-1/dewy-cache/myapp -- /opt/app/current/app
+
+# Google Cloud Storage
+dewy server --cache gs://dewy-cache/myapp -- /opt/app/current/app
 ```
 
 ### --notifier (-n)
@@ -418,7 +425,7 @@ dewy server \
 dewy server \
   --registry ghr://mycompany/myapp \
   --artifact s3://mybucket/artifacts/ \
-  --cache redis://localhost:6379/0 \
+  --cache s3://ap-northeast-1/dewy-cache/myapp \
   --notifier slack://hooks.slack.com/services/xxx/yyy/zzz \
   --port 8080 \
   --interval 300 \

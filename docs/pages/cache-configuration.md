@@ -43,6 +43,27 @@ The cache system automatically skips unnecessary processing when the same versio
 
 However, if the application startup fails in server mode, deployment processing will execute even when cache exists, working to resolve the problem.
 
+## Cache Backend Selection
+
+By default Dewy uses a local file cache. To share cache across multiple instances, point them at an S3 or Google Cloud Storage bucket with the `--cache` flag.
+
+```sh
+# Local file (default)
+dewy server --registry ghr://owner/repo -- /opt/app/current/app
+
+# Amazon S3 (or any S3-compatible storage)
+dewy server --registry ghr://owner/repo \
+  --cache s3://ap-northeast-1/dewy-cache/myapp -- /opt/app/current/app
+
+# Google Cloud Storage
+dewy server --registry ghr://owner/repo \
+  --cache gs://dewy-cache/myapp -- /opt/app/current/app
+```
+
+For S3 and GCS, the cloud bucket is the source of truth: the first instance to download a new artifact uploads it to the bucket, and subsequent instances fetch from the bucket instead of the upstream registry. Each instance still keeps a local staging copy so that archive extraction continues to work the same way as the file backend.
+
+Authentication uses the standard credential chain for each provider (AWS environment variables / shared config / IAM role; Google ADC / `GOOGLE_APPLICATION_CREDENTIALS` / workload identity).
+
 ## Cache Directory Configuration
 
 The cache file storage location can be flexibly configured according to environment and operational requirements.

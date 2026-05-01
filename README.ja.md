@@ -275,7 +275,26 @@ Artifact
 Cache
 --
 
-キャッシュは、現在のバージョンやアーティファクトをDewyが保持するためのインターフェースです。キャッシュの実装には、ファイルシステムとメモリとHashicorp ConsulとRedisがあります。
+キャッシュは、現在のバージョンやダウンロード済みアーティファクトをDewyが保持するためのインターフェースです。キャッシュの実装には、ローカルファイル（デフォルト）、AWS S3、Google Cloud Storageが利用可能です。メモリ、Hashicorp Consul、Redisは将来対応予定です。
+
+複数のDewyインスタンスを同じS3/GCS bucketに向けることで、artifactのダウンロードを共有できます。新しいリリースを最初に検知したインスタンスだけが上流registryからダウンロードのコストを払い、残りは共有キャッシュから取得します。
+
+```sh
+# ローカルファイルキャッシュ（デフォルト）
+$ dewy server --registry ghr://owner/repo -- /opt/myapp/current/myapp
+
+# Amazon S3 で共有キャッシュ（S3互換ストレージにも対応）
+# Format: s3://<region>/<bucket>/<prefix>?<options: endpoint>
+$ dewy server --registry ghr://owner/repo \
+    --cache s3://ap-northeast-1/dewy-cache/myapp -- /opt/myapp/current/myapp
+
+# Google Cloud Storage で共有キャッシュ
+# Format: gs://<bucket>/<prefix>
+$ dewy server --registry ghr://owner/repo \
+    --cache gs://dewy-cache/myapp -- /opt/myapp/current/myapp
+```
+
+S3およびGCS backendの認証は各providerの標準credential chainを使用するため、registry sourceとして既に設定しているS3/GCS用credentialをそのまま流用できます。各インスタンスは取得したartifactをローカルにstagingコピーするため、アーカイブ展開はfile backendと同じ動作になります。
 
 Notifier
 --
@@ -703,8 +722,8 @@ FAQ
     
 - 複数Dewyからのポーリングによってレジストリのレートリミットにかかるのはどう対処できますか？
     
-    キャッシュコンポーネントにHashicorp Consul やredisを使うと複数Dewyでキャッシュを共有出来るため、レジストリへの総リクエスト数は減るでしょう。その際は、レジストリTTLを適切な時間に設定するのがよいです。
-    なお、ポーリング間隔を長くするにはコマンドのオプションで指定できます。
+    キャッシュbackendにAWS S3やGoogle Cloud Storageを指定すると、複数のDewyインスタンスがartifactを共有できるため、上流registryへのダウンロードトラフィックを大幅に削減できます（`--cache s3://<region>/<bucket>/<prefix>` または `--cache gs://<bucket>/<prefix>`）。
+    また、ポーリング間隔自体を長くするには `--interval` オプションで指定できます。metadata pollingの調停（stale-while-revalidate）はregistry層の課題として将来対応予定です。
 
 作者
 --

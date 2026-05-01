@@ -98,9 +98,10 @@ type tcpBackend struct {
 
 // New returns Dewy.
 func New(c Config, log *logging.Logger) (*Dewy, error) {
-	kv := &kvs.File{}
-	kv.Default()
-	kv.SetLogger(log.Logger)
+	kv, err := kvs.New(context.Background(), c.Cache.URL, log.Logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to init cache backend: %w", err)
+	}
 
 	wd, err := os.Getwd()
 	if err != nil {
