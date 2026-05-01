@@ -242,7 +242,13 @@ func (s *S3) stageLocal(p string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil {
 		return err
 	}
-	return os.WriteFile(p, data, 0644)
+	f, err := os.OpenFile(p, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = f.Write(data)
+	return err
 }
 
 // normalizePrefix ensures the prefix has a trailing slash when non-empty.
