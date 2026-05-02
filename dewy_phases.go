@@ -132,7 +132,7 @@ func (d *Dewy) downloadAndCache(ctx context.Context, res *registry.CurrentRespon
 
 	buf := new(bytes.Buffer)
 	if d.artifact == nil {
-		a, err := artifact.New(ctx, res.ArtifactURL, d.logger.Logger)
+		a, err := artifact.New(ctx, res.ArtifactURL, d.logger.Slog())
 		if err != nil {
 			return fmt.Errorf("failed artifact.New: %w", err)
 		}
@@ -299,7 +299,7 @@ func (d *Dewy) resolveContainerState(ctx context.Context, res *registry.CurrentR
 		}
 	}
 
-	rt, err := container.New(d.config.Container.Runtime, d.logger.Logger, d.config.Container.DrainTime)
+	rt, err := container.New(d.config.Container.Runtime, d.logger.Slog(), d.config.Container.DrainTime)
 	if err != nil {
 		return st, fmt.Errorf("failed to create container runtime: %w", err)
 	}
@@ -325,7 +325,7 @@ func (d *Dewy) resolveContainerState(ctx context.Context, res *registry.CurrentR
 // notifies on success. The runtime in st must be non-nil.
 func (d *Dewy) pullContainerImage(ctx context.Context, res *registry.CurrentResponse, st containerState) error {
 	if d.artifact == nil {
-		a, err := artifact.New(ctx, res.ArtifactURL, d.logger.Logger, artifact.WithPuller(st.runtime))
+		a, err := artifact.New(ctx, res.ArtifactURL, d.logger.Slog(), artifact.WithPuller(st.runtime))
 		if err != nil {
 			return fmt.Errorf("failed artifact.New: %w", err)
 		}
