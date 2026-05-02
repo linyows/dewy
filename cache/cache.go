@@ -65,8 +65,10 @@ func New(ctx context.Context, urlStr string, log *slog.Logger) (Cache, error) {
 		return NewS3(ctx, urlStr, log)
 	case "gs":
 		return NewGS(ctx, urlStr, log)
+	case "consul", "redis", "memory":
+		return nil, fmt.Errorf("cache scheme %q is planned but not yet implemented; supported schemes: file, s3, gs", scheme)
 	default:
-		return nil, fmt.Errorf("unsupported cache scheme: %s", scheme)
+		return nil, fmt.Errorf("unsupported cache scheme %q; supported schemes: file, s3, gs", scheme)
 	}
 }
 
