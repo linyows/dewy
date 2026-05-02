@@ -91,7 +91,9 @@ dewy server --registry ghr://owner/repo \
 
 The cache entry doubles as a refresh lock (single-flight via `If-Match` / `ifGenerationMatch`). On upstream failure the cache continues to serve the last known response (stale-but-usable), so a transient registry outage does not stop the cluster.
 
-The option is silently ignored on backends that do not support atomic conditional writes (file backend).
+> Operational note: stale-but-usable hides upstream errors from `Dewy.Run()`'s normal error path, so prolonged outages won't surface via the configured notifier. Watch for the `"upstream registry failed; serving stale cache"` warning in the dewy log to detect them.
+
+If `registry-ttl` is set on a backend that does not support atomic conditional writes (currently the file backend), Dewy logs a `"registry-ttl set but cache backend does not support atomic writes; ignoring"` warning at startup and proceeds without registry-result caching.
 
 ### Memory {% #memory-cache %}
 

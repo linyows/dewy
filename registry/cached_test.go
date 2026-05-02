@@ -272,6 +272,22 @@ func TestCachedReleasesLockAfterUpstreamFailure(t *testing.T) {
 	}
 }
 
+func TestCachedScopeCanonicalization(t *testing.T) {
+	// Two scopes that differ only in query-parameter order should produce
+	// the same cache key, so peers configured with semantically identical
+	// registry URLs deduplicate as expected.
+	a := cacheKeyForScope("ghr://owner/repo?artifact=foo&pre-release=true")
+	b := cacheKeyForScope("ghr://owner/repo?pre-release=true&artifact=foo")
+	if a != b {
+		t.Errorf("scope canonicalization failed: %q != %q", a, b)
+	}
+
+	c := cacheKeyForScope("ghr://owner/other?artifact=foo&pre-release=true")
+	if a == c {
+		t.Errorf("different registries collided: %q == %q", a, c)
+	}
+}
+
 func TestCachedDifferentScopesDoNotShare(t *testing.T) {
 	// Two Cached instances backed by the same fake cache but with different
 	// scopes (e.g., different registry URLs) must not share entries.

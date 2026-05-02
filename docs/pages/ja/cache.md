@@ -91,7 +91,9 @@ dewy server --registry ghr://owner/repo \
 
 cacheエントリ自体がrefresh lockを兼ねます（`If-Match` / `ifGenerationMatch`によるsingle-flight）。上流registry障害時は最後のキャッシュ値を返し続けるため（stale-but-usable）、一時的なregistry障害でクラスタが止まりません。
 
-conditional writeをサポートしないbackend（file backend）では本オプションは無視されます。
+> 運用上の注意: stale-but-usableは `Dewy.Run()` の通常のエラー経路から上流エラーを隠すため、長期障害が設定済みのnotifierに通知されません。dewyログ内の `"upstream registry failed; serving stale cache"` warningを監視してください。
+
+conditional writeをサポートしないbackend（現状はfile backend）に `registry-ttl` を設定した場合、Dewyは起動時に `"registry-ttl set but cache backend does not support atomic writes; ignoring"` warningを出力し、registry-result cacheを有効化せずに動作を続行します。
 
 ### メモリ（Memory）{% #memory-cache %}
 

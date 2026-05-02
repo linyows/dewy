@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"runtime"
 	"strconv"
@@ -83,10 +84,26 @@ func NewCached(inner Registry, scope string, atomicCache cache.AtomicCache, ttl 
 
 // cacheKeyForScope returns the cache key used by a Cached instance with the
 // given scope. The local OS/arch are folded in because Current() responses
-// vary by platform (artifact name selection).
+// vary by platform (artifact name selection). The scope is canonicalized so
+// that registry URLs that differ only in query-parameter ordering hash to
+// the same key.
 func cacheKeyForScope(scope string) string {
-	h := sha256.Sum256([]byte(scope + "|" + runtime.GOOS + "|" + runtime.GOARCH))
+	h := sha256.Sum256([]byte(canonicalizeScope(scope) + "|" + runtime.GOOS + "|" + runtime.GOARCH))
 	return registryCacheKeyPrefix + hex.EncodeToString(h[:8]) + ".json"
+}
+
+// canonicalizeScope returns scope with URL query parameters sorted by key
+// (via url.Values.Encode), so that ?a=1&b=2 and ?b=2&a=1 produce the same
+// canonical form. Non-URL scopes are returned unchanged.
+func canonicalizeScope(scope string) string {
+	u, err := url.Parse(scope)
+	if err != nil {
+		return scope
+	}
+	if u.RawQuery != "" {
+		u.RawQuery = u.Query().Encode()
+	}
+	return u.String()
 }
 
 // maxLockTTL is the time after which an abandoned refresh lock is considered
@@ -228,10 +245,6 @@ func buildClaim(prev *cachedEntry, nodeID string) *cachedEntry {
 // (releasing the lock). On upstream failure it releases the lock with the
 // previous Response so the cache continues to serve stale-but-usable.
 func (c *Cached) refreshAndPublish(ctx context.Context, prev *cachedEntry, version string) (*CurrentResponse, error) {
-	if c.logger != nil {
-		c.logger.Info("Registry result refreshed from upstream",
-			slog.String("node", c.nodeID))
-	}
 	res, err := c.inner.Current(ctx)
 	if err != nil {
 		c.releaseLock(prev, version)
@@ -240,6 +253,10 @@ func (c *Cached) refreshAndPublish(ctx context.Context, prev *cachedEntry, versi
 			return prev.Response, nil
 		}
 		return nil, err
+	}
+	if c.logger != nil {
+		c.logger.Info("Registry result refreshed from upstream",
+			slog.String("node", c.nodeID))
 	}
 
 	final := &cachedEntry{
