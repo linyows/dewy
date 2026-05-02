@@ -158,14 +158,16 @@ func (d *Dewy) Start(i int) {
 	// Wrap the registry with a shared result cache when the cache backend
 	// supports atomic writes and the operator opted in via ?registry-ttl=...
 	// on the cache URL.
-	if ttl := d.cache.RegistryTTL(); ttl > 0 {
-		if ac, ok := d.cache.(cache.AtomicCache); ok {
-			d.registry = registry.NewCached(d.registry, d.config.Registry, ac, ttl, d.logger)
-			d.logger.Info("Registry result cache enabled",
-				slog.Duration("ttl", ttl))
-		} else {
-			d.logger.Warn("registry-ttl set but cache backend does not support atomic writes; ignoring",
-				slog.Duration("ttl", ttl))
+	if d.registry != nil {
+		if ttl := d.cache.RegistryTTL(); ttl > 0 {
+			if ac, ok := d.cache.(cache.AtomicCache); ok {
+				d.registry = registry.NewCached(d.registry, d.config.Registry, ac, ttl, d.logger)
+				d.logger.Info("Registry result cache enabled",
+					slog.Duration("ttl", ttl))
+			} else {
+				d.logger.Warn("registry-ttl set but cache backend does not support atomic writes; ignoring",
+					slog.Duration("ttl", ttl))
+			}
 		}
 	}
 

@@ -10,7 +10,6 @@ import (
 	"os"
 	"runtime"
 	"strconv"
-	"sync/atomic"
 	"time"
 
 	"github.com/linyows/dewy/cache"
@@ -58,7 +57,6 @@ type Cached struct {
 	logger   *logging.Logger
 	nodeID   string
 	cacheKey string
-	upstream atomic.Int64 // count of upstream calls (test helper)
 }
 
 // NewCached wraps inner with a shared registry-result cache backed by
@@ -183,12 +181,6 @@ func (c *Cached) Report(ctx context.Context, req *ReportRequest) error {
 	return c.inner.Report(ctx, req)
 }
 
-// UpstreamCallCount returns the number of times Cached has called the
-// underlying registry. Intended for tests.
-func (c *Cached) UpstreamCallCount() int64 {
-	return c.upstream.Load()
-}
-
 // readEntry reads and decodes the shared cache entry. Returns
 // (nil, "", IsNotFound) when the entry does not exist yet.
 func (c *Cached) readEntry() (*cachedEntry, string, error) {
@@ -236,7 +228,6 @@ func buildClaim(prev *cachedEntry, nodeID string) *cachedEntry {
 // (releasing the lock). On upstream failure it releases the lock with the
 // previous Response so the cache continues to serve stale-but-usable.
 func (c *Cached) refreshAndPublish(ctx context.Context, prev *cachedEntry, version string) (*CurrentResponse, error) {
-	c.upstream.Add(1)
 	if c.logger != nil {
 		c.logger.Info("Registry result refreshed from upstream",
 			slog.String("node", c.nodeID))
