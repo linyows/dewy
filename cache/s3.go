@@ -16,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go"
 )
 
 const s3Format = "s3://<region>/<bucket>/<prefix>"
@@ -203,6 +204,65 @@ func (s *S3) Delete(key string) error {
 		return fmt.Errorf("failed to delete object: %w", err)
 	}
 	return nil
+}
+
+// ReadWithVersion fetches the object and returns its ETag as the opaque version.
+// Returns IsNotFound(err) when the object does not exist.
+func (s *S3) ReadWithVersion(key string) ([]byte, string, error) {
+	out, err := s.cl.GetObject(s.ctx, &s3.GetObjectInput{
+		Bucket: aws.String(s.Bucket),
+		Key:    aws.String(s.objectKey(key)),
+	})
+	if err != nil {
+		var nsk *s3types.NoSuchKey
+		var nf *s3types.NotFound
+		if errors.As(err, &nsk) || errors.As(err, &nf) {
+			return nil, "", fmt.Errorf("%w: %s", errNotFound, key)
+		}
+		return nil, "", fmt.Errorf("failed to get object: %w", err)
+	}
+	defer out.Body.Close()
+
+	data, err := io.ReadAll(out.Body)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to read object body: %w", err)
+	}
+	return data, aws.ToString(out.ETag), nil
+}
+
+// WriteIfMatch writes the object only if the current ETag matches version.
+// Pass version="" to write only if no object exists at the key.
+// Returns the new ETag on success, IsConflict(err) on precondition mismatch.
+func (s *S3) WriteIfMatch(key string, version string, data []byte) (string, error) {
+	in := &s3.PutObjectInput{
+		Bucket: aws.String(s.Bucket),
+		Key:    aws.String(s.objectKey(key)),
+		Body:   bytes.NewReader(data),
+	}
+	if version == "" {
+		in.IfNoneMatch = aws.String("*")
+	} else {
+		in.IfMatch = aws.String(version)
+	}
+
+	out, err := s.cl.PutObject(s.ctx, in)
+	if err != nil {
+		if isS3PreconditionFailure(err) {
+			return "", fmt.Errorf("%w: %s", errConflict, key)
+		}
+		return "", fmt.Errorf("failed to put object: %w", err)
+	}
+	return aws.ToString(out.ETag), nil
+}
+
+// isS3PreconditionFailure reports whether err is the 412 Precondition Failed
+// response S3 returns when If-Match or If-None-Match conditions fail.
+func isS3PreconditionFailure(err error) bool {
+	var apiErr smithy.APIError
+	if errors.As(err, &apiErr) {
+		return apiErr.ErrorCode() == "PreconditionFailed"
+	}
+	return false
 }
 
 // List returns cache keys present in S3 under the configured prefix.

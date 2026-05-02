@@ -79,6 +79,30 @@ func IsNotFound(err error) bool {
 	return errors.Is(err, errNotFound)
 }
 
+// errConflict indicates that a conditional write's precondition did not match.
+var errConflict = errors.New("precondition failed")
+
+// IsConflict reports whether err indicates a conditional-write precondition mismatch.
+func IsConflict(err error) bool {
+	return errors.Is(err, errConflict)
+}
+
+// AtomicCache is an optional capability for cache backends that support
+// conditional writes. Cloud backends (S3, GCS) implement it so that callers
+// can coordinate writes across instances without an external lock service.
+//
+// version is an opaque token returned by ReadWithVersion. Pass it back in
+// WriteIfMatch to perform a "write only if the entry has not changed" update.
+// Pass version="" to perform a "write only if no entry exists" update.
+//
+// On precondition mismatch WriteIfMatch returns an error for which IsConflict
+// returns true; the caller is expected to re-read and retry as appropriate.
+type AtomicCache interface {
+	Cache
+	ReadWithVersion(key string) (data []byte, version string, err error)
+	WriteIfMatch(key string, version string, data []byte) (newVersion string, err error)
+}
+
 // nolint
 type item struct {
 	content    []byte

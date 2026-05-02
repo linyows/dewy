@@ -11,15 +11,21 @@ import (
 	"testing"
 
 	"cloud.google.com/go/storage"
+	"google.golang.org/api/googleapi"
 )
 
 type mockGSClient struct {
-	objects map[string][]byte
-	getErr  error
+	objects     map[string][]byte
+	generations map[string]int64
+	nextGen     int64
+	getErr      error
 }
 
 func newMockGSClient() *mockGSClient {
-	return &mockGSClient{objects: map[string][]byte{}}
+	return &mockGSClient{
+		objects:     map[string][]byte{},
+		generations: map[string]int64{},
+	}
 }
 
 func (m *mockGSClient) GetObject(ctx context.Context, bucket, name string) ([]byte, error) {
@@ -35,7 +41,31 @@ func (m *mockGSClient) GetObject(ctx context.Context, bucket, name string) ([]by
 
 func (m *mockGSClient) PutObject(ctx context.Context, bucket, name string, data []byte) error {
 	m.objects[name] = data
+	m.nextGen++
+	m.generations[name] = m.nextGen
 	return nil
+}
+
+func (m *mockGSClient) ReadWithGeneration(ctx context.Context, bucket, name string) ([]byte, int64, error) {
+	if m.getErr != nil {
+		return nil, 0, m.getErr
+	}
+	data, ok := m.objects[name]
+	if !ok {
+		return nil, 0, storage.ErrObjectNotExist
+	}
+	return data, m.generations[name], nil
+}
+
+func (m *mockGSClient) WriteIfGeneration(ctx context.Context, bucket, name string, data []byte, expectedGeneration int64) (int64, error) {
+	current := m.generations[name]
+	if current != expectedGeneration {
+		return 0, &googleapi.Error{Code: 412, Message: "precondition failed"}
+	}
+	m.objects[name] = data
+	m.nextGen++
+	m.generations[name] = m.nextGen
+	return m.nextGen, nil
 }
 
 func (m *mockGSClient) DeleteObject(ctx context.Context, bucket, name string) error {
@@ -220,5 +250,76 @@ func TestNewGSURLParse(t *testing.T) {
 	}
 }
 
-// Compile-time check that *GS satisfies Cache.
-var _ Cache = (*GS)(nil)
+// Compile-time check that *GS satisfies Cache and AtomicCache.
+var (
+	_ Cache       = (*GS)(nil)
+	_ AtomicCache = (*GS)(nil)
+)
+
+func TestGSAtomicWriteIfAbsent(t *testing.T) {
+	g, mock := newTestGS(t)
+
+	v1, err := g.WriteIfMatch("k", "", []byte("first"))
+	if err != nil {
+		t.Fatalf("first WriteIfMatch: %v", err)
+	}
+	if v1 == "" || v1 == "0" {
+		t.Errorf("expected non-empty version, got %q", v1)
+	}
+
+	if _, err := g.WriteIfMatch("k", "", []byte("second")); err == nil {
+		t.Fatal("expected conflict on second write-if-absent")
+	} else if !IsConflict(err) {
+		t.Errorf("expected IsConflict, got %v", err)
+	}
+
+	if got := mock.objects["team/app/k"]; string(got) != "first" {
+		t.Errorf("object overwritten unexpectedly: %q", got)
+	}
+}
+
+func TestGSAtomicReadWriteIfMatch(t *testing.T) {
+	g, _ := newTestGS(t)
+
+	v1, err := g.WriteIfMatch("k", "", []byte("v1"))
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	data, version, err := g.ReadWithVersion("k")
+	if err != nil {
+		t.Fatalf("ReadWithVersion: %v", err)
+	}
+	if string(data) != "v1" || version != v1 {
+		t.Errorf("unexpected read: data=%q version=%q want %q", data, version, v1)
+	}
+
+	v2, err := g.WriteIfMatch("k", version, []byte("v2"))
+	if err != nil {
+		t.Fatalf("CAS with current version: %v", err)
+	}
+	if v2 == version {
+		t.Error("expected new version different from previous")
+	}
+
+	if _, err := g.WriteIfMatch("k", version, []byte("v3")); err == nil {
+		t.Fatal("expected conflict on stale CAS")
+	} else if !IsConflict(err) {
+		t.Errorf("expected IsConflict, got %v", err)
+	}
+
+	if _, err := g.WriteIfMatch("k", v2, []byte("v3")); err != nil {
+		t.Fatalf("CAS after stale fail: %v", err)
+	}
+}
+
+func TestGSAtomicReadWithVersionNotFound(t *testing.T) {
+	g, _ := newTestGS(t)
+	_, _, err := g.ReadWithVersion("missing")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !IsNotFound(err) {
+		t.Errorf("expected IsNotFound, got %v", err)
+	}
+}
