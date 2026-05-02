@@ -117,6 +117,6 @@ func TestFakeCommandRunnerCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if _, err := r.Output(ctx, "any"); !errors.Is(err, context.Canceled) {
-		t.Errorf("Output() with cancelled ctx err = %v, want Canceled", err)
+		t.Errorf("Output() with canceled ctx err = %v, want Canceled", err)
 	}
 }
