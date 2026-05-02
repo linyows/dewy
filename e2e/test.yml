@@ -633,8 +633,6 @@ jobs:
           --title {{ outputs.genver.version }} \
           --notes "End-to-end Testing by Probe"
     test: status == 0
-    echo: |
-      {{res.stdout}}
   - name: Verify release exists
     uses: shell
     retry:
