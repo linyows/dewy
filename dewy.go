@@ -252,7 +252,7 @@ func (d *Dewy) cachekeyName(res *registry.CurrentResponse) string {
 
 // Run is the per-tick deploy state machine for SERVER and ASSETS commands.
 // It is intentionally short: each phase lives as a method on Dewy in
-// dewy_phases.go and can be exercised in isolation.
+// lifecycle.go and can be exercised in isolation.
 func (d *Dewy) Run() error {
 	ctx, cancel := d.makeRunContext()
 	defer cancel()
@@ -281,7 +281,7 @@ func (d *Dewy) Run() error {
 
 // RunContainer runs the container deployment process.
 // RunContainer is the per-tick deploy state machine for the CONTAINER command.
-// Like Run, each phase lives as a method on Dewy in dewy_phases.go.
+// Like Run, each phase lives as a method on Dewy in lifecycle.go.
 func (d *Dewy) RunContainer() error {
 	ctx, cancel := d.makeRunContext()
 	defer cancel()
