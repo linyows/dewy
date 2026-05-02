@@ -27,7 +27,7 @@ import (
 	"github.com/cli/safeexec"
 	"github.com/linyows/dewy/artifact"
 	"github.com/linyows/dewy/container"
-	"github.com/linyows/dewy/kvs"
+	"github.com/linyows/dewy/cache"
 	"github.com/linyows/dewy/logging"
 	"github.com/linyows/dewy/notifier"
 	"github.com/linyows/dewy/registry"
@@ -61,7 +61,7 @@ type Dewy struct {
 	config           Config
 	registry         registry.Registry
 	artifact         artifact.Artifact
-	cache            kvs.KVS
+	cache            cache.Cache
 	isServerRunning  bool
 	disableReport    bool
 	root             string
@@ -98,7 +98,7 @@ type tcpBackend struct {
 
 // New returns Dewy.
 func New(c Config, log *logging.Logger) (*Dewy, error) {
-	kv, err := kvs.New(context.Background(), c.Cache.URL, log.Logger)
+	kv, err := cache.New(context.Background(), c.Cache.URL, log.Logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to init cache backend: %w", err)
 	}
@@ -153,6 +153,22 @@ func (d *Dewy) Start(i int) {
 	d.registry, err = registry.New(ctx, d.config.Registry, d.logger)
 	if err != nil {
 		d.logger.Error("Registry failure", slog.String("error", err.Error()))
+	}
+
+	// Wrap the registry with a shared result cache when the cache backend
+	// supports atomic writes and the operator opted in via ?registry-ttl=...
+	// on the cache URL.
+	if d.registry != nil {
+		if ttl := d.cache.RegistryTTL(); ttl > 0 {
+			if ac, ok := d.cache.(cache.AtomicCache); ok {
+				d.registry = registry.NewCached(d.registry, d.config.Registry, ac, ttl, d.logger)
+				d.logger.Info("Registry result cache enabled",
+					slog.Duration("ttl", ttl))
+			} else {
+				d.logger.Warn("registry-ttl set but cache backend does not support atomic writes; ignoring",
+					slog.Duration("ttl", ttl))
+			}
+		}
 	}
 
 	d.notifier, err = notifier.New(ctx, d.config.Notifier, d.logger.Logger)
@@ -499,7 +515,7 @@ func (d *Dewy) preserve(p string) (string, error) {
 		return "", err
 	}
 
-	if err := kvs.ExtractArchive(p, dst); err != nil {
+	if err := cache.ExtractArchive(p, dst); err != nil {
 		return "", err
 	}
 

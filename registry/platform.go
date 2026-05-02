@@ -84,7 +84,7 @@ func matchesPlatform(artifactName string, archMatches, osMatches []string) bool 
 func isArchiveFile(filename string) bool {
 	name := strings.ToLower(filename)
 
-	// Supported archive extensions based on kvs.ExtractArchive
+	// Supported archive extensions based on cache.ExtractArchive
 	supportedExtensions := []string{
 		".tar.gz", ".tgz",
 		".tar.bz2", ".tbz2",

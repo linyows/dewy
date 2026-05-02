@@ -32,7 +32,10 @@ steps:
   id: noerr
   uses: shell
   with:
-    cmd: "grep -i error {{ vars.log }}"
+    # Match only level=ERROR. The previous "grep -i error" also matched the
+    # `error="..."` slog field used by INFO/WARN log lines, which produced
+    # false positives for benign warnings (e.g. registry-cache fail-open).
+    cmd: "grep 'level=ERROR' {{ vars.log }}"
   test: status == 1
   outputs:
     ok: status == 1

@@ -296,6 +296,18 @@ $ dewy server --registry ghr://owner/repo \
 
 S3およびGCS backendの認証は各providerの標準credential chainを使用するため、registry sourceとして既に設定しているS3/GCS用credentialをそのまま流用できます。各インスタンスは取得したartifactをローカルにstagingコピーするため、アーカイブ展開はfile backendと同じ動作になります。
 
+### Registry result cache
+
+cache URLに `registry-ttl=<duration>` を追加すると、**上流registryのレスポンスそのもの**もインスタンス間で共有されます。有効化すると、TTLウィンドウあたり1台だけが上流registryをpollし、残りは共有キャッシュからレスポンスを読みます（single-flight refresh lockで調停）。上流registry障害時は最後のキャッシュ値を返し続ける（stale-but-usable）ため、一時的なregistry障害でクラスタが止まりません。
+
+```sh
+$ dewy server --registry ghr://owner/repo \
+    --cache 's3://ap-northeast-1/dewy-cache/myapp?registry-ttl=30s' \
+    -- /opt/myapp/current/myapp
+```
+
+`registry-ttl` を指定しない場合は通常通り各インスタンスがpollします（既存動作）。このオプションはconditional writeをサポートするbackend（S3、GCS）でのみ機能し、file backendでは無視されます。
+
 Notifier
 --
 
@@ -722,8 +734,7 @@ FAQ
     
 - 複数Dewyからのポーリングによってレジストリのレートリミットにかかるのはどう対処できますか？
     
-    キャッシュbackendにAWS S3やGoogle Cloud Storageを指定すると、複数のDewyインスタンスがartifactを共有できるため、上流registryへのダウンロードトラフィックを大幅に削減できます（`--cache s3://<region>/<bucket>/<prefix>` または `--cache gs://<bucket>/<prefix>`）。
-    また、ポーリング間隔自体を長くするには `--interval` オプションで指定できます。metadata pollingの調停（stale-while-revalidate）はregistry層の課題として将来対応予定です。
+    キャッシュbackendにAWS S3やGoogle Cloud Storageを指定すると、複数のDewyインスタンスがartifactとregistryレスポンスを共有できます。`--cache s3://<region>/<bucket>/<prefix>`（または`gs://<bucket>/<prefix>`）でartifactのダウンロードを重複排除します。さらにそのURLに `?registry-ttl=<duration>` を加えると、metadata pollingそのものも重複排除されます: TTLウィンドウあたり1台だけが上流registryをpollし、残りは共有キャッシュから読みます。上流registry障害時は最後のキャッシュ値を返し続けます（stale-but-usable）。インスタンス毎のポーリング間隔自体は `--interval` オプションでさらに伸ばせます。
 
 作者
 --

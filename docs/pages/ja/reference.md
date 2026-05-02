@@ -82,6 +82,8 @@ dewy server --artifact s3://bucket/path/to/artifact -- /opt/app/current/app
 
 URLでキャッシュbackendを選択します。サポートscheme: `file://`（デフォルトのローカルファイルシステム）、`s3://<region>/<bucket>/<prefix>`（Amazon S3およびS3互換ストレージ）、`gs://<bucket>/<prefix>`（Google Cloud Storage）。S3またはGCSを使用する場合、複数のDewyインスタンスを同じbucketに向けることでartifactダウンロードを共有でき、上流registryへのトラフィックが大幅に削減できます。
 
+URLに `?registry-ttl=<duration>` （例: `30s`、`2m`）を追加すると、上流registryのレスポンスもインスタンス間で共有されます。TTLウィンドウあたり1台だけが上流registryをpollし、残りは共有キャッシュからレスポンスを読みます。本オプションはfile backendでは無視されます。
+
 ```bash
 # ローカルファイルシステム（デフォルト）
 dewy server --cache file:///tmp/dewy-cache -- /opt/app/current/app
@@ -91,6 +93,9 @@ dewy server --cache s3://ap-northeast-1/dewy-cache/myapp -- /opt/app/current/app
 
 # Google Cloud Storage
 dewy server --cache gs://dewy-cache/myapp -- /opt/app/current/app
+
+# 共有キャッシュ + registry result cache
+dewy server --cache 's3://ap-northeast-1/dewy-cache/myapp?registry-ttl=30s' -- /opt/app/current/app
 ```
 
 ### --notifier (-n)

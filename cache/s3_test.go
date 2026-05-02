@@ -1,28 +1,36 @@
-package kvs
+package cache
 
 import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go"
 )
 
 type mockS3Client struct {
 	objects map[string][]byte
+	etags   map[string]string
+	nextGen int
 	getErr  error
 }
 
 func newMockS3Client() *mockS3Client {
-	return &mockS3Client{objects: map[string][]byte{}}
+	return &mockS3Client{
+		objects: map[string][]byte{},
+		etags:   map[string]string{},
+	}
 }
 
 func (m *mockS3Client) GetObject(ctx context.Context, in *s3.GetObjectInput, opts ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
@@ -33,20 +41,35 @@ func (m *mockS3Client) GetObject(ctx context.Context, in *s3.GetObjectInput, opt
 	if !ok {
 		return nil, &s3types.NoSuchKey{}
 	}
-	return &s3.GetObjectOutput{Body: io.NopCloser(bytes.NewReader(data))}, nil
+	etag := m.etags[*in.Key]
+	return &s3.GetObjectOutput{
+		Body: io.NopCloser(bytes.NewReader(data)),
+		ETag: aws.String(etag),
+	}, nil
 }
 
 func (m *mockS3Client) PutObject(ctx context.Context, in *s3.PutObjectInput, opts ...func(*s3.Options)) (*s3.PutObjectOutput, error) {
+	currentEtag, exists := m.etags[*in.Key]
+	if in.IfNoneMatch != nil && *in.IfNoneMatch == "*" && exists {
+		return nil, &smithy.GenericAPIError{Code: "PreconditionFailed", Message: "object exists"}
+	}
+	if in.IfMatch != nil && currentEtag != *in.IfMatch {
+		return nil, &smithy.GenericAPIError{Code: "PreconditionFailed", Message: "etag mismatch"}
+	}
 	data, err := io.ReadAll(in.Body)
 	if err != nil {
 		return nil, err
 	}
 	m.objects[*in.Key] = data
-	return &s3.PutObjectOutput{}, nil
+	m.nextGen++
+	newEtag := fmt.Sprintf("\"etag-%d\"", m.nextGen)
+	m.etags[*in.Key] = newEtag
+	return &s3.PutObjectOutput{ETag: aws.String(newEtag)}, nil
 }
 
 func (m *mockS3Client) DeleteObject(ctx context.Context, in *s3.DeleteObjectInput, opts ...func(*s3.Options)) (*s3.DeleteObjectOutput, error) {
 	delete(m.objects, *in.Key)
+	delete(m.etags, *in.Key)
 	return &s3.DeleteObjectOutput{}, nil
 }
 
@@ -195,12 +218,16 @@ func TestNewS3URLParse(t *testing.T) {
 		region    string
 		bucket    string
 		prefix    string
+		ttl       time.Duration
 		expectErr bool
 	}{
-		{"basic", "s3://ap-northeast-1/mybucket", "ap-northeast-1", "mybucket", "", false},
-		{"with prefix", "s3://ap-northeast-1/mybucket/team/app", "ap-northeast-1", "mybucket", "team/app/", false},
-		{"missing region", "s3:///mybucket", "", "", "", true},
-		{"missing bucket", "s3://ap-northeast-1/", "", "", "", true},
+		{"basic", "s3://ap-northeast-1/mybucket", "ap-northeast-1", "mybucket", "", 0, false},
+		{"with prefix", "s3://ap-northeast-1/mybucket/team/app", "ap-northeast-1", "mybucket", "team/app/", 0, false},
+		{"with registry-ttl", "s3://ap-northeast-1/mybucket?registry-ttl=30s", "ap-northeast-1", "mybucket", "", 30 * time.Second, false},
+		{"prefix and ttl", "s3://ap-northeast-1/mybucket/team/app?registry-ttl=2m", "ap-northeast-1", "mybucket", "team/app/", 2 * time.Minute, false},
+		{"missing region", "s3:///mybucket", "", "", "", 0, true},
+		{"missing bucket", "s3://ap-northeast-1/", "", "", "", 0, true},
+		{"invalid ttl", "s3://ap-northeast-1/mybucket?registry-ttl=30", "", "", "", 0, true},
 	}
 
 	for _, tt := range tests {
@@ -224,9 +251,89 @@ func TestNewS3URLParse(t *testing.T) {
 			if s.Prefix != tt.prefix {
 				t.Errorf("prefix: got %q want %q", s.Prefix, tt.prefix)
 			}
+			if s.RegistryTTL() != tt.ttl {
+				t.Errorf("ttl: got %v want %v", s.RegistryTTL(), tt.ttl)
+			}
 		})
 	}
 }
 
-// Compile-time check that *S3 satisfies KVS.
-var _ KVS = (*S3)(nil)
+// Compile-time check that *S3 satisfies Cache and AtomicCache.
+var (
+	_ Cache       = (*S3)(nil)
+	_ AtomicCache = (*S3)(nil)
+)
+
+func TestS3AtomicWriteIfAbsent(t *testing.T) {
+	s, mock := newTestS3(t)
+
+	// First write-if-absent succeeds and yields a non-empty version.
+	v1, err := s.WriteIfMatch("k", "", []byte("first"))
+	if err != nil {
+		t.Fatalf("first WriteIfMatch: %v", err)
+	}
+	if v1 == "" {
+		t.Error("expected non-empty version on success")
+	}
+
+	// Second write-if-absent on the same key fails with IsConflict.
+	if _, err := s.WriteIfMatch("k", "", []byte("second")); err == nil {
+		t.Fatal("expected conflict on second write-if-absent")
+	} else if !IsConflict(err) {
+		t.Errorf("expected IsConflict, got %v", err)
+	}
+
+	// Existing object should remain unchanged.
+	if got := mock.objects["myteam/myapp/k"]; string(got) != "first" {
+		t.Errorf("object overwritten unexpectedly: %q", got)
+	}
+}
+
+func TestS3AtomicReadWriteIfMatch(t *testing.T) {
+	s, _ := newTestS3(t)
+
+	v1, err := s.WriteIfMatch("k", "", []byte("v1"))
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	data, version, err := s.ReadWithVersion("k")
+	if err != nil {
+		t.Fatalf("ReadWithVersion: %v", err)
+	}
+	if string(data) != "v1" || version != v1 {
+		t.Errorf("unexpected read: data=%q version=%q want v1=%q", data, version, v1)
+	}
+
+	// Compare-and-swap with current version succeeds.
+	v2, err := s.WriteIfMatch("k", version, []byte("v2"))
+	if err != nil {
+		t.Fatalf("CAS with current version: %v", err)
+	}
+	if v2 == version {
+		t.Error("expected new version different from previous")
+	}
+
+	// Compare-and-swap with stale version fails IsConflict.
+	if _, err := s.WriteIfMatch("k", version, []byte("v3")); err == nil {
+		t.Fatal("expected conflict on stale CAS")
+	} else if !IsConflict(err) {
+		t.Errorf("expected IsConflict, got %v", err)
+	}
+
+	// CAS with the up-to-date version still works.
+	if _, err := s.WriteIfMatch("k", v2, []byte("v3")); err != nil {
+		t.Fatalf("CAS after stale fail: %v", err)
+	}
+}
+
+func TestS3AtomicReadWithVersionNotFound(t *testing.T) {
+	s, _ := newTestS3(t)
+	_, _, err := s.ReadWithVersion("missing")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !IsNotFound(err) {
+		t.Errorf("expected IsNotFound, got %v", err)
+	}
+}

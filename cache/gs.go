@@ -1,4 +1,4 @@
-package kvs
+package cache
 
 import (
 	"context"
@@ -9,9 +9,12 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 
 	"cloud.google.com/go/storage"
+	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 )
 
@@ -23,6 +26,13 @@ type GSClient interface {
 	PutObject(ctx context.Context, bucket, name string, data []byte) error
 	DeleteObject(ctx context.Context, bucket, name string) error
 	ListObjects(ctx context.Context, bucket, prefix string) ([]string, error)
+	// ReadWithGeneration returns the object bytes and its current generation.
+	// Returns storage.ErrObjectNotExist when the object does not exist.
+	ReadWithGeneration(ctx context.Context, bucket, name string) ([]byte, int64, error)
+	// WriteIfGeneration writes only if the current generation matches expectedGeneration.
+	// Pass expectedGeneration=0 to write only when the object does not yet exist.
+	// Returns ErrPreconditionFailed (or HTTP 412 from googleapi.Error) on mismatch.
+	WriteIfGeneration(ctx context.Context, bucket, name string, data []byte, expectedGeneration int64) (int64, error)
 }
 
 // GS is a Google Cloud Storage backed cache with local filesystem staging.
@@ -33,9 +43,10 @@ type GS struct {
 	cl  GSClient
 	ctx context.Context
 
-	dir     string
-	MaxSize int64
-	logger  *slog.Logger
+	dir         string
+	MaxSize     int64
+	registryTTL time.Duration
+	logger      *slog.Logger
 }
 
 // NewGS returns a GS cache backend configured from a URL.
@@ -57,13 +68,19 @@ func NewGSWithClient(ctx context.Context, u string, log *slog.Logger, client GSC
 		return nil, fmt.Errorf("bucket is required: %s", gsFormat)
 	}
 
+	ttl, err := parseRegistryTTL(ur.Query())
+	if err != nil {
+		return nil, err
+	}
+
 	g := &GS{
-		Bucket:  bucket,
-		Prefix:  prefix,
-		ctx:     ctx,
-		dir:     DefaultCacheDir,
-		MaxSize: DefaultMaxSize,
-		logger:  log,
+		Bucket:      bucket,
+		Prefix:      prefix,
+		ctx:         ctx,
+		dir:         DefaultCacheDir,
+		MaxSize:     DefaultMaxSize,
+		registryTTL: ttl,
+		logger:      log,
 	}
 
 	if client != nil {
@@ -88,6 +105,9 @@ func (g *GS) SetDir(dir string) { g.dir = dir }
 // GetDir returns the local staging directory.
 func (g *GS) GetDir() string { return g.dir }
 
+// RegistryTTL returns the configured registry-result cache TTL.
+func (g *GS) RegistryTTL() time.Duration { return g.registryTTL }
+
 func (g *GS) objectName(key string) string { return g.Prefix + key }
 
 // Read returns cache data for key, fetching from GCS and staging locally on miss.
@@ -104,7 +124,7 @@ func (g *GS) Read(key string) ([]byte, error) {
 	data, err := g.cl.GetObject(g.ctx, g.Bucket, g.objectName(key))
 	if err != nil {
 		if errors.Is(err, storage.ErrObjectNotExist) {
-			return nil, fmt.Errorf("%w: %s", errNotFound, key)
+			return nil, fmt.Errorf("%w: %s", ErrNotFound, key)
 		}
 		return nil, fmt.Errorf("failed to get object: %w", err)
 	}
@@ -179,6 +199,52 @@ func (g *GS) List() ([]string, error) {
 	return keys, nil
 }
 
+// ReadWithVersion fetches the object and returns its generation as the opaque version.
+// Returns IsNotFound(err) when the object does not exist.
+func (g *GS) ReadWithVersion(key string) ([]byte, string, error) {
+	data, gen, err := g.cl.ReadWithGeneration(g.ctx, g.Bucket, g.objectName(key))
+	if err != nil {
+		if errors.Is(err, storage.ErrObjectNotExist) {
+			return nil, "", fmt.Errorf("%w: %s", ErrNotFound, key)
+		}
+		return nil, "", fmt.Errorf("failed to get object: %w", err)
+	}
+	return data, strconv.FormatInt(gen, 10), nil
+}
+
+// WriteIfMatch writes the object only if the current generation matches version.
+// Pass version="" to write only if no object exists at the key.
+// Returns the new generation (as a decimal string) on success, or an error
+// for which IsConflict returns true on precondition mismatch.
+func (g *GS) WriteIfMatch(key string, version string, data []byte) (string, error) {
+	var expected int64
+	if version != "" {
+		v, err := strconv.ParseInt(version, 10, 64)
+		if err != nil {
+			return "", fmt.Errorf("invalid version %q: %w", version, err)
+		}
+		expected = v
+	}
+	gen, err := g.cl.WriteIfGeneration(g.ctx, g.Bucket, g.objectName(key), data, expected)
+	if err != nil {
+		if isGSPreconditionFailure(err) {
+			return "", fmt.Errorf("%w: %s", ErrConflict, key)
+		}
+		return "", fmt.Errorf("failed to put object: %w", err)
+	}
+	return strconv.FormatInt(gen, 10), nil
+}
+
+// isGSPreconditionFailure reports whether err is a 412 Precondition Failed
+// response from GCS (returned when ifGenerationMatch does not hold).
+func isGSPreconditionFailure(err error) bool {
+	var gerr *googleapi.Error
+	if errors.As(err, &gerr) {
+		return gerr.Code == 412
+	}
+	return false
+}
+
 func (g *GS) stageLocal(p string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil {
 		return err
@@ -235,4 +301,39 @@ func (c *gsStorageClient) ListObjects(ctx context.Context, bucket, prefix string
 		}
 	}
 	return names, nil
+}
+
+func (c *gsStorageClient) ReadWithGeneration(ctx context.Context, bucket, name string) ([]byte, int64, error) {
+	r, err := c.client.Bucket(bucket).Object(name).NewReader(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer r.Close()
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return nil, 0, err
+	}
+	return data, r.Attrs.Generation, nil
+}
+
+func (c *gsStorageClient) WriteIfGeneration(ctx context.Context, bucket, name string, data []byte, expectedGeneration int64) (int64, error) {
+	// storage.Conditions{GenerationMatch: 0} is treated as the zero value
+	// by the SDK and rejected as "empty conditions". Use DoesNotExist for
+	// the "write only if absent" case.
+	var conds storage.Conditions
+	if expectedGeneration == 0 {
+		conds.DoesNotExist = true
+	} else {
+		conds.GenerationMatch = expectedGeneration
+	}
+	obj := c.client.Bucket(bucket).Object(name).If(conds)
+	w := obj.NewWriter(ctx)
+	if _, err := w.Write(data); err != nil {
+		_ = w.Close()
+		return 0, err
+	}
+	if err := w.Close(); err != nil {
+		return 0, err
+	}
+	return w.Attrs().Generation, nil
 }

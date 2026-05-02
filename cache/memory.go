@@ -1,4 +1,4 @@
-package kvs
+package cache
 
 // Memory struct.
 type Memory struct {

@@ -73,6 +73,28 @@ dewy server --registry ghr://owner/repo \
 
 Authentication follows the standard Google Cloud authentication methods (`GOOGLE_APPLICATION_CREDENTIALS`, workload identity, ADC).
 
+### Registry result cache {% #registry-result-cache %}
+
+Both S3 and GCS cache backends accept a `registry-ttl=<duration>` query parameter. When set, the cache also stores the **upstream registry response**, and Dewy instances sharing the same prefix coordinate so that only one of them per TTL window calls the upstream registry. Followers read the cached response from the shared cache. Useful when many Dewy instances poll a rate-limited registry such as GitHub Releases.
+
+```sh
+# Shared registry-result cache with 30s freshness window
+dewy server --registry ghr://owner/repo \
+  --cache 's3://ap-northeast-1/mybucket/myapp?registry-ttl=30s' \
+  -- /opt/myapp/current/myapp
+
+# Same with GCS
+dewy server --registry ghr://owner/repo \
+  --cache 'gs://mybucket/myapp?registry-ttl=30s' \
+  -- /opt/myapp/current/myapp
+```
+
+The cache entry doubles as a refresh lock (single-flight via `If-Match` / `ifGenerationMatch`). On upstream failure the cache continues to serve the last known response (stale-but-usable), so a transient registry outage does not stop the cluster.
+
+> Operational note: stale-but-usable hides upstream errors from `Dewy.Run()`'s normal error path, so prolonged outages won't surface via the configured notifier. Watch for the `"upstream registry failed; serving stale cache"` warning in the dewy log to detect them.
+
+If `registry-ttl` is set on a backend that does not support atomic conditional writes (currently the file backend), Dewy logs a `"registry-ttl set but cache backend does not support atomic writes; ignoring"` warning at startup and proceeds without registry-result caching.
+
 ### Memory {% #memory-cache %}
 
 {% callout type="warning" title="Not Implemented" %}
