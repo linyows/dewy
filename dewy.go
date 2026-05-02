@@ -98,7 +98,7 @@ type tcpBackend struct {
 
 // New returns Dewy.
 func New(c Config, log *logging.Logger) (*Dewy, error) {
-	kv, err := cache.New(context.Background(), c.Cache.URL, log.Logger)
+	kv, err := cache.New(context.Background(), c.Cache.URL, log.Slog())
 	if err != nil {
 		return nil, fmt.Errorf("failed to init cache backend: %w", err)
 	}
@@ -171,7 +171,7 @@ func (d *Dewy) Start(i int) {
 		}
 	}
 
-	d.notifier, err = notifier.New(ctx, d.config.Notifier, d.logger.Logger)
+	d.notifier, err = notifier.New(ctx, d.config.Notifier, d.logger.Slog())
 	if err != nil {
 		d.logger.Error("Notifier failure", slog.String("error", err.Error()))
 	}
@@ -563,7 +563,7 @@ func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentRespons
 	}
 
 	// Create container runtime
-	runtime, err := container.New(d.config.Container.Runtime, d.logger.Logger, d.config.Container.DrainTime)
+	runtime, err := container.New(d.config.Container.Runtime, d.logger.Slog(), d.config.Container.DrainTime)
 	if err != nil {
 		return 0, fmt.Errorf("failed to create container runtime: %w", err)
 	}
