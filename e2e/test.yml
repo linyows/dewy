@@ -871,6 +871,7 @@ jobs:
         echo "A=${a} B=${b} total=${total} (ideal=2, allowed<=3)"
         [ "${total}" -le 3 ]
     test: status == 0
+    echo: "{{ res.stdout }}"
 
 - name: Verify shared cache reduces upstream downloads (GCS pair)
   needs: [verify_srv_ghr_gscache_a, verify_srv_ghr_gscache_b]
@@ -885,6 +886,7 @@ jobs:
         echo "A=${a} B=${b} total=${total} (ideal=2, allowed<=3)"
         [ "${total}" -le 3 ]
     test: status == 0
+    echo: "{{ res.stdout }}"
 
 # Phase 5: Verify the registry-result cache deduplicated upstream polls.
 # Each instance polls every 10s. Without sharing, two instances over the
@@ -906,6 +908,7 @@ jobs:
         echo "A=${a} B=${b} total=${total} (allowed<=20)"
         [ "${total}" -ge 1 ] && [ "${total}" -le 20 ]
     test: status == 0
+    echo: "{{ res.stdout }}"
 
 - name: Verify registry result cache reduces upstream polls (GCS pair)
   needs: [verify_srv_ghr_gscache_a, verify_srv_ghr_gscache_b]
@@ -920,3 +923,4 @@ jobs:
         echo "A=${a} B=${b} total=${total} (allowed<=20)"
         [ "${total}" -ge 1 ] && [ "${total}" -le 20 ]
     test: status == 0
+    echo: "{{ res.stdout }}"
