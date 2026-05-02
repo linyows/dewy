@@ -72,7 +72,7 @@ func (d *Dewy) deploy(key string) (err error) {
 	return nil
 }
 
-// preserve materialises the cached artifact into a timestamp-named release
+// preserve materializes the cached artifact into a timestamp-named release
 // directory under d.root and returns its path.
 func (d *Dewy) preserve(p string) (string, error) {
 	dst := filepath.Join(d.root, releasesDir, time.Now().UTC().Format(releaseDir))
