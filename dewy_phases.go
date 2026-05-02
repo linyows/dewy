@@ -34,11 +34,10 @@ func (d *Dewy) resolveCurrent(ctx context.Context) (*registry.CurrentResponse, e
 		// we return (nil, nil) to suppress the alert.
 		var artifactNotFoundErr *registry.ArtifactNotFoundError
 		if errors.As(err, &artifactNotFoundErr) {
-			gracePeriod := 30 * time.Minute
-			if artifactNotFoundErr.IsWithinGracePeriod(gracePeriod) {
+			if artifactNotFoundErr.IsWithinGracePeriod(defaultArtifactGracePeriod) {
 				d.logger.Debug("Artifact not found within grace period",
 					slog.String("message", artifactNotFoundErr.Message),
-					slog.Duration("grace_period", gracePeriod))
+					slog.Duration("grace_period", defaultArtifactGracePeriod))
 				return nil, nil
 			}
 		}

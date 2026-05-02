@@ -637,9 +637,9 @@ func (d *Dewy) createHealthCheckFunc(rt *container.Runtime, resolvedMappings []c
 		}
 
 		healthURL := fmt.Sprintf("http://localhost:%d%s", mappedPort, d.config.Container.HealthPath)
-		client := &http.Client{Timeout: 5 * time.Second}
+		client := &http.Client{Timeout: defaultHealthCheckTimeout}
 
-		retries := 5
+		retries := defaultHealthCheckRetries
 		for i := range retries {
 			if d.telemetry != nil && d.telemetry.Enabled() {
 				d.telemetry.Metrics().HealthChecksTotal.Add(ctx, 1)
@@ -658,7 +658,7 @@ func (d *Dewy) createHealthCheckFunc(rt *container.Runtime, resolvedMappings []c
 				d.telemetry.Metrics().HealthCheckFailures.Add(ctx, 1)
 			}
 			if i < retries-1 {
-				time.Sleep(2 * time.Second)
+				time.Sleep(defaultHealthCheckDelay)
 			}
 		}
 		return fmt.Errorf("health check failed after %d retries", retries)
@@ -1073,7 +1073,7 @@ func (d *Dewy) startAdminAPI(ctx context.Context) error {
 
 	d.adminServer = &http.Server{
 		Handler:           mux,
-		ReadHeaderTimeout: 5 * time.Second,
+		ReadHeaderTimeout: defaultAdminReadHeaderTimeout,
 	}
 
 	// Start server in background

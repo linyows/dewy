@@ -551,7 +551,7 @@ func (r *Runtime) Deploy(ctx context.Context, opts RollingDeployOptions, updater
 		}
 
 		// Stop and remove old container
-		if err := r.Stop(ctx, oldContainerID, 10*time.Second); err != nil {
+		if err := r.Stop(ctx, oldContainerID, defaultStopTimeoutOld); err != nil {
 			r.logger.Error("Failed to stop old container",
 				slog.String("container", oldContainerID),
 				slog.String("error", err.Error()))
@@ -633,11 +633,11 @@ func (r *Runtime) startAndCheck(ctx context.Context, opts RollingDeployOptions, 
 	// Perform health check if configured
 	if opts.HealthCheck != nil {
 		// Give the container a moment to start
-		time.Sleep(3 * time.Second)
+		time.Sleep(defaultStartupGrace)
 
 		r.logger.Info("Performing health check", slog.String("container", containerID))
 		if err := opts.HealthCheck(ctx, containerID); err != nil {
-			sErr := r.Stop(ctx, containerID, 5*time.Second)
+			sErr := r.Stop(ctx, containerID, defaultStopTimeoutFailed)
 			rErr := r.Remove(ctx, containerID)
 			return DeployResult{}, errors.Join(
 				fmt.Errorf("health check failed: %w", err),
@@ -674,7 +674,7 @@ func (r *Runtime) rollback(ctx context.Context, results []DeployResult, updater 
 
 	// Stop and remove containers
 	for _, result := range results {
-		if err := r.Stop(ctx, result.ContainerID, 5*time.Second); err != nil {
+		if err := r.Stop(ctx, result.ContainerID, defaultStopTimeoutFailed); err != nil {
 			r.logger.Error("Failed to stop container during rollback",
 				slog.String("container", result.ContainerID),
 				slog.String("error", err.Error()))
@@ -708,7 +708,7 @@ func (r *Runtime) StopManagedContainers(ctx context.Context, appName string) (in
 
 	r.logger.Info("Found managed containers to stop", slog.Int("count", len(containerIDs)))
 
-	timeout := 10 * time.Second
+	timeout := defaultStopTimeoutOld
 	stopped := 0
 	removed := 0
 
