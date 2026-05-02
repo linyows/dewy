@@ -58,6 +58,10 @@ func (c CacheType) String() string {
 type CacheConfig struct {
 	Type       CacheType
 	Expiration int
+	// URL selects a cache backend by scheme.
+	// Examples: "" (default file), "file:///path/to/cache",
+	// "s3://<region>/<bucket>/<prefix>", "gs://<bucket>/<prefix>".
+	URL string
 }
 
 // PortMapping represents a port mapping between proxy and container.

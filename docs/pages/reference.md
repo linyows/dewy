@@ -80,10 +80,17 @@ dewy server --artifact s3://bucket/path/to/artifact -- /opt/app/current/app
 
 ### --cache (-c)
 
-Specifies artifact cache settings. Local filesystem or Redis can be used as cache storage.
+Selects the cache backend by URL. Supported schemes: `file://` (default local filesystem), `s3://<region>/<bucket>/<prefix>` (Amazon S3 or S3-compatible storage), `gs://<bucket>/<prefix>` (Google Cloud Storage). When using S3 or GCS, multiple Dewy instances pointed at the same bucket share artifact downloads, dramatically reducing upstream registry traffic.
 
 ```bash
+# Local filesystem (default)
 dewy server --cache file:///tmp/dewy-cache -- /opt/app/current/app
+
+# Amazon S3
+dewy server --cache s3://ap-northeast-1/dewy-cache/myapp -- /opt/app/current/app
+
+# Google Cloud Storage
+dewy server --cache gs://dewy-cache/myapp -- /opt/app/current/app
 ```
 
 ### --notifier (-n)
@@ -418,7 +425,7 @@ Comprehensive configuration example specifying all major options. Suitable for p
 dewy server \
   --registry ghr://mycompany/myapp \
   --artifact s3://mybucket/artifacts/ \
-  --cache redis://localhost:6379/0 \
+  --cache s3://ap-northeast-1/dewy-cache/myapp \
   --notifier slack://hooks.slack.com/services/xxx/yyy/zzz \
   --port 8080 \
   --interval 300 \

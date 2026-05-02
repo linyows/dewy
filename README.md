@@ -268,7 +268,26 @@ The Artifact interface manages application or file content itself. If the regist
 Cache
 --
 
-The Cache interface stores the current versions and artifacts. Supported implementations include the file system, memory, HashiCorp Consul, and Redis.
+The Cache interface stores the current version and downloaded artifacts. Supported implementations are local file (default), AWS S3, and Google Cloud Storage. Memory, HashiCorp Consul, and Redis backends are planned.
+
+Pointing multiple Dewy instances at the same S3/GCS bucket lets them share artifact downloads: only the first instance to detect a new release pays the upstream download cost, while the rest fetch from the shared cache.
+
+```sh
+# Local file cache (default)
+$ dewy server --registry ghr://owner/repo -- /opt/myapp/current/myapp
+
+# Shared cache on Amazon S3 (or any S3-compatible storage)
+# Format: s3://<region>/<bucket>/<prefix>?<options: endpoint>
+$ dewy server --registry ghr://owner/repo \
+    --cache s3://ap-northeast-1/dewy-cache/myapp -- /opt/myapp/current/myapp
+
+# Shared cache on Google Cloud Storage
+# Format: gs://<bucket>/<prefix>
+$ dewy server --registry ghr://owner/repo \
+    --cache gs://dewy-cache/myapp -- /opt/myapp/current/myapp
+```
+
+Authentication for the S3 and GCS backends uses the standard credential chain for each provider, so the same credentials configured for an S3/GCS registry source can be reused. Each instance also keeps a local staging copy of fetched artifacts so that archive extraction works the same way as the file backend.
 
 Notifier
 --
@@ -690,8 +709,8 @@ Here are some questions you may be asked:
     
 - How can I prevent registry rate limits caused by polling from multiple Dewy instances?
     
-    By using a cache component like HashiCorp Consul or Redis, you can share the cache among multiple Dewy instances, which reduces the total number of requests to the registry. In this case, it's best to set an appropriate registry TTL.
-    You can also extend the polling interval by specifying it in the command options.
+    Point the cache backend at AWS S3 or Google Cloud Storage to share artifacts across instances, which dramatically reduces artifact download traffic against the upstream registry (`--cache s3://<region>/<bucket>/<prefix>` or `--cache gs://<bucket>/<prefix>`).
+    You can also extend the polling interval with the `--interval` option. Coordinating metadata polls themselves (stale-while-revalidate) is a separate concern at the registry layer and is planned for a future release.
 
 Author
 --

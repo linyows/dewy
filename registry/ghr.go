@@ -42,6 +42,10 @@ func (e *ArtifactNotFoundError) IsWithinGracePeriod(gracePeriod time.Duration) b
 const (
 	// ISO8601 for time format.
 	ISO8601 = "20060102T150405Z0700"
+	// iso8601Nano is a nanosecond-resolution variant used for audit asset
+	// names so that multiple Dewy instances deploying near-simultaneously on
+	// the same host do not generate colliding filenames.
+	iso8601Nano = "20060102T150405.000000000Z0700"
 )
 
 // GHR struct.
@@ -229,7 +233,7 @@ func (g *GHR) Report(ctx context.Context, req *ReportRequest) error {
 	if req.Err != nil {
 		return req.Err
 	}
-	now := time.Now().UTC().Format(ISO8601)
+	now := time.Now().UTC().Format(iso8601Nano)
 	hostname, _ := os.Hostname()
 	info := fmt.Sprintf("shipped to %s %s at %s", strings.ToLower(hostname), req.Command, now)
 
