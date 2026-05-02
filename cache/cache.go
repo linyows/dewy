@@ -25,10 +25,6 @@ type Cache interface {
 	RegistryTTL() time.Duration
 }
 
-// Config struct.
-type Config struct {
-}
-
 // New returns a Cache backend by URL scheme.
 //
 // Supported schemes:
