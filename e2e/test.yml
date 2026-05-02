@@ -56,6 +56,10 @@ jobs:
     - { command: 'server', variant: 'ghr' }
     - { command: 'server', variant: 's3' }
     - { command: 'server', variant: 'gs' }
+    - { command: 'server', variant: 'ghr-s3cache-a' }
+    - { command: 'server', variant: 'ghr-s3cache-b' }
+    - { command: 'server', variant: 'ghr-gscache-a' }
+    - { command: 'server', variant: 'ghr-gscache-b' }
     - { command: 'assets', variant: 'ghr' }
     - { command: 'assets', variant: 's3' }
     - { command: 'assets', variant: 'gs' }
@@ -185,6 +189,160 @@ jobs:
       cmd: |
         if [ -f "{{ outputs.srv_gs.log }}" ]; then
           grep -q 'Create symlink' "{{ outputs.srv_gs.log }}" && exit 0
+        fi
+        exit 1
+    test: status == 0
+
+- name: Start server by Github-Releases registry with S3 shared cache (A)
+  id: start_srv_ghr_s3cache_a
+  needs: [build]
+  steps:
+  - name: Start dewy
+    id: srv_ghr_s3cache_a
+    uses: shell
+    with:
+      workdir: ./e2e/server/ghr-s3cache-a
+      background: true
+      env:
+        GITHUB_TOKEN: "{{ vars.github_token }}"
+        AWS_ACCESS_KEY_ID: "{{ vars.aws_access_key_id }}"
+        AWS_SECRET_ACCESS_KEY: "{{ vars.aws_secret_access_key }}"
+      cmd: |
+        ./dewy server -p 8003 -l debug \
+        --registry "ghr://linyows/dewy-testapp?pre-release=true" \
+        --cache "s3://ap-northeast-3/dewy-testapp/.cache/{{ outputs.genver.version }}-s3" \
+        -- $PWD/current/dewy-testapp
+    test: status == -1
+    outputs:
+      pid: res.pid
+      log: res.log
+    echo: |
+      PID: {{ res.pid }}
+      Log: {{ res.log }}
+  - name: Wait for initial deployment
+    uses: shell
+    retry:
+      max_attempts: 60
+      interval: 5s
+    with:
+      cmd: |
+        if [ -f "{{ outputs.srv_ghr_s3cache_a.log }}" ]; then
+          grep -q 'Create symlink' "{{ outputs.srv_ghr_s3cache_a.log }}" && exit 0
+        fi
+        exit 1
+    test: status == 0
+
+- name: Start server by Github-Releases registry with S3 shared cache (B)
+  id: start_srv_ghr_s3cache_b
+  needs: [start_srv_ghr_s3cache_a]
+  steps:
+  - name: Start dewy
+    id: srv_ghr_s3cache_b
+    uses: shell
+    with:
+      workdir: ./e2e/server/ghr-s3cache-b
+      background: true
+      env:
+        GITHUB_TOKEN: "{{ vars.github_token }}"
+        AWS_ACCESS_KEY_ID: "{{ vars.aws_access_key_id }}"
+        AWS_SECRET_ACCESS_KEY: "{{ vars.aws_secret_access_key }}"
+      cmd: |
+        ./dewy server -p 8004 -l debug \
+        --registry "ghr://linyows/dewy-testapp?pre-release=true" \
+        --cache "s3://ap-northeast-3/dewy-testapp/.cache/{{ outputs.genver.version }}-s3" \
+        -- $PWD/current/dewy-testapp
+    test: status == -1
+    outputs:
+      pid: res.pid
+      log: res.log
+    echo: |
+      PID: {{ res.pid }}
+      Log: {{ res.log }}
+  - name: Wait for initial deployment
+    uses: shell
+    retry:
+      max_attempts: 60
+      interval: 5s
+    with:
+      cmd: |
+        if [ -f "{{ outputs.srv_ghr_s3cache_b.log }}" ]; then
+          grep -q 'Create symlink' "{{ outputs.srv_ghr_s3cache_b.log }}" && exit 0
+        fi
+        exit 1
+    test: status == 0
+
+- name: Start server by Github-Releases registry with GCS shared cache (A)
+  id: start_srv_ghr_gscache_a
+  needs: [build]
+  steps:
+  - name: Start dewy
+    id: srv_ghr_gscache_a
+    uses: shell
+    with:
+      workdir: ./e2e/server/ghr-gscache-a
+      background: true
+      env:
+        GITHUB_TOKEN: "{{ vars.github_token }}"
+        GOOGLE_APPLICATION_CREDENTIALS: "{{ vars.google_application_credentials }}"
+      cmd: |
+        ./dewy server -p 8005 -l debug \
+        --registry "ghr://linyows/dewy-testapp?pre-release=true" \
+        --cache "gs://dewy-testapp/.cache/{{ outputs.genver.version }}-gs" \
+        -- $PWD/current/dewy-testapp
+    test: status == -1
+    outputs:
+      pid: res.pid
+      log: res.log
+    echo: |
+      PID: {{ res.pid }}
+      Log: {{ res.log }}
+  - name: Wait for initial deployment
+    uses: shell
+    retry:
+      max_attempts: 60
+      interval: 5s
+    with:
+      cmd: |
+        if [ -f "{{ outputs.srv_ghr_gscache_a.log }}" ]; then
+          grep -q 'Create symlink' "{{ outputs.srv_ghr_gscache_a.log }}" && exit 0
+        fi
+        exit 1
+    test: status == 0
+
+- name: Start server by Github-Releases registry with GCS shared cache (B)
+  id: start_srv_ghr_gscache_b
+  needs: [start_srv_ghr_gscache_a]
+  steps:
+  - name: Start dewy
+    id: srv_ghr_gscache_b
+    uses: shell
+    with:
+      workdir: ./e2e/server/ghr-gscache-b
+      background: true
+      env:
+        GITHUB_TOKEN: "{{ vars.github_token }}"
+        GOOGLE_APPLICATION_CREDENTIALS: "{{ vars.google_application_credentials }}"
+      cmd: |
+        ./dewy server -p 8006 -l debug \
+        --registry "ghr://linyows/dewy-testapp?pre-release=true" \
+        --cache "gs://dewy-testapp/.cache/{{ outputs.genver.version }}-gs" \
+        -- $PWD/current/dewy-testapp
+    test: status == -1
+    outputs:
+      pid: res.pid
+      log: res.log
+    echo: |
+      PID: {{ res.pid }}
+      Log: {{ res.log }}
+  - name: Wait for initial deployment
+    uses: shell
+    retry:
+      max_attempts: 60
+      interval: 5s
+    with:
+      cmd: |
+        if [ -f "{{ outputs.srv_ghr_gscache_b.log }}" ]; then
+          grep -q 'Create symlink' "{{ outputs.srv_ghr_gscache_b.log }}" && exit 0
         fi
         exit 1
     test: status == 0
@@ -462,7 +620,7 @@ jobs:
 
 - name: Create new version
   id: create_release
-  needs: [start_srv_ghr, start_srv_s3, start_srv_gs, start_ast_ghr, start_ast_s3, start_ast_gs, start_ctr_oci, start_ctr_podman, start_ctr_dockerhub, start_ctr_mp_oci]
+  needs: [start_srv_ghr, start_srv_s3, start_srv_gs, start_srv_ghr_s3cache_b, start_srv_ghr_gscache_b, start_ast_ghr, start_ast_s3, start_ast_gs, start_ctr_oci, start_ctr_podman, start_ctr_dockerhub, start_ctr_mp_oci]
   steps:
   - name: Create release
     uses: shell
@@ -530,6 +688,66 @@ jobs:
       vars:
         pid: "{{ outputs.srv_gs.pid }}"
         log: "{{ outputs.srv_gs.log }}"
+        new_version: "{{ outputs.genver.version }}"
+    test: res.code == 0
+    timeout: 15m
+
+- name: Verify server by Github-Releases registry with S3 shared cache (A)
+  id: verify_srv_ghr_s3cache_a
+  needs: [create_release]
+  steps:
+  - name: Server verify
+    uses: embedded
+    with:
+      path: ./e2e/jobs/server-verify.yml
+      vars:
+        pid: "{{ outputs.srv_ghr_s3cache_a.pid }}"
+        log: "{{ outputs.srv_ghr_s3cache_a.log }}"
+        new_version: "{{ outputs.genver.version }}"
+    test: res.code == 0
+    timeout: 15m
+
+- name: Verify server by Github-Releases registry with S3 shared cache (B)
+  id: verify_srv_ghr_s3cache_b
+  needs: [create_release]
+  steps:
+  - name: Server verify
+    uses: embedded
+    with:
+      path: ./e2e/jobs/server-verify.yml
+      vars:
+        pid: "{{ outputs.srv_ghr_s3cache_b.pid }}"
+        log: "{{ outputs.srv_ghr_s3cache_b.log }}"
+        new_version: "{{ outputs.genver.version }}"
+    test: res.code == 0
+    timeout: 15m
+
+- name: Verify server by Github-Releases registry with GCS shared cache (A)
+  id: verify_srv_ghr_gscache_a
+  needs: [create_release]
+  steps:
+  - name: Server verify
+    uses: embedded
+    with:
+      path: ./e2e/jobs/server-verify.yml
+      vars:
+        pid: "{{ outputs.srv_ghr_gscache_a.pid }}"
+        log: "{{ outputs.srv_ghr_gscache_a.log }}"
+        new_version: "{{ outputs.genver.version }}"
+    test: res.code == 0
+    timeout: 15m
+
+- name: Verify server by Github-Releases registry with GCS shared cache (B)
+  id: verify_srv_ghr_gscache_b
+  needs: [create_release]
+  steps:
+  - name: Server verify
+    uses: embedded
+    with:
+      path: ./e2e/jobs/server-verify.yml
+      vars:
+        pid: "{{ outputs.srv_ghr_gscache_b.pid }}"
+        log: "{{ outputs.srv_ghr_gscache_b.log }}"
         new_version: "{{ outputs.genver.version }}"
     test: res.code == 0
     timeout: 15m
@@ -635,3 +853,37 @@ jobs:
         new_version: "{{ outputs.genver.version }}"
     test: res.code == 0
     timeout: 30m
+
+# Phase 4: Verify shared cache reduced upstream downloads.
+# Each instance writes "Cached artifact" only when it downloads from upstream
+# and writes the result to the shared cache. Without sharing, each pair would
+# do this 4 times (2 instances * 2 versions). With sharing, ideal total is 2.
+# We allow up to 3 to absorb a single race on either deploy cycle.
+
+- name: Verify shared cache reduces upstream downloads (S3 pair)
+  needs: [verify_srv_ghr_s3cache_a, verify_srv_ghr_s3cache_b]
+  steps:
+  - name: Count "Cached artifact" log lines across S3 pair
+    uses: shell
+    with:
+      cmd: |
+        a=$(grep -c 'Cached artifact' "{{ outputs.srv_ghr_s3cache_a.log }}" 2>/dev/null || true); a=${a:-0}
+        b=$(grep -c 'Cached artifact' "{{ outputs.srv_ghr_s3cache_b.log }}" 2>/dev/null || true); b=${b:-0}
+        total=$((a + b))
+        echo "A=${a} B=${b} total=${total} (ideal=2, allowed<=3)"
+        [ "${total}" -le 3 ]
+    test: status == 0
+
+- name: Verify shared cache reduces upstream downloads (GCS pair)
+  needs: [verify_srv_ghr_gscache_a, verify_srv_ghr_gscache_b]
+  steps:
+  - name: Count "Cached artifact" log lines across GCS pair
+    uses: shell
+    with:
+      cmd: |
+        a=$(grep -c 'Cached artifact' "{{ outputs.srv_ghr_gscache_a.log }}" 2>/dev/null || true); a=${a:-0}
+        b=$(grep -c 'Cached artifact' "{{ outputs.srv_ghr_gscache_b.log }}" 2>/dev/null || true); b=${b:-0}
+        total=$((a + b))
+        echo "A=${a} B=${b} total=${total} (ideal=2, allowed<=3)"
+        [ "${total}" -le 3 ]
+    test: status == 0
