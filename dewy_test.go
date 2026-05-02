@@ -18,7 +18,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/linyows/dewy/kvs"
+	"github.com/linyows/dewy/cache"
 	"github.com/linyows/dewy/logging"
 	"github.com/linyows/dewy/notifier"
 	"github.com/linyows/dewy/registry"
@@ -54,9 +54,9 @@ func TestNew(t *testing.T) {
 	}
 
 	opts := []cmp.Option{
-		cmp.AllowUnexported(Dewy{}, kvs.File{}),
+		cmp.AllowUnexported(Dewy{}, cache.File{}),
 		cmpopts.IgnoreFields(Dewy{}, "RWMutex", "logger", "tcpProxies", "proxyMutex", "containerRuntime"),
-		cmpopts.IgnoreFields(kvs.File{}, "mutex", "logger"),
+		cmpopts.IgnoreFields(cache.File{}, "mutex", "logger"),
 	}
 	if diff := cmp.Diff(dewy, expect, opts...); diff != "" {
 		t.Error(diff)
@@ -641,10 +641,10 @@ func TestNoDuplicateDownload(t *testing.T) {
 			}
 
 			// Use separate cache instance for each test with isolated directory
-			fileKvs := &kvs.File{}
+			fileKvs := &cache.File{}
 			fileKvs.SetLogger(testLogger().Logger)
 			testCacheDir := t.TempDir()
-			fileKvs.MaxSize = kvs.DefaultMaxSize
+			fileKvs.MaxSize = cache.DefaultMaxSize
 			// Set isolated cache directory for this test
 			fileKvs.SetDir(testCacheDir)
 			dewy.cache = fileKvs
@@ -714,10 +714,10 @@ func TestCacheSkipBehavior(t *testing.T) {
 	}
 
 	// Use separate cache instance with isolated directory
-	fileKvs := &kvs.File{}
+	fileKvs := &cache.File{}
 	fileKvs.SetLogger(logger.Logger)
 	testCacheDir := t.TempDir()
-	fileKvs.MaxSize = kvs.DefaultMaxSize
+	fileKvs.MaxSize = cache.DefaultMaxSize
 	fileKvs.SetDir(testCacheDir)
 	dewy.cache = fileKvs
 
@@ -805,10 +805,10 @@ func TestDifferentVersionsDownload(t *testing.T) {
 	}
 
 	// Use separate cache instance with isolated directory
-	fileKvs := &kvs.File{}
+	fileKvs := &cache.File{}
 	fileKvs.SetLogger(testLogger().Logger)
 	testCacheDir := t.TempDir()
-	fileKvs.MaxSize = kvs.DefaultMaxSize
+	fileKvs.MaxSize = cache.DefaultMaxSize
 	fileKvs.SetDir(testCacheDir)
 	dewy.cache = fileKvs
 
@@ -915,9 +915,9 @@ func TestSharedCacheReusesExistingArtifact(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fileKvs := &kvs.File{}
+	fileKvs := &cache.File{}
 	fileKvs.SetLogger(testLogger().Logger)
-	fileKvs.MaxSize = kvs.DefaultMaxSize
+	fileKvs.MaxSize = cache.DefaultMaxSize
 	fileKvs.SetDir(t.TempDir())
 	dewy.cache = fileKvs
 
@@ -1022,7 +1022,7 @@ func TestHookResultNotification(t *testing.T) {
 			}
 
 			// Use separate cache instance
-			fileKvs := &kvs.File{}
+			fileKvs := &cache.File{}
 			fileKvs.SetLogger(testLogger().Logger)
 			fileKvs.Default()
 			dewy.cache = fileKvs
@@ -1114,7 +1114,7 @@ func TestHookStdoutStderrTrimming(t *testing.T) {
 			}
 
 			// Use separate cache instance
-			fileKvs := &kvs.File{}
+			fileKvs := &cache.File{}
 			fileKvs.SetLogger(testLogger().Logger)
 			fileKvs.Default()
 			dewy.cache = fileKvs

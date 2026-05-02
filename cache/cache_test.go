@@ -1,4 +1,4 @@
-package kvs
+package cache
 
 import (
 	"testing"

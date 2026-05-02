@@ -1,4 +1,4 @@
-package kvs
+package cache
 
 import (
 	"context"
@@ -11,8 +11,8 @@ import (
 	"time"
 )
 
-// KVS interface.
-type KVS interface {
+// Cache interface.
+type Cache interface {
 	Read(key string) ([]byte, error)
 	Write(key string, data []byte) error
 	Delete(key string) error
@@ -24,7 +24,7 @@ type KVS interface {
 type Config struct {
 }
 
-// New returns KVS backend by URL scheme.
+// New returns a Cache backend by URL scheme.
 //
 // Supported schemes:
 //   - "" or "file": local filesystem cache (default).
@@ -32,7 +32,7 @@ type Config struct {
 //   - "gs://<bucket>/<prefix>": Google Cloud Storage backed cache with local staging.
 //
 // An empty urlStr returns the default file backend.
-func New(ctx context.Context, urlStr string, log *slog.Logger) (KVS, error) {
+func New(ctx context.Context, urlStr string, log *slog.Logger) (Cache, error) {
 	if urlStr == "" {
 		f := &File{}
 		f.Default()

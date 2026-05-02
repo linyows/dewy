@@ -1,4 +1,4 @@
-package kvs
+package cache
 
 import (
 	"bytes"
@@ -220,5 +220,5 @@ func TestNewGSURLParse(t *testing.T) {
 	}
 }
 
-// Compile-time check that *GS satisfies KVS.
-var _ KVS = (*GS)(nil)
+// Compile-time check that *GS satisfies Cache.
+var _ Cache = (*GS)(nil)

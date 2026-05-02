@@ -27,7 +27,7 @@ import (
 	"github.com/cli/safeexec"
 	"github.com/linyows/dewy/artifact"
 	"github.com/linyows/dewy/container"
-	"github.com/linyows/dewy/kvs"
+	"github.com/linyows/dewy/cache"
 	"github.com/linyows/dewy/logging"
 	"github.com/linyows/dewy/notifier"
 	"github.com/linyows/dewy/registry"
@@ -61,7 +61,7 @@ type Dewy struct {
 	config           Config
 	registry         registry.Registry
 	artifact         artifact.Artifact
-	cache            kvs.KVS
+	cache            cache.Cache
 	isServerRunning  bool
 	disableReport    bool
 	root             string
@@ -98,7 +98,7 @@ type tcpBackend struct {
 
 // New returns Dewy.
 func New(c Config, log *logging.Logger) (*Dewy, error) {
-	kv, err := kvs.New(context.Background(), c.Cache.URL, log.Logger)
+	kv, err := cache.New(context.Background(), c.Cache.URL, log.Logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to init cache backend: %w", err)
 	}
@@ -499,7 +499,7 @@ func (d *Dewy) preserve(p string) (string, error) {
 		return "", err
 	}
 
-	if err := kvs.ExtractArchive(p, dst); err != nil {
+	if err := cache.ExtractArchive(p, dst); err != nil {
 		return "", err
 	}
 

@@ -1,4 +1,4 @@
-package kvs
+package cache
 
 import (
 	"bytes"
@@ -228,5 +228,5 @@ func TestNewS3URLParse(t *testing.T) {
 	}
 }
 
-// Compile-time check that *S3 satisfies KVS.
-var _ KVS = (*S3)(nil)
+// Compile-time check that *S3 satisfies Cache.
+var _ Cache = (*S3)(nil)
