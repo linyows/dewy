@@ -1,5 +1,5 @@
 // Package scheme defines the URL scheme strings shared between the registry
-// and artifact factories. Centralising the names prevents drift between the
+// and artifact factories. Centralizing the names prevents drift between the
 // two factories (which historically duplicated the same set of constants).
 package scheme
 

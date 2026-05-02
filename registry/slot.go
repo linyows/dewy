@@ -4,7 +4,7 @@ package registry
 // instance's configured slot constraint. An empty Expected matches anything;
 // otherwise the actual slot must match exactly.
 //
-// Centralising this check keeps blue/green slot semantics in one place even
+// Centralizing this check keeps blue/green slot semantics in one place even
 // though the comparison itself is trivial.
 type SlotMatcher struct {
 	Expected string
