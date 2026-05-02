@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"cloud.google.com/go/storage"
 	"google.golang.org/api/googleapi"
@@ -42,9 +43,10 @@ type GS struct {
 	cl  GSClient
 	ctx context.Context
 
-	dir     string
-	MaxSize int64
-	logger  *slog.Logger
+	dir         string
+	MaxSize     int64
+	registryTTL time.Duration
+	logger      *slog.Logger
 }
 
 // NewGS returns a GS cache backend configured from a URL.
@@ -66,13 +68,19 @@ func NewGSWithClient(ctx context.Context, u string, log *slog.Logger, client GSC
 		return nil, fmt.Errorf("bucket is required: %s", gsFormat)
 	}
 
+	ttl, err := parseRegistryTTL(ur.Query())
+	if err != nil {
+		return nil, err
+	}
+
 	g := &GS{
-		Bucket:  bucket,
-		Prefix:  prefix,
-		ctx:     ctx,
-		dir:     DefaultCacheDir,
-		MaxSize: DefaultMaxSize,
-		logger:  log,
+		Bucket:      bucket,
+		Prefix:      prefix,
+		ctx:         ctx,
+		dir:         DefaultCacheDir,
+		MaxSize:     DefaultMaxSize,
+		registryTTL: ttl,
+		logger:      log,
 	}
 
 	if client != nil {
@@ -96,6 +104,9 @@ func (g *GS) SetDir(dir string) { g.dir = dir }
 
 // GetDir returns the local staging directory.
 func (g *GS) GetDir() string { return g.dir }
+
+// RegistryTTL returns the configured registry-result cache TTL.
+func (g *GS) RegistryTTL() time.Duration { return g.registryTTL }
 
 func (g *GS) objectName(key string) string { return g.Prefix + key }
 

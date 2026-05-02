@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -42,9 +43,10 @@ type S3 struct {
 	cl  S3Client
 	ctx context.Context
 
-	dir     string
-	MaxSize int64
-	logger  *slog.Logger
+	dir         string
+	MaxSize     int64
+	registryTTL time.Duration
+	logger      *slog.Logger
 }
 
 // NewS3 returns an S3 cache backend configured from a URL.
@@ -66,15 +68,22 @@ func NewS3(ctx context.Context, u string, log *slog.Logger) (*S3, error) {
 	}
 	prefix = normalizePrefix(prefix)
 
+	q := ur.Query()
+	ttl, err := parseRegistryTTL(q)
+	if err != nil {
+		return nil, err
+	}
+
 	s := &S3{
-		Region:   ur.Host,
-		Bucket:   bucket,
-		Prefix:   prefix,
-		Endpoint: ur.Query().Get("endpoint"),
-		ctx:      ctx,
-		dir:      DefaultCacheDir,
-		MaxSize:  DefaultMaxSize,
-		logger:   log,
+		Region:      ur.Host,
+		Bucket:      bucket,
+		Prefix:      prefix,
+		Endpoint:    q.Get("endpoint"),
+		ctx:         ctx,
+		dir:         DefaultCacheDir,
+		MaxSize:     DefaultMaxSize,
+		registryTTL: ttl,
+		logger:      log,
 	}
 
 	if s.Region == "" {
@@ -114,6 +123,9 @@ func (s *S3) SetDir(dir string) { s.dir = dir }
 
 // GetDir returns the local staging directory.
 func (s *S3) GetDir() string { return s.dir }
+
+// RegistryTTL returns the configured registry-result cache TTL.
+func (s *S3) RegistryTTL() time.Duration { return s.registryTTL }
 
 // objectKey returns the full S3 object key for a cache key.
 func (s *S3) objectKey(key string) string { return s.Prefix + key }

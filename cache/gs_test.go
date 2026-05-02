@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"cloud.google.com/go/storage"
 	"google.golang.org/api/googleapi"
@@ -221,11 +222,15 @@ func TestNewGSURLParse(t *testing.T) {
 		url       string
 		bucket    string
 		prefix    string
+		ttl       time.Duration
 		expectErr bool
 	}{
-		{"basic", "gs://mybucket", "mybucket", "", false},
-		{"with prefix", "gs://mybucket/team/app", "mybucket", "team/app/", false},
-		{"missing bucket", "gs:///team/app", "", "", true},
+		{"basic", "gs://mybucket", "mybucket", "", 0, false},
+		{"with prefix", "gs://mybucket/team/app", "mybucket", "team/app/", 0, false},
+		{"with registry-ttl", "gs://mybucket?registry-ttl=45s", "mybucket", "", 45 * time.Second, false},
+		{"prefix and ttl", "gs://mybucket/team/app?registry-ttl=1m", "mybucket", "team/app/", time.Minute, false},
+		{"missing bucket", "gs:///team/app", "", "", 0, true},
+		{"invalid ttl", "gs://mybucket?registry-ttl=oops", "", "", 0, true},
 	}
 
 	for _, tt := range tests {
@@ -245,6 +250,9 @@ func TestNewGSURLParse(t *testing.T) {
 			}
 			if g.Prefix != tt.prefix {
 				t.Errorf("prefix: got %q want %q", g.Prefix, tt.prefix)
+			}
+			if g.RegistryTTL() != tt.ttl {
+				t.Errorf("ttl: got %v want %v", g.RegistryTTL(), tt.ttl)
 			}
 		})
 	}

@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -217,12 +218,16 @@ func TestNewS3URLParse(t *testing.T) {
 		region    string
 		bucket    string
 		prefix    string
+		ttl       time.Duration
 		expectErr bool
 	}{
-		{"basic", "s3://ap-northeast-1/mybucket", "ap-northeast-1", "mybucket", "", false},
-		{"with prefix", "s3://ap-northeast-1/mybucket/team/app", "ap-northeast-1", "mybucket", "team/app/", false},
-		{"missing region", "s3:///mybucket", "", "", "", true},
-		{"missing bucket", "s3://ap-northeast-1/", "", "", "", true},
+		{"basic", "s3://ap-northeast-1/mybucket", "ap-northeast-1", "mybucket", "", 0, false},
+		{"with prefix", "s3://ap-northeast-1/mybucket/team/app", "ap-northeast-1", "mybucket", "team/app/", 0, false},
+		{"with registry-ttl", "s3://ap-northeast-1/mybucket?registry-ttl=30s", "ap-northeast-1", "mybucket", "", 30 * time.Second, false},
+		{"prefix and ttl", "s3://ap-northeast-1/mybucket/team/app?registry-ttl=2m", "ap-northeast-1", "mybucket", "team/app/", 2 * time.Minute, false},
+		{"missing region", "s3:///mybucket", "", "", "", 0, true},
+		{"missing bucket", "s3://ap-northeast-1/", "", "", "", 0, true},
+		{"invalid ttl", "s3://ap-northeast-1/mybucket?registry-ttl=30", "", "", "", 0, true},
 	}
 
 	for _, tt := range tests {
@@ -245,6 +250,9 @@ func TestNewS3URLParse(t *testing.T) {
 			}
 			if s.Prefix != tt.prefix {
 				t.Errorf("prefix: got %q want %q", s.Prefix, tt.prefix)
+			}
+			if s.RegistryTTL() != tt.ttl {
+				t.Errorf("ttl: got %v want %v", s.RegistryTTL(), tt.ttl)
 			}
 		})
 	}

@@ -18,6 +18,11 @@ type Cache interface {
 	Delete(key string) error
 	List() ([]string, error)
 	GetDir() string
+	// RegistryTTL returns the TTL configured for caching upstream registry
+	// responses against this backend. A non-zero value opts the backend
+	// in to acting as a shared registry-result cache. Backends parse this
+	// from the "registry-ttl" URL query parameter at construction time.
+	RegistryTTL() time.Duration
 }
 
 // Config struct.
@@ -46,10 +51,19 @@ func New(ctx context.Context, urlStr string, log *slog.Logger) (Cache, error) {
 		f := &File{}
 		f.Default()
 		f.SetLogger(log)
+		u, err := url.Parse(urlStr)
+		if err != nil {
+			return nil, err
+		}
 		// Allow file:///custom/path to override the default dir.
-		if p := strings.TrimPrefix(urlStr, "file://"); p != "" && p != urlStr {
+		if p := u.Path; p != "" {
 			f.SetDir(p)
 		}
+		ttl, err := parseRegistryTTL(u.Query())
+		if err != nil {
+			return nil, err
+		}
+		f.SetRegistryTTL(ttl)
 		return f, nil
 	case "s3":
 		return NewS3(ctx, urlStr, log)
@@ -101,6 +115,23 @@ type AtomicCache interface {
 	Cache
 	ReadWithVersion(key string) (data []byte, version string, err error)
 	WriteIfMatch(key string, version string, data []byte) (newVersion string, err error)
+}
+
+// parseRegistryTTL parses the "registry-ttl" query parameter from a cache URL.
+// Empty or unset means 0 (no registry-result caching).
+func parseRegistryTTL(values url.Values) (time.Duration, error) {
+	v := values.Get("registry-ttl")
+	if v == "" {
+		return 0, nil
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil {
+		return 0, fmt.Errorf("invalid registry-ttl %q: %w", v, err)
+	}
+	if d < 0 {
+		return 0, fmt.Errorf("registry-ttl must be non-negative, got %s", d)
+	}
+	return d, nil
 }
 
 // nolint

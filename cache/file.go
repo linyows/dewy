@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/mholt/archives"
 )
@@ -48,17 +49,29 @@ func createPersistentCacheDir() string {
 
 // File struct.
 type File struct {
-	items    map[string]*item //nolint
-	dir      string
-	mutex    sync.Mutex //nolint
-	MaxItems int
-	MaxSize  int64
-	logger   *slog.Logger
+	items       map[string]*item //nolint
+	dir         string
+	mutex       sync.Mutex //nolint
+	MaxItems    int
+	MaxSize     int64
+	registryTTL time.Duration
+	logger      *slog.Logger
 }
 
 // GetDir returns dir.
 func (f *File) GetDir() string {
 	return f.dir
+}
+
+// RegistryTTL returns the configured registry-result cache TTL.
+// File backend is single-instance; callers typically leave this at 0.
+func (f *File) RegistryTTL() time.Duration {
+	return f.registryTTL
+}
+
+// SetRegistryTTL configures the registry-result cache TTL.
+func (f *File) SetRegistryTTL(d time.Duration) {
+	f.registryTTL = d
 }
 
 // SetDir sets the cache directory.
