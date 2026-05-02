@@ -8,12 +8,12 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
-	"os"
 	"runtime"
 	"strconv"
 	"time"
 
 	"github.com/linyows/dewy/cache"
+	"github.com/linyows/dewy/internal/sysdeps"
 	"github.com/linyows/dewy/logging"
 )
 
@@ -56,8 +56,24 @@ type Cached struct {
 	lockTTL  time.Duration
 	wait     time.Duration
 	logger   *logging.Logger
+	clock    sysdeps.Clock
 	nodeID   string
 	cacheKey string
+}
+
+// CachedOption configures optional dependencies of a Cached registry.
+type CachedOption func(*Cached)
+
+// WithClock injects a custom Clock. The default is sysdeps.RealClock.
+func WithClock(c sysdeps.Clock) CachedOption {
+	return func(x *Cached) { x.clock = c }
+}
+
+// WithEnv injects a custom Env. Used for hostname lookup at construction.
+// Passing this option is only meaningful when paired with NewCachedWithOptions
+// — the default constructor freezes nodeID at New time.
+func WithEnv(e sysdeps.Env) CachedOption {
+	return func(x *Cached) { x.nodeID = nodeIDFrom(e) }
 }
 
 // NewCached wraps inner with a shared registry-result cache backed by
@@ -68,18 +84,33 @@ type Cached struct {
 // prefix coordinate single-flight refresh only when they pass the same scope
 // (and run on the same platform), preventing instances with different
 // registry URLs or differing OS/arch from overwriting each other's entries.
-func NewCached(inner Registry, scope string, atomicCache cache.AtomicCache, ttl time.Duration, log *logging.Logger) *Cached {
-	hostname, _ := os.Hostname()
-	return &Cached{
+func NewCached(inner Registry, scope string, atomicCache cache.AtomicCache, ttl time.Duration, log *logging.Logger, opts ...CachedOption) *Cached {
+	c := &Cached{
 		inner:    inner,
 		cache:    atomicCache,
 		ttl:      ttl,
 		lockTTL:  maxLockTTL(ttl),
 		wait:     defaultRefreshWait,
 		logger:   log,
-		nodeID:   hostname + ":" + strconv.Itoa(os.Getpid()),
+		clock:    sysdeps.RealClock(),
+		nodeID:   nodeIDFrom(sysdeps.RealEnv()),
 		cacheKey: cacheKeyForScope(scope),
 	}
+	for _, opt := range opts {
+		opt(c)
+	}
+	return c
+}
+
+// nodeIDFrom builds the per-process refresh-lock identifier from an Env.
+// Hostname errors fall back to a stable placeholder so the lock can still be
+// claimed; the lock owner is informational only.
+func nodeIDFrom(e sysdeps.Env) string {
+	host, err := e.Hostname()
+	if err != nil || host == "" {
+		host = "unknown-host"
+	}
+	return host + ":" + strconv.Itoa(e.Pid())
 }
 
 // cacheKeyForScope returns the cache key used by a Cached instance with the
@@ -129,7 +160,7 @@ func maxLockTTL(ttl time.Duration) time.Duration {
 // longer than a few hundred milliseconds. If lockTTL elapses without the
 // peer publishing, we treat the lock as abandoned and claim it ourselves.
 func (c *Cached) Current(ctx context.Context) (*CurrentResponse, error) {
-	deadline := time.Now().Add(c.lockTTL + c.wait)
+	deadline := c.clock.Now().Add(c.lockTTL + c.wait)
 
 	for {
 		entry, version, err := c.readEntry()
@@ -144,8 +175,8 @@ func (c *Cached) Current(ctx context.Context) (*CurrentResponse, error) {
 		}
 
 		// A peer is refreshing — wait briefly and try again, up to lockTTL.
-		if entry != nil && c.isLocked(entry) && time.Now().Before(deadline) {
-			if err := sleepCtx(ctx, c.wait); err != nil {
+		if entry != nil && c.isLocked(entry) && c.clock.Now().Before(deadline) {
+			if err := c.sleepCtx(ctx, c.wait); err != nil {
 				if entry.Response != nil {
 					return entry.Response, nil
 				}
@@ -155,12 +186,12 @@ func (c *Cached) Current(ctx context.Context) (*CurrentResponse, error) {
 		}
 
 		// Either stale, absent, or the peer's lock has expired. Try to claim.
-		claim := buildClaim(entry, c.nodeID)
+		claim := buildClaim(entry, c.nodeID, c.clock.Now())
 		newVersion, err := c.writeEntry(claim, version)
 		if err != nil {
 			if cache.IsConflict(err) {
 				// Another node beat us to the claim. Re-read and continue.
-				if err := sleepCtx(ctx, c.wait); err != nil {
+				if err := c.sleepCtx(ctx, c.wait); err != nil {
 					if entry != nil && entry.Response != nil {
 						return entry.Response, nil
 					}
@@ -180,14 +211,14 @@ func (c *Cached) Current(ctx context.Context) (*CurrentResponse, error) {
 	}
 }
 
-// sleepCtx is time.Sleep that respects ctx cancellation.
-func sleepCtx(ctx context.Context, d time.Duration) error {
-	t := time.NewTimer(d)
+// sleepCtx waits d using the injected clock, returning early on ctx cancel.
+func (c *Cached) sleepCtx(ctx context.Context, d time.Duration) error {
+	t := c.clock.NewTimer(d)
 	defer t.Stop()
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case <-t.C:
+	case <-t.C():
 		return nil
 	}
 }
@@ -222,17 +253,16 @@ func (c *Cached) writeEntry(entry *cachedEntry, version string) (string, error) 
 }
 
 func (c *Cached) isFresh(entry *cachedEntry) bool {
-	return entry.Response != nil && time.Since(entry.FetchedAt) < c.ttl
+	return entry.Response != nil && c.clock.Now().Sub(entry.FetchedAt) < c.ttl
 }
 
 func (c *Cached) isLocked(entry *cachedEntry) bool {
-	return !entry.LockedAt.IsZero() && time.Since(entry.LockedAt) < c.lockTTL
+	return !entry.LockedAt.IsZero() && c.clock.Now().Sub(entry.LockedAt) < c.lockTTL
 }
 
 // buildClaim returns the entry that marks "we are refreshing". The previous
 // Response is preserved so concurrent readers can still serve stale-but-usable.
-func buildClaim(prev *cachedEntry, nodeID string) *cachedEntry {
-	now := time.Now()
+func buildClaim(prev *cachedEntry, nodeID string, now time.Time) *cachedEntry {
 	c := &cachedEntry{LockedAt: now, LockedBy: nodeID}
 	if prev != nil {
 		c.Response = prev.Response
@@ -261,7 +291,7 @@ func (c *Cached) refreshAndPublish(ctx context.Context, prev *cachedEntry, versi
 
 	final := &cachedEntry{
 		Response:  res,
-		FetchedAt: time.Now(),
+		FetchedAt: c.clock.Now(),
 		// LockedAt zero — released.
 	}
 	if _, werr := c.writeEntry(final, version); werr != nil {
