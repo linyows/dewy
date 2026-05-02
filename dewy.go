@@ -282,176 +282,33 @@ func (d *Dewy) cachekeyName(res *registry.CurrentResponse) string {
 	return fmt.Sprintf("%s--%s", res.Tag, filepath.Base(u[0]))
 }
 
-// Run dewy.
+// Run is the per-tick deploy state machine for SERVER and ASSETS commands.
+// It is intentionally short: each phase lives as a method on Dewy in
+// dewy_phases.go and can be exercised in isolation.
 func (d *Dewy) Run() error {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := d.makeRunContext()
 	defer cancel()
 
-	// Get current
-	res, err := d.registry.Current(ctx)
-	if err != nil {
-		// Check if this is an artifact not found error within 30 minute grace period.
-		// This prevents false alerts when GitHub Actions or other CI systems are still
-		// building and uploading artifacts after release creation.
-		var artifactNotFoundErr *registry.ArtifactNotFoundError
-		if errors.As(err, &artifactNotFoundErr) {
-			gracePeriod := 30 * time.Minute
-			if artifactNotFoundErr.IsWithinGracePeriod(gracePeriod) {
-				d.logger.Debug("Artifact not found within grace period",
-					slog.String("message", artifactNotFoundErr.Message),
-					slog.Duration("grace_period", 30*time.Minute))
-				return nil // Return nil to avoid error notification
-			}
-		}
-		d.logger.Error("Current failure", slog.String("error", err.Error()))
+	res, err := d.resolveCurrent(ctx)
+	if err != nil || res == nil {
 		return err
 	}
 
-	// Check slot matching for blue/green deployment
-	if !(registry.SlotMatcher{Expected: d.config.Slot}).Matches(res.Slot) {
-		d.logger.Debug("Deploy skipped: slot mismatch",
-			slog.String("expected_slot", d.config.Slot),
-			slog.String("actual_slot", res.Slot),
-			slog.String("tag", res.Tag))
+	st, err := d.resolveCacheState(ctx, res)
+	if err != nil {
+		return err
+	}
+	if st.skip {
 		return nil
 	}
 
-	// Check cache
-	cachekeyName := d.cachekeyName(res)
-	currentkeyValue, _ := d.cache.Read(currentkeyName)
-	found := false
-	list, err := d.cache.List()
-	if err != nil {
+	if err := d.downloadAndCache(ctx, res, st); err != nil {
 		return err
 	}
-
-	for _, key := range list {
-		if key != cachekeyName {
-			continue
-		}
-		found = true
-
-		if string(currentkeyValue) == cachekeyName {
-			// Cache says we are already at this version.
-			switch d.config.Command {
-			case SERVER:
-				d.RLock()
-				running := d.isServerRunning
-				d.RUnlock()
-				if running {
-					d.logger.Debug("Deploy skipped")
-					return nil
-				}
-				// Server is down (e.g. crashed or just starting up):
-				// fall through to redeploy from cache.
-			case ASSETS:
-				d.logger.Debug("Deploy skipped")
-				return nil
-			}
-		} else {
-			// Take ownership of the current pointer.
-			if err := d.cache.Write(currentkeyName, []byte(cachekeyName)); err != nil {
-				return err
-			}
-		}
-
-		// Ensure the artifact bytes are present in local staging for
-		// ExtractArchive. Cloud backends populate the local stage on Read;
-		// the file backend reads from disk where it already lives.
-		if _, err := d.cache.Read(cachekeyName); err != nil {
-			return fmt.Errorf("failed to load cached artifact: %w", err)
-		}
-		break
-	}
-
-	// Download artifact and cache
-	if !found {
-		buf := new(bytes.Buffer)
-
-		if d.artifact == nil {
-			d.artifact, err = artifact.New(ctx, res.ArtifactURL, d.logger.Logger)
-			if err != nil {
-				return fmt.Errorf("failed artifact.New: %w", err)
-			}
-		}
-		err := d.artifact.Download(ctx, &limitedWriter{W: buf, N: MaxArtifactSize})
-		d.artifact = nil
-		if err != nil {
-			return fmt.Errorf("failed artifact.Download: %w", err)
-		}
-
-		if err := d.cache.Write(cachekeyName, buf.Bytes()); err != nil {
-			return fmt.Errorf("failed cache.Write cachekeyName: %w", err)
-		}
-		if err := d.cache.Write(currentkeyName, []byte(cachekeyName)); err != nil {
-			return fmt.Errorf("failed cache.Write currentkeyName: %w", err)
-		}
-		d.logger.Info("Cached artifact", slog.String("cache_key", cachekeyName))
-	}
-
-	msg := fmt.Sprintf("Downloaded artifact for `%s`", res.Tag)
-	d.logger.Info("Download notification", slog.String("message", msg))
-	d.notifier.Send(ctx, msg)
-
-	if err := d.deploy(cachekeyName); err != nil {
+	if err := d.applyDeployment(ctx, res, st.key); err != nil {
 		return err
 	}
-
-	// Save current version
-	d.Lock()
-	d.cVer = res.Tag
-	d.Unlock()
-
-	if d.config.Command == SERVER {
-		d.RLock()
-		running := d.isServerRunning
-		d.RUnlock()
-		if running {
-			err = d.restartServer()
-			if err == nil {
-				msg := fmt.Sprintf("Server restarted for `%s`", d.cVer)
-				if len(d.config.Starter.Ports()) == 0 {
-					msg += " without port"
-				}
-				d.logger.Info("Restart notification", slog.String("message", msg))
-				d.notifier.SendImportant(ctx, msg)
-			}
-		} else {
-			err = d.startServer()
-			if err == nil {
-				msg := fmt.Sprintf("Server started for `%s`", d.cVer)
-				if len(d.config.Starter.Ports()) == 0 {
-					msg += " without port"
-				}
-				d.logger.Info("Start notification", slog.String("message", msg))
-				d.notifier.SendImportant(ctx, msg)
-			}
-		}
-		if err != nil {
-			d.logger.Error("Server failure", slog.String("error", err.Error()))
-			return err
-		}
-	}
-
-	if !d.disableReport {
-		d.logger.Debug("Report shipping")
-		err := d.registry.Report(ctx, &registry.ReportRequest{
-			ID:      res.ID,
-			Tag:     res.Tag,
-			Command: d.config.Command.String(),
-		})
-		if err != nil {
-			d.logger.Error("Report shipping failure", slog.String("error", err.Error()))
-		}
-	}
-
-	d.logger.Info("Keep releases", slog.Int("count", keepReleases))
-	err = d.keepReleases()
-	if err != nil {
-		d.logger.Error("Keep releases failure", slog.String("error", err.Error()))
-	}
-
-	return nil
+	return d.promoteAndReport(ctx, res)
 }
 
 func (d *Dewy) deploy(key string) (err error) {
@@ -667,159 +524,35 @@ func (d *Dewy) execHook(cmd string) (*notifier.HookResult, error) {
 }
 
 // RunContainer runs the container deployment process.
+// RunContainer is the per-tick deploy state machine for the CONTAINER command.
+// Like Run, each phase lives as a method on Dewy in dewy_phases.go.
 func (d *Dewy) RunContainer() error {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := d.makeRunContext()
 	defer cancel()
 
-	// Get current image information from registry
-	res, err := d.registry.Current(ctx)
-	if err != nil {
-		d.logger.Error("Failed to get current image", slog.String("error", err.Error()))
+	res, err := d.resolveContainerCurrent(ctx)
+	if err != nil || res == nil {
 		return err
 	}
 
-	d.logger.Debug("Found latest image",
-		slog.String("tag", res.Tag),
-		slog.String("digest", res.ID),
-		slog.String("url", res.ArtifactURL),
-		slog.String("slot", res.Slot))
-
-	// Check slot matching for blue/green deployment
-	if !(registry.SlotMatcher{Expected: d.config.Slot}).Matches(res.Slot) {
-		d.logger.Debug("Deploy skipped: slot mismatch",
-			slog.String("expected_slot", d.config.Slot),
-			slog.String("actual_slot", res.Slot),
-			slog.String("tag", res.Tag))
-		return nil
-	}
-
-	// Extract image reference from artifact URL
-	imageRef := strings.TrimPrefix(res.ArtifactURL, "img://")
-
-	// Determine app name from config or image
-	appName := d.config.Container.Name
-	if appName == "" {
-		// Use repository name as app name
-		parts := strings.Split(imageRef, "/")
-		if len(parts) > 0 {
-			lastPart := parts[len(parts)-1]
-			appName = strings.Split(lastPart, ":")[0]
-		}
-	}
-
-	// Check if this version is already running
-	rt, err := container.New(d.config.Container.Runtime, d.logger.Logger, d.config.Container.DrainTime)
+	st, err := d.resolveContainerState(ctx, res)
 	if err != nil {
-		return fmt.Errorf("failed to create container runtime: %w", err)
-	}
-
-	// Store runtime for shutdown handling
-	d.containerRuntime = rt
-
-	runningID, err := rt.GetRunningContainerWithImage(ctx, imageRef, appName)
-	if err != nil {
-		d.logger.Warn("Failed to check running containers", slog.String("error", err.Error()))
-		// Continue with deployment even if check fails
-	} else if runningID != "" {
-		d.logger.Debug("Container with this image is already running, skipping deployment",
-			slog.String("version", res.Tag),
-			slog.String("container", runningID))
-		return nil
-	}
-
-	// Pull the image (this will be cached by the runtime itself)
-	if d.artifact == nil {
-		d.artifact, err = artifact.New(ctx, res.ArtifactURL, d.logger.Logger, artifact.WithPuller(rt))
-		if err != nil {
-			return fmt.Errorf("failed artifact.New: %w", err)
-		}
-	}
-
-	buf := new(bytes.Buffer)
-	err = d.artifact.Download(ctx, buf)
-	d.artifact = nil
-	if err != nil {
-		return fmt.Errorf("failed to pull image: %w", err)
-	}
-
-	msg := fmt.Sprintf("Pulled image for `%s`", res.Tag)
-	d.logger.Info("Pull notification", slog.String("message", msg))
-	d.notifier.Send(ctx, msg)
-
-	// Execute before deploy hook
-	beforeResult, beforeErr := d.execHook(d.config.BeforeDeployHook)
-	if beforeResult != nil {
-		d.notifier.SendHookResult(ctx, "Before Deploy", beforeResult)
-	}
-	if beforeErr != nil {
-		d.logger.Error("Before deploy hook failure", slog.String("error", beforeErr.Error()))
-	}
-
-	// Perform Blue-Green deployment
-	deployStart := time.Now()
-	deployedCount, err := d.deployContainer(ctx, res)
-	if err != nil {
-		d.logger.Error("Container deployment failed",
-			slog.Int("deployed", deployedCount),
-			slog.String("error", err.Error()))
-		if d.telemetry != nil && d.telemetry.Enabled() {
-			d.telemetry.Metrics().DeploymentErrors.Add(ctx, 1)
-		}
 		return err
 	}
-	if d.telemetry != nil && d.telemetry.Enabled() {
-		m := d.telemetry.Metrics()
-		m.DeploymentsTotal.Add(ctx, 1)
-		m.DeploymentDuration.Record(ctx, time.Since(deployStart).Seconds())
+	if st.skip {
+		return nil
 	}
 
-	// Save current version
-	d.Lock()
-	d.cVer = res.Tag
-	d.Unlock()
-
-	// Execute after deploy hook
-	afterResult, afterErr := d.execHook(d.config.AfterDeployHook)
-	if afterResult != nil {
-		d.notifier.SendHookResult(ctx, "After Deploy", afterResult)
-	}
-	if afterErr != nil {
-		d.logger.Error("After deploy hook failure", slog.String("error", afterErr.Error()))
+	if err := d.pullContainerImage(ctx, res, st); err != nil {
+		return err
 	}
 
-	// Report deployment
-	if !d.disableReport {
-		d.logger.Debug("Report shipping")
-		err := d.registry.Report(ctx, &registry.ReportRequest{
-			ID:      res.ID,
-			Tag:     res.Tag,
-			Command: d.config.Command.String(),
-		})
-		if err != nil {
-			d.logger.Error("Report shipping failure", slog.String("error", err.Error()))
-		}
-	}
-
-	// Prepare deployment notification
-	totalReplicas := d.config.Container.Replicas
-	if totalReplicas <= 0 {
-		totalReplicas = 1
-	}
-	msg = fmt.Sprintf("Container deployed successfully: `%d/%d` replicas of `%s`", deployedCount, totalReplicas, d.cVer)
-	d.logger.Info("Container deployed successfully",
-		slog.String("version", d.cVer),
-		slog.Int("replicas", deployedCount),
-		slog.Int("total", totalReplicas))
-	d.notifier.SendImportant(ctx, msg)
-
-	// Clean up old images
-	d.logger.Info("Keep images", slog.Int("count", keepReleases))
-	err = d.cleanupOldImages(ctx, imageRef)
+	deployedCount, err := d.applyContainerDeployment(ctx, res)
 	if err != nil {
-		d.logger.Error("Keep images failure", slog.String("error", err.Error()))
+		return err
 	}
 
-	return nil
+	return d.promoteContainerAndReport(ctx, res, deployedCount, st.imageRef)
 }
 
 // deployContainer performs the actual container deployment using rolling update strategy.
