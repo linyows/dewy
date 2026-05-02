@@ -185,7 +185,7 @@ func (s *S3) Report(ctx context.Context, req *ReportRequest) error {
 		return req.Err
 	}
 
-	now := time.Now().UTC().Format(ISO8601)
+	now := time.Now().UTC().Format(iso8601Nano)
 	hostname, _ := os.Hostname()
 	info := fmt.Sprintf("shipped to %s %s at %s", strings.ToLower(hostname), req.Command, now)
 	filename := fmt.Sprintf("%s.txt", strings.ReplaceAll(info, " ", "_"))
