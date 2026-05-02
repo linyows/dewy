@@ -210,7 +210,7 @@ jobs:
       cmd: |
         ./dewy server -p 8003 -l debug \
         --registry "ghr://linyows/dewy-testapp?pre-release=true" \
-        --cache "s3://ap-northeast-3/dewy-testapp/.cache/{{ outputs.genver.version }}-s3" \
+        --cache "s3://ap-northeast-3/dewy-testapp/.cache/{{ outputs.genver.version }}-s3?registry-ttl=30s" \
         -- $PWD/current/dewy-testapp
     test: status == -1
     outputs:
@@ -249,7 +249,7 @@ jobs:
       cmd: |
         ./dewy server -p 8004 -l debug \
         --registry "ghr://linyows/dewy-testapp?pre-release=true" \
-        --cache "s3://ap-northeast-3/dewy-testapp/.cache/{{ outputs.genver.version }}-s3" \
+        --cache "s3://ap-northeast-3/dewy-testapp/.cache/{{ outputs.genver.version }}-s3?registry-ttl=30s" \
         -- $PWD/current/dewy-testapp
     test: status == -1
     outputs:
@@ -287,7 +287,7 @@ jobs:
       cmd: |
         ./dewy server -p 8005 -l debug \
         --registry "ghr://linyows/dewy-testapp?pre-release=true" \
-        --cache "gs://dewy-testapp/.cache/{{ outputs.genver.version }}-gs" \
+        --cache "gs://dewy-testapp/.cache/{{ outputs.genver.version }}-gs?registry-ttl=30s" \
         -- $PWD/current/dewy-testapp
     test: status == -1
     outputs:
@@ -325,7 +325,7 @@ jobs:
       cmd: |
         ./dewy server -p 8006 -l debug \
         --registry "ghr://linyows/dewy-testapp?pre-release=true" \
-        --cache "gs://dewy-testapp/.cache/{{ outputs.genver.version }}-gs" \
+        --cache "gs://dewy-testapp/.cache/{{ outputs.genver.version }}-gs?registry-ttl=30s" \
         -- $PWD/current/dewy-testapp
     test: status == -1
     outputs:
@@ -884,4 +884,39 @@ jobs:
         total=$((a + b))
         echo "A=${a} B=${b} total=${total} (ideal=2, allowed<=3)"
         [ "${total}" -le 3 ]
+    test: status == 0
+
+# Phase 5: Verify the registry-result cache deduplicated upstream polls.
+# Each instance polls every 10s. Without sharing, two instances over the
+# ~3-5 minute test duration would each call the upstream registry per poll
+# (~36-60 calls per pair). With registry-ttl=30s and shared single-flight,
+# only the leader of each TTL window calls upstream (~10-15 per pair).
+# We assert <=20 to absorb startup races and timing variance.
+
+- name: Verify registry result cache reduces upstream polls (S3 pair)
+  needs: [verify_srv_ghr_s3cache_a, verify_srv_ghr_s3cache_b]
+  steps:
+  - name: Count "Registry result refreshed from upstream" log lines across S3 pair
+    uses: shell
+    with:
+      cmd: |
+        a=$(grep -c 'Registry result refreshed from upstream' "{{ outputs.srv_ghr_s3cache_a.log }}" 2>/dev/null || true); a=${a:-0}
+        b=$(grep -c 'Registry result refreshed from upstream' "{{ outputs.srv_ghr_s3cache_b.log }}" 2>/dev/null || true); b=${b:-0}
+        total=$((a + b))
+        echo "A=${a} B=${b} total=${total} (allowed<=20)"
+        [ "${total}" -ge 1 ] && [ "${total}" -le 20 ]
+    test: status == 0
+
+- name: Verify registry result cache reduces upstream polls (GCS pair)
+  needs: [verify_srv_ghr_gscache_a, verify_srv_ghr_gscache_b]
+  steps:
+  - name: Count "Registry result refreshed from upstream" log lines across GCS pair
+    uses: shell
+    with:
+      cmd: |
+        a=$(grep -c 'Registry result refreshed from upstream' "{{ outputs.srv_ghr_gscache_a.log }}" 2>/dev/null || true); a=${a:-0}
+        b=$(grep -c 'Registry result refreshed from upstream' "{{ outputs.srv_ghr_gscache_b.log }}" 2>/dev/null || true); b=${b:-0}
+        total=$((a + b))
+        echo "A=${a} B=${b} total=${total} (allowed<=20)"
+        [ "${total}" -ge 1 ] && [ "${total}" -le 20 ]
     test: status == 0

@@ -73,6 +73,26 @@ dewy server --registry ghr://owner/repo \
 
 認証はGoogle Cloud標準の方式（`GOOGLE_APPLICATION_CREDENTIALS`、workload identity、ADC）に従います。
 
+### Registry result cache {% #registry-result-cache %}
+
+S3とGCSのcache backendは `registry-ttl=<duration>` query parameterを受け付けます。指定すると**上流registryのレスポンスそのもの**もキャッシュに保存され、同じprefixを共有するDewyインスタンス間で調停して、TTLウィンドウあたり1台だけが上流registryをpollするようになります。GitHub Releasesのようなrate-limit付きregistryを多数のDewyインスタンスでpollする場合に有効です。
+
+```sh
+# 30秒のfreshness windowで共有registry-result cacheを有効化
+dewy server --registry ghr://owner/repo \
+  --cache 's3://ap-northeast-1/mybucket/myapp?registry-ttl=30s' \
+  -- /opt/myapp/current/myapp
+
+# GCSでも同様
+dewy server --registry ghr://owner/repo \
+  --cache 'gs://mybucket/myapp?registry-ttl=30s' \
+  -- /opt/myapp/current/myapp
+```
+
+cacheエントリ自体がrefresh lockを兼ねます（`If-Match` / `ifGenerationMatch`によるsingle-flight）。上流registry障害時は最後のキャッシュ値を返し続けるため（stale-but-usable）、一時的なregistry障害でクラスタが止まりません。
+
+conditional writeをサポートしないbackend（file backend）では本オプションは無視されます。
+
 ### メモリ（Memory）{% #memory-cache %}
 
 {% callout type="warning" title="未実装" %}

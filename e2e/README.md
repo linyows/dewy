@@ -36,9 +36,10 @@ All of the above are verified across every supported combination of commands and
 - Two versions started/downloaded (initial + new)
 - New version string appears in log
 
-**Shared cache pairs (server with `--cache s3://...` / `gs://...`):**
+**Shared cache pairs (server with `--cache s3://...?registry-ttl=30s` / `gs://...?registry-ttl=30s`):**
 - All of the above for each instance in the pair
 - Total `Cached artifact` log lines across the pair is `<= 3` (ideal `2`). Each instance only logs `Cached artifact` when it actually downloads from upstream and writes to the cache, so without sharing the total would be `4` (2 instances × 2 versions). With sharing, the second instance hits the cache and skips the download. The `<= 3` bound tolerates a single race on either deploy cycle.
+- Total `Registry result refreshed from upstream` log lines across the pair is `>= 1` and `<= 20`. The decorator only logs this when an instance acquires the refresh lock and actually calls upstream. Without the registry-result cache the pair would log it on every poll (~36-60 across the run), so the upper bound demonstrates that single-flight refresh is working. The lower bound asserts that the cache fired at least once.
 
 **Container command:**
 - No errors in log output (excluding transient `context deadline exceeded`)
@@ -296,6 +297,12 @@ flowchart LR
     subgraph job_33["Verify shared cache reduces upstream downloads (GCS pair)"]
         job_33_step0["Count #quot;Cached artifact#quot; log lines across GCS pair"]
     end
+    subgraph job_34["Verify registry result cache reduces upstream polls (S3 pair)"]
+        job_34_step0["Count #quot;Registry result refreshed from upstream#quot; log lines across S3 pair"]
+    end
+    subgraph job_35["Verify registry result cache reduces upstream polls (GCS pair)"]
+        job_35_step0["Count #quot;Registry result refreshed from upstream#quot; log lines across GCS pair"]
+    end
 
     check --> generate_version
     generate_version --> build
@@ -343,6 +350,10 @@ flowchart LR
     verify_srv_ghr_s3cache_b --> job_32
     verify_srv_ghr_gscache_a --> job_33
     verify_srv_ghr_gscache_b --> job_33
+    verify_srv_ghr_s3cache_a --> job_34
+    verify_srv_ghr_s3cache_b --> job_34
+    verify_srv_ghr_gscache_a --> job_35
+    verify_srv_ghr_gscache_b --> job_35
 ```
 
 ### Phase Details

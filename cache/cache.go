@@ -85,20 +85,23 @@ func schemeOf(urlStr string) string {
 	return u.Scheme
 }
 
-// errNotFound indicates a missing cache entry.
-var errNotFound = errors.New("not found")
+// ErrNotFound indicates a missing cache entry. Backends wrap this to
+// surface a not-found condition; callers detect it via IsNotFound.
+var ErrNotFound = errors.New("not found")
 
 // IsNotFound reports whether err indicates a missing cache entry.
 func IsNotFound(err error) bool {
-	return errors.Is(err, errNotFound)
+	return errors.Is(err, ErrNotFound)
 }
 
-// errConflict indicates that a conditional write's precondition did not match.
-var errConflict = errors.New("precondition failed")
+// ErrConflict indicates that a conditional write's precondition did not
+// match. Backends wrap this to surface a precondition mismatch; callers
+// detect it via IsConflict.
+var ErrConflict = errors.New("precondition failed")
 
 // IsConflict reports whether err indicates a conditional-write precondition mismatch.
 func IsConflict(err error) bool {
-	return errors.Is(err, errConflict)
+	return errors.Is(err, ErrConflict)
 }
 
 // AtomicCache is an optional capability for cache backends that support

@@ -124,7 +124,7 @@ func (g *GS) Read(key string) ([]byte, error) {
 	data, err := g.cl.GetObject(g.ctx, g.Bucket, g.objectName(key))
 	if err != nil {
 		if errors.Is(err, storage.ErrObjectNotExist) {
-			return nil, fmt.Errorf("%w: %s", errNotFound, key)
+			return nil, fmt.Errorf("%w: %s", ErrNotFound, key)
 		}
 		return nil, fmt.Errorf("failed to get object: %w", err)
 	}
@@ -205,7 +205,7 @@ func (g *GS) ReadWithVersion(key string) ([]byte, string, error) {
 	data, gen, err := g.cl.ReadWithGeneration(g.ctx, g.Bucket, g.objectName(key))
 	if err != nil {
 		if errors.Is(err, storage.ErrObjectNotExist) {
-			return nil, "", fmt.Errorf("%w: %s", errNotFound, key)
+			return nil, "", fmt.Errorf("%w: %s", ErrNotFound, key)
 		}
 		return nil, "", fmt.Errorf("failed to get object: %w", err)
 	}
@@ -228,7 +228,7 @@ func (g *GS) WriteIfMatch(key string, version string, data []byte) (string, erro
 	gen, err := g.cl.WriteIfGeneration(g.ctx, g.Bucket, g.objectName(key), data, expected)
 	if err != nil {
 		if isGSPreconditionFailure(err) {
-			return "", fmt.Errorf("%w: %s", errConflict, key)
+			return "", fmt.Errorf("%w: %s", ErrConflict, key)
 		}
 		return "", fmt.Errorf("failed to put object: %w", err)
 	}

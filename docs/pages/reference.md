@@ -82,6 +82,8 @@ dewy server --artifact s3://bucket/path/to/artifact -- /opt/app/current/app
 
 Selects the cache backend by URL. Supported schemes: `file://` (default local filesystem), `s3://<region>/<bucket>/<prefix>` (Amazon S3 or S3-compatible storage), `gs://<bucket>/<prefix>` (Google Cloud Storage). When using S3 or GCS, multiple Dewy instances pointed at the same bucket share artifact downloads, dramatically reducing upstream registry traffic.
 
+Add `?registry-ttl=<duration>` (e.g. `30s`, `2m`) to also share the upstream registry response across instances. Only one instance per TTL window calls the upstream registry; the rest read the cached response from the shared cache. The option is ignored on the file backend.
+
 ```bash
 # Local filesystem (default)
 dewy server --cache file:///tmp/dewy-cache -- /opt/app/current/app
@@ -91,6 +93,9 @@ dewy server --cache s3://ap-northeast-1/dewy-cache/myapp -- /opt/app/current/app
 
 # Google Cloud Storage
 dewy server --cache gs://dewy-cache/myapp -- /opt/app/current/app
+
+# Shared cache with registry-result caching
+dewy server --cache 's3://ap-northeast-1/dewy-cache/myapp?registry-ttl=30s' -- /opt/app/current/app
 ```
 
 ### --notifier (-n)

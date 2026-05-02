@@ -73,6 +73,26 @@ dewy server --registry ghr://owner/repo \
 
 Authentication follows the standard Google Cloud authentication methods (`GOOGLE_APPLICATION_CREDENTIALS`, workload identity, ADC).
 
+### Registry result cache {% #registry-result-cache %}
+
+Both S3 and GCS cache backends accept a `registry-ttl=<duration>` query parameter. When set, the cache also stores the **upstream registry response**, and Dewy instances sharing the same prefix coordinate so that only one of them per TTL window calls the upstream registry. Followers read the cached response from the shared cache. Useful when many Dewy instances poll a rate-limited registry such as GitHub Releases.
+
+```sh
+# Shared registry-result cache with 30s freshness window
+dewy server --registry ghr://owner/repo \
+  --cache 's3://ap-northeast-1/mybucket/myapp?registry-ttl=30s' \
+  -- /opt/myapp/current/myapp
+
+# Same with GCS
+dewy server --registry ghr://owner/repo \
+  --cache 'gs://mybucket/myapp?registry-ttl=30s' \
+  -- /opt/myapp/current/myapp
+```
+
+The cache entry doubles as a refresh lock (single-flight via `If-Match` / `ifGenerationMatch`). On upstream failure the cache continues to serve the last known response (stale-but-usable), so a transient registry outage does not stop the cluster.
+
+The option is silently ignored on backends that do not support atomic conditional writes (file backend).
+
 ### Memory {% #memory-cache %}
 
 {% callout type="warning" title="Not Implemented" %}

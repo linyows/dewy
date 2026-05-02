@@ -149,7 +149,7 @@ func (s *S3) Read(key string) ([]byte, error) {
 		var nsk *s3types.NoSuchKey
 		var nf *s3types.NotFound
 		if errors.As(err, &nsk) || errors.As(err, &nf) {
-			return nil, fmt.Errorf("%w: %s", errNotFound, key)
+			return nil, fmt.Errorf("%w: %s", ErrNotFound, key)
 		}
 		return nil, fmt.Errorf("failed to get object: %w", err)
 	}
@@ -229,7 +229,7 @@ func (s *S3) ReadWithVersion(key string) ([]byte, string, error) {
 		var nsk *s3types.NoSuchKey
 		var nf *s3types.NotFound
 		if errors.As(err, &nsk) || errors.As(err, &nf) {
-			return nil, "", fmt.Errorf("%w: %s", errNotFound, key)
+			return nil, "", fmt.Errorf("%w: %s", ErrNotFound, key)
 		}
 		return nil, "", fmt.Errorf("failed to get object: %w", err)
 	}
@@ -260,7 +260,7 @@ func (s *S3) WriteIfMatch(key string, version string, data []byte) (string, erro
 	out, err := s.cl.PutObject(s.ctx, in)
 	if err != nil {
 		if isS3PreconditionFailure(err) {
-			return "", fmt.Errorf("%w: %s", errConflict, key)
+			return "", fmt.Errorf("%w: %s", ErrConflict, key)
 		}
 		return "", fmt.Errorf("failed to put object: %w", err)
 	}

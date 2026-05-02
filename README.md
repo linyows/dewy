@@ -289,6 +289,18 @@ $ dewy server --registry ghr://owner/repo \
 
 Authentication for the S3 and GCS backends uses the standard credential chain for each provider, so the same credentials configured for an S3/GCS registry source can be reused. Each instance also keeps a local staging copy of fetched artifacts so that archive extraction works the same way as the file backend.
 
+### Registry result cache
+
+Add `registry-ttl=<duration>` to the cache URL to also share the **upstream registry response** across instances. With it enabled, only one instance per TTL window calls the upstream registry; the rest read the cached response from the shared cache via a single-flight refresh lock. On upstream failure the cache continues to serve the last known response (stale-but-usable), so a transient registry outage does not stop the cluster.
+
+```sh
+$ dewy server --registry ghr://owner/repo \
+    --cache 's3://ap-northeast-1/dewy-cache/myapp?registry-ttl=30s' \
+    -- /opt/myapp/current/myapp
+```
+
+Without `registry-ttl` the registry is polled normally and behavior is unchanged. The option only takes effect on backends that support atomic conditional writes (S3, GCS); it is ignored on the file backend.
+
 Notifier
 --
 
@@ -709,8 +721,7 @@ Here are some questions you may be asked:
     
 - How can I prevent registry rate limits caused by polling from multiple Dewy instances?
     
-    Point the cache backend at AWS S3 or Google Cloud Storage to share artifacts across instances, which dramatically reduces artifact download traffic against the upstream registry (`--cache s3://<region>/<bucket>/<prefix>` or `--cache gs://<bucket>/<prefix>`).
-    You can also extend the polling interval with the `--interval` option. Coordinating metadata polls themselves (stale-while-revalidate) is a separate concern at the registry layer and is planned for a future release.
+    Point the cache backend at AWS S3 or Google Cloud Storage to share artifacts and registry responses across instances. `--cache s3://<region>/<bucket>/<prefix>` (or `gs://<bucket>/<prefix>`) deduplicates artifact downloads. Adding `?registry-ttl=<duration>` to that URL further deduplicates the metadata polls themselves: only one instance per TTL window calls the upstream registry, while the rest read the cached response from the shared cache. On upstream failure the cache continues to serve the last known response (stale-but-usable). You can also extend the per-instance polling interval with the `--interval` option.
 
 Author
 --

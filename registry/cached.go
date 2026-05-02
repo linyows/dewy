@@ -195,6 +195,10 @@ func buildClaim(prev *cachedEntry, nodeID string) *cachedEntry {
 // previous Response so the cache continues to serve stale-but-usable.
 func (c *Cached) refreshAndPublish(ctx context.Context, prev *cachedEntry, version string) (*CurrentResponse, error) {
 	c.upstream.Add(1)
+	if c.logger != nil {
+		c.logger.Info("Registry result refreshed from upstream",
+			slog.String("node", c.nodeID))
+	}
 	res, err := c.inner.Current(ctx)
 	if err != nil {
 		c.releaseLock(prev, version)
