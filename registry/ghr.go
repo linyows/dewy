@@ -51,14 +51,13 @@ const (
 
 // GHR struct.
 type GHR struct {
-	Owner                 string `schema:"-"`
-	Repo                  string `schema:"-"`
-	Artifact              string `schema:"artifact"`
-	PreRelease            bool   `schema:"pre-release"`
-	CalVer                string `schema:"calver"`
-	DisableRecordShipping bool   // FIXME: For testing. Remove this.
-	cl                    *github.Client
-	logger                *logging.Logger
+	Owner      string `schema:"-"`
+	Repo       string `schema:"-"`
+	Artifact   string `schema:"artifact"`
+	PreRelease bool   `schema:"pre-release"`
+	CalVer     string `schema:"calver"`
+	cl         *github.Client
+	logger     *logging.Logger
 }
 
 // New returns GHR.
