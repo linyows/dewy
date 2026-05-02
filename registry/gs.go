@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
+	"github.com/linyows/dewy/internal/scheme"
 	"github.com/linyows/dewy/logging"
 	"google.golang.org/api/iterator"
 )
@@ -146,7 +147,7 @@ func (g *GS) Current(ctx context.Context) (*CurrentResponse, error) {
 }
 
 func (g *GS) buildArtifactURL(name string) string {
-	return fmt.Sprintf("%s://%s/%s", gsScheme, g.Bucket, name)
+	return fmt.Sprintf("%s://%s/%s", scheme.GS, g.Bucket, name)
 }
 
 // Report report shipping.

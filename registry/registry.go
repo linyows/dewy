@@ -7,17 +7,34 @@ import (
 	"time"
 
 	"github.com/gorilla/schema"
+	"github.com/linyows/dewy/internal/scheme"
 	"github.com/linyows/dewy/logging"
 )
 
-var (
-	decoder    = schema.NewDecoder()
-	s3Scheme   = "s3"
-	ghrScheme  = "ghr"
-	grpcScheme = "grpc"
-	gsScheme   = "gs"
-	imgScheme  = "img"
-)
+var decoder = schema.NewDecoder()
+
+// factoryFn constructs a Registry from a parsed URL. logger is optional
+// (NewGRPC ignores it) but kept in the signature so all registries plug into
+// the same dispatch table.
+type factoryFn func(ctx context.Context, url string, log *logging.Logger) (Registry, error)
+
+var factories = map[string]factoryFn{
+	scheme.GHR: func(ctx context.Context, url string, log *logging.Logger) (Registry, error) {
+		return NewGHR(ctx, url, log)
+	},
+	scheme.S3: func(ctx context.Context, url string, log *logging.Logger) (Registry, error) {
+		return NewS3(ctx, url, log)
+	},
+	scheme.GS: func(ctx context.Context, url string, log *logging.Logger) (Registry, error) {
+		return NewGS(ctx, url, log)
+	},
+	scheme.GRPC: func(ctx context.Context, url string, _ *logging.Logger) (Registry, error) {
+		return NewGRPC(ctx, url)
+	},
+	scheme.OCI: func(ctx context.Context, url string, log *logging.Logger) (Registry, error) {
+		return NewOCI(ctx, url, log)
+	},
+}
 
 type Registry interface {
 	// Current returns the current artifact.
@@ -56,24 +73,9 @@ type ReportRequest struct {
 
 func New(ctx context.Context, url string, log *logging.Logger) (Registry, error) {
 	splitted := strings.SplitN(url, "://", 2)
-
-	switch splitted[0] {
-	case ghrScheme:
-		return NewGHR(ctx, url, log)
-
-	case s3Scheme:
-		return NewS3(ctx, url, log)
-
-	case gsScheme:
-		return NewGS(ctx, url, log)
-
-	case grpcScheme:
-		return NewGRPC(ctx, url)
-
-	case imgScheme:
-		return NewOCI(ctx, url, log)
+	if f, ok := factories[splitted[0]]; ok {
+		return f(ctx, url, log)
 	}
-
 	return nil, fmt.Errorf("unsupported registry: %s", url)
 }
 

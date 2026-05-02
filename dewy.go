@@ -308,7 +308,7 @@ func (d *Dewy) Run() error {
 	}
 
 	// Check slot matching for blue/green deployment
-	if d.config.Slot != "" && res.Slot != d.config.Slot {
+	if !(registry.SlotMatcher{Expected: d.config.Slot}).Matches(res.Slot) {
 		d.logger.Debug("Deploy skipped: slot mismatch",
 			slog.String("expected_slot", d.config.Slot),
 			slog.String("actual_slot", res.Slot),
@@ -685,7 +685,7 @@ func (d *Dewy) RunContainer() error {
 		slog.String("slot", res.Slot))
 
 	// Check slot matching for blue/green deployment
-	if d.config.Slot != "" && res.Slot != d.config.Slot {
+	if !(registry.SlotMatcher{Expected: d.config.Slot}).Matches(res.Slot) {
 		d.logger.Debug("Deploy skipped: slot mismatch",
 			slog.String("expected_slot", d.config.Slot),
 			slog.String("actual_slot", res.Slot),
