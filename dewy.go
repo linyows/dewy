@@ -160,7 +160,7 @@ func (d *Dewy) Start(i int) {
 	// on the cache URL.
 	if ttl := d.cache.RegistryTTL(); ttl > 0 {
 		if ac, ok := d.cache.(cache.AtomicCache); ok {
-			d.registry = registry.NewCached(d.registry, ac, ttl, d.logger)
+			d.registry = registry.NewCached(d.registry, d.config.Registry, ac, ttl, d.logger)
 			d.logger.Info("Registry result cache enabled",
 				slog.Duration("ttl", ttl))
 		} else {

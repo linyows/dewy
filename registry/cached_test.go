@@ -145,7 +145,7 @@ func newCachedForTest(t *testing.T, ttl time.Duration) (*Cached, *mockUpstream, 
 	t.Helper()
 	upstream := &mockUpstream{tag: "v1.2.3"}
 	fakeCache := newFakeAtomicCache()
-	c := NewCached(upstream, fakeCache, ttl, testLogger())
+	c := NewCached(upstream, "ghr://test/scope", fakeCache, ttl, testLogger())
 	c.wait = 5 * time.Millisecond
 	return c, upstream, fakeCache
 }
@@ -195,8 +195,8 @@ func TestCachedSharedAcrossInstances(t *testing.T) {
 	// hit upstream per TTL window.
 	upstream := &mockUpstream{tag: "v1.2.3"}
 	fakeCache := newFakeAtomicCache()
-	a := NewCached(upstream, fakeCache, time.Minute, testLogger())
-	b := NewCached(upstream, fakeCache, time.Minute, testLogger())
+	a := NewCached(upstream, "ghr://test/scope", fakeCache, time.Minute, testLogger())
+	b := NewCached(upstream, "ghr://test/scope", fakeCache, time.Minute, testLogger())
 	a.wait = 5 * time.Millisecond
 	b.wait = 5 * time.Millisecond
 
@@ -231,6 +231,69 @@ func TestCachedFailOpenServesStale(t *testing.T) {
 	}
 	if res == nil || res.Tag != "v1.2.3" {
 		t.Errorf("expected stale tag v1.2.3, got %+v", res)
+	}
+}
+
+func TestCachedReleasesLockAfterUpstreamFailure(t *testing.T) {
+	// On upstream failure with no prior entry, the leader should release
+	// the lock so a peer can immediately attempt the next refresh once
+	// upstream recovers, rather than waiting out lockTTL.
+	upstream := &mockUpstream{tag: "v1.2.3", err: errors.New("upstream down")}
+	fakeCache := newFakeAtomicCache()
+	leader := NewCached(upstream, "ghr://test/scope", fakeCache, 50*time.Millisecond, testLogger())
+	leader.wait = 5 * time.Millisecond
+
+	// Upstream fails and there is no cached entry to fall back to —
+	// expect an error.
+	if _, err := leader.Current(context.Background()); err == nil {
+		t.Fatal("expected error: upstream down with empty cache")
+	}
+
+	// Recover upstream and create a peer instance. The peer should not be
+	// blocked by a stale lock; it should claim immediately and succeed.
+	upstream.mu.Lock()
+	upstream.err = nil
+	upstream.mu.Unlock()
+
+	peer := NewCached(upstream, "ghr://test/scope", fakeCache, 50*time.Millisecond, testLogger())
+	peer.wait = 5 * time.Millisecond
+
+	start := time.Now()
+	res, err := peer.Current(context.Background())
+	if err != nil {
+		t.Fatalf("peer Current after lock release: %v", err)
+	}
+	if res == nil || res.Tag != "v1.2.3" {
+		t.Errorf("unexpected response: %+v", res)
+	}
+	// We should be well under lockTTL, otherwise the lock was not released.
+	if elapsed := time.Since(start); elapsed > leader.lockTTL/2 {
+		t.Errorf("peer waited %v before refreshing — lock-release path is broken", elapsed)
+	}
+}
+
+func TestCachedDifferentScopesDoNotShare(t *testing.T) {
+	// Two Cached instances backed by the same fake cache but with different
+	// scopes (e.g., different registry URLs) must not share entries.
+	fakeCache := newFakeAtomicCache()
+	upstreamA := &mockUpstream{tag: "v1.0.0"}
+	upstreamB := &mockUpstream{tag: "v2.0.0"}
+	a := NewCached(upstreamA, "ghr://owner/repoA", fakeCache, time.Minute, testLogger())
+	b := NewCached(upstreamB, "ghr://owner/repoB", fakeCache, time.Minute, testLogger())
+
+	resA, err := a.Current(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	resB, err := b.Current(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resA.Tag == resB.Tag {
+		t.Errorf("scoped instances should not share entries; both got %q", resA.Tag)
+	}
+	if upstreamA.Calls() != 1 || upstreamB.Calls() != 1 {
+		t.Errorf("each scope should hit its own upstream; got A=%d B=%d", upstreamA.Calls(), upstreamB.Calls())
 	}
 }
 
