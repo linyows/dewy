@@ -556,14 +556,14 @@ func validateAndDeduplicatePorts(ports []string) ([]string, error) {
 
 // parsePortMappings parses port mapping specifications for container command.
 // Supports formats:
-//   - "8080" -> proxy=8080, container=auto-detect
+//   - "8080" -> proxy=8080, container=auto-detect (ContainerPort==0)
 //   - "8080:80" -> proxy=8080, container=80
-func parsePortMappings(portSpecs []string) ([]PortMapping, error) {
+func parsePortMappings(portSpecs []string) ([]container.PortMapping, error) {
 	if len(portSpecs) == 0 {
 		return nil, nil
 	}
 
-	mappings := make([]PortMapping, 0, len(portSpecs))
+	mappings := make([]container.PortMapping, 0, len(portSpecs))
 	proxyPorts := make(map[int]bool) // Track duplicate proxy ports
 
 	for _, spec := range portSpecs {
@@ -572,7 +572,7 @@ func parsePortMappings(portSpecs []string) ([]PortMapping, error) {
 			continue
 		}
 
-		var mapping PortMapping
+		var mapping container.PortMapping
 
 		// Check if it contains ":"
 		if strings.Contains(spec, ":") {
@@ -598,9 +598,9 @@ func parsePortMappings(portSpecs []string) ([]PortMapping, error) {
 				return nil, fmt.Errorf("invalid container port in %s: %w", spec, err)
 			}
 
-			mapping = PortMapping{
+			mapping = container.PortMapping{
 				ProxyPort:     proxyPort,
-				ContainerPort: &containerPort,
+				ContainerPort: containerPort,
 			}
 		} else {
 			// Format: "proxy" (container port will be auto-detected)
@@ -612,9 +612,9 @@ func parsePortMappings(portSpecs []string) ([]PortMapping, error) {
 				return nil, fmt.Errorf("invalid port: %w", err)
 			}
 
-			mapping = PortMapping{
+			mapping = container.PortMapping{
 				ProxyPort:     proxyPort,
-				ContainerPort: nil, // Auto-detect
+				ContainerPort: 0, // Auto-detect
 			}
 		}
 

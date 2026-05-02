@@ -849,9 +849,8 @@ func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentRespons
 		}
 	}
 
-	// Convert and resolve port mappings
-	configMappings := convertPortMappings(d.config.Container.PortMappings)
-	resolvedMappings, err := runtime.ResolvePortMappings(ctx, imageRef, configMappings)
+	// Resolve port mappings (auto-detect ContainerPort==0 from image EXPOSE).
+	resolvedMappings, err := runtime.ResolvePortMappings(ctx, imageRef, d.config.Container.PortMappings)
 	if err != nil {
 		return 0, fmt.Errorf("failed to resolve port mappings: %w", err)
 	}
@@ -938,20 +937,6 @@ func (d *Dewy) createHealthCheckFunc(rt *container.Runtime, resolvedMappings []c
 		}
 		return fmt.Errorf("health check failed after %d retries", retries)
 	}
-}
-
-// convertPortMappings converts dewy PortMappings to container PortMappings.
-// dewy.PortMapping uses *int for ContainerPort (nil = auto-detect),
-// container.PortMapping uses int (0 = auto-detect).
-func convertPortMappings(mappings []PortMapping) []container.PortMapping {
-	result := make([]container.PortMapping, len(mappings))
-	for i, m := range mappings {
-		result[i] = container.PortMapping{ProxyPort: m.ProxyPort}
-		if m.ContainerPort != nil {
-			result[i].ContainerPort = *m.ContainerPort
-		}
-	}
-	return result
 }
 
 // startProxy starts TCP proxies for all configured port mappings.
@@ -1403,10 +1388,10 @@ func (d *Dewy) handleGetContainers(w http.ResponseWriter, r *http.Request) {
 	var err error
 
 	if d.config.Command == CONTAINER {
-		// Use first port mapping for listing containers
+		// Use first port mapping for listing containers (0 = auto-detect / not specified)
 		containerPort := 0
-		if len(d.config.Container.PortMappings) > 0 && d.config.Container.PortMappings[0].ContainerPort != nil {
-			containerPort = *d.config.Container.PortMappings[0].ContainerPort
+		if len(d.config.Container.PortMappings) > 0 {
+			containerPort = d.config.Container.PortMappings[0].ContainerPort
 		}
 		containers, err = d.containerRuntime.ListContainersByLabels(ctx, labels, containerPort)
 		if err != nil {
