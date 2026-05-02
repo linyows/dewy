@@ -310,31 +310,42 @@ func (d *Dewy) Run() error {
 	}
 
 	for _, key := range list {
-		// same current version and already cached
-		if string(currentkeyValue) == cachekeyName && key == cachekeyName {
-			d.logger.Debug("Deploy skipped")
-			if d.config.Command == SERVER {
+		if key != cachekeyName {
+			continue
+		}
+		found = true
+
+		if string(currentkeyValue) == cachekeyName {
+			// Cache says we are already at this version.
+			switch d.config.Command {
+			case SERVER:
 				d.RLock()
 				running := d.isServerRunning
 				d.RUnlock()
 				if running {
+					d.logger.Debug("Deploy skipped")
 					return nil
 				}
-				// when the server fails to start (SERVER mode only)
-				break
-			} else if d.config.Command == ASSETS {
-				return nil // always skip for assets command
+				// Server is down (e.g. crashed or just starting up):
+				// fall through to redeploy from cache.
+			case ASSETS:
+				d.logger.Debug("Deploy skipped")
+				return nil
 			}
-		}
-
-		// no current version but already cached
-		if key == cachekeyName {
-			found = true
+		} else {
+			// Take ownership of the current pointer.
 			if err := d.cache.Write(currentkeyName, []byte(cachekeyName)); err != nil {
 				return err
 			}
-			break
 		}
+
+		// Ensure the artifact bytes are present in local staging for
+		// ExtractArchive. Cloud backends populate the local stage on Read;
+		// the file backend reads from disk where it already lives.
+		if _, err := d.cache.Read(cachekeyName); err != nil {
+			return fmt.Errorf("failed to load cached artifact: %w", err)
+		}
+		break
 	}
 
 	// Download artifact and cache

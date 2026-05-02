@@ -897,6 +897,66 @@ func TestDifferentVersionsDownload(t *testing.T) {
 	}
 }
 
+// TestSharedCacheReusesExistingArtifact simulates a shared cache where
+// another Dewy instance has already downloaded and cached the artifact,
+// then verifies that this instance does not redownload from upstream.
+func TestSharedCacheReusesExistingArtifact(t *testing.T) {
+	artifactURL := "ghr://linyows/dewy/tag/v1.2.3/artifact.zip"
+	registry := "ghr://linyows/dewy"
+	root := t.TempDir()
+
+	c := DefaultConfig()
+	c.Command = ASSETS
+	c.Registry = registry
+	c.Cache = CacheConfig{Type: FILE, Expiration: 10}
+
+	dewy, err := New(c, testLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fileKvs := &kvs.File{}
+	fileKvs.SetLogger(testLogger().Logger)
+	fileKvs.MaxSize = kvs.DefaultMaxSize
+	fileKvs.SetDir(t.TempDir())
+	dewy.cache = fileKvs
+
+	mockArt := &mockArtifact{binary: "dewy", url: artifactURL}
+
+	// Pre-populate the cache as if another instance had already downloaded
+	// and cached the artifact (peer-written shared cache state).
+	var buf bytes.Buffer
+	if err := mockArt.Download(context.Background(), &buf); err != nil {
+		t.Fatalf("priming the artifact bytes: %v", err)
+	}
+	mockArt.mutex.Lock()
+	mockArt.downloadCount = 0
+	mockArt.mutex.Unlock()
+	cachekey := "shared_cache_test--artifact.zip"
+	if err := fileKvs.Write(cachekey, buf.Bytes()); err != nil {
+		t.Fatalf("seed cache: %v", err)
+	}
+	if err := fileKvs.Write(currentkeyName, []byte(cachekey)); err != nil {
+		t.Fatalf("seed current: %v", err)
+	}
+
+	dewy.artifact = mockArt
+	dewy.registry = &mockRegistry{url: artifactURL, tag: "shared_cache_test"}
+	dewy.notifier, err = notifier.New(context.Background(), "", testLogger().Logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dewy.root = root
+
+	if err := dewy.Run(); err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	if got := mockArt.GetDownloadCount(); got != 0 {
+		t.Errorf("expected zero upstream downloads (shared cache reuse), got %d", got)
+	}
+}
+
 func TestHookResultNotification(t *testing.T) {
 	tests := []struct {
 		name         string
