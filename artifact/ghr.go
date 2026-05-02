@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/go-github/v73/github"
 	"github.com/linyows/dewy/client"
+	"github.com/linyows/dewy/internal/scheme"
 )
 
 var (
@@ -29,7 +30,7 @@ type GHR struct {
 
 func NewGHR(ctx context.Context, url string, logger *slog.Logger) (*GHR, error) {
 	// ghr://owner/repo/tag/v1.0.0/artifact.zip
-	splitted := strings.Split(strings.TrimPrefix(url, fmt.Sprintf("%s://", ghrScheme)), "/")
+	splitted := strings.Split(strings.TrimPrefix(url, fmt.Sprintf("%s://", scheme.GHR)), "/")
 	if len(splitted) != 5 {
 		return nil, fmt.Errorf("invalid artifact url: %s, %#v", url, splitted)
 	}

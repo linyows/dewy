@@ -6,13 +6,8 @@ import (
 	"io"
 	"log/slog"
 	"strings"
-)
 
-const (
-	ghrScheme = "ghr"
-	s3Scheme  = "s3"
-	gsScheme  = "gs"
-	imgScheme = "img"
+	"github.com/linyows/dewy/internal/scheme"
 )
 
 // Fetcher is the interface that wraps the Fetch method.
@@ -35,27 +30,33 @@ func WithPuller(p Puller) Option {
 	}
 }
 
+// factoryFn constructs an Artifact from a parsed URL plus the resolved
+// per-call options (puller, etc.).
+type factoryFn func(ctx context.Context, url string, logger *slog.Logger, o *options) (Artifact, error)
+
+var factories = map[string]factoryFn{
+	scheme.GHR: func(ctx context.Context, url string, logger *slog.Logger, _ *options) (Artifact, error) {
+		return NewGHR(ctx, url, logger)
+	},
+	scheme.S3: func(ctx context.Context, url string, logger *slog.Logger, _ *options) (Artifact, error) {
+		return NewS3(ctx, url, logger)
+	},
+	scheme.GS: func(ctx context.Context, url string, logger *slog.Logger, _ *options) (Artifact, error) {
+		return NewGS(ctx, url, logger)
+	},
+	scheme.OCI: func(ctx context.Context, url string, logger *slog.Logger, o *options) (Artifact, error) {
+		return NewOCI(ctx, url, o.puller, logger)
+	},
+}
+
 func New(ctx context.Context, url string, logger *slog.Logger, opts ...Option) (Artifact, error) {
 	var o options
 	for _, opt := range opts {
 		opt(&o)
 	}
-
 	splitted := strings.SplitN(url, "://", 2)
-
-	switch splitted[0] {
-	case ghrScheme:
-		return NewGHR(ctx, url, logger)
-
-	case s3Scheme:
-		return NewS3(ctx, url, logger)
-
-	case gsScheme:
-		return NewGS(ctx, url, logger)
-
-	case imgScheme:
-		return NewOCI(ctx, url, o.puller, logger)
+	if f, ok := factories[splitted[0]]; ok {
+		return f(ctx, url, logger, &o)
 	}
-
 	return nil, fmt.Errorf("unsupported scheme: %s", url)
 }
