@@ -591,7 +591,7 @@ func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentRespons
 	// Create health check function (telemetry-aware, stays in dewy.go)
 	healthCheck := d.createHealthCheckFunc(runtime, resolvedMappings)
 
-	// Deploy via container runtime
+	// Deploy via container runtime, with the dewy proxy as the BackendUpdater.
 	report, err := runtime.Deploy(ctx, container.RollingDeployOptions{
 		ImageRef:     imageRef,
 		AppName:      appName,
@@ -600,14 +600,7 @@ func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentRespons
 		Command:      d.config.Container.Command,
 		ExtraArgs:    d.config.Container.ExtraArgs,
 		HealthCheck:  healthCheck,
-	}, container.BackendCallback{
-		OnAdd: func(host string, mappedPort, proxyPort int) error {
-			return d.addProxyBackend(host, mappedPort, proxyPort)
-		},
-		OnRemove: func(host string, mappedPort, proxyPort int) error {
-			return d.removeProxyBackend(host, mappedPort, proxyPort)
-		},
-	})
+	}, (*proxyBackendUpdater)(d))
 	if err != nil {
 		return 0, err
 	}
@@ -918,6 +911,23 @@ func (p *tcpProxy) backendCount() int {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return len(p.backends)
+}
+
+// proxyBackendUpdater adapts *Dewy to the container.BackendUpdater interface
+// so the rolling deploy can register/unregister TCP-proxy backends as new
+// replicas come up and old replicas are taken down.
+//
+// The type alias on *Dewy (rather than a wrapper struct) keeps zero indirection
+// and avoids capturing closures: passing (*proxyBackendUpdater)(d) to Deploy
+// is the entire glue.
+type proxyBackendUpdater Dewy
+
+func (p *proxyBackendUpdater) AddBackend(host string, mappedPort, proxyPort int) error {
+	return (*Dewy)(p).addProxyBackend(host, mappedPort, proxyPort)
+}
+
+func (p *proxyBackendUpdater) RemoveBackend(host string, mappedPort, proxyPort int) error {
+	return (*Dewy)(p).removeProxyBackend(host, mappedPort, proxyPort)
 }
 
 // addProxyBackend adds a new backend to the appropriate TCP proxy.
