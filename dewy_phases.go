@@ -15,7 +15,7 @@ import (
 )
 
 // makeRunContext is the single point at which Run / RunContainer derive their
-// per-tick context. Centralised so future PRs can swap the parent (e.g. to
+// per-tick context. Centralized so future PRs can swap the parent (e.g. to
 // thread Start's context through, or to add deadlines).
 func (d *Dewy) makeRunContext() (context.Context, context.CancelFunc) {
 	return context.WithCancel(context.Background())
@@ -165,10 +165,10 @@ func (d *Dewy) applyDeployment(ctx context.Context, res *registry.CurrentRespons
 	return d.deploy(key)
 }
 
-// promoteAndReport finalises a server/assets deploy: saves the version,
+// promoteAndReport finalizes a server/assets deploy: saves the version,
 // (re)starts the server for SERVER mode, reports to the registry, and prunes
 // old releases. Errors from Report and keepReleases are logged but do not
-// cause the run to fail, matching the original behaviour.
+// cause the run to fail, matching the original behavior.
 func (d *Dewy) promoteAndReport(ctx context.Context, res *registry.CurrentResponse) error {
 	d.Lock()
 	d.cVer = res.Tag
@@ -377,10 +377,10 @@ func (d *Dewy) applyContainerDeployment(ctx context.Context, res *registry.Curre
 	return deployedCount, nil
 }
 
-// promoteContainerAndReport finalises a container deploy: saves cVer, runs
+// promoteContainerAndReport finalizes a container deploy: saves cVer, runs
 // the after-hook, reports to the registry, sends the success notification,
 // and prunes old images. Failures of the post-deploy steps are logged but
-// not returned, matching the original behaviour.
+// not returned, matching the original behavior.
 func (d *Dewy) promoteContainerAndReport(ctx context.Context, res *registry.CurrentResponse, deployedCount int, imageRef string) error {
 	d.Lock()
 	d.cVer = res.Tag
