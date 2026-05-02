@@ -317,7 +317,16 @@ func (c *gsStorageClient) ReadWithGeneration(ctx context.Context, bucket, name s
 }
 
 func (c *gsStorageClient) WriteIfGeneration(ctx context.Context, bucket, name string, data []byte, expectedGeneration int64) (int64, error) {
-	obj := c.client.Bucket(bucket).Object(name).If(storage.Conditions{GenerationMatch: expectedGeneration})
+	// storage.Conditions{GenerationMatch: 0} is treated as the zero value
+	// by the SDK and rejected as "empty conditions". Use DoesNotExist for
+	// the "write only if absent" case.
+	var conds storage.Conditions
+	if expectedGeneration == 0 {
+		conds.DoesNotExist = true
+	} else {
+		conds.GenerationMatch = expectedGeneration
+	}
+	obj := c.client.Bucket(bucket).Object(name).If(conds)
 	w := obj.NewWriter(ctx)
 	if _, err := w.Write(data); err != nil {
 		_ = w.Close()
