@@ -6,9 +6,12 @@ import "fmt"
 // so the rolling deploy can register/unregister TCP-proxy backends as new
 // replicas come up and old replicas are taken down.
 //
-// The type alias on *Dewy (rather than a wrapper struct) keeps zero indirection
-// and avoids capturing closures: passing (*proxyBackendUpdater)(d) to Deploy
-// is the entire glue.
+// proxyBackendUpdater is a defined type whose underlying type is Dewy, not
+// an alias (which would be `type proxyBackendUpdater = Dewy`). The defined
+// form gives us a separate method set scoped to the BackendUpdater contract
+// while sharing memory with *Dewy, so the explicit conversion
+// (*proxyBackendUpdater)(d) is zero-cost: no wrapper struct, no captured
+// closures, just a pointer reinterpretation.
 type proxyBackendUpdater Dewy
 
 func (p *proxyBackendUpdater) AddBackend(host string, mappedPort, proxyPort int) error {
