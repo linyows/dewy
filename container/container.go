@@ -107,8 +107,21 @@ type DeployReport struct {
 	RemovedCount int
 }
 
-// BackendCallback provides hooks for proxy backend management during deployment.
-type BackendCallback struct {
-	OnAdd    func(host string, mappedPort int, proxyPort int) error
-	OnRemove func(host string, mappedPort int, proxyPort int) error
+// BackendUpdater is the rolling-deploy hook into the dewy reverse proxy.
+// Deploy calls AddBackend after each new replica passes its health check and
+// RemoveBackend before each old replica is stopped.
+//
+// Deploy treats a nil updater as a no-op, so callers that have no proxy to
+// update (e.g. tests that exercise only container lifecycle) can pass nil.
+type BackendUpdater interface {
+	AddBackend(host string, mappedPort, proxyPort int) error
+	RemoveBackend(host string, mappedPort, proxyPort int) error
 }
+
+// noopBackendUpdater is the default updater used when nil is passed to Deploy.
+// It is unexported because callers should pass nil rather than constructing
+// one explicitly.
+type noopBackendUpdater struct{}
+
+func (noopBackendUpdater) AddBackend(string, int, int) error    { return nil }
+func (noopBackendUpdater) RemoveBackend(string, int, int) error { return nil }

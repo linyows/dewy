@@ -464,9 +464,13 @@ func (r *Runtime) FindContainersByLabel(ctx context.Context, labels map[string]s
 }
 
 // Deploy performs a rolling deployment of containers.
-// It starts new containers one by one, runs health checks, updates backends via callback,
-// and then removes old containers.
-func (r *Runtime) Deploy(ctx context.Context, opts RollingDeployOptions, cb BackendCallback) (*DeployReport, error) {
+// It starts new containers one by one, runs health checks, updates backends
+// via the BackendUpdater hook, and then removes old containers. Pass nil for
+// updater when no proxy interaction is needed.
+func (r *Runtime) Deploy(ctx context.Context, opts RollingDeployOptions, updater BackendUpdater) (*DeployReport, error) {
+	if updater == nil {
+		updater = noopBackendUpdater{}
+	}
 	replicas := opts.Replicas
 	if replicas <= 0 {
 		replicas = 1
@@ -501,22 +505,20 @@ func (r *Runtime) Deploy(ctx context.Context, opts RollingDeployOptions, cb Back
 			r.logger.Error("Failed to start container, rolling back",
 				slog.Int("replica", i+1),
 				slog.String("error", err.Error()))
-			r.rollback(ctx, results, cb)
+			r.rollback(ctx, results, updater)
 			return nil, err
 		}
 
 		// Add all port mappings to proxy backends
-		if cb.OnAdd != nil {
-			for proxyPort, mappedPort := range result.MappedPorts {
-				if err := cb.OnAdd("localhost", mappedPort, proxyPort); err != nil {
-					r.logger.Error("Failed to add proxy backend",
-						slog.Int("proxy_port", proxyPort),
-						slog.Int("mapped_port", mappedPort),
-						slog.String("error", err.Error()))
-					// Include current result in rollback to clean up its container and backends
-					r.rollback(ctx, append(results, result), cb)
-					return nil, err
-				}
+		for proxyPort, mappedPort := range result.MappedPorts {
+			if err := updater.AddBackend("localhost", mappedPort, proxyPort); err != nil {
+				r.logger.Error("Failed to add proxy backend",
+					slog.Int("proxy_port", proxyPort),
+					slog.Int("mapped_port", mappedPort),
+					slog.String("error", err.Error()))
+				// Include current result in rollback to clean up its container and backends
+				r.rollback(ctx, append(results, result), updater)
+				return nil, err
 			}
 		}
 
@@ -536,16 +538,14 @@ func (r *Runtime) Deploy(ctx context.Context, opts RollingDeployOptions, cb Back
 			slog.String("container", oldContainerID))
 
 		// Remove from proxy backends
-		if cb.OnRemove != nil {
-			for _, mapping := range opts.PortMappings {
-				oldPort, err := r.GetMappedPort(ctx, oldContainerID, mapping.ContainerPort)
-				if err == nil {
-					if err := cb.OnRemove("localhost", oldPort, mapping.ProxyPort); err != nil {
-						r.logger.Warn("Failed to remove old backend from proxy",
-							slog.Int("proxy_port", mapping.ProxyPort),
-							slog.Int("mapped_port", oldPort),
-							slog.String("error", err.Error()))
-					}
+		for _, mapping := range opts.PortMappings {
+			oldPort, err := r.GetMappedPort(ctx, oldContainerID, mapping.ContainerPort)
+			if err == nil {
+				if err := updater.RemoveBackend("localhost", oldPort, mapping.ProxyPort); err != nil {
+					r.logger.Warn("Failed to remove old backend from proxy",
+						slog.Int("proxy_port", mapping.ProxyPort),
+						slog.Int("mapped_port", oldPort),
+						slog.String("error", err.Error()))
 				}
 			}
 		}
@@ -655,19 +655,19 @@ func (r *Runtime) startAndCheck(ctx context.Context, opts RollingDeployOptions, 
 }
 
 // rollback removes all newly deployed containers and their proxy backends.
-func (r *Runtime) rollback(ctx context.Context, results []DeployResult, cb BackendCallback) {
+// updater is assumed non-nil — callers (Deploy) substitute the noop updater
+// before calling.
+func (r *Runtime) rollback(ctx context.Context, results []DeployResult, updater BackendUpdater) {
 	r.logger.Info("Rolling back containers", slog.Int("count", len(results)))
 
 	// Remove from proxy backends first
-	if cb.OnRemove != nil {
-		for _, result := range results {
-			for proxyPort, mappedPort := range result.MappedPorts {
-				if err := cb.OnRemove("localhost", mappedPort, proxyPort); err != nil {
-					r.logger.Warn("Failed to remove backend during rollback",
-						slog.Int("proxy_port", proxyPort),
-						slog.Int("mapped_port", mappedPort),
-						slog.String("error", err.Error()))
-				}
+	for _, result := range results {
+		for proxyPort, mappedPort := range result.MappedPorts {
+			if err := updater.RemoveBackend("localhost", mappedPort, proxyPort); err != nil {
+				r.logger.Warn("Failed to remove backend during rollback",
+					slog.Int("proxy_port", proxyPort),
+					slog.Int("mapped_port", mappedPort),
+					slog.String("error", err.Error()))
 			}
 		}
 	}
