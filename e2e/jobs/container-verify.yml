@@ -24,19 +24,24 @@ steps:
 
 - name: Verify containers are not running as root
   id: notroot
-  skipif: vars.runtime == 'podman'
   uses: shell
   with:
     cmd: |
+      runtime="{{ vars.runtime ?? 'docker' }}"
+      # Podman runs rootless by default; skip the check.
+      if [ "$runtime" = "podman" ]; then
+        echo "Skipping non-root check on podman (rootless by default)"
+        exit 0
+      fi
       # Get all container IDs managed by dewy
-      containers=$({{ vars.runtime ?? 'docker' }} ps --filter "label=dewy.managed=true" -q)
+      containers=$($runtime ps --filter "label=dewy.managed=true" -q)
       if [ -z "$containers" ]; then
         echo "No dewy-managed containers found"
         exit 1
       fi
       # Check each container's process user
       for cid in $containers; do
-        uid=$({{ vars.runtime ?? 'docker' }} top "$cid" -o uid | tail -n +2 | head -1 | tr -d ' ')
+        uid=$($runtime top "$cid" -o uid | tail -n +2 | head -1 | tr -d ' ')
         if [ "$uid" = "0" ]; then
           echo "Container $cid is running as root (UID=0)"
           exit 1
@@ -46,7 +51,7 @@ steps:
       echo "All containers are running as non-root user"
   test: status == 0
   outputs:
-    ok: status == 0 || vars.runtime == 'podman'
+    ok: status == 0
 
 - name: Stop dewy
   uses: shell
