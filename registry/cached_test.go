@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/linyows/dewy/cache"
+	"github.com/linyows/dewy/internal/sysdeps/fake"
 )
 
 // fakeAtomicCache is an in-memory cache.AtomicCache used to drive the
@@ -310,6 +311,69 @@ func TestCachedDifferentScopesDoNotShare(t *testing.T) {
 	}
 	if upstreamA.Calls() != 1 || upstreamB.Calls() != 1 {
 		t.Errorf("each scope should hit its own upstream; got A=%d B=%d", upstreamA.Calls(), upstreamB.Calls())
+	}
+}
+
+func TestCachedRefreshAfterTTLDeterministic(t *testing.T) {
+	// With an injected fake clock, the post-TTL refresh check is deterministic:
+	// no real sleep, no flakiness from scheduler jitter.
+	upstream := &mockUpstream{tag: "v1.2.3"}
+	fakeCache := newFakeAtomicCache()
+	clk := fake.NewClock(time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC))
+	c := NewCached(upstream, "ghr://test/scope", fakeCache, time.Minute, testLogger(), WithClock(clk))
+	c.wait = 5 * time.Millisecond
+
+	if _, err := c.Current(context.Background()); err != nil {
+		t.Fatalf("first Current: %v", err)
+	}
+	if got := upstream.Calls(); got != 1 {
+		t.Fatalf("after first call: want 1, got %d", got)
+	}
+
+	// Within TTL — should hit cache.
+	clk.Advance(30 * time.Second)
+	if _, err := c.Current(context.Background()); err != nil {
+		t.Fatalf("within-TTL Current: %v", err)
+	}
+	if got := upstream.Calls(); got != 1 {
+		t.Errorf("within TTL: want 1 upstream call, got %d", got)
+	}
+
+	// Past TTL — should refresh upstream exactly once.
+	clk.Advance(2 * time.Minute)
+	if _, err := c.Current(context.Background()); err != nil {
+		t.Fatalf("post-TTL Current: %v", err)
+	}
+	if got := upstream.Calls(); got != 2 {
+		t.Errorf("post TTL: want 2 upstream calls, got %d", got)
+	}
+}
+
+func TestCachedNodeIDFromEnv(t *testing.T) {
+	upstream := &mockUpstream{tag: "v1"}
+	fakeCache := newFakeAtomicCache()
+	env := fake.NewEnv().SetHostname("host-a").SetPid(42)
+	c := NewCached(upstream, "ghr://x", fakeCache, time.Minute, testLogger(), WithEnv(env))
+	if c.nodeID != "host-a:42" {
+		t.Errorf("nodeID = %q, want host-a:42", c.nodeID)
+	}
+}
+
+// Passing nil to WithClock / WithEnv must leave the real defaults installed
+// rather than panicking later inside Current().
+func TestCachedOptionsIgnoreNil(t *testing.T) {
+	upstream := &mockUpstream{tag: "v1.2.3"}
+	fakeCache := newFakeAtomicCache()
+	c := NewCached(upstream, "ghr://x", fakeCache, time.Minute, testLogger(), WithClock(nil), WithEnv(nil))
+	if c.clock == nil {
+		t.Fatal("WithClock(nil) wiped the default clock; expected real clock to remain")
+	}
+	if c.nodeID == "" {
+		t.Fatal("WithEnv(nil) wiped the default nodeID; expected real env to remain")
+	}
+	// Smoke: Current must not panic with the defaults still in place.
+	if _, err := c.Current(context.Background()); err != nil {
+		t.Fatalf("Current after nil options: %v", err)
 	}
 }
 

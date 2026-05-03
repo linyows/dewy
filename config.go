@@ -3,6 +3,7 @@ package dewy
 import (
 	"time"
 
+	"github.com/linyows/dewy/container"
 	starter "github.com/linyows/server-starter"
 )
 
@@ -64,19 +65,13 @@ type CacheConfig struct {
 	URL string
 }
 
-// PortMapping represents a port mapping between proxy and container.
-type PortMapping struct {
-	ProxyPort     int  // Port where the proxy listens (required)
-	ContainerPort *int // Container port to forward to (nil means auto-detect from image EXPOSE)
-}
-
 // ContainerConfig struct for container command.
 type ContainerConfig struct {
 	Name             string
-	PortMappings     []PortMapping // Port mappings between proxy and container
-	Replicas         int           // Number of container replicas to run (default: 1)
-	Command          []string      // Command and arguments to pass to container
-	ExtraArgs        []string      // Extra docker run arguments from -- separator
+	PortMappings     []container.PortMapping // Port mappings between proxy and container (ContainerPort==0 means auto-detect from image EXPOSE)
+	Replicas         int                     // Number of container replicas to run (default: 1)
+	Command          []string                // Command and arguments to pass to container
+	ExtraArgs        []string                // Extra docker run arguments from -- separator
 	HealthPath       string
 	HealthTimeout    time.Duration
 	DrainTime        time.Duration

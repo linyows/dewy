@@ -13,6 +13,7 @@ import (
 	"github.com/google/go-github/v73/github"
 	"github.com/google/go-querystring/query"
 	"github.com/linyows/dewy/client"
+	"github.com/linyows/dewy/internal/scheme"
 	"github.com/linyows/dewy/logging"
 )
 
@@ -50,14 +51,13 @@ const (
 
 // GHR struct.
 type GHR struct {
-	Owner                 string `schema:"-"`
-	Repo                  string `schema:"-"`
-	Artifact              string `schema:"artifact"`
-	PreRelease            bool   `schema:"pre-release"`
-	CalVer                string `schema:"calver"`
-	DisableRecordShipping bool   // FIXME: For testing. Remove this.
-	cl                    *github.Client
-	logger                *logging.Logger
+	Owner      string `schema:"-"`
+	Repo       string `schema:"-"`
+	Artifact   string `schema:"artifact"`
+	PreRelease bool   `schema:"pre-release"`
+	CalVer     string `schema:"calver"`
+	cl         *github.Client
+	logger     *logging.Logger
 }
 
 // New returns GHR.
@@ -159,7 +159,7 @@ func (g *GHR) Current(ctx context.Context) (*CurrentResponse, error) {
 		g.logger.Debug("Fetched artifact", slog.String("name", artifactName))
 	}
 
-	au := fmt.Sprintf("%s://%s/%s/tag/%s/%s", ghrScheme, g.Owner, g.Repo, release.GetTagName(), artifactName)
+	au := fmt.Sprintf("%s://%s/%s/tag/%s/%s", scheme.GHR, g.Owner, g.Repo, release.GetTagName(), artifactName)
 
 	// Extract slot from build metadata
 	slot := extractSlot(release.GetTagName(), g.CalVer)

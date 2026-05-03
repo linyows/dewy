@@ -14,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	awslogging "github.com/aws/smithy-go/logging"
+	"github.com/linyows/dewy/internal/scheme"
 	"github.com/linyows/dewy/logging"
 )
 
@@ -176,7 +177,7 @@ func (s *S3) buildArtifactURL(key string) string {
 		qstr = "?" + strings.Join(q, "&")
 	}
 
-	return fmt.Sprintf("%s://%s/%s/%s%s", s3Scheme, s.Region, s.Bucket, key, qstr)
+	return fmt.Sprintf("%s://%s/%s/%s%s", scheme.S3, s.Region, s.Bucket, key, qstr)
 }
 
 // Report report shipping.

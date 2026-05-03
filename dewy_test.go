@@ -19,6 +19,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/linyows/dewy/cache"
+	"github.com/linyows/dewy/container"
 	"github.com/linyows/dewy/logging"
 	"github.com/linyows/dewy/notifier"
 	"github.com/linyows/dewy/registry"
@@ -1288,13 +1289,11 @@ func TestMultiPortTCPProxy(t *testing.T) {
 	c.Registry = "ghr://test/repo"
 	port1 := 18080
 	port2 := 18081
-	containerPort1 := 80
-	containerPort2 := 9090
 	c.Container = &ContainerConfig{
 		Name: "test-app",
-		PortMappings: []PortMapping{
-			{ProxyPort: port1, ContainerPort: &containerPort1},
-			{ProxyPort: port2, ContainerPort: &containerPort2},
+		PortMappings: []container.PortMapping{
+			{ProxyPort: port1, ContainerPort: 80},
+			{ProxyPort: port2, ContainerPort: 9090},
 		},
 		Replicas: 1,
 	}

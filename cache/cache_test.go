@@ -14,9 +14,9 @@ func TestNewSchemeDispatch(t *testing.T) {
 	}{
 		{"empty defaults to file", "", ""},
 		{"file scheme", "file:///tmp/dewy-cache-test", ""},
-		{"consul not implemented", "consul://localhost:8500", "planned but not yet implemented"},
-		{"redis not implemented", "redis://localhost:6379", "planned but not yet implemented"},
-		{"memory not implemented", "memory://", "planned but not yet implemented"},
+		{"consul unsupported", "consul://localhost:8500", "unsupported cache scheme"},
+		{"redis unsupported", "redis://localhost:6379", "unsupported cache scheme"},
+		{"memory unsupported", "memory://", "unsupported cache scheme"},
 		{"unknown scheme", "ftp://example.com", "unsupported cache scheme"},
 	}
 

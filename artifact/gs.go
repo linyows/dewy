@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"cloud.google.com/go/storage"
+
+	"github.com/linyows/dewy/internal/scheme"
 )
 
 type GS struct {
@@ -26,7 +28,7 @@ func NewGS(ctx context.Context, strUrl string, logger *slog.Logger) (*GS, error)
 		return nil, err
 	}
 
-	if u.Scheme != gsScheme {
+	if u.Scheme != scheme.GS {
 		return nil, fmt.Errorf("unsupported scheme: %s", u.Scheme)
 	}
 

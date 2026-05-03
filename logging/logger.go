@@ -18,6 +18,13 @@ func (l *Logger) Format() string {
 	return l.format
 }
 
+// Slog returns the underlying *slog.Logger. Prefer this over reaching for
+// the embedded field directly so call sites read as deliberate hand-offs to
+// downstream packages whose APIs accept *slog.Logger.
+func (l *Logger) Slog() *slog.Logger {
+	return l.Logger
+}
+
 // SetupLogger creates and configures a structured logger.
 func SetupLogger(level, format string, output io.Writer) *Logger {
 	var slogLevel slog.Level
