@@ -3,6 +3,7 @@ package dewy
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -136,7 +137,7 @@ func (d *Dewy) startServer() error {
 }
 
 // keepReleases prunes old release directories under d.root, retaining the
-// keepReleases most recent by modification time.
+// keep most recent by modification time.
 func (d *Dewy) keepReleases() error {
 	dir := filepath.Join(d.root, releasesDir)
 	files, err := os.ReadDir(dir)
@@ -144,28 +145,55 @@ func (d *Dewy) keepReleases() error {
 		return err
 	}
 
-	sort.Slice(files, func(i, j int) bool {
-		fi, err := files[i].Info()
-		if err != nil {
-			return false
-		}
-		fj, err := files[j].Info()
-		if err != nil {
-			return true
-		}
-		return fi.ModTime().Unix() > fj.ModTime().Unix()
-	})
-
-	for i, f := range files {
-		if i < keepReleases {
-			continue
-		}
-		if err := os.RemoveAll(filepath.Join(dir, f.Name())); err != nil {
+	for _, name := range selectStaleReleases(files, keepReleases) {
+		if err := os.RemoveAll(filepath.Join(dir, name)); err != nil {
 			return err
 		}
 	}
-
 	return nil
+}
+
+// selectStaleReleases returns the names of release directories that should
+// be removed to retain at most `keep` entries by modification time (newest
+// first).
+//
+// Entries whose Info() errors (e.g. concurrent deletion, transient stat
+// failure) are excluded from both the keep set and the stale set: keeping
+// the in-memory comparator strictly ordered avoids the strict-weak-ordering
+// violation that the previous sort.Slice comparator would hit when Info()
+// returned an error mid-sort. Unstattable entries are simply left alone so
+// a transient FS hiccup does not remove the wrong directory.
+func selectStaleReleases(files []fs.DirEntry, keep int) []string {
+	type entry struct {
+		name    string
+		modTime time.Time
+	}
+	stat := make([]entry, 0, len(files))
+	for _, f := range files {
+		info, err := f.Info()
+		if err != nil {
+			continue
+		}
+		stat = append(stat, entry{name: f.Name(), modTime: info.ModTime()})
+	}
+
+	// Newest first; tie-break on name so equal mtimes yield a deterministic
+	// order even across runs.
+	sort.Slice(stat, func(i, j int) bool {
+		if !stat[i].modTime.Equal(stat[j].modTime) {
+			return stat[i].modTime.After(stat[j].modTime)
+		}
+		return stat[i].name < stat[j].name
+	})
+
+	if len(stat) <= keep {
+		return nil
+	}
+	stale := make([]string, 0, len(stat)-keep)
+	for _, e := range stat[keep:] {
+		stale = append(stale, e.name)
+	}
+	return stale
 }
 
 // cleanupOldImages removes old container images, keeping only the most recent ones.

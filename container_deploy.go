@@ -13,32 +13,22 @@ import (
 )
 
 // deployContainer performs the actual container deployment using rolling
-// update strategy. Returns the number of successfully deployed containers
-// and any error encountered.
-func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentResponse) (int, error) {
+// update strategy. The runtime must be the same instance resolved by
+// resolveContainerState (and used for the image pull) so login state and
+// runtime configuration stay consistent across the per-tick deploy. Returns
+// the number of successfully deployed containers and any error encountered.
+func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentResponse, runtime *container.Runtime) (int, error) {
 	if d.config.Container == nil {
 		return 0, fmt.Errorf("container config is nil")
 	}
-
-	// Create container runtime
-	runtime, err := container.New(d.config.Container.Runtime, d.logger.Slog(), d.config.Container.DrainTime)
-	if err != nil {
-		return 0, fmt.Errorf("failed to create container runtime: %w", err)
+	if runtime == nil {
+		return 0, fmt.Errorf("container runtime is nil")
 	}
 
 	// Extract image reference from artifact URL
 	// Format: img://registry/repo:tag
 	imageRef := strings.TrimPrefix(res.ArtifactURL, "img://")
-
-	// Determine app name from config or image
-	appName := d.config.Container.Name
-	if appName == "" {
-		parts := strings.Split(imageRef, "/")
-		if len(parts) > 0 {
-			lastPart := parts[len(parts)-1]
-			appName = strings.Split(lastPart, ":")[0]
-		}
-	}
+	appName := d.appName()
 
 	// Resolve port mappings (auto-detect ContainerPort==0 from image EXPOSE).
 	resolvedMappings, err := runtime.ResolvePortMappings(ctx, imageRef, d.config.Container.PortMappings)
@@ -130,22 +120,6 @@ func (d *Dewy) stopManagedContainers(ctx context.Context) error {
 	}
 
 	d.logger.Info("Stopping managed containers")
-
-	// Determine app name from config or registry
-	appName := d.config.Container.Name
-	if appName == "" {
-		registryURL := d.config.Registry
-		parts := strings.SplitN(registryURL, "://", 2)
-		if len(parts) == 2 {
-			pathParts := strings.Split(parts[1], "/")
-			if len(pathParts) > 0 {
-				lastPart := pathParts[len(pathParts)-1]
-				appName = strings.Split(lastPart, "?")[0]
-				appName = strings.Split(appName, ":")[0]
-			}
-		}
-	}
-
-	_, _, err := d.containerRuntime.StopManagedContainers(ctx, appName)
+	_, _, err := d.containerRuntime.StopManagedContainers(ctx, d.appName())
 	return err
 }

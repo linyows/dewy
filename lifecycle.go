@@ -286,16 +286,7 @@ type containerState struct {
 func (d *Dewy) resolveContainerState(ctx context.Context, res *registry.CurrentResponse) (containerState, error) {
 	st := containerState{
 		imageRef: strings.TrimPrefix(res.ArtifactURL, "img://"),
-	}
-
-	st.appName = d.config.Container.Name
-	if st.appName == "" {
-		// Use repository name as app name.
-		parts := strings.Split(st.imageRef, "/")
-		if len(parts) > 0 {
-			lastPart := parts[len(parts)-1]
-			st.appName = strings.Split(lastPart, ":")[0]
-		}
+		appName:  d.appName(),
 	}
 
 	rt, err := container.New(d.config.Container.Runtime, d.logger.Slog(), d.config.Container.DrainTime)
@@ -346,9 +337,11 @@ func (d *Dewy) pullContainerImage(ctx context.Context, res *registry.CurrentResp
 
 // applyContainerDeployment runs the before-hook and the rolling deployment,
 // records telemetry, and returns the number of replicas successfully
-// deployed. The after-hook runs in promoteContainerAndReport so it only fires
-// once the deploy is considered final.
-func (d *Dewy) applyContainerDeployment(ctx context.Context, res *registry.CurrentResponse) (int, error) {
+// deployed. The runtime is the one resolveContainerState already created
+// (and pullContainerImage already used); deployContainer reuses it rather
+// than creating a duplicate. The after-hook runs in promoteContainerAndReport
+// so it only fires once the deploy is considered final.
+func (d *Dewy) applyContainerDeployment(ctx context.Context, res *registry.CurrentResponse, st containerState) (int, error) {
 	beforeResult, beforeErr := d.execHook(d.config.BeforeDeployHook)
 	if beforeResult != nil {
 		d.notifier.SendHookResult(ctx, "Before Deploy", beforeResult)
@@ -358,7 +351,7 @@ func (d *Dewy) applyContainerDeployment(ctx context.Context, res *registry.Curre
 	}
 
 	deployStart := time.Now()
-	deployedCount, err := d.deployContainer(ctx, res)
+	deployedCount, err := d.deployContainer(ctx, res, st.runtime)
 	if err != nil {
 		d.logger.Error("Container deployment failed",
 			slog.Int("deployed", deployedCount),
