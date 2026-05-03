@@ -13,32 +13,33 @@ import (
 // For images without explicit registry (e.g., "nginx:latest"), returns "docker.io".
 // For images with registry (e.g., "ghcr.io/owner/repo:tag"), returns the registry host.
 func extractRegistry(imageRef string) string {
-	// Remove tag or digest
+	// Strip any digest first (after `@`).
 	ref := imageRef
-	if idx := strings.LastIndex(ref, "@"); idx != -1 {
+	if idx := strings.Index(ref, "@"); idx != -1 {
 		ref = ref[:idx]
 	}
-	if idx := strings.LastIndex(ref, ":"); idx != -1 {
-		// Check if this is a port number (e.g., localhost:5000/image)
-		slashIdx := strings.LastIndex(ref[:idx], "/")
-		if slashIdx == -1 || !strings.Contains(ref[slashIdx:idx], ".") {
-			ref = ref[:idx]
-		}
+
+	// Strip the tag, but only when `:` is unambiguously a tag separator —
+	// i.e. the colon appears after the last `/`. A colon before the last
+	// `/` is part of a `host:port` registry (e.g. `localhost:5000/img`)
+	// and must be preserved.
+	lastSlash := strings.LastIndex(ref, "/")
+	lastColon := strings.LastIndex(ref, ":")
+	if lastColon > lastSlash {
+		ref = ref[:lastColon]
 	}
 
-	// Check if the first part contains a dot or colon (indicating a registry)
+	// First component is the registry only if it contains a dot, a colon
+	// (host:port), or is the literal "localhost". Otherwise it is the user
+	// part of an implicit Docker Hub reference (e.g. "library/nginx").
 	parts := strings.SplitN(ref, "/", 2)
 	if len(parts) == 1 {
-		// No slash, it's a Docker Hub official image (e.g., "nginx")
 		return "docker.io"
 	}
-
 	firstPart := parts[0]
 	if strings.Contains(firstPart, ".") || strings.Contains(firstPart, ":") || firstPart == "localhost" {
 		return firstPart
 	}
-
-	// No registry specified (e.g., "library/nginx"), use Docker Hub
 	return "docker.io"
 }
 

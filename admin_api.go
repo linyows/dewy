@@ -97,6 +97,17 @@ func (d *Dewy) stopAdminAPI(ctx context.Context) error {
 	return nil
 }
 
+// containerListLabels returns the label set the deploy path uses to mark
+// managed containers, so admin queries match the deploy reality even when
+// --name is omitted (in which case appName falls back to the registry-
+// derived repository name).
+func (d *Dewy) containerListLabels() map[string]string {
+	return map[string]string{
+		"dewy.managed": "true",
+		"dewy.app":     d.appName(),
+	}
+}
+
 // handleGetContainers handles GET /api/containers endpoint.
 func (d *Dewy) handleGetContainers(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -106,22 +117,20 @@ func (d *Dewy) handleGetContainers(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	// Get containers managed by dewy
-	labels := map[string]string{
-		"dewy.managed": "true",
-		"dewy.app":     d.config.Container.Name,
-	}
-
 	var containers []*container.Info
-	var err error
 
-	if d.config.Command == CONTAINER {
+	// containerRuntime is wired up by the first RunContainer tick. The admin
+	// API listens earlier (in Start()), so a request that lands during the
+	// startup window has nothing to query — return an empty list rather
+	// than nil-deref.
+	if d.config.Command == CONTAINER && d.containerRuntime != nil {
 		// Use first port mapping for listing containers (0 = auto-detect / not specified)
 		containerPort := 0
 		if len(d.config.Container.PortMappings) > 0 {
 			containerPort = d.config.Container.PortMappings[0].ContainerPort
 		}
-		containers, err = d.containerRuntime.ListContainersByLabels(ctx, labels, containerPort)
+		var err error
+		containers, err = d.containerRuntime.ListContainersByLabels(ctx, d.containerListLabels(), containerPort)
 		if err != nil {
 			d.logger.Error("Failed to list containers",
 				slog.String("error", err.Error()))
@@ -156,7 +165,7 @@ func (d *Dewy) handleGetStatus(w http.ResponseWriter, r *http.Request) {
 	// Return JSON response
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(map[string]any{
-		"name":            d.config.Container.Name,
+		"name":            d.appName(),
 		"command":         d.config.Command,
 		"current_version": d.cVer,
 		"proxy_backends":  totalBackends,

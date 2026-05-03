@@ -408,6 +408,24 @@ func TestExtractRegistry(t *testing.T) {
 			imageRef: "registry.example.com/myimage:v1.0.0",
 			expected: "registry.example.com",
 		},
+		// --- no-tag variants: the colon is part of the registry host:port,
+		// not a tag separator. The implementation must distinguish these
+		// from `nginx:latest` (where `:` is a tag separator).
+		{
+			name:     "localhost registry with port, no tag",
+			imageRef: "localhost:5000/myimage",
+			expected: "localhost:5000",
+		},
+		{
+			name:     "private registry with port, no tag",
+			imageRef: "registry.example.com:5000/myimage",
+			expected: "registry.example.com:5000",
+		},
+		{
+			name:     "localhost registry with port and digest, no tag",
+			imageRef: "localhost:5000/myimage@sha256:abc",
+			expected: "localhost:5000",
+		},
 	}
 
 	for _, tt := range tests {

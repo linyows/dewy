@@ -303,7 +303,7 @@ func (d *Dewy) RunContainer() error {
 		return err
 	}
 
-	deployedCount, err := d.applyContainerDeployment(ctx, res)
+	deployedCount, err := d.applyContainerDeployment(ctx, res, st)
 	if err != nil {
 		return err
 	}
