@@ -310,4 +310,3 @@ func (d *Dewy) RunContainer() error {
 
 	return d.promoteContainerAndReport(ctx, res, deployedCount, st.imageRef)
 }
-

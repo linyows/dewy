@@ -71,8 +71,8 @@ func New(ctx context.Context, urlStr string, log *slog.Logger) (Cache, error) {
 }
 
 func schemeOf(urlStr string) string {
-	if i := strings.Index(urlStr, "://"); i >= 0 {
-		return urlStr[:i]
+	if before, _, ok := strings.Cut(urlStr, "://"); ok {
+		return before
 	}
 	u, err := url.Parse(urlStr)
 	if err != nil {

@@ -133,7 +133,6 @@ func (e *ErrorLimitingSender) OnDeploy(dir string) {
 	}
 }
 
-
 // SendHookResult sends hook result notification.
 // In quiet mode, only failed hook results are sent.
 func (e *ErrorLimitingSender) SendHookResult(ctx context.Context, hookType string, result *HookResult) {

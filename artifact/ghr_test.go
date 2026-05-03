@@ -83,11 +83,11 @@ func TestGHRDownload(t *testing.T) {
 					mock.GetReposReleasesByOwnerByRepo,
 					[]github.RepositoryRelease{
 						{
-							TagName: github.Ptr("v1.0.0"),
+							TagName: new("v1.0.0"),
 							Assets: []*github.ReleaseAsset{
 								{
-									ID:   github.Ptr(int64(12345)),
-									Name: github.Ptr("artifact.zip"),
+									ID:   new(int64(12345)),
+									Name: new("artifact.zip"),
 								},
 							},
 						},
@@ -108,11 +108,11 @@ func TestGHRDownload(t *testing.T) {
 					mock.GetReposReleasesByOwnerByRepo,
 					[]github.RepositoryRelease{
 						{
-							TagName: github.Ptr("v1.0.0"),
+							TagName: new("v1.0.0"),
 							Assets: []*github.ReleaseAsset{
 								{
-									ID:   github.Ptr(int64(12345)),
-									Name: github.Ptr("other-artifact.zip"),
+									ID:   new(int64(12345)),
+									Name: new("other-artifact.zip"),
 								},
 							},
 						},

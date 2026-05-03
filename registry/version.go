@@ -28,7 +28,7 @@ func comparePreRelease(a, b string) int {
 
 	maxLen := max(len(partsB), len(partsA))
 
-	for i := 0; i < maxLen; i++ {
+	for i := range maxLen {
 		if i >= len(partsA) {
 			return -1
 		}
