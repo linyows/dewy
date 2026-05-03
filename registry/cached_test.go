@@ -359,6 +359,24 @@ func TestCachedNodeIDFromEnv(t *testing.T) {
 	}
 }
 
+// Passing nil to WithClock / WithEnv must leave the real defaults installed
+// rather than panicking later inside Current().
+func TestCachedOptionsIgnoreNil(t *testing.T) {
+	upstream := &mockUpstream{tag: "v1.2.3"}
+	fakeCache := newFakeAtomicCache()
+	c := NewCached(upstream, "ghr://x", fakeCache, time.Minute, testLogger(), WithClock(nil), WithEnv(nil))
+	if c.clock == nil {
+		t.Fatal("WithClock(nil) wiped the default clock; expected real clock to remain")
+	}
+	if c.nodeID == "" {
+		t.Fatal("WithEnv(nil) wiped the default nodeID; expected real env to remain")
+	}
+	// Smoke: Current must not panic with the defaults still in place.
+	if _, err := c.Current(context.Background()); err != nil {
+		t.Fatalf("Current after nil options: %v", err)
+	}
+}
+
 func TestCachedReportPassthrough(t *testing.T) {
 	c, upstream, _ := newCachedForTest(t, time.Minute)
 	called := false
