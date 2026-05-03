@@ -167,7 +167,7 @@ func TestCachedFirstCallHitsUpstream(t *testing.T) {
 
 func TestCachedSubsequentCallsHitCache(t *testing.T) {
 	c, upstream, _ := newCachedForTest(t, time.Minute)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if _, err := c.Current(context.Background()); err != nil {
 			t.Fatalf("call %d: %v", i, err)
 		}

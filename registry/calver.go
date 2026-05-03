@@ -134,7 +134,7 @@ func (f *CalVerFormat) Parse(version string) *CalVer {
 func (v *CalVer) Compare(other *CalVer) int {
 	maxLen := max(len(other.Segments), len(v.Segments))
 
-	for i := 0; i < maxLen; i++ {
+	for i := range maxLen {
 		var a, b int
 		if i < len(v.Segments) {
 			a = v.Segments[i]

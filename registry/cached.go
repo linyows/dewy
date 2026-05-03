@@ -34,7 +34,7 @@ type cachedEntry struct {
 	FetchedAt time.Time        `json:"fetched_at"`
 	// LockedAt records when a peer began refreshing. Zero means no peer
 	// is currently refreshing.
-	LockedAt time.Time `json:"locked_at,omitempty"`
+	LockedAt time.Time `json:"locked_at"`
 	LockedBy string    `json:"locked_by,omitempty"`
 }
 
