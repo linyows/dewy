@@ -64,16 +64,25 @@ type Cached struct {
 // CachedOption configures optional dependencies of a Cached registry.
 type CachedOption func(*Cached)
 
-// WithClock injects a custom Clock. The default is sysdeps.RealClock.
+// WithClock injects a custom Clock. Defaults to sysdeps.RealClock.
+// A nil clock is ignored so the default stays in effect.
 func WithClock(c sysdeps.Clock) CachedOption {
-	return func(x *Cached) { x.clock = c }
+	return func(x *Cached) {
+		if c != nil {
+			x.clock = c
+		}
+	}
 }
 
-// WithEnv injects a custom Env. Used for hostname lookup at construction.
-// Passing this option is only meaningful when paired with NewCachedWithOptions
-// — the default constructor freezes nodeID at New time.
+// WithEnv injects a custom Env. The Env is consulted at NewCached time to
+// derive the refresh-lock node ID (hostname:pid); after construction the
+// node ID is frozen. Defaults to sysdeps.RealEnv. A nil env is ignored.
 func WithEnv(e sysdeps.Env) CachedOption {
-	return func(x *Cached) { x.nodeID = nodeIDFrom(e) }
+	return func(x *Cached) {
+		if e != nil {
+			x.nodeID = nodeIDFrom(e)
+		}
+	}
 }
 
 // NewCached wraps inner with a shared registry-result cache backed by
