@@ -12,8 +12,10 @@ import (
 	"time"
 )
 
-// imageInspect represents the structure of image inspect JSON output.
-type imageInspect struct {
+// imageInspection represents the structure of `<runtime> image inspect` JSON
+// output. The "image" qualifier distinguishes it from inspection (the
+// container-side default in inspect.go).
+type imageInspection struct {
 	ID     string `json:"Id"`
 	Config struct {
 		ExposedPorts map[string]struct{} `json:"ExposedPorts"`
@@ -255,7 +257,7 @@ func (r *Runtime) GetImageExposedPorts(ctx context.Context, imageRef string) ([]
 		return nil, fmt.Errorf("failed to inspect image: %w", err)
 	}
 
-	var inspects []imageInspect
+	var inspects []imageInspection
 	if err := json.Unmarshal([]byte(output), &inspects); err != nil {
 		return nil, fmt.Errorf("failed to parse image inspect output: %w", err)
 	}
