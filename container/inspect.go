@@ -9,8 +9,10 @@ import (
 	"time"
 )
 
-// containerInspect represents the structure of container inspect JSON output.
-type containerInspect struct {
+// inspection represents the structure of `<runtime> inspect <container>` JSON
+// output. The "container" qualifier is implicit (the package is container);
+// the image variant is named imageInspection (in image.go).
+type inspection struct {
 	ID      string `json:"Id"`
 	Name    string `json:"Name"`
 	Created string `json:"Created"`
@@ -157,7 +159,7 @@ func (r *Runtime) GetContainerInfo(ctx context.Context, containerID string, cont
 		return nil, fmt.Errorf("failed to inspect container: %w", err)
 	}
 
-	var inspects []containerInspect
+	var inspects []inspection
 	if err := json.Unmarshal([]byte(output), &inspects); err != nil {
 		return nil, fmt.Errorf("failed to parse inspect output: %w", err)
 	}
