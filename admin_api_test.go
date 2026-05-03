@@ -40,7 +40,7 @@ func TestContainerListLabels_DerivesAppName(t *testing.T) {
 }
 
 // Bug #1: startAdminAPI runs in Start() before the first RunContainer tick
-// initialises d.containerRuntime. Hitting /api/containers during that window
+// initializes d.containerRuntime. Hitting /api/containers during that window
 // used to nil-deref. The handler must respond cleanly without panicking.
 func TestHandleGetContainers_NilRuntimeDoesNotPanic(t *testing.T) {
 	d := newAdminTestDewy(t)

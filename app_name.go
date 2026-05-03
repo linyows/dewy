@@ -10,7 +10,7 @@ import "strings"
 // container_deploy.go's deployContainer and stopManagedContainers) and was
 // missing from admin_api.go entirely — so /api/containers and /api/status
 // would return empty values when --name was omitted even though the deploy
-// had created containers under the derived name. Centralising it here makes
+// had created containers under the derived name. Centralizing it here makes
 // the deploy / admin / shutdown paths agree by construction.
 func (d *Dewy) appName() string {
 	if d.config.Container != nil && d.config.Container.Name != "" {
