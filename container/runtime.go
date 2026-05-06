@@ -25,7 +25,6 @@ var forbiddenOptions = []string{
 	"-it",
 	"-i", "--interactive",
 	"-t", "--tty",
-	"-l", "--label",
 	"-p", "--publish",
 	"--privileged",
 	"--pid",
@@ -35,6 +34,11 @@ var forbiddenOptions = []string{
 	"--userns",
 	"--cgroupns",
 }
+
+// reservedLabelPrefix is the label namespace Dewy uses to track managed
+// containers. Users cannot set labels under this prefix because doing so
+// would interfere with container discovery (FindContainersByLabel).
+const reservedLabelPrefix = "dewy."
 
 // newCLIRuntime creates a new Runtime with the specified command name.
 func newCLIRuntime(cmd string, logger *slog.Logger, drainTime time.Duration) (*Runtime, error) {
@@ -52,11 +56,24 @@ func newCLIRuntime(cmd string, logger *slog.Logger, drainTime time.Duration) (*R
 
 // validateExtraArgs checks if any forbidden options are present in extra args.
 func validateExtraArgs(args []string) error {
-	for _, arg := range args {
+	for i, arg := range args {
 		for _, forbidden := range forbiddenOptions {
 			if arg == forbidden || strings.HasPrefix(arg, forbidden+"=") {
 				return fmt.Errorf("option %s conflicts with Dewy management and cannot be used", forbidden)
 			}
+		}
+
+		var labelValue string
+		switch {
+		case (arg == "--label" || arg == "-l") && i+1 < len(args):
+			labelValue = args[i+1]
+		case strings.HasPrefix(arg, "--label="):
+			labelValue = arg[len("--label="):]
+		case strings.HasPrefix(arg, "-l="):
+			labelValue = arg[len("-l="):]
+		}
+		if strings.HasPrefix(labelValue, reservedLabelPrefix) {
+			return fmt.Errorf("label with reserved prefix %q cannot be used", reservedLabelPrefix)
 		}
 	}
 	return nil
