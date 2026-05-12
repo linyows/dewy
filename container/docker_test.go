@@ -327,6 +327,41 @@ func TestValidateExtraArgs(t *testing.T) {
 			args:        []string{"--cgroupns=host"},
 			expectError: true,
 		},
+		{
+			name:        "allowed --label with user namespace",
+			args:        []string{"--label", "app=myapp", "-e", "FOO=bar"},
+			expectError: false,
+		},
+		{
+			name:        "allowed --label= with user namespace",
+			args:        []string{"--label=app=myapp"},
+			expectError: false,
+		},
+		{
+			name:        "allowed -l with user namespace",
+			args:        []string{"-l", "env=prod"},
+			expectError: false,
+		},
+		{
+			name:        "reserved --label dewy. prefix",
+			args:        []string{"--label", "dewy.custom=value"},
+			expectError: true,
+		},
+		{
+			name:        "reserved --label= dewy. prefix",
+			args:        []string{"--label=dewy.app=other"},
+			expectError: true,
+		},
+		{
+			name:        "reserved -l dewy. prefix",
+			args:        []string{"-l", "dewy.managed=false"},
+			expectError: true,
+		},
+		{
+			name:        "reserved -l= dewy. prefix",
+			args:        []string{"-l=dewy.app=other"},
+			expectError: true,
+		},
 	}
 
 	for _, tt := range tests {
