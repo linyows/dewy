@@ -20,12 +20,14 @@ type Runtime struct {
 }
 
 // Forbidden options that conflict with Dewy management or pose security risks.
+// --label-file is forbidden because its file contents bypass the reservedLabelPrefix check.
 var forbiddenOptions = []string{
 	"-d", "--detach",
 	"-it",
 	"-i", "--interactive",
 	"-t", "--tty",
 	"-p", "--publish",
+	"--label-file",
 	"--privileged",
 	"--pid",
 	"--cap-add",
@@ -54,6 +56,27 @@ func newCLIRuntime(cmd string, logger *slog.Logger, drainTime time.Duration) (*R
 	}, nil
 }
 
+// extractLabelValue returns the label value if args[i] is a label flag.
+// Supports --label foo, --label=foo, -l foo, -l=foo, and -lfoo concatenated form.
+// Returns ("", false) if args[i] is not a label flag.
+func extractLabelValue(args []string, i int) (string, bool) {
+	arg := args[i]
+	switch {
+	case arg == "--label" || arg == "-l":
+		if i+1 < len(args) {
+			return args[i+1], true
+		}
+		return "", false
+	case strings.HasPrefix(arg, "--label="):
+		return arg[len("--label="):], true
+	case strings.HasPrefix(arg, "-l="):
+		return arg[len("-l="):], true
+	case strings.HasPrefix(arg, "-l") && len(arg) > 2 && arg[2] != '-':
+		return arg[2:], true
+	}
+	return "", false
+}
+
 // validateExtraArgs checks if any forbidden options are present in extra args.
 func validateExtraArgs(args []string) error {
 	for i, arg := range args {
@@ -63,17 +86,8 @@ func validateExtraArgs(args []string) error {
 			}
 		}
 
-		var labelValue string
-		switch {
-		case (arg == "--label" || arg == "-l") && i+1 < len(args):
-			labelValue = args[i+1]
-		case strings.HasPrefix(arg, "--label="):
-			labelValue = arg[len("--label="):]
-		case strings.HasPrefix(arg, "-l="):
-			labelValue = arg[len("-l="):]
-		}
-		if strings.HasPrefix(labelValue, reservedLabelPrefix) {
-			return fmt.Errorf("label with reserved prefix %q cannot be used", reservedLabelPrefix)
+		if value, ok := extractLabelValue(args, i); ok && strings.HasPrefix(value, reservedLabelPrefix) {
+			return fmt.Errorf("label %q uses reserved prefix %q and cannot be used", value, reservedLabelPrefix)
 		}
 	}
 	return nil

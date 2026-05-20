@@ -422,7 +422,7 @@ After considering the above two methods, we implemented a built-in reverse proxy
   - Port mapping: `--port proxy[:container]` (auto-detects container port if not specified)
   - Dewy-specific options: `--replicas`, `--health-path`, `--cmd`
   - Docker run options passthrough via `--` separator
-  - Forbidden options validation: `-d`, `-it`, `-i`, `-t`, `-p` (and labels under the reserved `dewy.` prefix)
+  - Forbidden options validation: `-d`, `-it`, `-i`, `-t`, `-p`, `--label-file` (and labels under the reserved `dewy.` prefix)
 - `config.go`: Container configuration structure (PortMappings, Command, ExtraArgs)
 
 ## Related Documentation

@@ -266,7 +266,7 @@ The `--` separator allows you to pass additional docker run options directly. Al
 
 **Supported options:** Environment variables (`-e`), volumes (`-v`), resource limits (`--cpus`, `--memory`), entrypoint (`--entrypoint`), and most other docker run options.
 
-**Forbidden options:** `-d`, `-it`, `-i`, `-t`, `-p` (these conflict with Dewy's management). The `dewy.` label prefix is also reserved for internal container tracking and cannot be used with `-l` / `--label`.
+**Forbidden options:** `-d`, `-it`, `-i`, `-t`, `-p`, `--label-file` (these conflict with Dewy's management). The `dewy.` label prefix is also reserved for internal container tracking and cannot be used with `-l` / `--label`.
 
 **Default user:** When `--user` or `-u` is not specified in extra args, Dewy automatically adds `--user UID:GID` using the UID and GID of the user running Dewy. This prevents containers from accidentally running as root. If your container requires root privileges, explicitly specify `--user=0:0`.
 
