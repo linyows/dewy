@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -362,6 +363,56 @@ func TestValidateExtraArgs(t *testing.T) {
 			args:        []string{"-l=dewy.app=other"},
 			expectError: true,
 		},
+		{
+			name:        "allowed -l concatenated with user namespace",
+			args:        []string{"-lapp=myapp"},
+			expectError: false,
+		},
+		{
+			name:        "reserved -l concatenated dewy. prefix",
+			args:        []string{"-ldewy.managed=false"},
+			expectError: true,
+		},
+		{
+			name:        "forbidden --label-file",
+			args:        []string{"--label-file", "/tmp/labels"},
+			expectError: true,
+		},
+		{
+			name:        "forbidden --label-file=",
+			args:        []string{"--label-file=/tmp/labels"},
+			expectError: true,
+		},
+		{
+			name:        "trailing --label without value",
+			args:        []string{"-e", "FOO=bar", "--label"},
+			expectError: false,
+		},
+		{
+			name:        "forbidden bundled -dit",
+			args:        []string{"-dit"},
+			expectError: true,
+		},
+		{
+			name:        "forbidden bundled -itd",
+			args:        []string{"-itd"},
+			expectError: true,
+		},
+		{
+			name:        "forbidden -p value attached",
+			args:        []string{"-p8080:80"},
+			expectError: true,
+		},
+		{
+			name:        "allowed -e value attached",
+			args:        []string{"-eFOO=bar"},
+			expectError: false,
+		},
+		{
+			name:        "allowed -v value attached",
+			args:        []string{"-v/host/dir:/data"},
+			expectError: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -374,6 +425,16 @@ func TestValidateExtraArgs(t *testing.T) {
 				t.Errorf("validateExtraArgs(%v) expected no error, got %v", tt.args, err)
 			}
 		})
+	}
+}
+
+func TestValidateExtraArgsErrorMessage(t *testing.T) {
+	err := validateExtraArgs([]string{"--label", "dewy.custom=value"})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "dewy.custom=value") {
+		t.Errorf("error message should contain label value, got: %v", err)
 	}
 }
 

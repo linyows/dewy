@@ -19,13 +19,15 @@ type Runtime struct {
 	loggedInRegistries map[string]bool
 }
 
-// Forbidden options that conflict with Dewy management or pose security risks.
-var forbiddenOptions = []string{
-	"-d", "--detach",
-	"-it",
-	"-i", "--interactive",
-	"-t", "--tty",
-	"-p", "--publish",
+// forbiddenLongOptions are long-form flags that conflict with Dewy management
+// or pose security risks. --label-file is included because its file contents
+// would bypass the reservedLabelPrefix check.
+var forbiddenLongOptions = []string{
+	"--detach",
+	"--interactive",
+	"--tty",
+	"--publish",
+	"--label-file",
 	"--privileged",
 	"--pid",
 	"--cap-add",
@@ -34,6 +36,19 @@ var forbiddenOptions = []string{
 	"--userns",
 	"--cgroupns",
 }
+
+// forbiddenShortFlagChars are single-character short flags that conflict with
+// Dewy management. A short-flag arg is rejected when its first character is in
+// this set, which catches three forms in one check:
+//   - standalone: -d
+//   - bundled boolean shorts: -dit (= -d -i -t)
+//   - value-attached: -p8080:80 (= -p 8080:80)
+//
+// pflag-style parsing determines a short flag's type by its first character,
+// so checking only arg[1] handles all three. Bundles led by an allowed boolean
+// short (e.g., -qd) are not caught, but extra args are user-supplied so that
+// blind spot does not cross a privilege boundary.
+var forbiddenShortFlagChars = []byte{'d', 'i', 't', 'p'}
 
 // reservedLabelPrefix is the label namespace Dewy uses to track managed
 // containers. Users cannot set labels under this prefix because doing so
@@ -54,26 +69,56 @@ func newCLIRuntime(cmd string, logger *slog.Logger, drainTime time.Duration) (*R
 	}, nil
 }
 
+// extractLabelValue returns the label value if args[i] is a label flag.
+// Supports --label foo, --label=foo, -l foo, -l=foo, and -lfoo concatenated form.
+// Returns ("", false) if args[i] is not a label flag.
+func extractLabelValue(args []string, i int) (string, bool) {
+	arg := args[i]
+	switch {
+	case arg == "--label" || arg == "-l":
+		if i+1 < len(args) {
+			return args[i+1], true
+		}
+		return "", false
+	case strings.HasPrefix(arg, "--label="):
+		return arg[len("--label="):], true
+	case strings.HasPrefix(arg, "-l="):
+		return arg[len("-l="):], true
+	case strings.HasPrefix(arg, "-l") && len(arg) > 2 && arg[2] != '-':
+		return arg[2:], true
+	}
+	return "", false
+}
+
+// matchForbiddenShortFlag reports whether arg is a short-flag form (standalone,
+// bundled, or value-attached) led by a character in forbiddenShortFlagChars.
+func matchForbiddenShortFlag(arg string) (byte, bool) {
+	if len(arg) < 2 || arg[0] != '-' || arg[1] == '-' {
+		return 0, false
+	}
+	for _, c := range forbiddenShortFlagChars {
+		if arg[1] == c {
+			return c, true
+		}
+	}
+	return 0, false
+}
+
 // validateExtraArgs checks if any forbidden options are present in extra args.
 func validateExtraArgs(args []string) error {
 	for i, arg := range args {
-		for _, forbidden := range forbiddenOptions {
+		for _, forbidden := range forbiddenLongOptions {
 			if arg == forbidden || strings.HasPrefix(arg, forbidden+"=") {
 				return fmt.Errorf("option %s conflicts with Dewy management and cannot be used", forbidden)
 			}
 		}
 
-		var labelValue string
-		switch {
-		case (arg == "--label" || arg == "-l") && i+1 < len(args):
-			labelValue = args[i+1]
-		case strings.HasPrefix(arg, "--label="):
-			labelValue = arg[len("--label="):]
-		case strings.HasPrefix(arg, "-l="):
-			labelValue = arg[len("-l="):]
+		if c, ok := matchForbiddenShortFlag(arg); ok {
+			return fmt.Errorf("option -%c conflicts with Dewy management and cannot be used", c)
 		}
-		if strings.HasPrefix(labelValue, reservedLabelPrefix) {
-			return fmt.Errorf("label with reserved prefix %q cannot be used", reservedLabelPrefix)
+
+		if value, ok := extractLabelValue(args, i); ok && strings.HasPrefix(value, reservedLabelPrefix) {
+			return fmt.Errorf("label %q uses reserved prefix %q and cannot be used", value, reservedLabelPrefix)
 		}
 	}
 	return nil
