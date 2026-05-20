@@ -388,6 +388,31 @@ func TestValidateExtraArgs(t *testing.T) {
 			args:        []string{"-e", "FOO=bar", "--label"},
 			expectError: false,
 		},
+		{
+			name:        "forbidden bundled -dit",
+			args:        []string{"-dit"},
+			expectError: true,
+		},
+		{
+			name:        "forbidden bundled -itd",
+			args:        []string{"-itd"},
+			expectError: true,
+		},
+		{
+			name:        "forbidden -p value attached",
+			args:        []string{"-p8080:80"},
+			expectError: true,
+		},
+		{
+			name:        "allowed -e value attached",
+			args:        []string{"-eFOO=bar"},
+			expectError: false,
+		},
+		{
+			name:        "allowed -v value attached",
+			args:        []string{"-v/host/dir:/data"},
+			expectError: false,
+		},
 	}
 
 	for _, tt := range tests {

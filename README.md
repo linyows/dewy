@@ -258,7 +258,7 @@ cmd | string | Command and arguments to pass to container (can be specified mult
 admin-port | int | Admin API port (default: 17539, auto-increments if in use)
 -- | separator | Pass additional docker run options after this separator (e.g., `-e`, `-v`, `--cpus`, `--memory`)
 
-**Docker run options passthrough:** All options after `--` are passed directly to docker run. Forbidden options: `-d`, `-it`, `-i`, `-t`, `-p`, `--label-file`. The `dewy.` label prefix is reserved for Dewy's internal container tracking and cannot be used with `-l` / `--label`.
+**Docker run options passthrough:** All options after `--` are passed directly to docker run. Forbidden options: `-d`, `-i`, `-t`, `-it`, `-p`, `--label-file` (conflict with Dewy management); `--privileged`, `--pid`, `--cap-add`, `--security-opt`, `--device`, `--userns`, `--cgroupns` (security-sensitive). The `dewy.` label prefix is reserved for Dewy's internal container tracking and cannot be used with `-l` / `--label`.
 
 Artifact
 --
