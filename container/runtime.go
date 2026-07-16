@@ -80,6 +80,11 @@ func newCLIRuntime(cmd string, logger *slog.Logger, drainTime time.Duration, opt
 	for _, opt := range opts {
 		opt(r)
 	}
+	// An option may have cleared the runner (e.g. WithCommandRunner(nil));
+	// fall back to the real one so the rest of the type never sees a nil.
+	if r.runner == nil {
+		r.runner = sysdeps.RealCommandRunner()
+	}
 
 	if _, err := r.runner.LookPath(cmd); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrRuntimeNotFound, err)
@@ -210,7 +215,11 @@ func (r *Runtime) execCommandOutput(ctx context.Context, args ...string) (string
 			slog.String("cmd", r.cmd),
 			slog.Any("args", args),
 			slog.String("error", err.Error()))
-		return "", err
+		// No stderr to attach (e.g. the runner failed to start the process
+		// or the context was canceled); still wrap with cmd/args so callers
+		// get the same diagnostic context as the ExitError path. %w keeps
+		// errors.Is chains (context.Canceled, etc.) intact.
+		return "", fmt.Errorf("%s %s failed: %w", r.cmd, strings.Join(args, " "), err)
 	}
 
 	return strings.TrimSpace(string(output)), nil

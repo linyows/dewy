@@ -116,7 +116,9 @@ dewy container --otlp-endpoint otel-collector.internal:4317 \
 
 ### コンテナメトリクス
 
-コンテナモードでは、dewyはスクレイプのたびに管理下のコンテナを inspect し、そのライフサイクル状態を報告します。「コンテナがクラッシュ・再起動したか」に答えるメトリクスで、Kubernetes における kube-state-metrics のポッド向けメトリクスに相当します。コンテナ単位の系列には `app`、`container`（コンテナ名）、`replica`（レプリカ番号）のラベルが付きます。
+コンテナモードでは、dewyはスクレイプのたびに管理下のコンテナを inspect し、そのライフサイクル状態を報告します。「コンテナがクラッシュ・再起動したか」に答えるメトリクスで、Kubernetes における kube-state-metrics のポッド向けメトリクスに相当します。
+
+コンテナ単位のメトリクス（下記のうち `dewy.container.replicas` と `dewy.container.desired_replicas` を除くすべて）には、`app`、`container`（コンテナ名）、`replica`（レプリカ番号）のラベルが付きます。レプリカ数の2つのメトリクスはアプリ全体を表し、`app` ラベルのみを持ちます。`dewy.container.info` はさらに `image` と `version` を持ちます。
 
 | メトリクス | 種類 | 単位 | 説明 |
 |-----------|------|------|------|

@@ -119,8 +119,13 @@ The `dewy.deployment.duration` histogram uses the following bucket boundaries:
 In container mode, Dewy inspects the containers it manages on each scrape and
 reports their lifecycle state. These are the metrics that answer "did a
 container crash or restart?", analogous to what kube-state-metrics exposes for
-Kubernetes pods. Per-container series are labeled with `app`, `container` (the
-container name), and `replica` (its replica index).
+Kubernetes pods.
+
+Per-container metrics — every one below except `dewy.container.replicas` and
+`dewy.container.desired_replicas` — are labeled with `app`, `container` (the
+container name), and `replica` (its replica index). The two replica-count
+metrics are app-wide and carry only the `app` label. `dewy.container.info`
+additionally carries `image` and `version`.
 
 | Metric | Type | Unit | Description |
 |--------|------|------|-------------|
