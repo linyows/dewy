@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/linyows/dewy/internal/sysdeps"
 	promclient "github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/otel"
@@ -31,8 +32,10 @@ type Config struct {
 // Provider manages OpenTelemetry meter provider and Prometheus handler.
 type Provider struct {
 	meterProvider *sdkmetric.MeterProvider
+	meter         otelmetric.Meter
 	promHandler   http.Handler
 	metrics       *Metrics
+	clock         sysdeps.Clock
 }
 
 // New creates a new telemetry Provider with Prometheus and optional OTLP exporters.
@@ -109,8 +112,10 @@ func New(ctx context.Context, cfg Config) (*Provider, error) {
 
 	return &Provider{
 		meterProvider: mp,
+		meter:         meter,
 		promHandler:   promhttp.HandlerFor(promRegistry, promhttp.HandlerOpts{}),
 		metrics:       metrics,
+		clock:         sysdeps.RealClock(),
 	}, nil
 }
 
@@ -158,8 +163,10 @@ type Metrics struct {
 	HealthChecksTotal   otelmetric.Int64Counter
 	HealthCheckFailures otelmetric.Int64Counter
 
-	// Container metrics
-	ContainerReplicas otelmetric.Int64UpDownCounter
+	// Container metrics are reported asynchronously via a registered
+	// observer (see container.go); the instruments live in this struct so
+	// they share the meter and lifecycle with the rest.
+	container containerMetrics
 }
 
 func newMetrics(meter otelmetric.Meter) (*Metrics, error) {
@@ -254,11 +261,8 @@ func newMetrics(meter otelmetric.Meter) (*Metrics, error) {
 		return nil, err
 	}
 
-	// Container metrics
-	if m.ContainerReplicas, err = meter.Int64UpDownCounter("dewy.container.replicas",
-		otelmetric.WithDescription("Number of running container replicas"),
-		otelmetric.WithUnit("{replica}"),
-	); err != nil {
+	// Container metrics (asynchronous observable gauges).
+	if err = m.container.init(meter); err != nil {
 		return nil, err
 	}
 

@@ -23,10 +23,9 @@ type CommandRunner struct {
 	paths     map[string]string
 }
 
-type commandResponse struct {
-	output []byte
-	err    error
-}
+// commandResponse produces the result for one invocation. Taking the args
+// lets a single command name answer differently per subcommand.
+type commandResponse func(args []string) ([]byte, error)
 
 // NewCommandRunner returns an empty fake runner.
 func NewCommandRunner() *CommandRunner {
@@ -36,19 +35,26 @@ func NewCommandRunner() *CommandRunner {
 	}
 }
 
-// SetOutput configures the bytes (and nil error) returned for the given command.
+// SetOutput configures the bytes (and nil error) returned for the given command,
+// regardless of its arguments.
 func (c *CommandRunner) SetOutput(name string, output []byte) *CommandRunner {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.responses[name] = commandResponse{output: output}
-	return c
+	return c.SetOutputFunc(name, func([]string) ([]byte, error) { return output, nil })
 }
 
-// SetError configures the error returned for the given command.
+// SetError configures the error returned for the given command, regardless of
+// its arguments.
 func (c *CommandRunner) SetError(name string, err error) *CommandRunner {
+	return c.SetOutputFunc(name, func([]string) ([]byte, error) { return nil, err })
+}
+
+// SetOutputFunc configures a handler invoked with the command's arguments. Use
+// this when one command name must answer differently per subcommand — a
+// container runtime, for example, serves both `docker ps` and `docker inspect`
+// under the name "docker".
+func (c *CommandRunner) SetOutputFunc(name string, fn func(args []string) ([]byte, error)) *CommandRunner {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.responses[name] = commandResponse{err: err}
+	c.responses[name] = fn
 	return c
 }
 
@@ -75,14 +81,14 @@ func (c *CommandRunner) record(name string, args []string) {
 	c.mu.Unlock()
 }
 
-func (c *CommandRunner) response(name string) commandResponse {
+func (c *CommandRunner) respond(name string, args []string) ([]byte, error) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	r, ok := c.responses[name]
+	fn, ok := c.responses[name]
+	c.mu.Unlock()
 	if !ok {
-		return commandResponse{err: errors.New("fake: unregistered command: " + name)}
+		return nil, errors.New("fake: unregistered command: " + name)
 	}
-	return r
+	return fn(args)
 }
 
 func (c *CommandRunner) Run(ctx context.Context, name string, args ...string) error {
@@ -90,7 +96,8 @@ func (c *CommandRunner) Run(ctx context.Context, name string, args ...string) er
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return c.response(name).err
+	_, err := c.respond(name, args)
+	return err
 }
 
 func (c *CommandRunner) Output(ctx context.Context, name string, args ...string) ([]byte, error) {
@@ -98,8 +105,7 @@ func (c *CommandRunner) Output(ctx context.Context, name string, args ...string)
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	r := c.response(name)
-	return r.output, r.err
+	return c.respond(name, args)
 }
 
 func (c *CommandRunner) LookPath(name string) (string, error) {

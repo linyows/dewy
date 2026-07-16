@@ -123,7 +123,6 @@ func TestMetricsInstruments(t *testing.T) {
 	m.DeploymentErrors.Add(ctx, 1)
 	m.HealthChecksTotal.Add(ctx, 1)
 	m.HealthCheckFailures.Add(ctx, 1)
-	m.ContainerReplicas.Add(ctx, 2)
 }
 
 func TestShutdown(t *testing.T) {

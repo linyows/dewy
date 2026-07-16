@@ -22,11 +22,11 @@ var (
 )
 
 // New creates a new container runtime for the specified command (e.g., "docker", "podman").
-func New(runtime string, logger *slog.Logger, drainTime time.Duration) (*Runtime, error) {
+func New(runtime string, logger *slog.Logger, drainTime time.Duration, opts ...Option) (*Runtime, error) {
 	if !supportedRuntimes[runtime] {
 		return nil, fmt.Errorf("unsupported runtime %q: must be one of docker, podman", runtime)
 	}
-	return newCLIRuntime(runtime, logger, drainTime)
+	return newCLIRuntime(runtime, logger, drainTime, opts...)
 }
 
 // RunOptions contains options for running a container.
@@ -87,6 +87,7 @@ type PortMapping struct {
 type RollingDeployOptions struct {
 	ImageRef     string
 	AppName      string
+	Version      string // deployed tag, recorded as the dewy.version label
 	Replicas     int
 	PortMappings []PortMapping
 	Command      []string

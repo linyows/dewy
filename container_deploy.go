@@ -43,6 +43,7 @@ func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentRespons
 	report, err := runtime.Deploy(ctx, container.RollingDeployOptions{
 		ImageRef:     imageRef,
 		AppName:      appName,
+		Version:      res.Tag,
 		Replicas:     d.config.Container.Replicas,
 		PortMappings: resolvedMappings,
 		Command:      d.config.Container.Command,
@@ -53,12 +54,10 @@ func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentRespons
 		return 0, err
 	}
 
-	// Record telemetry: net change = new containers - removed containers
-	if d.telemetry != nil && d.telemetry.Enabled() {
-		delta := int64(len(report.Results)) - int64(report.RemovedCount)
-		d.telemetry.Metrics().ContainerReplicas.Add(ctx, delta)
-	}
-
+	// Replica counts are reported asynchronously by the container observer
+	// (registered in Start), which reads the live runtime state rather than
+	// tracking deltas here — a delta counter drifts when a container dies
+	// outside a deploy.
 	return len(report.Results), nil
 }
 

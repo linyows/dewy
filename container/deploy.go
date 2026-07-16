@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"time"
 )
 
@@ -141,6 +142,8 @@ func (r *Runtime) startAndCheck(ctx context.Context, opts RollingDeployOptions, 
 			"dewy.managed":     "true",
 			"dewy.app":         opts.AppName,
 			"dewy.deployed_at": time.Now().Format(time.RFC3339),
+			"dewy.replica":     strconv.Itoa(replicaIndex),
+			"dewy.version":     opts.Version,
 		},
 		Detach:    true,
 		Command:   opts.Command,

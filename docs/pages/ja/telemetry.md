@@ -116,9 +116,44 @@ dewy container --otlp-endpoint otel-collector.internal:4317 \
 
 ### コンテナメトリクス
 
+コンテナモードでは、dewyはスクレイプのたびに管理下のコンテナを inspect し、そのライフサイクル状態を報告します。「コンテナがクラッシュ・再起動したか」に答えるメトリクスで、Kubernetes における kube-state-metrics のポッド向けメトリクスに相当します。コンテナ単位の系列には `app`、`container`（コンテナ名）、`replica`（レプリカ番号）のラベルが付きます。
+
 | メトリクス | 種類 | 単位 | 説明 |
 |-----------|------|------|------|
-| `dewy.container.replicas` | UpDownCounter | {replica} | 稼働中のコンテナレプリカ数 |
+| `dewy.container.replicas` | Gauge | {replica} | 稼働中のコンテナレプリカ数 |
+| `dewy.container.desired_replicas` | Gauge | {replica} | dewyが稼働させるべく設定されているレプリカ数 |
+| `dewy.container.restarts` | Gauge | {restart} | ランタイムが報告する再起動回数 |
+| `dewy.container.status` | Gauge | {container} | 現在の `state` ラベルに対して1、それ以外は0 |
+| `dewy.container.last_terminated.exit_code` | Gauge | — | 停止したコンテナの終了コード |
+| `dewy.container.oom_killed` | Gauge | — | 停止したコンテナがOOM killされていれば1、そうでなければ0 |
+| `dewy.container.started.timestamp` | Gauge | s | コンテナの起動時刻（Unix秒） |
+| `dewy.container.info` | Gauge | — | 常に1。`image` と `version` のラベルを持つ |
+
+`dewy.container.status` の `state` ラベルは `created`、`running`、`paused`、`restarting`、`exited`、`dead` のいずれかを取ります。終了コードとOOMのメトリクスは、停止したコンテナがまだ存在する間だけ報告されます。1時間以上前に終了したコンテナは、古い系列が溜まり続けないように報告を停止します。
+
+> **`dewy.container.restarts` はカウンターではなくゲージです。** ランタイム自身の再起動回数をそのまま反映するため、デプロイでコンテナが置き換わると0にリセットされます。`increase()` や `rate()`（単調増加カウンターを前提とするため、リセットを取りこぼしたり誤読したりします）ではなく、`changes()` や `delta()` で参照してください。
+
+#### 再起動を有効にする
+
+dewyはクラッシュしたコンテナを自身では再起動しません。あくまで観測して報告するだけです。自動再起動（および0でない `dewy.container.restarts`）を得るには、`--` セパレータの後にランタイムへ restart ポリシーを渡してください。
+
+```
+dewy container --registry ... -- --restart=on-failure
+```
+
+restart ポリシーがないとコンテナはクラッシュ後に停止したままになり、`dewy.container.replicas` が `dewy.container.desired_replicas` を下回る形で現れます。
+
+#### kube-state-metrics との対応
+
+| dewyのメトリクス | kube-state-metricsの対応物 |
+|-----------------|---------------------------|
+| `dewy.container.restarts` | `kube_pod_container_status_restarts_total` |
+| `dewy.container.status` | `kube_pod_status_phase` |
+| `dewy.container.oom_killed` / `last_terminated.exit_code` | `kube_pod_container_status_last_terminated_reason` |
+| `dewy.container.started.timestamp` | `kube_pod_start_time` |
+| `dewy.container.replicas` | `kube_deployment_status_replicas_available` |
+| `dewy.container.desired_replicas` | `kube_deployment_spec_replicas` |
+| `dewy.container.info` | `kube_pod_info` |
 
 ## 連携例
 
@@ -152,6 +187,15 @@ increase(dewy_deployments_total[1h])
 
 # エラーレート
 rate(dewy_proxy_errors_total[5m])
+
+# 直近1時間のコンテナ再起動（ゲージなのでincreaseではなくchangesを使う）
+changes(dewy_container_restarts[1h])
+
+# レプリカ不足：dewyが望むコンテナ数と実際に稼働している数の差
+dewy_container_desired_replicas - dewy_container_replicas
+
+# OOM killされたコンテナ
+dewy_container_oom_killed == 1
 ```
 
 ### OpenTelemetry Collector
