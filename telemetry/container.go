@@ -76,9 +76,9 @@ func (c *containerMetrics) init(meter otelmetric.Meter) error {
 	); err != nil {
 		return err
 	}
+	// No unit: this is a dimensionless 0/1 state flag, not a container count.
 	if c.status, err = meter.Int64ObservableGauge("dewy.container.status",
 		otelmetric.WithDescription("Container lifecycle state (1 for the current state, 0 otherwise), keyed by the state attribute"),
-		otelmetric.WithUnit("{container}"),
 	); err != nil {
 		return err
 	}
@@ -183,8 +183,10 @@ func (c *containerMetrics) observe(o otelmetric.Observer, snap ContainerSnapshot
 
 // RegisterContainerObserver wires an observer into the container metrics. It is
 // a no-op when telemetry is disabled or fn is nil. The observer is called at
-// most once per observeMinInterval and is bounded by observeTimeout; a failed
-// or timed-out collection reports nothing for that cycle.
+// most once per observeMinInterval, and each call receives a ctx deadline of
+// observeTimeout; the deadline only bounds observers that honor ctx
+// cancellation (dewy's does, via exec.CommandContext). A failed or timed-out
+// collection reports nothing for that cycle.
 func (p *Provider) RegisterContainerObserver(fn ContainerObserver) error {
 	if p.meter == nil || p.metrics == nil || fn == nil {
 		return nil
@@ -209,10 +211,14 @@ func (p *Provider) RegisterContainerObserver(fn ContainerObserver) error {
 	return err
 }
 
-// containerObserverState adds caching and timeout around a ContainerObserver.
-// The whole collection is serialized so simultaneous Prometheus and OTLP
-// scrapes collapse into a single runtime call, and a cached result (success or
-// failure) is reused within ttl.
+// containerObserverState adds caching and a ctx deadline around a
+// ContainerObserver. The whole collection is serialized so simultaneous
+// Prometheus and OTLP scrapes collapse into a single runtime call, and a cached
+// result (success or failure) is reused within ttl.
+//
+// Because fn is called while holding mu, the deadline is only a real bound if
+// fn honors ctx cancellation: an observer that blocks while ignoring ctx would
+// stall every concurrent collection until it returns.
 type containerObserverState struct {
 	fn      ContainerObserver
 	clock   sysdeps.Clock

@@ -125,7 +125,7 @@ dewy container --otlp-endpoint otel-collector.internal:4317 \
 | `dewy.container.replicas` | Gauge | {replica} | 稼働中のコンテナレプリカ数 |
 | `dewy.container.desired_replicas` | Gauge | {replica} | dewyが稼働させるべく設定されているレプリカ数 |
 | `dewy.container.restarts` | Gauge | {restart} | ランタイムが報告する再起動回数 |
-| `dewy.container.status` | Gauge | {container} | 現在の `state` ラベルに対して1、それ以外は0 |
+| `dewy.container.status` | Gauge | — | 現在の `state` ラベルに対して1、それ以外は0 |
 | `dewy.container.last_terminated.exit_code` | Gauge | — | 停止したコンテナの終了コード |
 | `dewy.container.oom_killed` | Gauge | — | 停止したコンテナがOOM killされていれば1、そうでなければ0 |
 | `dewy.container.started.timestamp` | Gauge | s | コンテナの起動時刻（Unix秒） |

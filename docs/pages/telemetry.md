@@ -132,7 +132,7 @@ additionally carries `image` and `version`.
 | `dewy.container.replicas` | Gauge | {replica} | Number of running container replicas |
 | `dewy.container.desired_replicas` | Gauge | {replica} | Number of replicas Dewy is configured to run |
 | `dewy.container.restarts` | Gauge | {restart} | Restart count reported by the runtime |
-| `dewy.container.status` | Gauge | {container} | 1 for the container's current `state` label, 0 otherwise |
+| `dewy.container.status` | Gauge | — | 1 for the container's current `state` label, 0 otherwise |
 | `dewy.container.last_terminated.exit_code` | Gauge | — | Exit code of a stopped container |
 | `dewy.container.oom_killed` | Gauge | — | 1 if a stopped container was OOM-killed, else 0 |
 | `dewy.container.started.timestamp` | Gauge | s | Container start time (Unix seconds) |
