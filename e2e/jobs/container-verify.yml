@@ -53,6 +53,26 @@ steps:
   outputs:
     ok: status == 0
 
+- name: Verify container telemetry metrics
+  id: metrics
+  # Only the telemetry-enabled variant passes metrics_port; others skip.
+  skipif: "!('metrics_port' in vars)"
+  uses: http
+  with:
+    get: "http://localhost:{{ vars.metrics_port }}/metrics"
+  # A 200 with the dewy_container_* series proves the observable gauges are
+  # populated from a live container inspect (not deploy-time deltas). The
+  # running-status series confirms state semantics against the real runtime;
+  # exact value mapping is covered by unit tests.
+  test: |
+    res.code == 200 &&
+    res.body contains "dewy_container_desired_replicas{" &&
+    res.body contains "dewy_container_replicas{" &&
+    res.body contains "dewy_container_info{" &&
+    res.body contains "dewy_container_restarts{" &&
+    res.body contains "state=\"running\"} 1"
+  echo: Container telemetry metrics verified
+
 - name: Stop dewy
   uses: shell
   with: # Use Process Group ID

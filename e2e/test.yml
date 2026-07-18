@@ -475,6 +475,7 @@ jobs:
         GITHUB_TOKEN: "{{ vars.github_token }}"
       cmd: |
         ./dewy container -p 7000 -l debug \
+        --telemetry \
         --registry "img://ghcr.io/linyows/dewy-testapp?pre-release=true" \
         --health-path /health \
         --replicas 3
@@ -803,6 +804,7 @@ jobs:
         pid: "{{ outputs.ctr_oci.pid }}"
         log: "{{ outputs.ctr_oci.log }}"
         new_version: "{{ outputs.genver.version }}"
+        metrics_port: 17539
     test: res.code == 0
     timeout: 30m
 
