@@ -71,7 +71,8 @@ steps:
     res.body contains "dewy_container_info{" &&
     res.body contains "dewy_container_restarts{" &&
     res.body contains "state=\"running\"} 1"
-  echo: Container telemetry metrics verified
+  echo: |
+    {{ join(filter(split(res.body, "\n"), hasPrefix(#, "dewy_container")), "\n") }}
 
 - name: Stop dewy
   uses: shell
