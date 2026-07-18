@@ -473,8 +473,12 @@ jobs:
       background: true
       env:
         GITHUB_TOKEN: "{{ vars.github_token }}"
+      # --admin-port is pinned so the telemetry check scrapes this instance's
+      # /metrics, not a sibling variant that grabbed 17539 first (see the
+      # metrics_port note on the OCI verify job).
       cmd: |
         ./dewy container -p 7000 -l debug \
+        --telemetry --admin-port 17600 \
         --registry "img://ghcr.io/linyows/dewy-testapp?pre-release=true" \
         --health-path /health \
         --replicas 3
@@ -803,6 +807,10 @@ jobs:
         pid: "{{ outputs.ctr_oci.pid }}"
         log: "{{ outputs.ctr_oci.log }}"
         new_version: "{{ outputs.genver.version }}"
+        # Pinned to a port outside the default 17539-17548 auto-increment band
+        # so it never lands on another (telemetry-disabled) variant's admin API,
+        # whose /metrics would 404. Must match --admin-port in start_ctr_oci.
+        metrics_port: 17600
     test: res.code == 0
     timeout: 30m
 

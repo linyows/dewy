@@ -165,6 +165,16 @@ func (d *Dewy) Start(i int) {
 			d.notifier.SendError(ctx, err)
 			return
 		}
+
+		// Report container lifecycle metrics (restarts, crashes, replica
+		// counts) by inspecting the managed containers on each scrape. No-op
+		// when telemetry is disabled.
+		if d.telemetry != nil {
+			if err := d.telemetry.RegisterContainerObserver(d.observeContainers); err != nil {
+				d.logger.Warn("Failed to register container metrics observer",
+					slog.String("error", err.Error()))
+			}
+		}
 	}
 
 	d.job, err = scheduler.Every(i).Seconds().Run(func() {

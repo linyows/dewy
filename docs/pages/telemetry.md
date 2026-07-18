@@ -116,9 +116,64 @@ The `dewy.deployment.duration` histogram uses the following bucket boundaries:
 
 ### Container Metrics
 
+In container mode, Dewy inspects the containers it manages on each scrape and
+reports their lifecycle state. These are the metrics that answer "did a
+container crash or restart?", analogous to what kube-state-metrics exposes for
+Kubernetes pods.
+
+Per-container metrics — every one below except `dewy.container.replicas` and
+`dewy.container.desired_replicas` — are labeled with `app`, `container` (the
+container name), and `replica` (its replica index). The two replica-count
+metrics are app-wide and carry only the `app` label. `dewy.container.info`
+additionally carries `image` and `version`.
+
 | Metric | Type | Unit | Description |
 |--------|------|------|-------------|
-| `dewy.container.replicas` | UpDownCounter | {replica} | Number of running container replicas |
+| `dewy.container.replicas` | Gauge | {replica} | Number of running container replicas |
+| `dewy.container.desired_replicas` | Gauge | {replica} | Number of replicas Dewy is configured to run |
+| `dewy.container.restarts` | Gauge | {restart} | Restart count reported by the runtime |
+| `dewy.container.status` | Gauge | — | 1 for the container's current `state` label, 0 otherwise |
+| `dewy.container.last_terminated.exit_code` | Gauge | — | Exit code of a stopped container |
+| `dewy.container.oom_killed` | Gauge | — | 1 if a stopped container was OOM-killed, else 0 |
+| `dewy.container.started.timestamp` | Gauge | s | Container start time (Unix seconds) |
+| `dewy.container.info` | Gauge | — | Always 1; carries `image` and `version` labels |
+
+The `state` label on `dewy.container.status` takes one of `created`, `running`,
+`paused`, `restarting`, `exited`, `dead`. The exit-code and OOM metrics are
+reported only while a stopped container still exists; Dewy stops reporting a
+container that terminated more than one hour ago so old series do not
+accumulate.
+
+> **`dewy.container.restarts` is a gauge, not a counter.** It mirrors the
+> runtime's own restart count, which resets to 0 when Dewy replaces the
+> container on a deploy. Query it with `changes()` or `delta()`, not
+> `increase()`/`rate()` (those assume a monotonic counter and would miss or
+> misread the resets).
+
+#### Enabling restarts
+
+Dewy does not restart crashed containers itself — it observes and reports. To
+get automatic restarts (and a non-zero `dewy.container.restarts`), pass a
+restart policy through to the runtime after the `--` separator:
+
+```
+dewy container --registry ... -- --restart=on-failure
+```
+
+Without a restart policy the container stays stopped after a crash, which shows
+up as `dewy.container.replicas` falling below `dewy.container.desired_replicas`.
+
+#### kube-state-metrics equivalents
+
+| Dewy metric | kube-state-metrics analogue |
+|-------------|-----------------------------|
+| `dewy.container.restarts` | `kube_pod_container_status_restarts_total` |
+| `dewy.container.status` | `kube_pod_status_phase` |
+| `dewy.container.oom_killed` / `last_terminated.exit_code` | `kube_pod_container_status_last_terminated_reason` |
+| `dewy.container.started.timestamp` | `kube_pod_start_time` |
+| `dewy.container.replicas` | `kube_deployment_status_replicas_available` |
+| `dewy.container.desired_replicas` | `kube_deployment_spec_replicas` |
+| `dewy.container.info` | `kube_pod_info` |
 
 ## Integration Examples
 
@@ -152,6 +207,15 @@ increase(dewy_deployments_total[1h])
 
 # Error rate
 rate(dewy_proxy_errors_total[5m])
+
+# Container restarts in the last hour (gauge: use changes, not increase)
+changes(dewy_container_restarts[1h])
+
+# Replica shortfall: containers Dewy wants minus what is actually running
+dewy_container_desired_replicas - dewy_container_replicas
+
+# Containers OOM-killed
+dewy_container_oom_killed == 1
 ```
 
 ### OpenTelemetry Collector

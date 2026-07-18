@@ -13,12 +13,16 @@ import (
 // output. The "container" qualifier is implicit (the package is container);
 // the image variant is named imageInspection (in image.go).
 type inspection struct {
-	ID      string `json:"Id"`
-	Name    string `json:"Name"`
-	Created string `json:"Created"`
-	State   struct {
-		Status    string `json:"Status"`
-		StartedAt string `json:"StartedAt"`
+	ID           string `json:"Id"`
+	Name         string `json:"Name"`
+	Created      string `json:"Created"`
+	RestartCount int    `json:"RestartCount"`
+	State        struct {
+		Status     string `json:"Status"`
+		StartedAt  string `json:"StartedAt"`
+		FinishedAt string `json:"FinishedAt"`
+		ExitCode   int    `json:"ExitCode"`
+		OOMKilled  bool   `json:"OOMKilled"`
 	} `json:"State"`
 	Config struct {
 		Image        string              `json:"Image"`
@@ -33,30 +37,45 @@ type inspection struct {
 	} `json:"NetworkSettings"`
 }
 
-// FindContainerByLabel finds a container by labels.
-func (r *Runtime) FindContainerByLabel(ctx context.Context, labels map[string]string) (string, error) {
-	args := []string{"ps", "-q"}
-
-	for key, value := range labels {
-		args = append(args, "--filter", fmt.Sprintf("label=%s=%s", key, value))
-	}
-
-	output, err := r.execCommandOutput(ctx, args...)
-	if err != nil {
-		return "", err
-	}
-
-	if output == "" {
-		return "", ErrContainerNotFound
-	}
-
-	lines := strings.Split(output, "\n")
-	return lines[0], nil
+// Status is the observed lifecycle state of a single managed container,
+// including stopped ones. It carries exactly the fields the telemetry layer
+// turns into crash/restart metrics; unlike Info it does not resolve host
+// ports, so it can be gathered for exited containers too.
+type Status struct {
+	ID         string
+	Name       string
+	Image      string
+	State      string // created, running, paused, restarting, exited, dead
+	Restarts   int
+	ExitCode   int
+	OOMKilled  bool
+	Replica    string // dewy.replica label, "" for pre-upgrade containers
+	Version    string // dewy.version label, "" for pre-upgrade containers
+	StartedAt  time.Time
+	FinishedAt time.Time
 }
 
-// FindContainersByLabel finds all containers matching the given labels.
-func (r *Runtime) FindContainersByLabel(ctx context.Context, labels map[string]string) ([]string, error) {
+// Terminated reports whether the container has stopped running. Only a
+// terminated container carries a meaningful ExitCode/FinishedAt.
+func (s *Status) Terminated() bool {
+	switch s.State {
+	case "exited", "dead":
+		return true
+	default:
+		return false
+	}
+}
+
+// findContainerIDs lists container IDs matching every label. When all is true
+// stopped containers are included (ps -a); otherwise only running ones are
+// returned. Deploy-path callers must keep all=false: they use the result to
+// decide which containers to stop and remove, and including stopped containers
+// there would try to tear down already-dead ones.
+func (r *Runtime) findContainerIDs(ctx context.Context, labels map[string]string, all bool) ([]string, error) {
 	args := []string{"ps", "-q"}
+	if all {
+		args = append(args, "-a")
+	}
 
 	for key, value := range labels {
 		args = append(args, "--filter", fmt.Sprintf("label=%s=%s", key, value))
@@ -79,12 +98,95 @@ func (r *Runtime) FindContainersByLabel(ctx context.Context, labels map[string]s
 			containers = append(containers, line)
 		}
 	}
+	return containers, nil
+}
+
+// FindContainerByLabel finds a running container by labels.
+func (r *Runtime) FindContainerByLabel(ctx context.Context, labels map[string]string) (string, error) {
+	containers, err := r.findContainerIDs(ctx, labels, false)
+	if err != nil {
+		return "", err
+	}
+	if len(containers) == 0 {
+		return "", ErrContainerNotFound
+	}
+	return containers[0], nil
+}
+
+// FindContainersByLabel finds all running containers matching the given labels.
+func (r *Runtime) FindContainersByLabel(ctx context.Context, labels map[string]string) ([]string, error) {
+	containers, err := r.findContainerIDs(ctx, labels, false)
+	if err != nil {
+		return nil, err
+	}
 
 	r.logger.Debug("Found containers by label",
 		slog.Any("labels", labels),
 		slog.Int("count", len(containers)))
 
 	return containers, nil
+}
+
+// InspectManaged returns the lifecycle state of every container managed by this
+// dewy instance for appName, including stopped ones. A single batched inspect
+// backs the whole result so the cost is one exec per call regardless of replica
+// count. An empty appName lists all managed containers.
+func (r *Runtime) InspectManaged(ctx context.Context, appName string) ([]*Status, error) {
+	labels := map[string]string{"dewy.managed": "true"}
+	if appName != "" {
+		labels["dewy.app"] = appName
+	}
+
+	ids, err := r.findContainerIDs(ctx, labels, true)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list managed containers: %w", err)
+	}
+	if len(ids) == 0 {
+		return []*Status{}, nil
+	}
+
+	output, err := r.execCommandOutput(ctx, append([]string{"inspect"}, ids...)...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to inspect managed containers: %w", err)
+	}
+
+	var inspects []inspection
+	if err := json.Unmarshal([]byte(output), &inspects); err != nil {
+		return nil, fmt.Errorf("failed to parse inspect output: %w", err)
+	}
+
+	statuses := make([]*Status, 0, len(inspects))
+	for i := range inspects {
+		statuses = append(statuses, r.toStatus(&inspects[i]))
+	}
+	return statuses, nil
+}
+
+// toStatus converts a raw inspection into a Status, tolerating unparseable
+// timestamps (a not-yet-started or malformed container yields a zero time
+// rather than an error).
+func (r *Runtime) toStatus(in *inspection) *Status {
+	parseTime := func(v string) time.Time {
+		t, err := time.Parse(time.RFC3339Nano, v)
+		if err != nil {
+			return time.Time{}
+		}
+		return t
+	}
+
+	return &Status{
+		ID:         in.ID,
+		Name:       strings.TrimPrefix(in.Name, "/"),
+		Image:      in.Config.Image,
+		State:      in.State.Status,
+		Restarts:   in.RestartCount,
+		ExitCode:   in.State.ExitCode,
+		OOMKilled:  in.State.OOMKilled,
+		Replica:    in.Config.Labels["dewy.replica"],
+		Version:    in.Config.Labels["dewy.version"],
+		StartedAt:  parseTime(in.State.StartedAt),
+		FinishedAt: parseTime(in.State.FinishedAt),
+	}
 }
 
 // GetMappedPort returns the host port mapped to the container port.

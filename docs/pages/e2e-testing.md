@@ -224,3 +224,4 @@ For container tests, additional checks include:
 - Container health checks passing
 - TCP proxy functioning correctly
 - Multi-port routing working
+- Telemetry `/metrics` endpoint exposing the `dewy_container_*` lifecycle series

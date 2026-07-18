@@ -9,6 +9,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/linyows/dewy/internal/sysdeps"
 )
 
 // Runtime implements Runtime interface using a container CLI (docker or podman).
@@ -17,6 +19,17 @@ type Runtime struct {
 	logger             *slog.Logger
 	drainTime          time.Duration
 	loggedInRegistries map[string]bool
+	runner             sysdeps.CommandRunner
+}
+
+// Option customizes a Runtime at construction time.
+type Option func(*Runtime)
+
+// WithCommandRunner overrides the subprocess runner. Production code uses the
+// default (sysdeps.RealCommandRunner); tests inject a fake to exercise runtime
+// logic without a real container CLI.
+func WithCommandRunner(r sysdeps.CommandRunner) Option {
+	return func(rt *Runtime) { rt.runner = r }
 }
 
 // forbiddenLongOptions are long-form flags that conflict with Dewy management
@@ -56,17 +69,28 @@ var forbiddenShortFlagChars = []byte{'d', 'i', 't', 'p'}
 const reservedLabelPrefix = "dewy."
 
 // newCLIRuntime creates a new Runtime with the specified command name.
-func newCLIRuntime(cmd string, logger *slog.Logger, drainTime time.Duration) (*Runtime, error) {
-	if _, err := exec.LookPath(cmd); err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrRuntimeNotFound, err)
-	}
-
-	return &Runtime{
+func newCLIRuntime(cmd string, logger *slog.Logger, drainTime time.Duration, opts ...Option) (*Runtime, error) {
+	r := &Runtime{
 		cmd:                cmd,
 		logger:             logger,
 		drainTime:          drainTime,
 		loggedInRegistries: make(map[string]bool),
-	}, nil
+		runner:             sysdeps.RealCommandRunner(),
+	}
+	for _, opt := range opts {
+		opt(r)
+	}
+	// An option may have cleared the runner (e.g. WithCommandRunner(nil));
+	// fall back to the real one so the rest of the type never sees a nil.
+	if r.runner == nil {
+		r.runner = sysdeps.RealCommandRunner()
+	}
+
+	if _, err := r.runner.LookPath(cmd); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrRuntimeNotFound, err)
+	}
+
+	return r, nil
 }
 
 // extractLabelValue returns the label value if args[i] is a label flag.
@@ -161,37 +185,21 @@ func extractNameOption(args []string) (string, []string) {
 	return name, filtered
 }
 
-// execCommand executes a command without returning output.
+// execCommand executes a command, discarding its output on success.
 func (r *Runtime) execCommand(ctx context.Context, args ...string) error {
-	// #nosec G204 - args are constructed internally from validated inputs
-	cmd := exec.CommandContext(ctx, r.cmd, args...)
-	r.logger.Debug("Executing command",
-		slog.String("cmd", r.cmd),
-		slog.Any("args", args))
-
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		r.logger.Error("Command failed",
-			slog.String("cmd", r.cmd),
-			slog.Any("args", args),
-			slog.String("output", string(output)),
-			slog.String("error", err.Error()))
-		return fmt.Errorf("%s %s failed: %w: %s",
-			r.cmd, strings.Join(args, " "), err, string(output))
-	}
-
-	return nil
+	_, err := r.execCommandOutput(ctx, args...)
+	return err
 }
 
-// execCommandOutput executes a command and returns the output.
+// execCommandOutput executes a command and returns its trimmed stdout. On
+// failure the returned error carries the subprocess stderr when the runner
+// exposes it via *exec.ExitError.
 func (r *Runtime) execCommandOutput(ctx context.Context, args ...string) (string, error) {
-	// #nosec G204 - args are constructed internally from validated inputs
-	cmd := exec.CommandContext(ctx, r.cmd, args...)
 	r.logger.Debug("Executing command",
 		slog.String("cmd", r.cmd),
 		slog.Any("args", args))
 
-	output, err := cmd.Output()
+	output, err := r.runner.Output(ctx, r.cmd, args...)
 	if err != nil {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
@@ -203,7 +211,15 @@ func (r *Runtime) execCommandOutput(ctx context.Context, args ...string) (string
 			return "", fmt.Errorf("%s %s failed: %w: %s",
 				r.cmd, strings.Join(args, " "), err, string(exitErr.Stderr))
 		}
-		return "", err
+		r.logger.Error("Command failed",
+			slog.String("cmd", r.cmd),
+			slog.Any("args", args),
+			slog.String("error", err.Error()))
+		// No stderr to attach (e.g. the runner failed to start the process
+		// or the context was canceled); still wrap with cmd/args so callers
+		// get the same diagnostic context as the ExitError path. %w keeps
+		// errors.Is chains (context.Canceled, etc.) intact.
+		return "", fmt.Errorf("%s %s failed: %w", r.cmd, strings.Join(args, " "), err)
 	}
 
 	return strings.TrimSpace(string(output)), nil
