@@ -2,17 +2,10 @@ package dewy
 
 import (
 	"context"
-	"time"
 
 	"github.com/linyows/dewy/container"
 	"github.com/linyows/dewy/telemetry"
 )
-
-// terminatedRetention bounds how long a stopped container keeps reporting
-// metrics. dewy does not currently reap exited containers, and `ps -a` would
-// otherwise let their series accumulate without limit. A crash is actionable
-// for a while after it happens; past this window the series is dropped.
-const terminatedRetention = 1 * time.Hour
 
 // observeContainers is the telemetry.ContainerObserver for container mode. It
 // inspects the managed containers and shapes them into a snapshot. Before the
@@ -34,7 +27,7 @@ func (d *Dewy) observeContainers(ctx context.Context) (telemetry.ContainerSnapsh
 		return telemetry.ContainerSnapshot{}, err
 	}
 
-	return buildContainerSnapshot(app, d.desiredReplicas(), statuses, time.Now(), terminatedRetention), nil
+	return buildContainerSnapshot(app, d.desiredReplicas(), statuses), nil
 }
 
 // desiredReplicas mirrors the deploy-time default: a non-positive configured
@@ -46,11 +39,12 @@ func (d *Dewy) desiredReplicas() int64 {
 	return int64(d.config.Container.Replicas)
 }
 
-// buildContainerSnapshot converts runtime statuses into a telemetry snapshot,
-// dropping containers that terminated longer than retention ago. It is a pure
-// function of its inputs so the filtering and mapping can be tested without a
-// container runtime.
-func buildContainerSnapshot(app string, desired int64, statuses []*container.Status, now time.Time, retention time.Duration) telemetry.ContainerSnapshot {
+// buildContainerSnapshot converts runtime statuses into a telemetry snapshot.
+// It is a pure function of its inputs so the mapping can be tested without a
+// container runtime. Exited containers are included as-is; they are bounded
+// because each deploy reaps them (see Runtime.RemoveExited), so no time-based
+// retention filter is needed to cap series growth.
+func buildContainerSnapshot(app string, desired int64, statuses []*container.Status) telemetry.ContainerSnapshot {
 	snap := telemetry.ContainerSnapshot{
 		App:             app,
 		DesiredReplicas: desired,
@@ -59,9 +53,6 @@ func buildContainerSnapshot(app string, desired int64, statuses []*container.Sta
 
 	for _, s := range statuses {
 		if s == nil {
-			continue
-		}
-		if s.Terminated() && !s.FinishedAt.IsZero() && now.Sub(s.FinishedAt) > retention {
 			continue
 		}
 		snap.Containers = append(snap.Containers, telemetry.ContainerStatus{

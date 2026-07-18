@@ -187,6 +187,63 @@ func TestFindContainersByLabelStaysRunningOnly(t *testing.T) {
 	}
 }
 
+func TestRemoveExited(t *testing.T) {
+	rt, runner := newFakeRuntime(t)
+	var rmArgs [][]string
+	runner.SetOutputFunc("docker", func(args []string) ([]byte, error) {
+		switch args[0] {
+		case "ps":
+			return []byte("dead1\nexited2\n"), nil
+		case "rm":
+			rmArgs = append(rmArgs, args)
+			return []byte(""), nil
+		}
+		return nil, nil
+	})
+
+	n, err := rt.RemoveExited(context.Background(), "app")
+	if err != nil {
+		t.Fatalf("RemoveExited: %v", err)
+	}
+	if n != 2 {
+		t.Errorf("removed = %d, want 2", n)
+	}
+
+	// The ps filter must scope to stopped, managed, app-matched containers.
+	var psArgs []string
+	for _, c := range runner.Calls() {
+		if len(c.Args) > 0 && c.Args[0] == "ps" {
+			psArgs = c.Args
+		}
+	}
+	for _, want := range []string{"-aq", "status=exited", "status=dead", "label=dewy.managed=true", "label=dewy.app=app"} {
+		if !contains(psArgs, want) {
+			t.Errorf("ps args %v missing %q", psArgs, want)
+		}
+	}
+	if len(rmArgs) != 2 {
+		t.Errorf("expected 2 rm calls, got %d", len(rmArgs))
+	}
+}
+
+func TestRemoveExitedNone(t *testing.T) {
+	rt, runner := newFakeRuntime(t)
+	runner.SetOutputFunc("docker", func(args []string) ([]byte, error) { return []byte(""), nil })
+
+	n, err := rt.RemoveExited(context.Background(), "app")
+	if err != nil {
+		t.Fatalf("RemoveExited: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("removed = %d, want 0", n)
+	}
+	for _, c := range runner.Calls() {
+		if len(c.Args) > 0 && c.Args[0] == "rm" {
+			t.Error("rm should not be called when no exited containers match")
+		}
+	}
+}
+
 func contains(s []string, v string) bool {
 	for _, x := range s {
 		if x == v {

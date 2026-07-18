@@ -8,58 +8,44 @@ import (
 )
 
 func TestBuildContainerSnapshot(t *testing.T) {
-	now := time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC)
-	started := now.Add(-2 * time.Hour)
+	started := time.Date(2026, 7, 16, 10, 0, 0, 0, time.UTC)
 
 	statuses := []*container.Status{
 		{Name: "app-0", State: "running", Replica: "0", Version: "v1", Restarts: 1, StartedAt: started},
-		// Terminated recently: kept.
-		{Name: "app-1", State: "exited", Replica: "1", ExitCode: 137, OOMKilled: true, FinishedAt: now.Add(-10 * time.Minute)},
-		// Terminated long ago: dropped to bound series growth.
-		{Name: "app-old", State: "exited", Replica: "2", FinishedAt: now.Add(-3 * time.Hour)},
+		{Name: "app-1", State: "exited", Replica: "1", ExitCode: 137, OOMKilled: true, FinishedAt: started.Add(time.Minute)},
 		nil, // defensive: skipped
 	}
 
-	snap := buildContainerSnapshot("app", 2, statuses, now, terminatedRetention)
+	snap := buildContainerSnapshot("app", 2, statuses)
 
 	if snap.App != "app" || snap.DesiredReplicas != 2 {
 		t.Fatalf("snapshot header wrong: %+v", snap)
 	}
+	// Both real containers are mapped; exited ones are not dropped (reaping
+	// bounds them, so there is no time-based retention filter).
 	if len(snap.Containers) != 2 {
-		t.Fatalf("got %d containers, want 2 (stale exited one dropped): %+v", len(snap.Containers), snap.Containers)
+		t.Fatalf("got %d containers, want 2: %+v", len(snap.Containers), snap.Containers)
 	}
 
-	byName := map[string]bool{}
+	byName := map[string]telemetryStatus{}
 	for _, c := range snap.Containers {
-		byName[c.Name] = true
-	}
-	if byName["app-old"] {
-		t.Error("container terminated beyond retention should be dropped")
-	}
-	if !byName["app-0"] || !byName["app-1"] {
-		t.Errorf("expected app-0 and app-1 retained, got %v", byName)
+		byName[c.Name] = telemetryStatus{terminated: c.Terminated, exitCode: c.ExitCode, restarts: c.Restarts}
 	}
 
 	// Terminated flag is derived from state, not passed through.
-	for _, c := range snap.Containers {
-		if c.Name == "app-1" && !c.Terminated {
-			t.Error("exited container should be marked Terminated")
-		}
-		if c.Name == "app-0" && c.Terminated {
-			t.Error("running container should not be marked Terminated")
-		}
+	if !byName["app-1"].terminated {
+		t.Error("exited container should be marked Terminated")
+	}
+	if byName["app-0"].terminated {
+		t.Error("running container should not be marked Terminated")
+	}
+	if byName["app-1"].exitCode != 137 || byName["app-0"].restarts != 1 {
+		t.Errorf("fields mapped wrong: %+v", byName)
 	}
 }
 
-func TestBuildContainerSnapshotKeepsZeroFinishedAt(t *testing.T) {
-	now := time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC)
-	// Terminated but FinishedAt unknown (zero): age is indeterminate, so it
-	// is kept rather than silently dropped.
-	statuses := []*container.Status{
-		{Name: "app-x", State: "dead", Replica: "0"},
-	}
-	snap := buildContainerSnapshot("app", 1, statuses, now, terminatedRetention)
-	if len(snap.Containers) != 1 {
-		t.Fatalf("terminated container with zero FinishedAt should be kept, got %d", len(snap.Containers))
-	}
+type telemetryStatus struct {
+	terminated bool
+	exitCode   int64
+	restarts   int64
 }
