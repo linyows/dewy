@@ -127,16 +127,20 @@ func (r *Runtime) FindContainersByLabel(ctx context.Context, labels map[string]s
 	return containers, nil
 }
 
-// RemoveExited removes stopped (exited or dead) containers managed by this dewy
-// instance for appName, returning the number removed. The rolling deploy only
-// tears down the running containers it replaces; a replica that crashes on its
-// own lingers in the exited state and is never otherwise reclaimed, so exited
-// containers would accumulate across deploys (and keep reporting metrics).
-// Reaping them on each deploy keeps that set bounded to the current cycle.
+// RemoveExited removes exited containers managed by this dewy instance for
+// appName, returning the number removed. The rolling deploy only tears down the
+// running containers it replaces; a replica that crashes on its own lingers in
+// the exited state and is never otherwise reclaimed, so exited containers would
+// accumulate across deploys (and keep reporting metrics). Reaping them on each
+// deploy keeps that set bounded to the current cycle.
+//
+// Only status=exited is filtered: it is the common crash state and is
+// understood by both docker and podman. Podman has no "dead" state and rejects
+// status=dead outright; docker's "dead" is a rare un-removable remnant that rm
+// would fail on anyway, so it is not worth a runtime-specific filter.
 func (r *Runtime) RemoveExited(ctx context.Context, appName string) (int, error) {
 	args := []string{"ps", "-aq",
 		"--filter", "status=exited",
-		"--filter", "status=dead",
 		"--filter", "label=dewy.managed=true"}
 	if appName != "" {
 		args = append(args, "--filter", fmt.Sprintf("label=dewy.app=%s", appName))

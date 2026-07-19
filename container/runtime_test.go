@@ -216,10 +216,14 @@ func TestRemoveExited(t *testing.T) {
 			psArgs = c.Args
 		}
 	}
-	for _, want := range []string{"-aq", "status=exited", "status=dead", "label=dewy.managed=true", "label=dewy.app=app"} {
+	for _, want := range []string{"-aq", "status=exited", "label=dewy.managed=true", "label=dewy.app=app"} {
 		if !contains(psArgs, want) {
 			t.Errorf("ps args %v missing %q", psArgs, want)
 		}
+	}
+	// podman rejects status=dead, so it must not be passed.
+	if contains(psArgs, "status=dead") {
+		t.Errorf("ps args %v must not include status=dead (podman rejects it)", psArgs)
 	}
 	if len(rmArgs) != 2 {
 		t.Errorf("expected 2 rm calls, got %d", len(rmArgs))
