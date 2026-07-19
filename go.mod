@@ -18,7 +18,6 @@ require (
 	github.com/gorilla/schema v1.4.1
 	github.com/jessevdk/go-flags v1.6.1
 	github.com/k1LoW/grpcstub v0.26.4
-	github.com/lestrrat-go/server-starter v0.0.0-20210101230921-50cd1900b5bc
 	github.com/linyows/server-starter v0.1.0
 	github.com/mholt/archives v0.1.5
 	github.com/migueleliasweb/go-github-mock v1.5.0
