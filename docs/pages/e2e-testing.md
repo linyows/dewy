@@ -216,6 +216,11 @@ Each test job verifies:
 5. **Error-free operation** - No errors in logs
 6. **Clean shutdown** - Process stops gracefully
 
+One server variant additionally runs with `--telemetry` and verifies the
+`/metrics` endpoint exposes the server-mode series: `dewy_deployments_total`
+with `command="server"` and `dewy_server_restarts_total` with
+`reason="deploy"`.
+
 ### Container-Specific Verification
 
 For container tests, additional checks include:

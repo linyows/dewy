@@ -216,6 +216,8 @@ flowchart TD
 5. **エラーフリー動作** - ログにエラーがない
 6. **クリーンシャットダウン** - プロセスが正常に停止する
 
+server 変種の1つは追加で `--telemetry` を付けて起動し、`/metrics` エンドポイントが server モードの系列を公開していることを検証します：`command="server"` ラベル付きの `dewy_deployments_total`、および `reason="deploy"` ラベル付きの `dewy_server_restarts_total`。
+
 ### コンテナ固有の検証
 
 コンテナテストでは、追加のチェックが含まれます：

@@ -156,16 +156,24 @@ type Metrics struct {
 	ProxyErrorsTotal        otelmetric.Int64Counter
 	ProxyBackendCount       otelmetric.Int64UpDownCounter
 
-	// Deployment metrics
+	// Deployment metrics. All three carry a "command" attribute
+	// (server|assets|container) so the modes can be told apart.
 	DeploymentsTotal    otelmetric.Int64Counter
 	DeploymentDuration  otelmetric.Float64Histogram
 	DeploymentErrors    otelmetric.Int64Counter
 	HealthChecksTotal   otelmetric.Int64Counter
 	HealthCheckFailures otelmetric.Int64Counter
 
-	// Container metrics are reported asynchronously via a registered
-	// observer (see container.go); the instruments live in this struct so
-	// they share the meter and lifecycle with the rest.
+	// Server (process supervision) metric. Recorded in server mode when dewy
+	// restarts the managed process — an event only dewy can see. Crash
+	// detection is intentionally not here: the server-starter supervisor
+	// absorbs worker crashes (auto-respawn) and exposes no hook, so counting
+	// them meaningfully needs a supervisor-side event API (a follow-up).
+	ServerRestarts otelmetric.Int64Counter
+
+	// Container metrics are reported asynchronously via a registered observer
+	// (see container.go); the instruments live in this struct so they share the
+	// meter and lifecycle with the rest.
 	container containerMetrics
 }
 
@@ -257,6 +265,13 @@ func newMetrics(meter otelmetric.Meter) (*Metrics, error) {
 	if m.HealthCheckFailures, err = meter.Int64Counter("dewy.healthchecks.failures.total",
 		otelmetric.WithDescription("Total number of failed health checks"),
 		otelmetric.WithUnit("{check}"),
+	); err != nil {
+		return nil, err
+	}
+
+	if m.ServerRestarts, err = meter.Int64Counter("dewy.server.restarts.total",
+		otelmetric.WithDescription("Total number of managed-server restarts, keyed by reason (deploy|signal)"),
+		otelmetric.WithUnit("{restart}"),
 	); err != nil {
 		return nil, err
 	}
