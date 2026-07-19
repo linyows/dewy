@@ -201,6 +201,7 @@ func (d *Dewy) startOrRestartServer(ctx context.Context) error {
 	if running {
 		err = d.restartServer()
 		if err == nil {
+			d.recordServerRestart(ctx, "deploy")
 			msg := fmt.Sprintf("Server restarted for `%s`", d.cVer)
 			if len(d.config.Starter.Ports()) == 0 {
 				msg += " without port"
@@ -352,19 +353,12 @@ func (d *Dewy) applyContainerDeployment(ctx context.Context, res *registry.Curre
 
 	deployStart := time.Now()
 	deployedCount, err := d.deployContainer(ctx, res, st.runtime)
+	d.recordDeployment(ctx, time.Since(deployStart), err)
 	if err != nil {
 		d.logger.Error("Container deployment failed",
 			slog.Int("deployed", deployedCount),
 			slog.String("error", err.Error()))
-		if d.telemetry != nil && d.telemetry.Enabled() {
-			d.telemetry.Metrics().DeploymentErrors.Add(ctx, 1)
-		}
 		return deployedCount, err
-	}
-	if d.telemetry != nil && d.telemetry.Enabled() {
-		m := d.telemetry.Metrics()
-		m.DeploymentsTotal.Add(ctx, 1)
-		m.DeploymentDuration.Record(ctx, time.Since(deployStart).Seconds())
 	}
 	return deployedCount, nil
 }

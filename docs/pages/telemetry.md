@@ -8,7 +8,7 @@ Dewy provides built-in telemetry support based on OpenTelemetry (OTel) for monit
 
 ## Architecture
 
-In **server mode**, Dewy runs as part of the deployed application, so telemetry can be collected through the application's own OTel SDK (e.g., via otel-collector configured with systemd).
+In **server mode**, Dewy runs as part of the deployed application, so application-level telemetry is best collected through the application's own OTel SDK (e.g., via otel-collector configured with systemd). Dewy still reports what only the supervisor can see — deployment activity and the restart/crash/up state of the managed process (see [Server Metrics](#server-metrics)) — and serves them on the same `/metrics` endpoint when telemetry is enabled.
 
 In **container mode**, Dewy operates as a standalone reverse proxy managing container lifecycle. Since it is separate from the application, Dewy needs its own telemetry pipeline. Dewy uses the OpenTelemetry SDK internally and supports two export paths:
 
@@ -98,6 +98,9 @@ The `dewy.proxy.connect.latency` histogram uses the following bucket boundaries 
 
 ### Deployment Metrics
 
+Recorded in every mode. Each series carries a `command` label
+(`server`, `assets`, or `container`) so the deploy modes can be told apart.
+
 | Metric | Type | Unit | Description |
 |--------|------|------|-------------|
 | `dewy.deployments.total` | Counter | {deployment} | Total number of successful deployments |
@@ -106,6 +109,23 @@ The `dewy.proxy.connect.latency` histogram uses the following bucket boundaries 
 
 The `dewy.deployment.duration` histogram uses the following bucket boundaries:
 `1, 5, 10, 30, 60, 120, 300, 600` seconds.
+
+### Server Metrics
+
+In **server mode**, Dewy supervises the application process, so it can report
+restarts and crashes of that process — signals the application's own OTel SDK
+cannot produce (a process cannot report its own crash). When telemetry is
+enabled in server mode, Dewy also serves the `/metrics` endpoint on the Admin
+API, the same as in container mode.
+
+| Metric | Type | Unit | Description |
+|--------|------|------|-------------|
+| `dewy.server.restarts.total` | Counter | {restart} | Managed-server restarts, labeled `reason` (`deploy` or `signal`) |
+| `dewy.server.crashes.total` | Counter | {crash} | Times the supervised process exited on its own |
+| `dewy.server.up` | Gauge | — | 1 if the supervised process is currently running, else 0 |
+
+`reason="deploy"` counts restarts triggered by a new release; `reason="signal"`
+counts restarts requested via `SIGUSR1`.
 
 ### Health Check Metrics
 
@@ -202,11 +222,20 @@ dewy_proxy_connections_active
 # P99 backend connection latency
 histogram_quantile(0.99, rate(dewy_proxy_connect_latency_bucket[5m]))
 
-# Deployment frequency (per hour)
-increase(dewy_deployments_total[1h])
+# Deployment frequency per mode (per hour)
+sum by (command) (increase(dewy_deployments_total[1h]))
 
 # Error rate
 rate(dewy_proxy_errors_total[5m])
+
+# Managed server crash rate (server mode)
+rate(dewy_server_crashes_total[5m])
+
+# Server restarts by cause (server mode)
+sum by (reason) (increase(dewy_server_restarts_total[1h]))
+
+# Managed server currently down (server mode)
+dewy_server_up == 0
 
 # Container restarts in the last hour (gauge: use changes, not increase)
 changes(dewy_container_restarts[1h])

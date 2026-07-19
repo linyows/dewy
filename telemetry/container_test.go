@@ -121,7 +121,7 @@ func collectGauge(t *testing.T, reader *sdkmetric.ManualReader, name string) []m
 func attrsOf(dp metricdata.DataPoint[int64]) map[string]string {
 	out := map[string]string{}
 	for _, kv := range dp.Attributes.ToSlice() {
-		out[string(kv.Key)] = kv.Value.Emit()
+		out[string(kv.Key)] = kv.Value.AsString()
 	}
 	return out
 }

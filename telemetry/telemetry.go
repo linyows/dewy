@@ -156,17 +156,25 @@ type Metrics struct {
 	ProxyErrorsTotal        otelmetric.Int64Counter
 	ProxyBackendCount       otelmetric.Int64UpDownCounter
 
-	// Deployment metrics
+	// Deployment metrics. All three carry a "command" attribute
+	// (server|assets|container) so the modes can be told apart.
 	DeploymentsTotal    otelmetric.Int64Counter
 	DeploymentDuration  otelmetric.Float64Histogram
 	DeploymentErrors    otelmetric.Int64Counter
 	HealthChecksTotal   otelmetric.Int64Counter
 	HealthCheckFailures otelmetric.Int64Counter
 
-	// Container metrics are reported asynchronously via a registered
-	// observer (see container.go); the instruments live in this struct so
-	// they share the meter and lifecycle with the rest.
+	// Server (process supervision) metrics. Only server mode restarts or
+	// crashes the managed process, so these are recorded there; they capture
+	// events only dewy can see (the app's own SDK cannot report its own crash).
+	ServerRestarts otelmetric.Int64Counter
+	ServerCrashes  otelmetric.Int64Counter
+
+	// Container and server up-state are reported asynchronously via registered
+	// observers (see container.go and server.go); the instruments live in this
+	// struct so they share the meter and lifecycle with the rest.
 	container containerMetrics
+	server    serverMetrics
 }
 
 func newMetrics(meter otelmetric.Meter) (*Metrics, error) {
@@ -261,8 +269,25 @@ func newMetrics(meter otelmetric.Meter) (*Metrics, error) {
 		return nil, err
 	}
 
-	// Container metrics (asynchronous observable gauges).
+	if m.ServerRestarts, err = meter.Int64Counter("dewy.server.restarts.total",
+		otelmetric.WithDescription("Total number of managed-server restarts, keyed by reason (deploy|signal)"),
+		otelmetric.WithUnit("{restart}"),
+	); err != nil {
+		return nil, err
+	}
+
+	if m.ServerCrashes, err = meter.Int64Counter("dewy.server.crashes.total",
+		otelmetric.WithDescription("Total number of managed-server crashes (the supervised process exited on its own)"),
+		otelmetric.WithUnit("{crash}"),
+	); err != nil {
+		return nil, err
+	}
+
+	// Container and server up-state (asynchronous observable gauges).
 	if err = m.container.init(meter); err != nil {
+		return nil, err
+	}
+	if err = m.server.init(meter); err != nil {
 		return nil, err
 	}
 

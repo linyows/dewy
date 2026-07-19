@@ -175,6 +175,22 @@ func (d *Dewy) Start(i int) {
 					slog.String("error", err.Error()))
 			}
 		}
+	} else if d.telemetryOn() {
+		// Server/assets mode has no admin API of its own, but when telemetry
+		// is enabled we still need to serve /metrics for Prometheus scraping.
+		if err := d.startAdminAPI(ctx); err != nil {
+			d.logger.Error("Admin API startup failed", slog.String("error", err.Error()))
+			d.notifier.SendError(ctx, err)
+			return
+		}
+		// The server up-state gauge only applies to server mode (assets mode
+		// runs no managed process).
+		if d.config.Command == SERVER {
+			if err := d.telemetry.RegisterServerObserver(d.observeServer); err != nil {
+				d.logger.Warn("Failed to register server metrics observer",
+					slog.String("error", err.Error()))
+			}
+		}
 	}
 
 	d.job, err = scheduler.Every(i).Seconds().Run(func() {
@@ -212,6 +228,7 @@ func (d *Dewy) waitSigs(ctx context.Context) {
 			if err := d.restartServer(); err != nil {
 				d.logger.Error("Restart failure", slog.String("error", err.Error()))
 			} else {
+				d.recordServerRestart(ctx, "signal")
 				msg := fmt.Sprintf("Restarted receiving by `%s` signal", "SIGUSR1")
 				d.logger.Info("Restart notification", slog.String("message", msg))
 				d.notifier.Send(ctx, msg)
@@ -230,10 +247,13 @@ func (d *Dewy) waitSigs(ctx context.Context) {
 				if err := d.stopProxy(ctx); err != nil {
 					d.logger.Error("Failed to stop proxy", slog.String("error", err.Error()))
 				}
+			}
 
-				if err := d.stopAdminAPI(ctx); err != nil {
-					d.logger.Error("Failed to stop admin API", slog.String("error", err.Error()))
-				}
+			// The admin API may run in any mode (container always, server/assets
+			// when telemetry is enabled); stopAdminAPI is a no-op if it never
+			// started.
+			if err := d.stopAdminAPI(ctx); err != nil {
+				d.logger.Error("Failed to stop admin API", slog.String("error", err.Error()))
 			}
 
 			// Shutdown telemetry with fresh context to ensure flush completes
@@ -280,6 +300,17 @@ func (d *Dewy) Run() error {
 		return nil
 	}
 
+	// Past the skip check a real deploy is happening; time it and record the
+	// outcome. Skipped ticks above are not deployments and must not be counted.
+	start := time.Now()
+	err = d.runDeploy(ctx, res, st)
+	d.recordDeployment(ctx, time.Since(start), err)
+	return err
+}
+
+// runDeploy runs the download/apply/promote phases of a server or assets
+// deploy. Split out of Run so the deploy proper can be timed as a unit.
+func (d *Dewy) runDeploy(ctx context.Context, res *registry.CurrentResponse, st cacheState) error {
 	if err := d.downloadAndCache(ctx, res, st); err != nil {
 		return err
 	}

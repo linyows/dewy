@@ -98,6 +98,8 @@ dewy container --otlp-endpoint otel-collector.internal:4317 \
 
 ### デプロイメントメトリクス
 
+すべてのモードで記録されます。各系列には `command` ラベル（`server` / `assets` / `container`）が付き、デプロイモードを区別できます。
+
 | メトリクス | 種類 | 単位 | 説明 |
 |-----------|------|------|------|
 | `dewy.deployments.total` | Counter | {deployment} | 成功したデプロイの総数 |
@@ -106,6 +108,18 @@ dewy container --otlp-endpoint otel-collector.internal:4317 \
 
 `dewy.deployment.duration` ヒストグラムは以下のバケット境界を使用します：
 `1, 5, 10, 30, 60, 120, 300, 600` 秒
+
+### サーバーメトリクス
+
+**server モード**では dewy がアプリケーションプロセスを監督するため、そのプロセスの再起動やクラッシュを報告できます。これはアプリケーション自身の OTel SDK では生成できないシグナルです（プロセスは自身のクラッシュを報告できません）。server モードで telemetry を有効にすると、container モードと同様に Admin API 上の `/metrics` エンドポイントも提供されます。
+
+| メトリクス | 種類 | 単位 | 説明 |
+|-----------|------|------|------|
+| `dewy.server.restarts.total` | Counter | {restart} | 監督下サーバーの再起動回数。`reason` ラベル（`deploy` / `signal`）付き |
+| `dewy.server.crashes.total` | Counter | {crash} | 監督下プロセスが自ら終了した回数 |
+| `dewy.server.up` | Gauge | — | 監督下プロセスが稼働中なら1、そうでなければ0 |
+
+`reason="deploy"` は新しいリリースによる再起動、`reason="signal"` は `SIGUSR1` による再起動をカウントします。
 
 ### ヘルスチェックメトリクス
 
@@ -184,11 +198,20 @@ dewy_proxy_connections_active
 # P99バックエンド接続レイテンシ
 histogram_quantile(0.99, rate(dewy_proxy_connect_latency_bucket[5m]))
 
-# デプロイ頻度（1時間あたり）
-increase(dewy_deployments_total[1h])
+# モード別のデプロイ頻度（1時間あたり）
+sum by (command) (increase(dewy_deployments_total[1h]))
 
 # エラーレート
 rate(dewy_proxy_errors_total[5m])
+
+# 監督下サーバーのクラッシュレート（server モード）
+rate(dewy_server_crashes_total[5m])
+
+# 原因別のサーバー再起動（server モード）
+sum by (reason) (increase(dewy_server_restarts_total[1h]))
+
+# 監督下サーバーが現在停止している（server モード）
+dewy_server_up == 0
 
 # 直近1時間のコンテナ再起動（ゲージなのでincreaseではなくchangesを使う）
 changes(dewy_container_restarts[1h])
