@@ -22,6 +22,28 @@ steps:
     cmd: "echo 'Waiting for system stabilization after new version detection'"
   test: status == 0
 
+- name: Verify server telemetry metrics
+  id: metrics
+  # Only the telemetry-enabled server variant passes metrics_port; others skip.
+  skipif: "!('metrics_port' in vars)"
+  uses: http
+  with:
+    get: "http://localhost:{{ vars.metrics_port }}/metrics"
+  # A 200 proves /metrics is served in server mode (a path that only exists when
+  # telemetry is enabled). The command="server" deployment series and the
+  # reason="deploy" restart confirm the server-mode deployment/restart recording
+  # end-to-end; dewy_server_up confirms the up-state observer is wired. Crash and
+  # signal-restart metrics are covered by unit tests, not here.
+  test: |
+    res.code == 200 &&
+    res.body contains "dewy_deployments_total{" &&
+    res.body contains "command=\"server\"" &&
+    res.body contains "dewy_server_up" &&
+    res.body contains "dewy_server_restarts_total{" &&
+    res.body contains "reason=\"deploy\""
+  echo: |
+    {{ join(filter(split(res.body, "\n"), hasPrefix(#, "dewy_")), "\n") }}
+
 - name: Stop dewy
   uses: shell
   with: # Use Process Group ID

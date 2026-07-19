@@ -86,8 +86,12 @@ jobs:
         AWS_SECRET_ACCESS_KEY: "{{ vars.aws_secret_access_key }}"
         GOOGLE_APPLICATION_CREDENTIALS: "{{ vars.google_application_credentials }}"
         SLACK_TOKEN: "{{ vars.slack_token }}"
+      # --admin-port is pinned outside the container variants' band (17600 for
+      # the OCI variant, 17539+ auto-increment for the others) so this server
+      # instance's /metrics is scraped deterministically.
       cmd: |
         ./dewy server -p 8000 -l debug \
+        --telemetry --admin-port 17700 \
         --registry "ghr://linyows/dewy-testapp?pre-release=true" \
         --notifier "slack://random?title=ghr&url=https://github.com/linyows/dewy-testapp&thread=true" \
         -- $PWD/current/dewy-testapp
@@ -663,6 +667,7 @@ jobs:
         pid: "{{ outputs.srv_ghr.pid }}"
         log: "{{ outputs.srv_ghr.log }}"
         new_version: "{{ outputs.genver.version }}"
+        metrics_port: 17700
     test: res.code == 0
     timeout: 15m
 
