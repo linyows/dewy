@@ -476,7 +476,6 @@ github.com/jaswdr/faker v1.19.1 h1:xBoz8/O6r0QAR8eEvKJZMdofxiRH+F0M/7MU9eNKhsM=
 github.com/jaswdr/faker v1.19.1/go.mod h1:x7ZlyB1AZqwqKZgyQlnqEG8FDptmHlncA5u2zY/yi6w=
 github.com/jdx/go-netrc v1.0.0 h1:QbLMLyCZGj0NA8glAhxUpf1zDg6cxnWgMBbjq40W0gQ=
 github.com/jdx/go-netrc v1.0.0/go.mod h1:Gh9eFQJnoTNIRHXl2j5bJXA1u84hQWJWgGh569zF3v8=
-github.com/jessevdk/go-flags v1.4.0/go.mod h1:4FA24M0QyGHXBuZZK/XkWh8h0e1EYbRYJSGM75WSRxI=
 github.com/jessevdk/go-flags v1.6.1 h1:Cvu5U8UGrLay1rZfv/zP7iLpSHGUZ/Ou68T0iX1bBK4=
 github.com/jessevdk/go-flags v1.6.1/go.mod h1:Mk8T1hIAWpOiJiHa9rJASDK2UGWji0EuPGBnNLMooyc=
 github.com/jgautheron/goconst v1.8.1 h1:PPqCYp3K/xlOj5JmIe6O1Mj6r1DbkdbLtR3AJuZo414=
@@ -541,8 +540,6 @@ github.com/ldez/usetesting v0.4.3 h1:pJpN0x3fMupdTf/IapYjnkhiY1nSTN+pox1/GyBRw3k
 github.com/ldez/usetesting v0.4.3/go.mod h1:eEs46T3PpQ+9RgN9VjpY6qWdiw2/QmfiDeWmdZdrjIQ=
 github.com/leonklingele/grouper v1.1.2 h1:o1ARBDLOmmasUaNDesWqWCIFH3u7hoFlM84YrjT3mIY=
 github.com/leonklingele/grouper v1.1.2/go.mod h1:6D0M/HVkhs2yRKRFZUoGjeDy7EZTfFBE9gl4kjmIGkA=
-github.com/lestrrat-go/server-starter v0.0.0-20210101230921-50cd1900b5bc h1:W0UVLQhE9AF0AzvKF6yTAfSrxsy8uEjo9/3ovhbiZuQ=
-github.com/lestrrat-go/server-starter v0.0.0-20210101230921-50cd1900b5bc/go.mod h1:qQfAJDHk9SgqMVIm+tnwzcUqjRVAEDWY++dN1PXV3vw=
 github.com/linyows/server-starter v0.1.0 h1:Fv9Dko/F6v4nmR07M++gxk6GzRU8e3Sqbn4juUgvXaM=
 github.com/linyows/server-starter v0.1.0/go.mod h1:XkcHCAjzBQpeWzATmlPNg/wPy8VM97Q6294lFh8ePfk=
 github.com/lucasb-eyer/go-colorful v1.3.0 h1:2/yBRLdWBZKrf7gB40FoiKfAWYQ0lqNcbuQwVHXptag=
