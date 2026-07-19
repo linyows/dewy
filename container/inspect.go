@@ -127,6 +127,54 @@ func (r *Runtime) FindContainersByLabel(ctx context.Context, labels map[string]s
 	return containers, nil
 }
 
+// RemoveExited removes exited containers managed by this dewy instance for
+// appName, returning the number removed. The rolling deploy only tears down the
+// running containers it replaces; a replica that crashes on its own lingers in
+// the exited state and is never otherwise reclaimed, so exited containers would
+// accumulate across deploys (and keep reporting metrics). Reaping them on each
+// deploy keeps that set bounded to the current cycle.
+//
+// Only status=exited is filtered: it is the common crash state and is
+// understood by both docker and podman. Podman has no "dead" state and rejects
+// status=dead outright; docker's "dead" is a rare un-removable remnant that rm
+// would fail on anyway, so it is not worth a runtime-specific filter.
+func (r *Runtime) RemoveExited(ctx context.Context, appName string) (int, error) {
+	// Always scope by dewy.app, exactly as the deploy path (FindContainersByLabel)
+	// does — even when appName is empty (the registry-derived fallback can yield
+	// ""). Omitting it here would reap every managed app's exited containers on a
+	// shared runtime, which is a destructive cross-app action.
+	args := []string{"ps", "-aq",
+		"--filter", "status=exited",
+		"--filter", "label=dewy.managed=true",
+		"--filter", fmt.Sprintf("label=dewy.app=%s", appName)}
+
+	output, err := r.execCommandOutput(ctx, args...)
+	if err != nil {
+		return 0, fmt.Errorf("failed to list exited containers: %w", err)
+	}
+	if output == "" {
+		return 0, nil
+	}
+
+	removed := 0
+	for _, id := range strings.Split(output, "\n") {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		if err := r.Remove(ctx, id); err != nil {
+			// Best-effort: a container that vanished between the list and the
+			// remove is fine to skip; log and keep going.
+			r.logger.Warn("Failed to remove exited container",
+				slog.String("container", id),
+				slog.String("error", err.Error()))
+			continue
+		}
+		removed++
+	}
+	return removed, nil
+}
+
 // InspectManaged returns the lifecycle state of every container managed by this
 // dewy instance for appName, including stopped ones. A single batched inspect
 // backs the whole result so the cost is one exec per call regardless of replica

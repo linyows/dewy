@@ -54,6 +54,16 @@ func (d *Dewy) deployContainer(ctx context.Context, res *registry.CurrentRespons
 		return 0, err
 	}
 
+	// Reap containers that crashed on their own since the last deploy. The
+	// rolling update above only removes the running containers it replaced;
+	// without this, exited replicas pile up across deploys. Best-effort — a
+	// failure here must not fail an otherwise-successful deploy.
+	if n, err := runtime.RemoveExited(ctx, appName); err != nil {
+		d.logger.Warn("Failed to reap exited containers", slog.String("error", err.Error()))
+	} else if n > 0 {
+		d.logger.Info("Reaped exited containers", slog.Int("count", n))
+	}
+
 	// Replica counts are reported asynchronously by the container observer
 	// (registered in Start), which reads the live runtime state rather than
 	// tracking deltas here — a delta counter drifts when a container dies
