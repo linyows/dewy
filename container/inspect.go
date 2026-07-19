@@ -139,12 +139,14 @@ func (r *Runtime) FindContainersByLabel(ctx context.Context, labels map[string]s
 // status=dead outright; docker's "dead" is a rare un-removable remnant that rm
 // would fail on anyway, so it is not worth a runtime-specific filter.
 func (r *Runtime) RemoveExited(ctx context.Context, appName string) (int, error) {
+	// Always scope by dewy.app, exactly as the deploy path (FindContainersByLabel)
+	// does — even when appName is empty (the registry-derived fallback can yield
+	// ""). Omitting it here would reap every managed app's exited containers on a
+	// shared runtime, which is a destructive cross-app action.
 	args := []string{"ps", "-aq",
 		"--filter", "status=exited",
-		"--filter", "label=dewy.managed=true"}
-	if appName != "" {
-		args = append(args, "--filter", fmt.Sprintf("label=dewy.app=%s", appName))
-	}
+		"--filter", "label=dewy.managed=true",
+		"--filter", fmt.Sprintf("label=dewy.app=%s", appName)}
 
 	output, err := r.execCommandOutput(ctx, args...)
 	if err != nil {

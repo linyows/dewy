@@ -44,6 +44,13 @@ func (d *Dewy) desiredReplicas() int64 {
 // container runtime. Exited containers are included as-is; they are bounded
 // because each deploy reaps them (see Runtime.RemoveExited), so no time-based
 // retention filter is needed to cap series growth.
+//
+// This relies on reaping actually succeeding. Reaping is best-effort, so if the
+// runtime persistently fails to remove exited containers while crashes keep
+// happening across deploys, terminated-container series can grow unbounded. That
+// is an accepted trade-off: such a state also emits loud WARN/ERROR reap-failure
+// logs, so it is observable, and a secondary time/count cap here would
+// reintroduce the silent-drop behavior this change set out to remove.
 func buildContainerSnapshot(app string, desired int64, statuses []*container.Status) telemetry.ContainerSnapshot {
 	snap := telemetry.ContainerSnapshot{
 		App:             app,

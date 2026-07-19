@@ -230,6 +230,27 @@ func TestRemoveExited(t *testing.T) {
 	}
 }
 
+// TestRemoveExitedEmptyAppScopes guards that an empty app name still scopes by
+// dewy.app (matching the deploy path) rather than reaping every managed app's
+// exited containers on a shared runtime.
+func TestRemoveExitedEmptyAppScopes(t *testing.T) {
+	rt, runner := newFakeRuntime(t)
+	runner.SetOutputFunc("docker", func([]string) ([]byte, error) { return []byte(""), nil })
+
+	if _, err := rt.RemoveExited(context.Background(), ""); err != nil {
+		t.Fatalf("RemoveExited: %v", err)
+	}
+	var psArgs []string
+	for _, c := range runner.Calls() {
+		if len(c.Args) > 0 && c.Args[0] == "ps" {
+			psArgs = c.Args
+		}
+	}
+	if !contains(psArgs, "label=dewy.app=") {
+		t.Errorf("ps args %v must scope by dewy.app even when app is empty", psArgs)
+	}
+}
+
 func TestRemoveExitedNone(t *testing.T) {
 	rt, runner := newFakeRuntime(t)
 	runner.SetOutputFunc("docker", func(args []string) ([]byte, error) { return []byte(""), nil })
