@@ -177,19 +177,12 @@ func (d *Dewy) Start(i int) {
 		}
 	} else if d.telemetryOn() {
 		// Server/assets mode has no admin API of its own, but when telemetry
-		// is enabled we still need to serve /metrics for Prometheus scraping.
+		// is enabled we still need to serve /metrics for Prometheus scraping of
+		// the deployment and restart counters.
 		if err := d.startAdminAPI(ctx); err != nil {
 			d.logger.Error("Admin API startup failed", slog.String("error", err.Error()))
 			d.notifier.SendError(ctx, err)
 			return
-		}
-		// The server up-state gauge only applies to server mode (assets mode
-		// runs no managed process).
-		if d.config.Command == SERVER {
-			if err := d.telemetry.RegisterServerObserver(d.observeServer); err != nil {
-				d.logger.Warn("Failed to register server metrics observer",
-					slog.String("error", err.Error()))
-			}
 		}
 	}
 

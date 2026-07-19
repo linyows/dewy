@@ -111,15 +111,15 @@ dewy container --otlp-endpoint otel-collector.internal:4317 \
 
 ### サーバーメトリクス
 
-**server モード**では dewy がアプリケーションプロセスを監督するため、そのプロセスの再起動やクラッシュを報告できます。これはアプリケーション自身の OTel SDK では生成できないシグナルです（プロセスは自身のクラッシュを報告できません）。server モードで telemetry を有効にすると、container モードと同様に Admin API 上の `/metrics` エンドポイントも提供されます。
+**server モード**では、新しいリリースのデプロイ時や `SIGUSR1` 受信時に dewy が監督下プロセスを再起動し、その回数をカウントします。これはアプリケーション自身の OTel SDK では報告できないイベントです。server モードで telemetry を有効にすると、container モードと同様に Admin API 上の `/metrics` エンドポイントも提供されます。
 
 | メトリクス | 種類 | 単位 | 説明 |
 |-----------|------|------|------|
 | `dewy.server.restarts.total` | Counter | {restart} | 監督下サーバーの再起動回数。`reason` ラベル（`deploy` / `signal`）付き |
-| `dewy.server.crashes.total` | Counter | {crash} | 監督下プロセスが自ら終了した回数 |
-| `dewy.server.up` | Gauge | — | 監督下プロセスが稼働中なら1、そうでなければ0 |
 
 `reason="deploy"` は新しいリリースによる再起動、`reason="signal"` は `SIGUSR1` による再起動をカウントします。
+
+> server モードではアプリケーションのクラッシュは報告されません。基盤の server-starter がクラッシュしたワーカーを吸収して自動再起動し、dewy が観測できるフックを公開していないため、クラッシュカウンターを有意義に生成できません（監督側の対応が必要）。container モードはコンテナランタイムが各コンテナの実状態を公開するためアプリのクラッシュを報告できます（container の `restarts` / `status` / `oom_killed` を参照）。
 
 ### ヘルスチェックメトリクス
 
@@ -204,14 +204,8 @@ sum by (command) (increase(dewy_deployments_total[1h]))
 # エラーレート
 rate(dewy_proxy_errors_total[5m])
 
-# 監督下サーバーのクラッシュレート（server モード）
-rate(dewy_server_crashes_total[5m])
-
 # 原因別のサーバー再起動（server モード）
 sum by (reason) (increase(dewy_server_restarts_total[1h]))
-
-# 監督下サーバーが現在停止している（server モード）
-dewy_server_up == 0
 
 # 直近1時間のコンテナ再起動（ゲージなのでincreaseではなくchangesを使う）
 changes(dewy_container_restarts[1h])

@@ -126,7 +126,6 @@ func (d *Dewy) startServer() error {
 		err := s.Run()
 		if err != nil {
 			d.logger.Error("Server run failure", slog.String("error", err.Error()))
-			d.recordServerCrash(context.Background())
 			d.Lock()
 			d.isServerRunning = false
 			d.Unlock()

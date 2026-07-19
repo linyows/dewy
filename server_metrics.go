@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/linyows/dewy/telemetry"
 	"go.opentelemetry.io/otel/attribute"
 	otelmetric "go.opentelemetry.io/otel/metric"
 )
@@ -46,21 +45,4 @@ func (d *Dewy) recordServerRestart(ctx context.Context, reason string) {
 	}
 	d.telemetry.Metrics().ServerRestarts.Add(ctx, 1,
 		otelmetric.WithAttributes(attribute.String("reason", reason)))
-}
-
-// recordServerCrash counts a managed-server crash (the process exited on its own).
-func (d *Dewy) recordServerCrash(ctx context.Context) {
-	if !d.telemetryOn() {
-		return
-	}
-	d.telemetry.Metrics().ServerCrashes.Add(ctx, 1)
-}
-
-// observeServer is the telemetry.ServerObserver for server mode: it reports
-// whether the supervised process is currently running.
-func (d *Dewy) observeServer() telemetry.ServerSnapshot {
-	d.RLock()
-	up := d.isServerRunning
-	d.RUnlock()
-	return telemetry.ServerSnapshot{Up: up}
 }

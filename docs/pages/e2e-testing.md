@@ -218,8 +218,8 @@ Each test job verifies:
 
 One server variant additionally runs with `--telemetry` and verifies the
 `/metrics` endpoint exposes the server-mode series: `dewy_deployments_total`
-with `command="server"`, `dewy_server_restarts_total` with `reason="deploy"`,
-and `dewy_server_up`.
+with `command="server"` and `dewy_server_restarts_total` with
+`reason="deploy"`.
 
 ### Container-Specific Verification
 

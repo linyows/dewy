@@ -164,17 +164,17 @@ type Metrics struct {
 	HealthChecksTotal   otelmetric.Int64Counter
 	HealthCheckFailures otelmetric.Int64Counter
 
-	// Server (process supervision) metrics. Only server mode restarts or
-	// crashes the managed process, so these are recorded there; they capture
-	// events only dewy can see (the app's own SDK cannot report its own crash).
+	// Server (process supervision) metric. Recorded in server mode when dewy
+	// restarts the managed process — an event only dewy can see. Crash
+	// detection is intentionally not here: the server-starter supervisor
+	// absorbs worker crashes (auto-respawn) and exposes no hook, so counting
+	// them meaningfully needs a supervisor-side event API (a follow-up).
 	ServerRestarts otelmetric.Int64Counter
-	ServerCrashes  otelmetric.Int64Counter
 
-	// Container and server up-state are reported asynchronously via registered
-	// observers (see container.go and server.go); the instruments live in this
-	// struct so they share the meter and lifecycle with the rest.
+	// Container metrics are reported asynchronously via a registered observer
+	// (see container.go); the instruments live in this struct so they share the
+	// meter and lifecycle with the rest.
 	container containerMetrics
-	server    serverMetrics
 }
 
 func newMetrics(meter otelmetric.Meter) (*Metrics, error) {
@@ -276,18 +276,8 @@ func newMetrics(meter otelmetric.Meter) (*Metrics, error) {
 		return nil, err
 	}
 
-	if m.ServerCrashes, err = meter.Int64Counter("dewy.server.crashes.total",
-		otelmetric.WithDescription("Total number of managed-server crashes (the supervised process exited on its own)"),
-		otelmetric.WithUnit("{crash}"),
-	); err != nil {
-		return nil, err
-	}
-
-	// Container and server up-state (asynchronous observable gauges).
+	// Container metrics (asynchronous observable gauges).
 	if err = m.container.init(meter); err != nil {
-		return nil, err
-	}
-	if err = m.server.init(meter); err != nil {
 		return nil, err
 	}
 

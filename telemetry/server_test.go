@@ -35,32 +35,13 @@ func collectSum(t *testing.T, reader *sdkmetric.ManualReader, name string) []met
 	return nil
 }
 
-func TestServerObserverUp(t *testing.T) {
-	p, reader := newTestProvider(t, fixedClock())
-
-	up := true
-	if err := p.RegisterServerObserver(func() ServerSnapshot { return ServerSnapshot{Up: up} }); err != nil {
-		t.Fatalf("RegisterServerObserver: %v", err)
-	}
-
-	if dps := collectGauge(t, reader, "dewy.server.up"); len(dps) != 1 || dps[0].Value != 1 {
-		t.Errorf("server.up = %+v, want 1", dps)
-	}
-
-	up = false
-	if dps := collectGauge(t, reader, "dewy.server.up"); len(dps) != 1 || dps[0].Value != 0 {
-		t.Errorf("server.up after down = %+v, want 0", dps)
-	}
-}
-
-func TestServerCountersAndDeploymentCommand(t *testing.T) {
+func TestServerRestartsAndDeploymentCommand(t *testing.T) {
 	p, reader := newTestProvider(t, fixedClock())
 	m := p.Metrics()
 	ctx := context.Background()
 
 	m.ServerRestarts.Add(ctx, 1, otelWithAttrs("reason", "deploy"))
 	m.ServerRestarts.Add(ctx, 1, otelWithAttrs("reason", "signal"))
-	m.ServerCrashes.Add(ctx, 1)
 	m.DeploymentsTotal.Add(ctx, 1, otelWithAttrs("command", "server"))
 
 	// restarts split by reason.
@@ -70,10 +51,6 @@ func TestServerCountersAndDeploymentCommand(t *testing.T) {
 	}
 	if byReason["deploy"] != 1 || byReason["signal"] != 1 {
 		t.Errorf("restarts by reason = %v, want deploy=1 signal=1", byReason)
-	}
-
-	if dps := collectSum(t, reader, "dewy.server.crashes.total"); len(dps) != 1 || dps[0].Value != 1 {
-		t.Errorf("crashes = %+v, want 1", dps)
 	}
 
 	// deployment carries the command attribute.
