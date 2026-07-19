@@ -225,10 +225,20 @@ func (d *Dewy) waitSigs(ctx context.Context) {
 			continue
 
 		case syscall.SIGUSR1:
+			// restartServer only signals this process (SIGHUP to self), so it
+			// "succeeds" even in assets mode or before the managed process has
+			// started — but nothing actually restarts. Only count a signal
+			// restart when there is a running managed server to restart, so the
+			// metric does not report phantom restarts.
+			d.RLock()
+			hasServer := d.config.Command == SERVER && d.isServerRunning
+			d.RUnlock()
 			if err := d.restartServer(); err != nil {
 				d.logger.Error("Restart failure", slog.String("error", err.Error()))
 			} else {
-				d.recordServerRestart(ctx, "signal")
+				if hasServer {
+					d.recordServerRestart(ctx, "signal")
+				}
 				msg := fmt.Sprintf("Restarted receiving by `%s` signal", "SIGUSR1")
 				d.logger.Info("Restart notification", slog.String("message", msg))
 				d.notifier.Send(ctx, msg)
