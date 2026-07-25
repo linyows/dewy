@@ -44,7 +44,7 @@ jobs:
     - name: Get PR info for comment trigger
       if: github.event_name == 'issue_comment'
       id: pr
-      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       with:
         script: |
           const { data: pr } = await github.rest.pulls.get({
@@ -57,7 +57,7 @@ jobs:
 
     - name: Add reaction to comment
       if: github.event_name == 'issue_comment'
-      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       with:
         script: |
           await github.rest.reactions.createForIssueComment({
@@ -67,11 +67,11 @@ jobs:
             content: 'rocket'
           });
 
-    - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         ref: ${{ steps.pr.outputs.sha || github.sha }}
 
-    - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       with:
         go-version-file: go.mod
     - name: Install Podman
@@ -89,10 +89,10 @@ jobs:
     - name: Set up Cloud SDK
       uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
     - name: Run probe
-      uses: linyows/probe-action@0164e23555aacbaaea03169102262dafeb1ff631 # v1
+      uses: linyows/probe-action@b7e74ef27bc83dfa93f121c0f0fe9649abf33c43 # v1.1.0
       with:
         path: e2e/test.yml
-        version: v1.5.0
+        version: v1.9.0
       env:
         # For gh CLI to create releases
         GH_TOKEN: ${{ secrets.GH_TOKEN }}
@@ -109,7 +109,7 @@ jobs:
 
     - name: Comment on success
       if: success() && github.event_name == 'issue_comment'
-      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       with:
         script: |
           await github.rest.issues.createComment({
@@ -121,7 +121,7 @@ jobs:
 
     - name: Comment on failure
       if: failure() && github.event_name == 'issue_comment'
-      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       with:
         script: |
           const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
