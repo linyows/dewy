@@ -6,7 +6,3 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-  - package-ecosystem: "bun"
-    directory: "/docs"
-    schedule:
-      interval: "weekly"
