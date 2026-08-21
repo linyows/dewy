@@ -14,13 +14,15 @@ const (
 	// was tagged) is treated as "skip this tick" rather than an error.
 	defaultArtifactGracePeriod = 30 * time.Minute
 
-	// defaultHealthCheckTimeout is the per-request HTTP timeout used by the
-	// container health check probe.
-	defaultHealthCheckTimeout = 5 * time.Second
+	// defaultHealthCheckProbeTimeout is the per-request HTTP timeout used by
+	// the container health check probe. The overall budget across all
+	// attempts comes from ContainerConfig.HealthTimeout (--health-timeout).
+	defaultHealthCheckProbeTimeout = 5 * time.Second
 
-	// defaultHealthCheckRetries is the number of probe attempts before a
-	// container is considered unhealthy.
-	defaultHealthCheckRetries = 5
+	// defaultHealthCheckTotalTimeout is the overall health check budget used
+	// when ContainerConfig.HealthTimeout is unset. The CLI always sets it, so
+	// this only applies to a Config built programmatically.
+	defaultHealthCheckTotalTimeout = 30 * time.Second
 
 	// defaultHealthCheckDelay is the back-off between probe attempts.
 	defaultHealthCheckDelay = 2 * time.Second
