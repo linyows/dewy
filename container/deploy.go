@@ -96,8 +96,10 @@ func (r *Runtime) Deploy(ctx context.Context, opts RollingDeployOptions, updater
 			}
 		}
 
-		// Stop and remove old container
-		if err := r.Stop(ctx, oldContainerID, defaultStopTimeoutOld); err != nil {
+		// Stop and remove old container. The backend was pulled from the
+		// proxy above, so this window is the drain time: how long in-flight
+		// requests have to finish before the container is killed.
+		if err := r.Stop(ctx, oldContainerID, r.drainTimeout()); err != nil {
 			r.logger.Error("Failed to stop old container",
 				slog.String("container", oldContainerID),
 				slog.String("error", err.Error()))

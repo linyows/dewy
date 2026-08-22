@@ -221,7 +221,7 @@ dewy container --registry img://ghcr.io/owner/app --health-timeout 60
 
 ### --drain-time
 
-トラフィック切り替え後のドレイン時間を秒単位で指定します。古いコンテナはこの期間、実行中のリクエストを完了するために稼働し続けます。デフォルトは30秒です。
+トラフィック切り替え後のドレイン時間を秒単位で指定します。古いコンテナはプロキシから外された時点で SIGTERM を受け取り、実行中のリクエストを完了するための猶予として最大この時間だけ待ってから強制終了されます。デフォルトは30秒です。
 
 ```bash
 dewy container --registry img://ghcr.io/owner/app --drain-time 60

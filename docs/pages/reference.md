@@ -221,7 +221,7 @@ dewy container --registry img://ghcr.io/owner/app --health-timeout 60
 
 ### --drain-time
 
-Specifies the drain time in seconds after traffic switch. The old container remains running during this period to complete in-flight requests. Default is 30 seconds.
+Specifies the drain time in seconds after traffic switch. The old container is sent SIGTERM once it is removed from the proxy, and is given up to this long to finish in-flight requests before being killed. Default is 30 seconds.
 
 ```bash
 dewy container --registry img://ghcr.io/owner/app --drain-time 60
