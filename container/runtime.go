@@ -284,7 +284,7 @@ func (r *Runtime) Run(ctx context.Context, opts RunOptions) (string, error) {
 }
 
 // drainTimeout returns how long a container that has been taking traffic gets
-// to finish in-flight requests before it is killed, honouring --drain-time.
+// to finish in-flight requests before it is killed, honoring --drain-time.
 func (r *Runtime) drainTimeout() time.Duration {
 	if r.drainTime > 0 {
 		return r.drainTime

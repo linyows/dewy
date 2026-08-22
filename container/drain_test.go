@@ -18,7 +18,7 @@ func TestDrainTimeout(t *testing.T) {
 		want      time.Duration
 	}{
 		{
-			name:      "honours configured drain time",
+			name:      "honors configured drain time",
 			drainTime: 60 * time.Second,
 			want:      60 * time.Second,
 		},

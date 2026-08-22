@@ -30,7 +30,7 @@ func TestHealthCheckTimeout(t *testing.T) {
 		want   time.Duration
 	}{
 		{
-			name:   "honours configured health timeout",
+			name:   "honors configured health timeout",
 			config: &ContainerConfig{HealthTimeout: 60 * time.Second},
 			want:   60 * time.Second,
 		},
@@ -177,7 +177,7 @@ func TestProbeHealth_ContextCancellation(t *testing.T) {
 	if err := d.probeHealth(ctx, server.URL, 30*time.Second); err == nil {
 		t.Fatal("probeHealth() error = nil, want failure")
 	}
-	// Cancelling the parent must abort immediately rather than burning the
+	// Canceling the parent must abort immediately rather than burning the
 	// full budget in the back-off sleep.
 	if elapsed := time.Since(start); elapsed > 5*time.Second {
 		t.Errorf("probeHealth() took %v after cancellation, want it to return promptly", elapsed)
