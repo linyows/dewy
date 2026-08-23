@@ -67,6 +67,7 @@ jobs:
     - { command: 'container', variant: 'dockerhub' }
     - { command: 'container', variant: 'multiport' }
     - { command: 'container', variant: 'podman' }
+    - { command: 'container', variant: 'healthfail' }
 
 # Phase 1: Start all dewy instances and wait for initial deployment (parallel)
 
@@ -506,6 +507,40 @@ jobs:
         exit 1
     test: status == 0
 
+- name: Start container with a failing health check
+  id: start_ctr_healthfail
+  needs: [build]
+  steps:
+  - name: Start dewy
+    id: ctr_healthfail
+    uses: shell
+    with:
+      workdir: ./e2e/container/healthfail
+      background: true
+      env:
+        GITHUB_TOKEN: "{{ vars.github_token }}"
+      # --health-path points at a route the testapp does not serve, so every
+      # probe gets a 404 and the deploy fails on purpose. --name isolates this
+      # instance's dewy.app label from the other docker variants, which share
+      # the dewy-testapp app name and would otherwise find each other's
+      # containers. --admin-port is pinned so the auto-increment cannot land on
+      # a sibling variant's port. One replica keeps the failing cycle cheap.
+      cmd: |
+        ./dewy container -p 7400 -l debug \
+        --admin-port 17650 \
+        --name dewy-testapp-healthfail \
+        --registry "img://ghcr.io/linyows/dewy-testapp?pre-release=true" \
+        --health-path /dewy-e2e-no-such-endpoint \
+        --health-timeout 7 \
+        --replicas 1
+    test: status == -1
+    outputs:
+      pid: res.pid
+      log: res.log
+    echo: |
+      PID: {{ res.pid }}
+      Log: {{ res.log }}
+
 - name: Start container by OCI registry with Podman runtime
   id: start_ctr_podman
   needs: [build]
@@ -862,6 +897,23 @@ jobs:
         port2: 7101
         replicas: 2
         new_version: "{{ outputs.genver.version }}"
+    test: res.code == 0
+    timeout: 30m
+
+# This variant never needs a second release: the failure happens on the first
+# deploy, so it only depends on its own start job.
+- name: Verify container health check failure handling
+  needs: [start_ctr_healthfail]
+  steps:
+  - name: Container health check failure verify
+    uses: embedded
+    with:
+      path: ./e2e/jobs/container-healthfail-verify.yml
+      vars:
+        pid: "{{ outputs.ctr_healthfail.pid }}"
+        log: "{{ outputs.ctr_healthfail.log }}"
+        health_timeout: 7
+        app_name: dewy-testapp-healthfail
     test: res.code == 0
     timeout: 30m
 
