@@ -524,18 +524,23 @@ jobs:
       background: true
       env:
         GITHUB_TOKEN: "{{ vars.github_token }}"
-      # --health-path points at a route the testapp does not serve, so every
-      # probe gets a 404 and the deploy fails on purpose. --name isolates this
-      # instance's dewy.app label from the other docker variants, which share
-      # the dewy-testapp app name and would otherwise find each other's
-      # containers. --admin-port is pinned so the auto-increment cannot land on
-      # a sibling variant's port. One replica keeps the failing cycle cheap.
+      # The probe targets container port 9999, which nothing inside the image
+      # listens on: the testapp serves 3333 only. Every probe is refused and
+      # the deploy fails on purpose. Targeting a dead port rather than a
+      # missing route is deliberate - the testapp registers a "/" catch-all,
+      # so no path can be made to answer unhealthy.
+      #
+      # --name isolates this instance's dewy.app label from the other docker
+      # variants, which share the dewy-testapp app name and would otherwise
+      # find each other's containers. --admin-port is pinned so the
+      # auto-increment cannot land on a sibling variant's port. One replica
+      # keeps the failing cycle cheap.
       cmd: |
-        ./dewy container -p 7400 -l debug \
+        ./dewy container -p 7400:9999 -l debug \
         --admin-port 17650 \
         --name dewy-testapp-healthfail \
         --registry "img://ghcr.io/linyows/dewy-testapp?pre-release=true" \
-        --health-path /dewy-e2e-no-such-endpoint \
+        --health-path /health \
         --health-timeout 7 \
         --replicas 1
     test: status == -1

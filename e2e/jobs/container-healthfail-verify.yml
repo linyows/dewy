@@ -1,7 +1,8 @@
 name: Container Health Check Failure Verify
 
 # Drives the container failure path that the happy-path jobs never reach: a
-# health check that can never pass. It covers two things nothing else does.
+# health check that can never pass, because it probes a container port nothing
+# listens on. It covers two things nothing else does.
 #
 # 1. --health-timeout actually bounds the probe. The flag was parsed and stored
 #    but never read, so raising it had no effect while the docs said otherwise.
