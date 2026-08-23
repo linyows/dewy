@@ -83,19 +83,48 @@ func TestStop_PassesConfiguredDrainTime(t *testing.T) {
 	}
 }
 
-func TestStop_SubSecondTimeoutKeepsGracePeriod(t *testing.T) {
+func TestStop_RoundsFractionalTimeoutUp(t *testing.T) {
 	t.Parallel()
 
-	rt, runner := newFakeRuntime(t)
-	runner.SetOutput("docker", nil)
-
-	// Truncating to whole seconds would yield 0, which the CLI treats as an
-	// immediate KILL rather than a graceful stop.
-	if err := rt.Stop(context.Background(), "abc123", 500*time.Millisecond); err != nil {
-		t.Fatalf("Stop: %v", err)
+	tests := []struct {
+		name    string
+		timeout time.Duration
+		want    string
+	}{
+		{
+			// Truncating would yield 0, which the CLI treats as an immediate
+			// KILL rather than a graceful stop.
+			name:    "sub-second keeps a grace period",
+			timeout: 500 * time.Millisecond,
+			want:    "1",
+		},
+		{
+			// Truncating would silently shorten the caller's grace period.
+			name:    "fractional above a second is not shortened",
+			timeout: 1500 * time.Millisecond,
+			want:    "2",
+		},
+		{
+			name:    "whole seconds pass through",
+			timeout: 5 * time.Second,
+			want:    "5",
+		},
 	}
-	if got := stopTimeArg(t, runner); got != "1" {
-		t.Errorf("stop --time = %s, want 1", got)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			rt, runner := newFakeRuntime(t)
+			runner.SetOutput("docker", nil)
+
+			if err := rt.Stop(context.Background(), "abc123", tt.timeout); err != nil {
+				t.Fatalf("Stop: %v", err)
+			}
+			if got := stopTimeArg(t, runner); got != tt.want {
+				t.Errorf("stop --time = %s, want %s", got, tt.want)
+			}
+		})
 	}
 }
 

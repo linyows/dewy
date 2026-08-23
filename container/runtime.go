@@ -298,11 +298,13 @@ func (r *Runtime) Stop(ctx context.Context, containerID string, timeout time.Dur
 		slog.String("container", containerID),
 		slog.Duration("timeout", timeout))
 
-	// The CLI takes whole seconds, and truncating a sub-second timeout to 0
-	// would turn a graceful stop into an immediate KILL.
-	timeoutSec := int(timeout.Seconds())
-	if timeoutSec < 1 && timeout > 0 {
-		timeoutSec = 1
+	// The CLI takes whole seconds. Round a positive timeout up rather than
+	// truncating: truncation shortens the grace period the caller asked for,
+	// and below one second it would drop to 0, turning a graceful stop into
+	// an immediate KILL. An explicit zero still means "kill now".
+	timeoutSec := 0
+	if timeout > 0 {
+		timeoutSec = int((timeout + time.Second - 1) / time.Second)
 	}
 	return r.execCommand(ctx, "stop", fmt.Sprintf("--time=%d", timeoutSec), containerID)
 }

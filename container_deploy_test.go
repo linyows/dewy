@@ -79,8 +79,6 @@ func TestProbeHealth_Success(t *testing.T) {
 func TestProbeHealth_RedirectStatusIsHealthy(t *testing.T) {
 	t.Parallel()
 
-	// 3xx is treated as healthy, but the client must not chase the redirect
-	// to a location that would fail.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotModified)
 	}))
@@ -89,6 +87,32 @@ func TestProbeHealth_RedirectStatusIsHealthy(t *testing.T) {
 	d := testDewy(&ContainerConfig{})
 	if err := d.probeHealth(context.Background(), server.URL, 5*time.Second); err != nil {
 		t.Errorf("probeHealth() error = %v, want nil", err)
+	}
+}
+
+func TestProbeHealth_DoesNotFollowRedirect(t *testing.T) {
+	t.Parallel()
+
+	// The redirect target is unhealthy. Following it would fail the probe even
+	// though the health endpoint itself answered with a status the rule calls
+	// healthy, so the 3xx has to be judged as itself.
+	var targetHits atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/elsewhere" {
+			targetHits.Add(1)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		http.Redirect(w, r, "/elsewhere", http.StatusFound)
+	}))
+	defer server.Close()
+
+	d := testDewy(&ContainerConfig{})
+	if err := d.probeHealth(context.Background(), server.URL+"/health", 5*time.Second); err != nil {
+		t.Errorf("probeHealth() error = %v, want nil", err)
+	}
+	if got := targetHits.Load(); got != 0 {
+		t.Errorf("redirect target was requested %d times, want 0", got)
 	}
 }
 

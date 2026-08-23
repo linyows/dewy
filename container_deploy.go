@@ -115,7 +115,16 @@ func (d *Dewy) probeHealth(ctx context.Context, healthURL string, budget time.Du
 	deadlineCtx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
 
-	client := &http.Client{Timeout: defaultHealthCheckProbeTimeout}
+	client := &http.Client{
+		Timeout: defaultHealthCheckProbeTimeout,
+		// Judge the container by the status it returns, not by wherever it
+		// points. Following a redirect would make a 3xx healthy or unhealthy
+		// depending on the target, contradicting the rule below, and would let
+		// a probe that is deliberately pinned to localhost leave the host.
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 	attempts := 0
 
 	for {
@@ -150,7 +159,8 @@ func (d *Dewy) probeHealth(ctx context.Context, healthURL string, budget time.Du
 }
 
 // probeOnce performs a single health check request. A 2xx or 3xx response is
-// treated as healthy.
+// treated as healthy; the caller's client is expected not to follow redirects,
+// so a 3xx is judged as itself.
 func probeOnce(ctx context.Context, client *http.Client, healthURL string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, healthURL, nil)
 	if err != nil {
