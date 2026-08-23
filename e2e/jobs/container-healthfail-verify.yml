@@ -1,0 +1,96 @@
+name: Container Health Check Failure Verify
+
+# Drives the container failure path that the happy-path jobs never reach: a
+# health check that can never pass, because it probes a container port nothing
+# listens on. It covers two things nothing else does.
+#
+# 1. --health-timeout actually bounds the probe. The flag was parsed and stored
+#    but never read, so raising it had no effect while the docs said otherwise.
+#    The budget appears verbatim in the failure message, which makes the wiring
+#    directly observable.
+# 2. A replica that fails its health check is rolled back rather than left
+#    behind. Deploy has no unit test, so this is the only coverage of that path.
+
+steps:
+- name: Wait for the health check to fail
+  uses: shell
+  retry:
+    max_attempts: 60
+    interval: 5s
+  with:
+    cmd: |
+      if [ -f "{{ vars.log }}" ]; then
+        grep -q 'health check failed after' "{{ vars.log }}" && exit 0
+      fi
+      exit 1
+  test: status == 0
+
+- name: Verify --health-timeout bounds the probe
+  id: budget
+  uses: shell
+  with:
+    # Before the flag was wired the probe ran a fixed five retries and reported
+    # "health check failed after 5 retries", with no budget in the message at
+    # all. Matching the configured budget pins the flag to the behavior.
+    cmd: |
+      grep -q "health check failed after .* attempts within {{ vars.health_timeout }}s" \
+        "{{ vars.log }}"
+  test: status == 0
+  outputs:
+    ok: status == 0
+
+- name: Wait for the deploy to fail three times
+  uses: shell
+  retry:
+    max_attempts: 60
+    interval: 5s
+  with:
+    # Three cycles give a container leak room to become visible. Counting via
+    # the shell exit code rather than probe's stdout avoids the empty-stdout
+    # flake that bites `grep -c` here.
+    cmd: |
+      n=$(grep -c 'Container deployment failed' "{{ vars.log }}" 2>/dev/null || true)
+      [ -n "$n" ] && [ "$n" -ge 3 ]
+  test: status == 0
+
+- name: Verify the failed replica is rolled back
+  id: rollback
+  uses: shell
+  with:
+    # --replicas is 1, so at most one container exists mid-cycle and none
+    # between cycles. Without the rollback in Deploy every failed cycle would
+    # strand its container, so the count would track the cycle count instead.
+    # The app label is unique to this variant, so sibling variants sharing the
+    # docker daemon are not counted.
+    cmd: |
+      n=$(docker ps -a \
+        --filter "label=dewy.managed=true" \
+        --filter "label=dewy.app={{ vars.app_name }}" \
+        -q | wc -l | tr -d ' ')
+      echo "managed containers: $n"
+      [ "$n" -le 1 ]
+  test: status == 0
+  outputs:
+    ok: status == 0
+
+- name: Stop dewy
+  uses: shell
+  with: # Use Process Group ID
+    cmd: "kill -TERM -{{ vars.pid }}"
+  test: status == 0
+
+- name: Verify the deploy was never reported successful
+  id: nosuccess
+  uses: shell
+  with:
+    cmd: "grep 'Container deployed successfully' {{ vars.log }}"
+  test: status == 1
+  outputs:
+    ok: status == 1
+
+- name: Show log
+  skipif: outputs.budget.ok && outputs.rollback.ok && outputs.nosuccess.ok
+  uses: shell
+  with:
+    cmd: "cat {{ vars.log }}"
+  echo: "{{ res.stdout }}"

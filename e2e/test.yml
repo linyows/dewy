@@ -67,6 +67,7 @@ jobs:
     - { command: 'container', variant: 'dockerhub' }
     - { command: 'container', variant: 'multiport' }
     - { command: 'container', variant: 'podman' }
+    - { command: 'container', variant: 'healthfail' }
 
 # Phase 1: Start all dewy instances and wait for initial deployment (parallel)
 
@@ -480,11 +481,16 @@ jobs:
       # --admin-port is pinned so the telemetry check scrapes this instance's
       # /metrics, not a sibling variant that grabbed 17539 first (see the
       # metrics_port note on the OCI verify job).
+      #
+      # --drain-time is set to a value that is neither the CLI default (30) nor
+      # the fallback the code uses when the flag never arrives (10), so the
+      # verify job can tell the configured window apart from both.
       cmd: |
         ./dewy container -p 7000 -l debug \
         --telemetry --admin-port 17600 \
         --registry "img://ghcr.io/linyows/dewy-testapp?pre-release=true" \
         --health-path /health \
+        --drain-time 15 \
         --replicas 3
     test: status == -1
     outputs:
@@ -505,6 +511,45 @@ jobs:
         fi
         exit 1
     test: status == 0
+
+- name: Start container with a failing health check
+  id: start_ctr_healthfail
+  needs: [build]
+  steps:
+  - name: Start dewy
+    id: ctr_healthfail
+    uses: shell
+    with:
+      workdir: ./e2e/container/healthfail
+      background: true
+      env:
+        GITHUB_TOKEN: "{{ vars.github_token }}"
+      # The probe targets container port 9999, which nothing inside the image
+      # listens on: the testapp serves 3333 only. Every probe is refused and
+      # the deploy fails on purpose. Targeting a dead port rather than a
+      # missing route is deliberate - the testapp registers a "/" catch-all,
+      # so no path can be made to answer unhealthy.
+      #
+      # --name isolates this instance's dewy.app label from the other docker
+      # variants, which share the dewy-testapp app name and would otherwise
+      # find each other's containers. --admin-port is pinned so the
+      # auto-increment cannot land on a sibling variant's port. One replica
+      # keeps the failing cycle cheap.
+      cmd: |
+        ./dewy container -p 7400:9999 -l debug \
+        --admin-port 17650 \
+        --name dewy-testapp-healthfail \
+        --registry "img://ghcr.io/linyows/dewy-testapp?pre-release=true" \
+        --health-path /health \
+        --health-timeout 7 \
+        --replicas 1
+    test: status == -1
+    outputs:
+      pid: res.pid
+      log: res.log
+    echo: |
+      PID: {{ res.pid }}
+      Log: {{ res.log }}
 
 - name: Start container by OCI registry with Podman runtime
   id: start_ctr_podman
@@ -816,6 +861,9 @@ jobs:
         # so it never lands on another (telemetry-disabled) variant's admin API,
         # whose /metrics would 404. Must match --admin-port in start_ctr_oci.
         metrics_port: 17600
+        # Only this variant passes --drain-time, so only this one checks it.
+        # Must match --drain-time in start_ctr_oci.
+        drain_time: 15
     test: res.code == 0
     timeout: 30m
 
@@ -862,6 +910,23 @@ jobs:
         port2: 7101
         replicas: 2
         new_version: "{{ outputs.genver.version }}"
+    test: res.code == 0
+    timeout: 30m
+
+# This variant never needs a second release: the failure happens on the first
+# deploy, so it only depends on its own start job.
+- name: Verify container health check failure handling
+  needs: [start_ctr_healthfail]
+  steps:
+  - name: Container health check failure verify
+    uses: embedded
+    with:
+      path: ./e2e/jobs/container-healthfail-verify.yml
+      vars:
+        pid: "{{ outputs.ctr_healthfail.pid }}"
+        log: "{{ outputs.ctr_healthfail.log }}"
+        health_timeout: 7
+        app_name: dewy-testapp-healthfail
     test: res.code == 0
     timeout: 30m
 
