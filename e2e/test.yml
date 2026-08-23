@@ -481,11 +481,16 @@ jobs:
       # --admin-port is pinned so the telemetry check scrapes this instance's
       # /metrics, not a sibling variant that grabbed 17539 first (see the
       # metrics_port note on the OCI verify job).
+      #
+      # --drain-time is set to a value that is neither the CLI default (30) nor
+      # the fallback the code uses when the flag never arrives (10), so the
+      # verify job can tell the configured window apart from both.
       cmd: |
         ./dewy container -p 7000 -l debug \
         --telemetry --admin-port 17600 \
         --registry "img://ghcr.io/linyows/dewy-testapp?pre-release=true" \
         --health-path /health \
+        --drain-time 15 \
         --replicas 3
     test: status == -1
     outputs:
@@ -851,6 +856,9 @@ jobs:
         # so it never lands on another (telemetry-disabled) variant's admin API,
         # whose /metrics would 404. Must match --admin-port in start_ctr_oci.
         metrics_port: 17600
+        # Only this variant passes --drain-time, so only this one checks it.
+        # Must match --drain-time in start_ctr_oci.
+        drain_time: 15
     test: res.code == 0
     timeout: 30m
 

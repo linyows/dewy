@@ -74,11 +74,55 @@ steps:
   echo: |
     {{ join(filter(split(res.body, "\n"), hasPrefix(#, "dewy_container")), "\n") }}
 
+# --drain-time was parsed and stored but never read until it was rewired, so
+# the window below is the only thing that distinguishes a configured drain from
+# the hardcoded fallback. Stop logs the duration it was handed, which makes the
+# wiring directly observable.
+- name: Verify --drain-time is used when replacing old containers
+  id: drain
+  # Only the variant that passes --drain-time checks it.
+  skipif: "!('drain_time' in vars)"
+  uses: shell
+  with:
+    # The three old replicas are stopped once the new version is healthy and
+    # their backends have been pulled from the proxy. Counting via the shell
+    # exit code rather than probe's stdout avoids the empty-stdout flake that
+    # bites `grep -c` here.
+    cmd: |
+      n=$(grep -c 'Stopping container gracefully.*timeout={{ vars.drain_time }}s' \
+        "{{ vars.log }}" 2>/dev/null || true)
+      echo "stops at the configured drain window: $n"
+      [ "$n" = "3" ]
+  test: status == 0
+  outputs:
+    ok: status == 0
+
 - name: Stop dewy
   uses: shell
   with: # Use Process Group ID
     cmd: "kill -TERM -{{ vars.pid }}"
   test: status == 0
+
+# Shutdown deliberately keeps a fixed 10s window rather than the operator's
+# drain budget, so a generous --drain-time cannot stall dewy past a service
+# manager's stop timeout. Asserting it here keeps that decision from being
+# quietly undone.
+- name: Verify shutdown keeps the fixed stop window
+  id: shutdown_drain
+  skipif: "!('drain_time' in vars)"
+  uses: shell
+  retry:
+    max_attempts: 30
+    interval: 2s
+  with:
+    cmd: |
+      n=$(grep -c 'Stopping container gracefully.*timeout=10s' \
+        "{{ vars.log }}" 2>/dev/null || true)
+      echo "stops at the fixed shutdown window: $n"
+      [ "$n" = "3" ]
+  test: status == 0
+  outputs:
+    ok: status == 0
 
 - name: Verify no error
   id: noerr
