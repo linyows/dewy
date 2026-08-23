@@ -13,8 +13,10 @@ const (
 	defaultStartupGrace = 3 * time.Second
 
 	// defaultStopTimeoutOld is how long we wait for an old (pre-deploy)
-	// container to drain before sending it KILL. Pairs with the
-	// drain-time setting and is intentionally generous.
+	// container to drain before sending it KILL. Used as the fallback when
+	// --drain-time is unset, and as the fixed window when stopping managed
+	// containers at shutdown, where the operator's drain budget should not
+	// be able to stall dewy's own exit.
 	defaultStopTimeoutOld = 10 * time.Second
 
 	// defaultStopTimeoutFailed is how long we wait for a container that

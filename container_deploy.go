@@ -94,32 +94,90 @@ func (d *Dewy) createHealthCheckFunc(rt *container.Runtime, resolvedMappings []c
 		}
 
 		healthURL := fmt.Sprintf("http://localhost:%d%s", mappedPort, d.config.Container.HealthPath)
-		client := &http.Client{Timeout: defaultHealthCheckTimeout}
-
-		retries := defaultHealthCheckRetries
-		for i := range retries {
-			if d.telemetry != nil && d.telemetry.Enabled() {
-				d.telemetry.Metrics().HealthChecksTotal.Add(ctx, 1)
-			}
-			resp, err := client.Get(healthURL)
-			if err == nil {
-				resp.Body.Close()
-				if resp.StatusCode >= 200 && resp.StatusCode < 400 {
-					d.logger.Debug("Health check passed",
-						slog.String("url", healthURL),
-						slog.Int("status", resp.StatusCode))
-					return nil
-				}
-			}
-			if d.telemetry != nil && d.telemetry.Enabled() {
-				d.telemetry.Metrics().HealthCheckFailures.Add(ctx, 1)
-			}
-			if i < retries-1 {
-				time.Sleep(defaultHealthCheckDelay)
-			}
-		}
-		return fmt.Errorf("health check failed after %d retries", retries)
+		return d.probeHealth(ctx, healthURL, d.healthCheckTimeout())
 	}
+}
+
+// healthCheckTimeout returns the overall budget for verifying a single
+// container, honoring --health-timeout.
+func (d *Dewy) healthCheckTimeout() time.Duration {
+	if d.config.Container != nil && d.config.Container.HealthTimeout > 0 {
+		return d.config.Container.HealthTimeout
+	}
+	return defaultHealthCheckTotalTimeout
+}
+
+// probeHealth polls healthURL until it answers with a success status or the
+// budget runs out. The budget covers every attempt including the back-off
+// between them, so an operator raising --health-timeout buys more attempts
+// rather than a longer wait on a single hung request.
+func (d *Dewy) probeHealth(ctx context.Context, healthURL string, budget time.Duration) error {
+	deadlineCtx, cancel := context.WithTimeout(ctx, budget)
+	defer cancel()
+
+	client := &http.Client{
+		Timeout: defaultHealthCheckProbeTimeout,
+		// Judge the container by the status it returns, not by wherever it
+		// points. Following a redirect would make a 3xx healthy or unhealthy
+		// depending on the target, contradicting the rule below, and would let
+		// a probe that is deliberately pinned to localhost leave the host.
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	attempts := 0
+
+	for {
+		attempts++
+		if d.telemetry != nil && d.telemetry.Enabled() {
+			d.telemetry.Metrics().HealthChecksTotal.Add(ctx, 1)
+		}
+
+		err := probeOnce(deadlineCtx, client, healthURL)
+		if err == nil {
+			d.logger.Debug("Health check passed",
+				slog.String("url", healthURL),
+				slog.Int("attempts", attempts))
+			return nil
+		}
+
+		if d.telemetry != nil && d.telemetry.Enabled() {
+			d.telemetry.Metrics().HealthCheckFailures.Add(ctx, 1)
+		}
+		d.logger.Debug("Health check attempt failed",
+			slog.String("url", healthURL),
+			slog.Int("attempt", attempts),
+			slog.String("error", err.Error()))
+
+		select {
+		case <-deadlineCtx.Done():
+			return fmt.Errorf("health check failed after %d attempts within %s: %w",
+				attempts, budget, err)
+		case <-time.After(defaultHealthCheckDelay):
+		}
+	}
+}
+
+// probeOnce performs a single health check request. A 2xx or 3xx response is
+// treated as healthy; the caller's client is expected not to follow redirects,
+// so a 3xx is judged as itself.
+func probeOnce(ctx context.Context, client *http.Client, healthURL string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, healthURL, nil)
+	if err != nil {
+		return err
+	}
+	// The URL is built from localhost, a port dewy resolved from the runtime
+	// and the operator's own --health-path, so it is not attacker-controlled.
+	resp, err := client.Do(req) //nolint:gosec // G704
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
+		return fmt.Errorf("unhealthy status %d", resp.StatusCode)
+	}
+	return nil
 }
 
 // stopManagedContainers stops all containers managed by this dewy instance.

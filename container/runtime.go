@@ -283,13 +283,29 @@ func (r *Runtime) Run(ctx context.Context, opts RunOptions) (string, error) {
 	return containerID, nil
 }
 
+// drainTimeout returns how long a container that has been taking traffic gets
+// to finish in-flight requests before it is killed, honoring --drain-time.
+func (r *Runtime) drainTimeout() time.Duration {
+	if r.drainTime > 0 {
+		return r.drainTime
+	}
+	return defaultStopTimeoutOld
+}
+
 // Stop stops a running container gracefully.
 func (r *Runtime) Stop(ctx context.Context, containerID string, timeout time.Duration) error {
 	r.logger.Info("Stopping container gracefully",
 		slog.String("container", containerID),
 		slog.Duration("timeout", timeout))
 
-	timeoutSec := int(timeout.Seconds())
+	// The CLI takes whole seconds. Round a positive timeout up rather than
+	// truncating: truncation shortens the grace period the caller asked for,
+	// and below one second it would drop to 0, turning a graceful stop into
+	// an immediate KILL. An explicit zero still means "kill now".
+	timeoutSec := 0
+	if timeout > 0 {
+		timeoutSec = int((timeout + time.Second - 1) / time.Second)
+	}
 	return r.execCommand(ctx, "stop", fmt.Sprintf("--time=%d", timeoutSec), containerID)
 }
 
