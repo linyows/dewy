@@ -138,7 +138,7 @@ See [Versioning - Calendar Versioning](/versioning#calver) for full details.
 
 ### --interval (-i)
 
-Specifies the interval in seconds to check the registry. Default is 600 seconds (10 minutes).
+Specifies the interval in seconds to check the registry. Default is 10 seconds.
 
 ```bash
 dewy server --interval 300 -- /opt/app/current/app
