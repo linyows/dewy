@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/linyows/dewy/cache"
 	"github.com/linyows/dewy/container"
+	"github.com/linyows/dewy/internal/sysdeps/fake"
 	"github.com/linyows/dewy/logging"
 	"github.com/linyows/dewy/notifier"
 	"github.com/linyows/dewy/registry"
@@ -56,11 +58,24 @@ func TestNew(t *testing.T) {
 
 	opts := []cmp.Option{
 		cmp.AllowUnexported(Dewy{}, cache.File{}),
-		cmpopts.IgnoreFields(Dewy{}, "RWMutex", "logger", "tcpProxies", "proxyMutex", "containerRuntime"),
+		// backoff holds a func field that cmp cannot compare; it is asserted
+		// separately below.
+		cmpopts.IgnoreFields(Dewy{}, "RWMutex", "logger", "tcpProxies", "proxyMutex", "containerRuntime", "backoff"),
 		cmpopts.IgnoreFields(cache.File{}, "mutex", "logger"),
 	}
 	if diff := cmp.Diff(dewy, expect, opts...); diff != "" {
 		t.Error(diff)
+	}
+
+	// New leaves the backoff inert; Start installs one based on the interval.
+	if dewy.backoff == nil {
+		t.Fatal("New did not install a backoff")
+	}
+	if dewy.backoff.skip() {
+		t.Error("a freshly constructed Dewy is already backing off, want not")
+	}
+	if got := dewy.backoff.delayFor(5); got != 0 {
+		t.Errorf("delayFor(5) on a fresh Dewy = %v, want 0 (disabled until Start)", got)
 	}
 }
 
@@ -1350,5 +1365,187 @@ func TestMultiPortTCPProxy(t *testing.T) {
 	err = dewy.addProxyBackend("localhost", 9999, 19999)
 	if err == nil {
 		t.Error("Expected error when adding backend to non-existent proxy")
+	}
+}
+
+// newBackoffTestDewy returns a Dewy whose registry is driven by currentFunc and
+// whose backoff runs on a fake clock with exact (unjittered) windows.
+func newBackoffTestDewy(t *testing.T, clk *fake.Clock, currentFunc func(context.Context) (*registry.CurrentResponse, error)) (*Dewy, *mockNotify) {
+	t.Helper()
+
+	c := DefaultConfig()
+	c.Registry = "ghr://linyows/dewy"
+	d, err := New(c, testLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	notify := &mockNotify{messages: []string{}}
+	d.registry = &mockRegistry{currentFunc: currentFunc}
+	d.notifier = notify
+	d.backoff = newTestBackoff(10*time.Second, clk)
+
+	return d, notify
+}
+
+func TestPollOnceSkipsTicksWhileBackingOff(t *testing.T) {
+	var calls atomic.Int32
+	clk := testClock()
+	d, _ := newBackoffTestDewy(t, clk, func(ctx context.Context) (*registry.CurrentResponse, error) {
+		calls.Add(1)
+		return nil, errors.New("registry down")
+	})
+
+	// The first failure must not stretch the interval, so both ticks run.
+	d.pollOnce()
+	d.pollOnce()
+	if got := calls.Load(); got != 2 {
+		t.Fatalf("registry calls after two failing ticks = %d, want 2", got)
+	}
+
+	// The second failure opened a 20s window: these ticks are no-ops.
+	d.pollOnce()
+	d.pollOnce()
+	if got := calls.Load(); got != 2 {
+		t.Errorf("registry calls during the backoff window = %d, want 2 (ticks must not reach the registry)", got)
+	}
+
+	clk.Advance(20 * time.Second)
+	d.pollOnce()
+	if got := calls.Load(); got != 3 {
+		t.Errorf("registry calls after the window elapsed = %d, want 3", got)
+	}
+}
+
+func TestPollOnceSkippedTickDoesNotNotify(t *testing.T) {
+	clk := testClock()
+	d, notify := newBackoffTestDewy(t, clk, func(ctx context.Context) (*registry.CurrentResponse, error) {
+		return nil, errors.New("registry down")
+	})
+
+	d.pollOnce()
+	d.pollOnce()
+	before := notify.errorCount
+
+	d.pollOnce()
+	d.pollOnce()
+
+	if notify.errorCount != before {
+		t.Errorf("notifier error count = %d after skipped ticks, want %d: a skipped tick did no work and must not report failure", notify.errorCount, before)
+	}
+}
+
+func TestPollOnceSuccessResumesNormalCadence(t *testing.T) {
+	var calls atomic.Int32
+	fail := true
+	clk := testClock()
+	d, _ := newBackoffTestDewy(t, clk, func(ctx context.Context) (*registry.CurrentResponse, error) {
+		calls.Add(1)
+		if fail {
+			return nil, errors.New("registry down")
+		}
+		// A slot mismatch is a successful tick that deploys nothing.
+		return &registry.CurrentResponse{ID: "id", Tag: "v1.0.0", Slot: ""}, nil
+	})
+	d.config.Slot = "blue"
+
+	d.pollOnce()
+	d.pollOnce()
+	if !d.backoff.skip() {
+		t.Fatal("backoff window did not open after two failures")
+	}
+
+	fail = false
+	clk.Advance(20 * time.Second)
+	d.pollOnce()
+
+	if got := d.backoff.failureCount(); got != 0 {
+		t.Errorf("failureCount() after a successful tick = %d, want 0", got)
+	}
+
+	// Back to the normal cadence: every subsequent tick reaches the registry.
+	before := calls.Load()
+	d.pollOnce()
+	d.pollOnce()
+	if got := calls.Load() - before; got != 2 {
+		t.Errorf("registry calls after recovery = %d, want 2", got)
+	}
+}
+
+// The artifact-not-found grace period is a "skip without error" and must not be
+// mistaken for a failure, or a slow CI upload would stretch the interval.
+func TestPollOnceGracePeriodDoesNotBackOff(t *testing.T) {
+	var calls atomic.Int32
+	clk := testClock()
+	d, _ := newBackoffTestDewy(t, clk, func(ctx context.Context) (*registry.CurrentResponse, error) {
+		calls.Add(1)
+		now := time.Now()
+		return nil, &registry.ArtifactNotFoundError{
+			Message:     "artifact not found",
+			ReleaseTime: &now,
+		}
+	})
+
+	for i := 0; i < 5; i++ {
+		d.pollOnce()
+	}
+
+	if got := calls.Load(); got != 5 {
+		t.Fatalf("registry calls = %d, want 5: every tick must still run", got)
+	}
+
+	if got := d.backoff.failureCount(); got != 0 {
+		t.Errorf("failureCount() during the grace period = %d, want 0", got)
+	}
+	if d.backoff.skip() {
+		t.Error("skip() during the grace period = true, want false")
+	}
+}
+
+// Without --poll-backoff-max, ticks must keep reaching the registry no matter
+// how long it has been failing: the default is the cadence dewy always had.
+func TestPollOnceDefaultConfigNeverSkips(t *testing.T) {
+	var calls atomic.Int32
+	clk := testClock()
+	d, _ := newBackoffTestDewy(t, clk, func(ctx context.Context) (*registry.CurrentResponse, error) {
+		calls.Add(1)
+		return nil, errors.New("registry down")
+	})
+
+	// Build the backoff exactly as Start does from an untouched config.
+	if d.config.PollBackoffMax != 0 {
+		t.Fatalf("DefaultConfig().PollBackoffMax = %v, want 0: the backoff must be opt-in", d.config.PollBackoffMax)
+	}
+	d.backoff = newPollBackoff(10*time.Second, d.config.PollBackoffMax)
+	d.backoff.clock = clk
+
+	for i := 0; i < 10; i++ {
+		d.pollOnce()
+	}
+
+	if got := calls.Load(); got != 10 {
+		t.Errorf("registry calls over 10 failing ticks = %d, want 10 (no tick may be skipped by default)", got)
+	}
+}
+
+// Opting in changes the cadence; this is the counterpart to the test above.
+func TestPollOnceOptInSkipsTicks(t *testing.T) {
+	var calls atomic.Int32
+	clk := testClock()
+	d, _ := newBackoffTestDewy(t, clk, func(ctx context.Context) (*registry.CurrentResponse, error) {
+		calls.Add(1)
+		return nil, errors.New("registry down")
+	})
+	d.config.PollBackoffMax = 5 * time.Minute
+	d.backoff = newPollBackoff(10*time.Second, d.config.PollBackoffMax)
+	d.backoff.clock = clk
+	d.backoff.jitter = identityJitter
+
+	for i := 0; i < 10; i++ {
+		d.pollOnce()
+	}
+
+	if got := calls.Load(); got != 2 {
+		t.Errorf("registry calls over 10 failing ticks = %d, want 2 (the window opens after the second failure)", got)
 	}
 }
