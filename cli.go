@@ -39,6 +39,7 @@ type cli struct {
 	LogLevel         string   `long:"log-level" short:"l" arg:"(debug|info|warn|error)" description:"Set log level for output (default: error)"`
 	LogFormat        string   `long:"log-format" short:"f" arg:"(text|json)" description:"Set log format for output (default: text)"`
 	Interval         int      `long:"interval" arg:"seconds" short:"i" description:"Polling interval in seconds for checking registry updates (default: 10)"`
+	PollBackoffMax   int      `long:"poll-backoff-max" arg:"seconds" description:"Stretch the polling interval exponentially while checks keep failing, up to this many seconds (default: 0, disabled; 300 is a reasonable choice)"`
 	Ports            []string `long:"port" short:"p" description:"For server: TCP ports to listen on. For container: port mappings in format 'proxy' or 'proxy:container' (multiple flags supported)"`
 	Registry         string   `long:"registry" description:"Registry URL (e.g., ghr://owner/repo, s3://region/bucket/prefix, docker://registry/repo)"`
 	Cache            string   `long:"cache" short:"c" description:"Cache backend URL (e.g., file:///path, s3://region/bucket/prefix, gs://bucket/prefix). Defaults to local file."`
@@ -144,6 +145,7 @@ func (c *cli) buildHelp(names []string) []string {
 func (c *cli) showHelp() {
 	generalOpts := strings.Join(c.buildHelp([]string{
 		"Interval",
+		"PollBackoffMax",
 		"Registry",
 		"Cache",
 		"Slot",
@@ -269,6 +271,9 @@ func (c *cli) run() int {
 	conf.AdminPort = c.AdminPort
 	conf.Slot = c.Slot
 	conf.CalVer = c.CalVer
+	if c.PollBackoffMax > 0 {
+		conf.PollBackoffMax = time.Duration(c.PollBackoffMax) * time.Second
+	}
 
 	switch c.command {
 	case "server":

@@ -61,6 +61,7 @@ type Dewy struct {
 	containerRuntime *container.Runtime
 	cVer             string // Current deployed version (tag)
 	telemetry        *telemetry.Provider
+	backoff          *pollBackoff
 	sync.RWMutex
 }
 
@@ -100,6 +101,8 @@ func New(c Config, log *logging.Logger) (*Dewy, error) {
 		isServerRunning: false,
 		root:            wd,
 		logger:          log,
+		// Inert until Start knows the polling interval.
+		backoff: newPollBackoff(0, 0),
 	}, nil
 }
 
@@ -186,25 +189,50 @@ func (d *Dewy) Start(i int) {
 		}
 	}
 
-	d.job, err = scheduler.Every(i).Seconds().Run(func() {
-		var e error
-		if d.config.Command == CONTAINER {
-			e = d.RunContainer()
-		} else {
-			e = d.Run()
-		}
-		if e != nil {
-			d.logger.Error("Dewy run failure", slog.String("error", e.Error()))
-			d.notifier.SendError(context.Background(), e)
-		} else {
-			d.notifier.ResetErrorCount()
-		}
-	})
+	// A zero PollBackoffMax leaves the cadence fixed.
+	d.backoff = newPollBackoff(time.Duration(i)*time.Second, d.config.PollBackoffMax)
+	if d.config.PollBackoffMax > 0 {
+		d.logger.Info("Polling backoff enabled",
+			slog.Duration("max_delay", d.config.PollBackoffMax))
+	}
+
+	d.job, err = scheduler.Every(i).Seconds().Run(d.pollOnce)
 	if err != nil {
 		d.logger.Error("Scheduler failure", slog.String("error", err.Error()))
 	}
 
 	d.waitSigs(ctx)
+}
+
+// pollOnce is one tick of the polling loop. It is a named method rather than a
+// closure so tests can drive single ticks without the scheduler.
+func (d *Dewy) pollOnce() {
+	if d.backoff.skip() {
+		return
+	}
+
+	var e error
+	if d.config.Command == CONTAINER {
+		e = d.RunContainer()
+	} else {
+		e = d.Run()
+	}
+
+	if e != nil {
+		d.logger.Error("Dewy run failure", slog.String("error", e.Error()))
+		d.notifier.SendError(context.Background(), e)
+		if failures, until := d.backoff.failure(); !until.IsZero() {
+			d.logger.Warn("Polling backoff engaged",
+				slog.Int("consecutive_failures", failures),
+				slog.Time("next_attempt", until))
+		}
+	} else {
+		d.notifier.ResetErrorCount()
+		if cleared := d.backoff.success(); cleared > 0 {
+			d.logger.Info("Polling backoff cleared",
+				slog.Int("after_failures", cleared))
+		}
+	}
 }
 
 func (d *Dewy) waitSigs(ctx context.Context) {
