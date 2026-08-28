@@ -1502,7 +1502,7 @@ func TestPollOnceGracePeriodDoesNotBackOff(t *testing.T) {
 	}
 }
 
-// Without --poll-backoff-max, ticks must keep reaching the registry no matter
+// Without --max-backoff-interval, ticks must keep reaching the registry no matter
 // how long it has been failing: the default is the cadence dewy always had.
 func TestPollOnceDefaultConfigNeverSkips(t *testing.T) {
 	var calls atomic.Int32
@@ -1513,10 +1513,10 @@ func TestPollOnceDefaultConfigNeverSkips(t *testing.T) {
 	})
 
 	// Build the backoff exactly as Start does from an untouched config.
-	if d.config.PollBackoffMax != 0 {
-		t.Fatalf("DefaultConfig().PollBackoffMax = %v, want 0: the backoff must be opt-in", d.config.PollBackoffMax)
+	if d.config.MaxBackoffInterval != 0 {
+		t.Fatalf("DefaultConfig().MaxBackoffInterval = %v, want 0: the backoff must be opt-in", d.config.MaxBackoffInterval)
 	}
-	d.backoff = newPollBackoff(10*time.Second, d.config.PollBackoffMax)
+	d.backoff = newBackoff(10*time.Second, d.config.MaxBackoffInterval)
 	d.backoff.clock = clk
 
 	for i := 0; i < 10; i++ {
@@ -1536,8 +1536,8 @@ func TestPollOnceOptInSkipsTicks(t *testing.T) {
 		calls.Add(1)
 		return nil, errors.New("registry down")
 	})
-	d.config.PollBackoffMax = 5 * time.Minute
-	d.backoff = newPollBackoff(10*time.Second, d.config.PollBackoffMax)
+	d.config.MaxBackoffInterval = 5 * time.Minute
+	d.backoff = newBackoff(10*time.Second, d.config.MaxBackoffInterval)
 	d.backoff.clock = clk
 	d.backoff.jitter = identityJitter
 

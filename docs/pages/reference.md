@@ -144,7 +144,7 @@ Specifies the interval in seconds to check the registry. Default is 10 seconds.
 dewy server --interval 300 -- /opt/app/current/app
 ```
 
-### --poll-backoff-max
+### --max-backoff-interval
 
 Stretches the polling interval exponentially while checks keep failing, so that
 a registry outage is not met with an unchanged request rate. The value is the
@@ -152,7 +152,7 @@ upper bound in seconds. Default is `0`, which disables the backoff and keeps the
 fixed interval Dewy has always used.
 
 ```bash
-dewy server --interval 10 --poll-backoff-max 300 -- /opt/app/current/app
+dewy server --interval 10 --max-backoff-interval 300 -- /opt/app/current/app
 ```
 
 A single failure changes nothing. From the second consecutive failure the wait
@@ -160,7 +160,7 @@ doubles each time (`interval`, `2x`, `4x`, ...), jittered, and never grows past
 the bound given here. The first successful check restores the configured
 interval immediately.
 
-With `--interval 10 --poll-backoff-max 300`, a registry that stays down is
+With `--interval 10 --max-backoff-interval 300`, a registry that stays down is
 polled at most 10s, 20s, 40s, 80s and 160s apart, then at most 300s apart,
 instead of every 10s. Jitter only ever shortens those waits, and each one lands
 on a multiple of `--interval` because the scheduler keeps firing at that

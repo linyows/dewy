@@ -61,7 +61,7 @@ type Dewy struct {
 	containerRuntime *container.Runtime
 	cVer             string // Current deployed version (tag)
 	telemetry        *telemetry.Provider
-	backoff          *pollBackoff
+	backoff          *backoff
 	sync.RWMutex
 }
 
@@ -102,7 +102,7 @@ func New(c Config, log *logging.Logger) (*Dewy, error) {
 		root:            wd,
 		logger:          log,
 		// Inert until Start knows the polling interval.
-		backoff: newPollBackoff(0, 0),
+		backoff: newBackoff(0, 0),
 	}, nil
 }
 
@@ -189,11 +189,11 @@ func (d *Dewy) Start(i int) {
 		}
 	}
 
-	// A zero PollBackoffMax leaves the cadence fixed.
-	d.backoff = newPollBackoff(time.Duration(i)*time.Second, d.config.PollBackoffMax)
-	if d.config.PollBackoffMax > 0 {
+	// A zero MaxBackoffInterval leaves the cadence fixed.
+	d.backoff = newBackoff(time.Duration(i)*time.Second, d.config.MaxBackoffInterval)
+	if d.config.MaxBackoffInterval > 0 {
 		d.logger.Info("Polling backoff enabled",
-			slog.Duration("max_delay", d.config.PollBackoffMax))
+			slog.Duration("max_backoff_interval", d.config.MaxBackoffInterval))
 	}
 
 	d.job, err = scheduler.Every(i).Seconds().Run(d.pollOnce)
