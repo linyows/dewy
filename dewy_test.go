@@ -1388,7 +1388,7 @@ func newBackoffTestDewy(t *testing.T, clk *fake.Clock, currentFunc func(context.
 	return d, notify
 }
 
-func TestPollOnceSkipsTicksWhileBackingOff(t *testing.T) {
+func TestTickSkipsWhileBackingOff(t *testing.T) {
 	var calls atomic.Int32
 	clk := testClock()
 	d, _ := newBackoffTestDewy(t, clk, func(ctx context.Context) (*registry.CurrentResponse, error) {
@@ -1397,45 +1397,45 @@ func TestPollOnceSkipsTicksWhileBackingOff(t *testing.T) {
 	})
 
 	// The first failure must not stretch the interval, so both ticks run.
-	d.pollOnce()
-	d.pollOnce()
+	d.tick()
+	d.tick()
 	if got := calls.Load(); got != 2 {
 		t.Fatalf("registry calls after two failing ticks = %d, want 2", got)
 	}
 
 	// The second failure opened a 20s window: these ticks are no-ops.
-	d.pollOnce()
-	d.pollOnce()
+	d.tick()
+	d.tick()
 	if got := calls.Load(); got != 2 {
 		t.Errorf("registry calls during the backoff window = %d, want 2 (ticks must not reach the registry)", got)
 	}
 
 	clk.Advance(20 * time.Second)
-	d.pollOnce()
+	d.tick()
 	if got := calls.Load(); got != 3 {
 		t.Errorf("registry calls after the window elapsed = %d, want 3", got)
 	}
 }
 
-func TestPollOnceSkippedTickDoesNotNotify(t *testing.T) {
+func TestSkippedTickDoesNotNotify(t *testing.T) {
 	clk := testClock()
 	d, notify := newBackoffTestDewy(t, clk, func(ctx context.Context) (*registry.CurrentResponse, error) {
 		return nil, errors.New("registry down")
 	})
 
-	d.pollOnce()
-	d.pollOnce()
+	d.tick()
+	d.tick()
 	before := notify.errorCount
 
-	d.pollOnce()
-	d.pollOnce()
+	d.tick()
+	d.tick()
 
 	if notify.errorCount != before {
 		t.Errorf("notifier error count = %d after skipped ticks, want %d: a skipped tick did no work and must not report failure", notify.errorCount, before)
 	}
 }
 
-func TestPollOnceSuccessResumesNormalCadence(t *testing.T) {
+func TestTickSuccessResumesNormalCadence(t *testing.T) {
 	var calls atomic.Int32
 	fail := true
 	clk := testClock()
@@ -1449,15 +1449,15 @@ func TestPollOnceSuccessResumesNormalCadence(t *testing.T) {
 	})
 	d.config.Slot = "blue"
 
-	d.pollOnce()
-	d.pollOnce()
+	d.tick()
+	d.tick()
 	if !d.backoff.skip() {
 		t.Fatal("backoff window did not open after two failures")
 	}
 
 	fail = false
 	clk.Advance(20 * time.Second)
-	d.pollOnce()
+	d.tick()
 
 	if got := d.backoff.failureCount(); got != 0 {
 		t.Errorf("failureCount() after a successful tick = %d, want 0", got)
@@ -1465,8 +1465,8 @@ func TestPollOnceSuccessResumesNormalCadence(t *testing.T) {
 
 	// Back to the normal cadence: every subsequent tick reaches the registry.
 	before := calls.Load()
-	d.pollOnce()
-	d.pollOnce()
+	d.tick()
+	d.tick()
 	if got := calls.Load() - before; got != 2 {
 		t.Errorf("registry calls after recovery = %d, want 2", got)
 	}
@@ -1474,7 +1474,7 @@ func TestPollOnceSuccessResumesNormalCadence(t *testing.T) {
 
 // The artifact-not-found grace period is a "skip without error" and must not be
 // mistaken for a failure, or a slow CI upload would stretch the interval.
-func TestPollOnceGracePeriodDoesNotBackOff(t *testing.T) {
+func TestTickGracePeriodDoesNotBackOff(t *testing.T) {
 	var calls atomic.Int32
 	clk := testClock()
 	d, _ := newBackoffTestDewy(t, clk, func(ctx context.Context) (*registry.CurrentResponse, error) {
@@ -1487,7 +1487,7 @@ func TestPollOnceGracePeriodDoesNotBackOff(t *testing.T) {
 	})
 
 	for i := 0; i < 5; i++ {
-		d.pollOnce()
+		d.tick()
 	}
 
 	if got := calls.Load(); got != 5 {
@@ -1504,7 +1504,7 @@ func TestPollOnceGracePeriodDoesNotBackOff(t *testing.T) {
 
 // Without --max-backoff-interval, ticks must keep reaching the registry no matter
 // how long it has been failing: the default is the cadence dewy always had.
-func TestPollOnceDefaultConfigNeverSkips(t *testing.T) {
+func TestTickDefaultConfigNeverSkips(t *testing.T) {
 	var calls atomic.Int32
 	clk := testClock()
 	d, _ := newBackoffTestDewy(t, clk, func(ctx context.Context) (*registry.CurrentResponse, error) {
@@ -1520,7 +1520,7 @@ func TestPollOnceDefaultConfigNeverSkips(t *testing.T) {
 	d.backoff.clock = clk
 
 	for i := 0; i < 10; i++ {
-		d.pollOnce()
+		d.tick()
 	}
 
 	if got := calls.Load(); got != 10 {
@@ -1529,7 +1529,7 @@ func TestPollOnceDefaultConfigNeverSkips(t *testing.T) {
 }
 
 // Opting in changes the cadence; this is the counterpart to the test above.
-func TestPollOnceOptInSkipsTicks(t *testing.T) {
+func TestTickOptInSkips(t *testing.T) {
 	var calls atomic.Int32
 	clk := testClock()
 	d, _ := newBackoffTestDewy(t, clk, func(ctx context.Context) (*registry.CurrentResponse, error) {
@@ -1542,7 +1542,7 @@ func TestPollOnceOptInSkipsTicks(t *testing.T) {
 	d.backoff.jitter = identityJitter
 
 	for i := 0; i < 10; i++ {
-		d.pollOnce()
+		d.tick()
 	}
 
 	if got := calls.Load(); got != 2 {

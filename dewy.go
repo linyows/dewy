@@ -196,7 +196,7 @@ func (d *Dewy) Start(i int) {
 			slog.Duration("max_backoff_interval", d.config.MaxBackoffInterval))
 	}
 
-	d.job, err = scheduler.Every(i).Seconds().Run(d.pollOnce)
+	d.job, err = scheduler.Every(i).Seconds().Run(d.tick)
 	if err != nil {
 		d.logger.Error("Scheduler failure", slog.String("error", err.Error()))
 	}
@@ -204,9 +204,10 @@ func (d *Dewy) Start(i int) {
 	d.waitSigs(ctx)
 }
 
-// pollOnce is one tick of the polling loop. It is a named method rather than a
-// closure so tests can drive single ticks without the scheduler.
-func (d *Dewy) pollOnce() {
+// tick is the scheduler's callback: one iteration of the polling loop. It does
+// no work at all while a backoff window is open. It is a named method rather
+// than a closure so tests can drive single ticks without the scheduler.
+func (d *Dewy) tick() {
 	if d.backoff.skip() {
 		return
 	}
