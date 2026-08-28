@@ -14,17 +14,17 @@ func testClock() *fake.Clock {
 	return fake.NewClock(time.Date(2026, 8, 25, 0, 0, 0, 0, time.UTC))
 }
 
-// testBackoffMax is the bound an operator would pass via --poll-backoff-max.
+// testBackoffMax is the bound an operator would pass via --max-backoff-interval.
 const testBackoffMax = 5 * time.Minute
 
-func newTestBackoff(base time.Duration, clk *fake.Clock) *pollBackoff {
-	b := newPollBackoff(base, testBackoffMax)
+func newTestBackoff(base time.Duration, clk *fake.Clock) *backoff {
+	b := newBackoff(base, testBackoffMax)
 	b.clock = clk
 	b.jitter = identityJitter
 	return b
 }
 
-func TestPollBackoffRunsBeforeAnyFailure(t *testing.T) {
+func TestBackoffRunsBeforeAnyFailure(t *testing.T) {
 	b := newTestBackoff(10*time.Second, testClock())
 
 	if b.skip() {
@@ -32,7 +32,7 @@ func TestPollBackoffRunsBeforeAnyFailure(t *testing.T) {
 	}
 }
 
-func TestPollBackoffFirstFailureDoesNotStretch(t *testing.T) {
+func TestBackoffFirstFailureDoesNotStretch(t *testing.T) {
 	b := newTestBackoff(10*time.Second, testClock())
 
 	if failures, until := b.failure(); !until.IsZero() {
@@ -43,7 +43,7 @@ func TestPollBackoffFirstFailureDoesNotStretch(t *testing.T) {
 	}
 }
 
-func TestPollBackoffSecondFailureOpensWindow(t *testing.T) {
+func TestBackoffSecondFailureOpensWindow(t *testing.T) {
 	clk := testClock()
 	b := newTestBackoff(10*time.Second, clk)
 
@@ -66,7 +66,7 @@ func TestPollBackoffSecondFailureOpensWindow(t *testing.T) {
 	}
 }
 
-func TestPollBackoffThirdFailureDoubles(t *testing.T) {
+func TestBackoffThirdFailureDoubles(t *testing.T) {
 	clk := testClock()
 	b := newTestBackoff(10*time.Second, clk)
 
@@ -84,7 +84,7 @@ func TestPollBackoffThirdFailureDoubles(t *testing.T) {
 	}
 }
 
-func TestPollBackoffSuccessClearsWindow(t *testing.T) {
+func TestBackoffSuccessClearsWindow(t *testing.T) {
 	b := newTestBackoff(10*time.Second, testClock())
 
 	b.failure()
@@ -104,7 +104,7 @@ func TestPollBackoffSuccessClearsWindow(t *testing.T) {
 	}
 }
 
-func TestPollBackoffDelayGrowthAndCap(t *testing.T) {
+func TestBackoffDelayGrowthAndCap(t *testing.T) {
 	b := newTestBackoff(10*time.Second, testClock())
 
 	tests := []struct {
@@ -128,11 +128,11 @@ func TestPollBackoffDelayGrowthAndCap(t *testing.T) {
 	}
 }
 
-// Without --poll-backoff-max the backoff must never skip a tick, so existing
+// Without --max-backoff-interval the backoff must never skip a tick, so existing
 // deployments keep the cadence they have always had.
-func TestPollBackoffDisabledByDefault(t *testing.T) {
+func TestBackoffDisabledByDefault(t *testing.T) {
 	clk := testClock()
-	b := newPollBackoff(10*time.Second, 0) // as if --poll-backoff-max were never passed
+	b := newBackoff(10*time.Second, 0) // as if --max-backoff-interval were never passed
 	b.clock = clk
 	b.jitter = identityJitter
 
@@ -156,7 +156,7 @@ func TestPollBackoffDisabledByDefault(t *testing.T) {
 	}
 }
 
-func TestPollBackoffDisabledWhenBaseIsZero(t *testing.T) {
+func TestBackoffDisabledWhenBaseIsZero(t *testing.T) {
 	b := newTestBackoff(0, testClock())
 
 	for i := 0; i < 5; i++ {
@@ -170,7 +170,7 @@ func TestPollBackoffDisabledWhenBaseIsZero(t *testing.T) {
 
 // An operator already polling more slowly than the cap gets no backoff, rather
 // than a delay shorter than their own interval.
-func TestPollBackoffIntervalLongerThanCap(t *testing.T) {
+func TestBackoffIntervalLongerThanCap(t *testing.T) {
 	base := 10 * time.Minute // longer than testBackoffMax
 	b := newTestBackoff(base, testClock())
 
@@ -187,13 +187,13 @@ func TestPollBackoffIntervalLongerThanCap(t *testing.T) {
 
 // The jittered window must never fall below one polling interval, or dewy
 // would poll faster while backing off.
-func TestPollBackoffEqualJitterStaysAboveBase(t *testing.T) {
+func TestBackoffEqualJitterStaysAboveBase(t *testing.T) {
 	base := 10 * time.Second
 
 	for i := 0; i < 200; i++ {
 		clk := testClock()
 		start := clk.Now()
-		b := newPollBackoff(base, testBackoffMax) // keeps the real equalJitter
+		b := newBackoff(base, testBackoffMax) // keeps the real equalJitter
 		b.clock = clk
 
 		b.failure()

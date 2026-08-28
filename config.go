@@ -93,9 +93,9 @@ type Config struct {
 	AfterDeployHook  string
 	Slot             string // Deployment slot for blue/green deployment (e.g., "blue", "green")
 	CalVer           string // CalVer format for version identification (e.g., "YYYY.0M.MICRO")
-	// PollBackoffMax bounds how far consecutive failures may stretch the
+	// MaxBackoffInterval bounds how far consecutive failures may stretch the
 	// polling interval. Zero keeps it fixed.
-	PollBackoffMax time.Duration
+	MaxBackoffInterval time.Duration
 	*Info
 }
 
