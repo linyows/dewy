@@ -16,9 +16,9 @@ type fakeDirEntry struct {
 	infoErr error
 }
 
-func (f fakeDirEntry) Name() string                { return f.name }
-func (f fakeDirEntry) IsDir() bool                 { return true }
-func (f fakeDirEntry) Type() fs.FileMode           { return fs.ModeDir }
+func (f fakeDirEntry) Name() string      { return f.name }
+func (f fakeDirEntry) IsDir() bool       { return true }
+func (f fakeDirEntry) Type() fs.FileMode { return fs.ModeDir }
 func (f fakeDirEntry) Info() (fs.FileInfo, error) {
 	if f.infoErr != nil {
 		return nil, f.infoErr
