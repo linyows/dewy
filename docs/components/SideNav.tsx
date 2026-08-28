@@ -18,7 +18,7 @@ const jaItems = [
     title: 'コンセプト',
     links: [
       { href: '/ja/architecture', children: 'アーキテクチャ' },
-      { href: '/ja/registry', children: 'レジストリー' },
+      { href: '/ja/registry', children: 'レジストリ' },
       { href: '/ja/artifact', children: 'アーティファクト' },
       { href: '/ja/notifier', children: '通知' },
       { href: '/ja/cache', children: 'キャッシュ' },

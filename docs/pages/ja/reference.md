@@ -64,7 +64,7 @@ UPSTREAM           DEPLOY TIME            NAME
 
 ### --registry (-r)
 
-アプリケーションのバージョン情報を取得するレジストリーのURLを指定します。GitHubリリース、DockerHub、ECRなど様々なレジストリーがサポートされています。
+アプリケーションのバージョン情報を取得するレジストリのURLを指定します。GitHubリリース、DockerHub、ECRなど様々なレジストリがサポートされています。
 
 ```bash
 dewy server --registry ghr://owner/repo -- /opt/app/current/app
@@ -138,7 +138,7 @@ dewy server --registry ghr://owner/repo --calver YYYY.0M.MICRO -- /opt/app/curre
 
 ### --interval (-i)
 
-レジストリーをチェックする間隔を秒単位で指定します。デフォルトは10秒です。
+レジストリをチェックする間隔を秒単位で指定します。デフォルトは10秒です。
 
 ```bash
 dewy server --interval 300 -- /opt/app/current/app
@@ -306,9 +306,9 @@ dewy container --registry img://ghcr.io/owner/app --replicas 3 -- \
 # 結果: myapp-1234567890-0, myapp-1234567890-1, myapp-1234567890-2
 ```
 
-## レジストリーURL形式
+## レジストリURL形式
 
-Dewyは複数のレジストリータイプをサポートしています。それぞれ異なるURL形式を使用します。
+Dewyは複数のレジストリタイプをサポートしています。それぞれ異なるURL形式を使用します。
 
 ### GitHub Releases
 
@@ -411,7 +411,7 @@ Dewyは以下の終了コードを使用して実行結果を示します。ス�
 
 ### ネットワークエラー (2)
 
-レジストリーやアーティファクトへの接続に失敗した場合に返されます。ネットワーク接続や認証情報を確認してください。
+レジストリやアーティファクトへの接続に失敗した場合に返されます。ネットワーク接続や認証情報を確認してください。
 
 ### ファイルシステムエラー (3)
 
