@@ -120,6 +120,29 @@ dewy server --port 9090 -- /opt/app/current/app
 dewy server --registry ghr://owner/repo -- /opt/worker/current/worker
 ```
 
+### --channel
+
+デプロイ対象を1つのリリースチャンネルに限定します。チャンネルとは、タグのプリリリース識別子の先頭の要素です。`v1.2.3-canary.1`は`canary`、`v1.2.3-rc.1`は`rc`、プリリリース識別子を持たないタグは`stable`に属します。
+
+一部のホストへ先行してバージョンを展開する用途に使用します。カナリアホストを`--channel canary`で起動しておくと、`v1.4.0-canary.1`が公開された時点でそれを取得します。残りのホストは`--channel stable`で起動しておき、`v1.4.0`が公開されるまで直前の正式リリースのままになります。
+
+`stable`以外のチャンネルは単独でプリリリースバージョンを選択するため、レジストリURLの`pre-release=true`は不要です。`--channel stable`は、レジストリURLがそれを指定していてもプリリリースバージョンを除外します。このオプションを指定しない場合、バージョン選択の挙動は変わりません。チャンネル名は大文字と小文字を区別せずに比較されます。
+
+このオプションはすべてのコマンドと、タグでバージョンを選択するすべてのレジストリで機能します。`--slot`と併用でき、両方を指定した場合は両方の条件を満たすバージョンのみをデプロイします。
+
+```bash
+# カナリアホスト
+dewy server --registry ghr://owner/repo --channel canary -- /opt/app/current/app
+
+# その他のホスト
+dewy server --registry ghr://owner/repo --channel stable -- /opt/app/current/app
+
+# コンテナイメージでも同様に機能する
+dewy container --registry img://ghcr.io/owner/app --channel canary --port 8080
+```
+
+展開の手順については[バージョニング - リリースチャンネル](/ja/versioning#channels)を参照してください。
+
 ### --calver
 
 CalVer（カレンダーバージョニング）のフォーマットを指定します。設定すると、Dewyはセマンティックバージョニングの代わりにカレンダーバージョニングを使用して最新バージョンを検出します。

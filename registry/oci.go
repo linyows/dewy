@@ -31,6 +31,7 @@ type OCI struct {
 	Tag        string `schema:"-"` // Optional: specific tag to track
 	PreRelease bool   `schema:"pre-release"`
 	CalVer     string `schema:"calver"`
+	Channel    string `schema:"channel"`
 	// Constraint filters versions by semver range (e.g., "~1.0" means >=1.0.0 <1.1.0,
 	// "^2.0" means >=2.0.0 <3.0.0). This prevents automatic upgrades across major versions
 	// when a registry contains multiple major version lines (v1.x, v2.x, v3.x).
@@ -413,14 +414,15 @@ func (o *OCI) findLatestTag(tags []string) (string, error) {
 	var latestTag string
 	var err error
 
+	filter := VersionFilter{Channel: o.Channel, PreRelease: o.PreRelease}
 	if o.CalVer != "" {
-		_, latestTag, err = FindLatestCalVer(tags, o.CalVer, o.PreRelease)
+		_, latestTag, err = FindLatestCalVerWith(tags, o.CalVer, filter)
 	} else {
 		// TODO: Phase 2 - implement constraint support.
 		// When o.Constraint is set (e.g., "~1.0", "^2.0"), filter tags by the semver
 		// range before finding the latest, so only versions matching the constraint
 		// are considered. This avoids unintended major-version upgrades.
-		_, latestTag, err = FindLatestSemVer(tags, o.PreRelease)
+		_, latestTag, err = FindLatestSemVerWith(tags, filter)
 	}
 	if err != nil {
 		o.logger.Warn("Failed to find versioned tag", "error", err, "tags", tags)

@@ -45,6 +45,7 @@ Features
 - Graceful restarts
 - Configurable registries and artifact stores
 - Support for Docker Hub, GHCR, GAR, ECR, and other OCI registries
+- Staged rollout by release channel
 - Deployment status notifications
 - Structured logging with JSON format support
 - OpenTelemetry-based observability (Prometheus metrics + OTLP export)
@@ -70,6 +71,18 @@ $ dewy server --registry ghr://linyows/myapp \
 ```
 
 A version that fails its health check is recorded and is not deployed again until a different version is published, so a release that does not start is deployed once rather than on every poll. The record is keyed by tag and artifact name, so republishing the same tag does not release it; publishing a different version, running without `--health-path`, or deleting the `blocked` entry from the cache store does. Pass `--no-rollback` to keep the failed release in place and only record and notify the failure.
+
+To roll a version out to a subset of hosts first, give each host a release channel. A channel is the leading component of the tag's pre-release identifier, so `v1.4.0-canary.1` is in `canary` and `v1.4.0` is in `stable`:
+
+```sh
+# Canary hosts take v*-canary.* as soon as it is published
+$ dewy server --registry ghr://linyows/myapp --channel canary -p 8000 -- /opt/myapp/current/myapp
+
+# Every other host stays on the last final release
+$ dewy server --registry ghr://linyows/myapp --channel stable -p 8000 -- /opt/myapp/current/myapp
+```
+
+Promotion needs no change on the hosts: publishing the final tag is what promotes the version. `--channel` works with the container command as well, and combines with `--slot`.
 
 ### Assets Command
 
@@ -117,12 +130,13 @@ The Registry interface manages versions of applications and files. It currently 
 
 ### Common Options
 
-There are two common options for the registry.
+There are three common options for the registry.
 
 Option | Type | Description
 ---    | ---  | ---  
 pre-release | bool | Set to true to include pre-release versions, following semantic versioning.
 artifact | string | Specify the artifact filename if it does not follow the name_os_arch.ext pattern that Dewy matches by default.
+channel | string | Track one release channel, named by the leading component of the tag's pre-release identifier. Usually set with the `--channel` option rather than in the URL.
 
 > [!IMPORTANT]
 > **Artifact Pattern Matching**: When the `artifact` option is not specified, Dewy automatically selects artifacts by matching the current OS and architecture in filenames. It performs case-insensitive substring matching for OS (`linux`, `darwin`/`macos`, `windows`) and architecture (`amd64`/`x86_64`, `arm64`, etc.). The first artifact containing both the current OS and architecture will be selected. If multiple artifacts match or if you need a specific artifact, use the `artifact` parameter to specify it explicitly.

@@ -120,6 +120,29 @@ dewy server --port 9090 -- /opt/app/current/app
 dewy server --registry ghr://owner/repo -- /opt/worker/current/worker
 ```
 
+### --channel
+
+Restricts deployments to one release channel. A channel is the leading component of the tag's pre-release identifier: `v1.2.3-canary.1` is in `canary`, `v1.2.3-rc.1` is in `rc`, and a tag with no pre-release identifier is in `stable`.
+
+Use it to roll a version out to a subset of hosts first. Canary hosts run with `--channel canary` and take `v1.4.0-canary.1` as soon as it is published; the rest run with `--channel stable` and stay on the last final release until `v1.4.0` is published.
+
+A channel other than `stable` selects pre-release versions on its own, so `pre-release=true` on the registry URL is not needed. `--channel stable` excludes pre-release versions even when the registry URL sets it. Without this option, version selection is unchanged. Channel names are compared case-insensitively.
+
+The option works with every command and every registry that selects versions by tag, and combines with `--slot`: an instance given both deploys only versions that satisfy both.
+
+```bash
+# Canary hosts
+dewy server --registry ghr://owner/repo --channel canary -- /opt/app/current/app
+
+# Every other host
+dewy server --registry ghr://owner/repo --channel stable -- /opt/app/current/app
+
+# Container images work the same way
+dewy container --registry img://ghcr.io/owner/app --channel canary --port 8080
+```
+
+See [Versioning - Release Channels](/versioning#channels) for the rollout workflow.
+
 ### --calver
 
 Specifies the CalVer (Calendar Versioning) format for version identification. When set, Dewy uses calendar versioning instead of semantic versioning to detect the latest version.

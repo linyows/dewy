@@ -169,13 +169,18 @@ func (v *CalVer) GetBuildMetadata() string {
 
 // FindLatestCalVer finds the latest calendar version from a list of version strings.
 func FindLatestCalVer(versionNames []string, format string, allowPreRelease bool) (*CalVer, string, error) {
-	return FindLatestCalVerWithSlot(versionNames, format, "", allowPreRelease)
+	return FindLatestCalVerWith(versionNames, format, VersionFilter{PreRelease: allowPreRelease})
 }
 
 // FindLatestCalVerWithSlot finds the latest calendar version that matches the specified slot.
 // If slot is empty, it matches versions without build metadata or any build metadata.
 // If allowPreRelease is false, versions with pre-release identifiers are excluded.
 func FindLatestCalVerWithSlot(versionNames []string, format, slot string, allowPreRelease bool) (*CalVer, string, error) {
+	return FindLatestCalVerWith(versionNames, format, VersionFilter{Slot: slot, PreRelease: allowPreRelease})
+}
+
+// FindLatestCalVerWith finds the latest calendar version that passes filter.
+func FindLatestCalVerWith(versionNames []string, format string, filter VersionFilter) (*CalVer, string, error) {
 	f, err := NewCalVerFormat(format)
 	if err != nil {
 		return nil, "", err
@@ -189,17 +194,9 @@ func FindLatestCalVerWithSlot(versionNames []string, format, slot string, allowP
 		if ver == nil {
 			continue
 		}
-
-		// Pre-release filtering
-		if !allowPreRelease && ver.PreRelease != "" {
+		if !filter.accepts(ver.PreRelease, ver.BuildMetadata) {
 			continue
 		}
-
-		// Slot filtering: if slot is specified, only match versions with that build metadata
-		if slot != "" && ver.BuildMetadata != slot {
-			continue
-		}
-
 		if latestVersion == nil || ver.Compare(latestVersion) > 0 {
 			latestVersion = ver
 			latestName = name

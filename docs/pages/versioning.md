@@ -75,6 +75,30 @@ Pre-release versions are treated with lower priority than official versions of t
 Example: `v1.2.3-rc.1 < v1.2.3`
 {% /callout %}
 
+### Release Channels {% #channels %}
+
+A release channel is the leading component of the pre-release identifier. `v1.2.3-canary.1` and `v1.2.3-canary.2` are both in the `canary` channel; `v1.2.3-rc.1` is in `rc`; a version with no pre-release identifier, such as `v1.2.3`, is in `stable`.
+
+`--channel` restricts an instance to one channel, which is how a version is rolled out to a subset of hosts before all of them:
+
+```bash
+# Canary hosts - only deploys v*-canary.* versions
+dewy server --registry ghr://owner/repo --channel canary -- /opt/myapp/current/myapp
+
+# Every other host - only deploys final releases
+dewy server --registry ghr://owner/repo --channel stable -- /opt/myapp/current/myapp
+```
+
+Publishing `v1.4.0-canary.1` deploys it to the canary hosts alone. The hosts on `stable` stay on `v1.3.0` until `v1.4.0` is published. No host-side change is needed to promote a version; publishing the final tag is what promotes it.
+
+A channel other than `stable` selects pre-release versions by definition, so `--channel canary` needs no `pre-release=true` on the registry URL. `--channel stable` excludes pre-release versions even when the registry URL sets `pre-release=true`. Without `--channel`, version selection is unchanged: the registry `pre-release` option decides whether pre-release versions are candidates.
+
+Channel names are compared case-insensitively.
+
+{% callout type="note" title="Channels and Slots" %}
+Channels and deployment slots are independent and can be combined. A channel is the pre-release identifier and says how far a version has been rolled out. A slot is build metadata and says which of two parallel environments a build is for. An instance started with both options deploys only versions that satisfy both, such as `v1.4.0-canary.1+blue` for `--channel canary --slot blue`.
+{% /callout %}
+
 ### Build Metadata and Deployment Slots {% #build-metadata %}
 
 Semantic versioning also supports build metadata, which is appended with a `+` sign. Dewy uses build metadata for **deployment slot** management, enabling blue/green deployment patterns.

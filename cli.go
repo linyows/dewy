@@ -59,6 +59,7 @@ type cli struct {
 	Cmd              []string `long:"cmd" description:"Command and arguments to pass to container (can be specified multiple times)"`
 	AdminPort        int      `long:"admin-port" description:"Admin API port for container command (default: 17539, auto-increments if in use)"`
 	Slot             string   `long:"slot" short:"s" description:"Deployment slot for blue/green deployment (e.g., blue, green). Only deploys if tag's build metadata matches."`
+	Channel          string   `long:"channel" description:"Release channel to track, named by the tag's pre-release identifier (e.g., canary for v1.2.3-canary.1). Use stable for final releases only. Unset tracks every version the registry pre-release option admits"`
 	CalVer           string   `long:"calver" description:"CalVer format for version identification (e.g., YYYY.0M.0D.MICRO)"`
 	Telemetry        bool     `long:"telemetry" description:"Enable telemetry (Prometheus metrics on admin API /metrics endpoint)"`
 	OTLPEndpoint     string   `long:"otlp-endpoint" description:"OTLP gRPC endpoint for exporting metrics (e.g., localhost:4317)"`
@@ -152,6 +153,7 @@ func (c *cli) showHelp() {
 		"Registry",
 		"Cache",
 		"Slot",
+		"Channel",
 		"CalVer",
 		"Notifier",
 		"LogLevel",
@@ -274,6 +276,7 @@ func (c *cli) run() int {
 	conf.AfterDeployHook = c.AfterDeployHook
 	conf.AdminPort = c.AdminPort
 	conf.Slot = c.Slot
+	conf.Channel = c.Channel
 	conf.CalVer = c.CalVer
 	if c.MaxBackoffInterval > 0 {
 		conf.MaxBackoffInterval = time.Duration(c.MaxBackoffInterval) * time.Second

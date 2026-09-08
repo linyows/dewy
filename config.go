@@ -110,7 +110,12 @@ type Config struct {
 	AfterDeployHook  string
 	Health           HealthConfig // Post-deploy health check (server command)
 	Slot             string       // Deployment slot for blue/green deployment (e.g., "blue", "green")
-	CalVer           string       // CalVer format for version identification (e.g., "YYYY.0M.MICRO")
+	// Channel restricts deployments to versions in one release channel, named
+	// by the pre-release identifier of the tag (e.g. "canary" for
+	// v1.2.3-canary.1). "stable" tracks final releases only. Empty tracks
+	// every version the pre-release setting admits.
+	Channel string
+	CalVer  string // CalVer format for version identification (e.g., "YYYY.0M.MICRO")
 	// MaxBackoffInterval bounds how far consecutive failures may stretch the
 	// polling interval. Zero keeps it fixed.
 	MaxBackoffInterval time.Duration

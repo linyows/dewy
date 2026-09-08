@@ -93,6 +93,11 @@ func New(c Config, log *logging.Logger) (*Dewy, error) {
 		q.Set("calver", c.CalVer)
 		u.RawQuery = q.Encode()
 	}
+	if c.Channel != "" {
+		q := u.Query()
+		q.Set("channel", c.Channel)
+		u.RawQuery = q.Encode()
+	}
 	c.Registry = fmt.Sprintf("%s://%s", su[0], u.String())
 
 	return &Dewy{

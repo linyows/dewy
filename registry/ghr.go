@@ -56,6 +56,7 @@ type GHR struct {
 	Artifact   string `schema:"artifact"`
 	PreRelease bool   `schema:"pre-release"`
 	CalVer     string `schema:"calver"`
+	Channel    string `schema:"channel"`
 	cl         *github.Client
 	logger     *logging.Logger
 }
@@ -214,10 +215,11 @@ func (g *GHR) latest(ctx context.Context) (*github.RepositoryRelease, error) {
 	// Use calver or semver to find the latest version
 	var latestTag string
 	var findErr error
+	filter := VersionFilter{Channel: g.Channel, PreRelease: g.PreRelease}
 	if g.CalVer != "" {
-		_, latestTag, findErr = FindLatestCalVer(tagNames, g.CalVer, g.PreRelease)
+		_, latestTag, findErr = FindLatestCalVerWith(tagNames, g.CalVer, filter)
 	} else {
-		_, latestTag, findErr = FindLatestSemVer(tagNames, g.PreRelease)
+		_, latestTag, findErr = FindLatestSemVerWith(tagNames, filter)
 	}
 	if findErr != nil {
 		return nil, fmt.Errorf("failed to find latest version: %w", findErr)

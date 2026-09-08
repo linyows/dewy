@@ -31,6 +31,7 @@ type S3 struct {
 	Artifact   string `schema:"artifact"`
 	PreRelease bool   `schema:"pre-release"`
 	CalVer     string `schema:"calver"`
+	Channel    string `schema:"channel"`
 	cl         S3Client
 	pager      ListObjectsV2Pager
 	logger     *logging.Logger
@@ -298,10 +299,11 @@ func (s *S3) LatestVersion(ctx context.Context) (string, Version, error) {
 	var latestVersion Version
 	var latestName string
 	var err error
+	filter := VersionFilter{Channel: s.Channel, PreRelease: s.PreRelease}
 	if s.CalVer != "" {
-		latestVersion, latestName, err = FindLatestCalVer(versionNames, s.CalVer, s.PreRelease)
+		latestVersion, latestName, err = FindLatestCalVerWith(versionNames, s.CalVer, filter)
 	} else {
-		latestVersion, latestName, err = FindLatestSemVer(versionNames, s.PreRelease)
+		latestVersion, latestName, err = FindLatestSemVerWith(versionNames, filter)
 	}
 	if err != nil {
 		return "", nil, err
