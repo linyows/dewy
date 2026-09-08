@@ -61,6 +61,12 @@ type cacheState struct {
 	key          string
 	foundInCache bool
 	skip         bool // true means deploy is a no-op for this tick
+	// prevKey is the cache key that "current" pointed at before this tick,
+	// and prevRelease the release directory the "current" symlink pointed at
+	// before the swap. Both are needed to restore the previous release when
+	// the new one fails its health check.
+	prevKey     string
+	prevRelease string
 }
 
 // resolveCacheState inspects the local cache to decide whether the artifact
@@ -74,7 +80,19 @@ type cacheState struct {
 func (d *Dewy) resolveCacheState(_ context.Context, res *registry.CurrentResponse) (cacheState, error) {
 	st := cacheState{key: d.cachekeyName(res)}
 
+	// A release that failed its health check is deployed once, not on every
+	// tick. The marker is cleared as soon as a different version appears or
+	// the same one passes (see clearBlockedVersion).
+	if blocked := d.blockedVersion(); blocked != "" && blocked == st.key {
+		d.logger.Warn("Deploy skipped: this version failed its health check",
+			slog.String("tag", res.Tag),
+			slog.String("cache_key", st.key))
+		st.skip = true
+		return st, nil
+	}
+
 	currentkeyValue, _ := d.cache.Read(currentkeyName)
+	st.prevKey = string(currentkeyValue)
 	list, err := d.cache.List()
 	if err != nil {
 		return st, err
@@ -156,28 +174,41 @@ func (d *Dewy) downloadAndCache(ctx context.Context, res *registry.CurrentRespon
 // applyDeployment sends the "downloaded" notification and runs the deploy
 // lifecycle (before-hook + extract + symlink swap + after-hook lives inside
 // d.deploy).
-func (d *Dewy) applyDeployment(ctx context.Context, res *registry.CurrentResponse, key string) error {
+func (d *Dewy) applyDeployment(ctx context.Context, res *registry.CurrentResponse, st *cacheState) error {
 	msg := fmt.Sprintf("Downloaded artifact for `%s`", res.Tag)
 	d.logger.Info("Download notification", slog.String("message", msg))
 	d.notifier.Send(ctx, msg)
 
-	return d.deploy(key)
+	prevRelease, err := d.deploy(st.key)
+	st.prevRelease = prevRelease
+	return err
 }
 
 // promoteAndReport finalizes a server/assets deploy: saves the version,
-// (re)starts the server for SERVER mode, reports to the registry, and prunes
-// old releases. Errors from Report and keepReleases are logged but do not
-// cause the run to fail, matching the original behavior.
-func (d *Dewy) promoteAndReport(ctx context.Context, res *registry.CurrentResponse) error {
+// (re)starts the server for SERVER mode, verifies it answers the health check,
+// reports to the registry, and prunes old releases. A start or health check
+// failure hands off to rollbackServer and is returned. Errors from Report and
+// keepReleases are logged but do not cause the run to fail, matching the
+// original behavior.
+func (d *Dewy) promoteAndReport(ctx context.Context, res *registry.CurrentResponse, st cacheState) error {
 	d.Lock()
 	d.cVer = res.Tag
 	d.Unlock()
 
 	if d.config.Command == SERVER {
 		if err := d.startOrRestartServer(ctx); err != nil {
+			d.rollbackServer(ctx, res, st, err)
+			return err
+		}
+		if err := d.verifyServerHealth(ctx); err != nil {
+			d.rollbackServer(ctx, res, st, err)
 			return err
 		}
 	}
+
+	// The release is live and answering, so a marker left by an earlier
+	// failure of this same version no longer applies.
+	d.clearBlockedVersion()
 
 	d.reportDeployment(ctx, res)
 

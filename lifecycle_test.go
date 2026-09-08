@@ -246,7 +246,7 @@ func TestPromoteAndReport_DisableReport(t *testing.T) {
 	d.notifier = notify
 
 	res := &registry.CurrentResponse{ID: "id-1", Tag: "v1.0.0"}
-	if err := d.promoteAndReport(context.Background(), res); err != nil {
+	if err := d.promoteAndReport(context.Background(), res, cacheState{}); err != nil {
 		t.Fatalf("err: %v", err)
 	}
 	if reportCalled {
@@ -271,7 +271,7 @@ func TestPromoteAndReport_ReportEnabled(t *testing.T) {
 	d.notifier = &mockNotify{}
 
 	res := &registry.CurrentResponse{ID: "id-2", Tag: "v2.0.0"}
-	if err := d.promoteAndReport(context.Background(), res); err != nil {
+	if err := d.promoteAndReport(context.Background(), res, cacheState{}); err != nil {
 		t.Fatalf("err: %v", err)
 	}
 	if got == nil {

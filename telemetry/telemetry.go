@@ -156,11 +156,13 @@ type Metrics struct {
 	ProxyErrorsTotal        otelmetric.Int64Counter
 	ProxyBackendCount       otelmetric.Int64UpDownCounter
 
-	// Deployment metrics. All three carry a "command" attribute
-	// (server|assets|container) so the modes can be told apart.
+	// Deployment metrics. Every counter and histogram below carries a
+	// "command" attribute (server|assets|container) so the modes can be told
+	// apart.
 	DeploymentsTotal    otelmetric.Int64Counter
 	DeploymentDuration  otelmetric.Float64Histogram
 	DeploymentErrors    otelmetric.Int64Counter
+	DeploymentRollbacks otelmetric.Int64Counter
 	HealthChecksTotal   otelmetric.Int64Counter
 	HealthCheckFailures otelmetric.Int64Counter
 
@@ -251,6 +253,13 @@ func newMetrics(meter otelmetric.Meter) (*Metrics, error) {
 	if m.DeploymentErrors, err = meter.Int64Counter("dewy.deployment.errors.total",
 		otelmetric.WithDescription("Total number of deployment errors"),
 		otelmetric.WithUnit("{error}"),
+	); err != nil {
+		return nil, err
+	}
+
+	if m.DeploymentRollbacks, err = meter.Int64Counter("dewy.deployments.rollbacks.total",
+		otelmetric.WithDescription("Total number of deployments rolled back after a failed health check"),
+		otelmetric.WithUnit("{deployment}"),
 	); err != nil {
 		return nil, err
 	}

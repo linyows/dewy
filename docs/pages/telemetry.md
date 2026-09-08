@@ -106,6 +106,7 @@ Recorded in every mode. Each series carries a `command` label
 | `dewy.deployments.total` | Counter | {deployment} | Total number of successful deployments |
 | `dewy.deployment.duration` | Histogram | s | Duration of the deployment process |
 | `dewy.deployment.errors.total` | Counter | {error} | Total number of failed deployments |
+| `dewy.deployments.rollbacks.total` | Counter | {deployment} | Total number of deployments rolled back after a failed health check |
 
 The `dewy.deployment.duration` histogram uses the following bucket boundaries:
 `1, 5, 10, 30, 60, 120, 300, 600` seconds.

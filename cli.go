@@ -46,10 +46,11 @@ type cli struct {
 	Notifier           string   `long:"notifier" description:"Notifier URL for deployment notifications (e.g., slack://channel, mail://smtp:port/recipient)"`
 	BeforeDeployHook   string   `long:"before-deploy-hook" description:"Shell command to execute before deployment begins"`
 	AfterDeployHook    string   `long:"after-deploy-hook" description:"Shell command to execute after successful deployment"`
+	HealthPath         string   `long:"health-path" description:"HTTP path to probe after a deployment (e.g., /health). For server: probed on the first --port after the process starts; a failure rolls the release back. For container: probed on every new replica"`
+	HealthTimeout      int      `long:"health-timeout" description:"Overall health check budget in seconds, covering every attempt (default: 30)"`
+	NoRollback         bool     `long:"no-rollback" description:"Keep the new release in place when its health check fails (server command). The failed version is still recorded so it is not deployed again"`
 	// Container-specific options
 	Replicas         int      `long:"replicas" description:"Number of container replicas to run (default: 1)"`
-	HealthPath       string   `long:"health-path" description:"Health check path (optional, e.g., /health)"`
-	HealthTimeout    int      `long:"health-timeout" description:"Health check timeout in seconds (default: 30)"`
 	DrainTime        int      `long:"drain-time" description:"Drain time in seconds after traffic switch (default: 30 for container command)"`
 	ContainerRuntime string   `long:"runtime" description:"Container runtime (docker or podman, default: docker)"`
 	ProxyIdleTimeout int      `long:"proxy-idle-timeout" description:"Proxy idle timeout in seconds (default: 300, 0 to disable)"`
@@ -155,6 +156,8 @@ func (c *cli) showHelp() {
 		"LogFormat",
 		"BeforeDeployHook",
 		"AfterDeployHook",
+		"HealthPath",
+		"HealthTimeout",
 		"Telemetry",
 		"OTLPEndpoint",
 		"OTLPInsecure",
@@ -162,13 +165,12 @@ func (c *cli) showHelp() {
 
 	serverOpts := strings.Join(c.buildHelp([]string{
 		"Ports",
+		"NoRollback",
 	}), "\n")
 
 	containerOpts := strings.Join(c.buildHelp([]string{
 		"Replicas",
 		"Cmd",
-		"HealthPath",
-		"HealthTimeout",
 		"DrainTime",
 		"ContainerRuntime",
 		"ProxyIdleTimeout",
@@ -350,6 +352,20 @@ func (c *cli) configureServerCommand(conf *Config) error {
 		args:      cmdArgs,
 		logformat: c.LogFormat,
 	}
+
+	conf.Health = HealthConfig{
+		Path:       c.HealthPath,
+		NoRollback: c.NoRollback,
+	}
+	if c.HealthTimeout > 0 {
+		conf.Health.Timeout = time.Duration(c.HealthTimeout) * time.Second
+	}
+
+	if c.HealthPath != "" && len(parsedPorts) == 0 {
+		fmt.Fprintf(c.env.Err, "Error: --health-path requires --port\n")
+		return fmt.Errorf("--health-path requires --port")
+	}
+
 	return nil
 }
 

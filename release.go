@@ -18,7 +18,11 @@ import (
 // deploy extracts the cached artifact into a new release directory and
 // atomically swaps the "current" symlink to point at it. Before- and after-
 // deploy hooks are wrapped around the extract step.
-func (d *Dewy) deploy(key string) (err error) {
+//
+// The release directory the symlink pointed at beforehand is returned so the
+// caller can restore it if the new release fails its health check. It is
+// empty on the first deploy.
+func (d *Dewy) deploy(key string) (prevRelease string, err error) {
 	ctx := context.Background()
 
 	beforeResult, beforeErr := d.execHook(d.config.BeforeDeployHook)
@@ -43,19 +47,34 @@ func (d *Dewy) deploy(key string) (err error) {
 			d.logger.Error("After deploy hook failure", slog.String("error", afterErr.Error()))
 		}
 	}()
+	// Read the outgoing target before the swap. A missing or non-symlink
+	// path (first deploy, or a directory left by an older dewy) yields an
+	// empty string, which the caller reads as "nothing to roll back to".
+	prevRelease, _ = os.Readlink(filepath.Join(d.root, symlinkDir))
+
 	p := filepath.Join(d.cache.GetDir(), key)
 	linkFrom, err := d.preserve(p)
 	if err != nil {
 		d.logger.Error("Preserve failure", slog.String("error", err.Error()))
-		return err
+		return prevRelease, err
 	}
 	d.logger.Info("Extract archive", slog.String("path", linkFrom))
 
 	d.notifier.OnDeploy(linkFrom)
 
+	if err := d.swapSymlink(linkFrom); err != nil {
+		return prevRelease, err
+	}
+
+	return prevRelease, nil
+}
+
+// swapSymlink atomically points the "current" symlink at linkFrom by creating
+// a temporary link and renaming it over the existing one. Shared by deploy
+// and by the rollback path.
+func (d *Dewy) swapSymlink(linkFrom string) error {
 	linkTo := filepath.Join(d.root, symlinkDir)
 
-	// Atomic symlink replacement: create temp symlink, then rename
 	tmpLink := linkTo + ".tmp"
 	os.Remove(tmpLink) // Ensure no stale temp link exists
 	if err := os.Symlink(linkFrom, tmpLink); err != nil {

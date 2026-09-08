@@ -79,6 +79,23 @@ type ContainerConfig struct {
 	ProxyIdleTimeout time.Duration // Idle timeout for TCP proxy connections (0 = disabled)
 }
 
+// HealthConfig configures the post-deploy health check for the server
+// command. The container command keeps its own copy of these settings in
+// ContainerConfig because it probes each replica through the runtime rather
+// than a fixed local port.
+type HealthConfig struct {
+	// Path is the HTTP path probed on the first configured port after the
+	// managed server starts or restarts. An empty Path disables the check.
+	Path string
+	// Timeout is the overall budget for the probe, covering every attempt.
+	// Zero falls back to defaultHealthCheckTotalTimeout.
+	Timeout time.Duration
+	// NoRollback keeps the new release in place when the probe fails. The
+	// failed version is still recorded so it is not deployed again, and the
+	// failure is still notified.
+	NoRollback bool
+}
+
 // Config struct.
 type Config struct {
 	Command          Command
@@ -91,8 +108,9 @@ type Config struct {
 	Container        *ContainerConfig
 	BeforeDeployHook string
 	AfterDeployHook  string
-	Slot             string // Deployment slot for blue/green deployment (e.g., "blue", "green")
-	CalVer           string // CalVer format for version identification (e.g., "YYYY.0M.MICRO")
+	Health           HealthConfig // Post-deploy health check (server command)
+	Slot             string       // Deployment slot for blue/green deployment (e.g., "blue", "green")
+	CalVer           string       // CalVer format for version identification (e.g., "YYYY.0M.MICRO")
 	// MaxBackoffInterval bounds how far consecutive failures may stretch the
 	// polling interval. Zero keeps it fixed.
 	MaxBackoffInterval time.Duration
