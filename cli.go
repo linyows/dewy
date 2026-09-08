@@ -46,6 +46,7 @@ type cli struct {
 	Registry           string   `long:"registry" description:"Registry URL (e.g., ghr://owner/repo, s3://region/bucket/prefix, docker://registry/repo)"`
 	Cache              string   `long:"cache" short:"c" description:"Cache backend URL (e.g., file:///path, s3://region/bucket/prefix, gs://bucket/prefix). Defaults to local file."`
 	Notifier           string   `long:"notifier" description:"Notifier URL for deployment notifications (e.g., slack://channel, mail://smtp:port/recipient)"`
+	VerifyChecksum     string   `long:"verify-checksum" arg:"(off|auto|required)" description:"How to check a downloaded artifact against the SHA-256 checksum file published next to it: auto verifies when one is published, required also fails when none is, off skips the check (default: auto)"`
 	BeforeDeployHook   string   `long:"before-deploy-hook" description:"Shell command to execute before deployment begins"`
 	AfterDeployHook    string   `long:"after-deploy-hook" description:"Shell command to execute after successful deployment"`
 	HealthPath         string   `long:"health-path" description:"HTTP path to probe after a deployment (e.g., /health). For server: probed on the first --port after the process starts; a failure rolls the release back. For container: probed on every new replica"`
@@ -153,6 +154,7 @@ func (c *cli) showHelp() {
 		"Cache",
 		"Slot",
 		"CalVer",
+		"VerifyChecksum",
 		"Notifier",
 		"LogLevel",
 		"LogFormat",
@@ -269,6 +271,12 @@ func (c *cli) run() int {
 	}
 	conf.Registry = c.Registry
 	conf.Cache.URL = c.Cache
+	mode, err := ParseChecksumMode(c.VerifyChecksum)
+	if err != nil {
+		fmt.Fprintf(c.env.Err, "Error: %s\n", err)
+		return ExitErr
+	}
+	conf.ChecksumMode = mode
 	conf.Notifier = c.Notifier
 	conf.BeforeDeployHook = c.BeforeDeployHook
 	conf.AfterDeployHook = c.AfterDeployHook

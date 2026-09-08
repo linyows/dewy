@@ -57,6 +57,11 @@ type CurrentResponse struct {
 	// Slot is the deployment slot extracted from build metadata (e.g., "blue", "green").
 	// This is used for blue/green deployment support.
 	Slot string
+	// ChecksumURL is the URL of the SHA-256 checksum file published next to
+	// the artifact, in the same scheme as ArtifactURL. It is empty when the
+	// registry found no checksum file, and when the registry serves images
+	// rather than archives (an OCI digest is verified by the runtime).
+	ChecksumURL string
 }
 
 // ReportRequest is the request to report the result of deploying the artifact.

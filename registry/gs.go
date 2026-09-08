@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
+	"github.com/linyows/dewy/internal/checksum"
 	"github.com/linyows/dewy/internal/scheme"
 	"github.com/linyows/dewy/logging"
 	"google.golang.org/api/iterator"
@@ -94,27 +95,22 @@ func (g *GS) Current(ctx context.Context) (*CurrentResponse, error) {
 	var createdAt *time.Time
 	found := false
 
+	objectNames := make([]string, 0, len(objects))
+	objectMap := make(map[string]*storage.ObjectAttrs, len(objects))
+	for _, obj := range objects {
+		name := g.extractFilenameFromObjectName(obj.Name, prefix)
+		objectNames = append(objectNames, name)
+		objectMap[name] = obj
+	}
+
 	if g.Artifact != "" {
 		artifactName = g.Artifact
-		for _, obj := range objects {
-			name := g.extractFilenameFromObjectName(obj.Name, prefix)
-			if name == artifactName {
-				found = true
-				createdAt = &obj.Created
-				g.logger.Debug("Fetched Google Cloud Storage object", slog.Any("object", obj))
-				break
-			}
+		if obj, exists := objectMap[artifactName]; exists {
+			found = true
+			createdAt = &obj.Created
+			g.logger.Debug("Fetched Google Cloud Storage object", slog.Any("object", obj))
 		}
 	} else {
-		// Extract object names
-		var objectNames []string
-		var objectMap = make(map[string]*storage.ObjectAttrs)
-		for _, obj := range objects {
-			name := g.extractFilenameFromObjectName(obj.Name, prefix)
-			objectNames = append(objectNames, name)
-			objectMap[name] = obj
-		}
-
 		// Use common pattern matching
 		var matchedName string
 		matchedName, found = MatchArtifactByPlatform(objectNames)
@@ -137,12 +133,19 @@ func (g *GS) Current(ctx context.Context) (*CurrentResponse, error) {
 		}
 	}
 
+	var checksumURL string
+	if name := checksum.FindFile(artifactName, objectNames); name != "" {
+		checksumURL = g.buildArtifactURL(prefix + name)
+		g.logger.Debug("Found checksum file", slog.String("name", name))
+	}
+
 	return &CurrentResponse{
 		ID:          time.Now().Format(ISO8601),
 		Tag:         version.String(),
 		ArtifactURL: g.buildArtifactURL(prefix + artifactName),
 		CreatedAt:   createdAt,
 		Slot:        version.GetBuildMetadata(),
+		ChecksumURL: checksumURL,
 	}, nil
 }
 

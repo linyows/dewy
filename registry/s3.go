@@ -14,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	awslogging "github.com/aws/smithy-go/logging"
+	"github.com/linyows/dewy/internal/checksum"
 	"github.com/linyows/dewy/internal/scheme"
 	"github.com/linyows/dewy/logging"
 )
@@ -113,28 +114,22 @@ func (s *S3) Current(ctx context.Context) (*CurrentResponse, error) {
 	var createdAt *time.Time
 	found := false
 
+	objectNames := make([]string, 0, len(objects))
+	objectMap := make(map[string]*types.Object, len(objects))
+	for i, v := range objects {
+		name := s.extractFilenameFromObjectKey(*v.Key, prefix)
+		objectNames = append(objectNames, name)
+		objectMap[name] = &objects[i]
+	}
+
 	if s.Artifact != "" {
 		artifactName = s.Artifact
-		for _, v := range objects {
-			name := s.extractFilenameFromObjectKey(*v.Key, prefix)
-			if name == artifactName {
-				found = true
-				createdAt = v.LastModified
-				s.logger.Debug("Fetched S3 version", slog.Any("version", v))
-				break
-			}
+		if obj, exists := objectMap[artifactName]; exists {
+			found = true
+			createdAt = obj.LastModified
+			s.logger.Debug("Fetched S3 version", slog.Any("version", obj))
 		}
-
 	} else {
-		// Extract object names
-		var objectNames []string
-		var objectMap = make(map[string]*types.Object)
-		for _, v := range objects {
-			name := s.extractFilenameFromObjectKey(*v.Key, prefix)
-			objectNames = append(objectNames, name)
-			objectMap[name] = &v
-		}
-
 		// Use common pattern matching
 		var matchedName string
 		matchedName, found = MatchArtifactByPlatform(objectNames)
@@ -157,12 +152,19 @@ func (s *S3) Current(ctx context.Context) (*CurrentResponse, error) {
 		}
 	}
 
+	var checksumURL string
+	if name := checksum.FindFile(artifactName, objectNames); name != "" {
+		checksumURL = s.buildArtifactURL(prefix + name)
+		s.logger.Debug("Found checksum file", slog.String("name", name))
+	}
+
 	return &CurrentResponse{
 		ID:          time.Now().Format(ISO8601),
 		Tag:         version.String(),
 		ArtifactURL: s.buildArtifactURL(prefix + artifactName),
 		CreatedAt:   createdAt,
 		Slot:        version.GetBuildMetadata(),
+		ChecksumURL: checksumURL,
 	}, nil
 }
 
