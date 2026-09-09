@@ -144,7 +144,7 @@ Dewy then monitors that registry and automatically deploys new versions to produ
 {% /item %}
 {% item %}
 ### What happens if a deployment fails?
-Dewy includes multiple safety mechanisms. If a before-deploy hook fails, deployment is aborted and the current version continues running. If deployment succeeds but the application fails to start, Dewy logs the error and sends notifications (if configured). The previous 7 releases are kept on disk, allowing for manual rollback by changing the symlink. Dewy also limits error notifications to prevent alert fatigue during persistent failures.
+Dewy includes multiple safety mechanisms. If a before-deploy hook fails, deployment is aborted and the current version continues running. With `--health-path` set, the server command probes the application after the deploy and restores the previous release when the probe fails; the failed version is recorded and is not deployed again until a different version is published. Without `--health-path`, a failure to start is logged and notified but the release stays in place. The previous 7 releases are kept on disk, so an older version can also be restored by changing the symlink. Dewy also limits error notifications to prevent alert fatigue during persistent failures.
 {% /item %}
 {% item %}
 ### Is Dewy free? Is it open source?

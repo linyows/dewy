@@ -231,18 +231,40 @@ dewy container --registry img://ghcr.io/owner/app \
 
 ### --health-path
 
-Specifies the HTTP path for health checks. If specified, Dewy will wait for this endpoint to return a successful response before switching traffic. Optional.
+Specifies the HTTP path for health checks. Optional in both commands.
+
+For the `container` command, each new replica is probed at this path and traffic is switched only after it returns a successful response.
+
+For the `server` command, the path is probed after the managed process starts or restarts, on the lowest of the configured `--port` values. A failure triggers a rollback to the previous release. The option requires `--port`; a server running without a port (a job worker, for example) cannot be probed over HTTP. The `assets` command rejects it.
+
+A response with status 2xx or 3xx counts as success. Redirects are not followed, so a 3xx is judged by its own status.
 
 ```bash
+# Container: probe every new replica
 dewy container --registry img://ghcr.io/owner/app --health-path /health
+
+# Server: probe the process after a deploy and roll back on failure
+dewy server --registry ghr://owner/repo --port 8000 --health-path /health -- /opt/app/current/app
 ```
 
 ### --health-timeout
 
-Specifies the timeout in seconds for health checks. Default is 30 seconds.
+Specifies the overall budget in seconds for one health check. The budget covers every attempt including the two-second wait between them, so raising it buys more attempts rather than a longer wait on a single request. Default is 30 seconds.
 
 ```bash
 dewy container --registry img://ghcr.io/owner/app --health-timeout 60
+```
+
+### --no-rollback
+
+Keeps a new release in place when its health check fails, instead of restoring the previous release. Applies to the `server` command.
+
+The failed version is still recorded and is not deployed again until a different version is published, and the failure is still notified. Use this when an operator decides what to do next rather than Dewy restoring the previous release automatically.
+
+The record names a `<tag>--<artifact>` cache key, so republishing the same tag with fixed contents does not release it. Publishing a different version, running without `--health-path`, or deleting the `blocked` entry from the cache store does.
+
+```bash
+dewy server --registry ghr://owner/repo --port 8000 --health-path /health --no-rollback -- /opt/app/current/app
 ```
 
 ### --drain-time

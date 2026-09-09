@@ -105,6 +105,7 @@ dewy container --otlp-endpoint otel-collector.internal:4317 \
 | `dewy.deployments.total` | Counter | {deployment} | 成功したデプロイの総数 |
 | `dewy.deployment.duration` | Histogram | s | デプロイプロセスの所要時間 |
 | `dewy.deployment.errors.total` | Counter | {error} | 失敗したデプロイの総数 |
+| `dewy.deployments.rollbacks.total` | Counter | {deployment} | ヘルスチェック失敗によりロールバックしたデプロイの総数 |
 
 `dewy.deployment.duration` ヒストグラムは以下のバケット境界を使用します：
 `1, 5, 10, 30, 60, 120, 300, 600` 秒

@@ -62,6 +62,15 @@ $ dewy server --registry ghr://linyows/myapp \
   --notifier slack://general?title=myapp -p 8000 -l info -- /opt/myapp/current/myapp
 ```
 
+Add `--health-path` to verify the application after a deployment. Dewy probes the path on the first `--port` once the process has started, and restores the previous release if the probe does not succeed within `--health-timeout` (30 seconds by default):
+
+```sh
+$ dewy server --registry ghr://linyows/myapp \
+  -p 8000 --health-path /health -- /opt/myapp/current/myapp
+```
+
+A version that fails its health check is recorded and is not deployed again until a different version is published, so a release that does not start is deployed once rather than on every poll. The record is keyed by tag and artifact name, so republishing the same tag does not release it; publishing a different version, running without `--health-path`, or deleting the `blocked` entry from the cache store does. Pass `--no-rollback` to keep the failed release in place and only record and notify the failure.
+
 ### Assets Command
 
 Deploy static files such as HTML, CSS, and JavaScript:
@@ -250,8 +259,8 @@ Container-specific options:
 Option | Type | Description
 ---    | ---  | ---
 port | string | Port mapping in format 'proxy' or 'proxy:container' (required, can be specified multiple times)
-health-path | string | HTTP path for health checks (e.g., /health)
-health-timeout | int | Health check timeout in seconds (default: 30)
+health-path | string | HTTP path for health checks (e.g., /health). Also available on the server command
+health-timeout | int | Health check timeout in seconds (default: 30). Also available on the server command
 drain-time | int | Drain period in seconds before removing old container (default: 30)
 replicas | int | Number of container replicas (default: 1)
 cmd | string | Command and arguments to pass to container (can be specified multiple times)

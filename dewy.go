@@ -329,27 +329,30 @@ func (d *Dewy) Run() error {
 		return err
 	}
 	if st.skip {
+		if st.blocked {
+			d.recoverBlockedServer(ctx, st.prevKey)
+		}
 		return nil
 	}
 
 	// Past the skip check a real deploy is happening; time it and record the
 	// outcome. Skipped ticks above are not deployments and must not be counted.
 	start := time.Now()
-	err = d.runDeploy(ctx, res, st)
+	err = d.runDeploy(ctx, res, &st)
 	d.recordDeployment(ctx, time.Since(start), err)
 	return err
 }
 
 // runDeploy runs the download/apply/promote phases of a server or assets
 // deploy. Split out of Run so the deploy proper can be timed as a unit.
-func (d *Dewy) runDeploy(ctx context.Context, res *registry.CurrentResponse, st cacheState) error {
-	if err := d.downloadAndCache(ctx, res, st); err != nil {
+func (d *Dewy) runDeploy(ctx context.Context, res *registry.CurrentResponse, st *cacheState) error {
+	if err := d.downloadAndCache(ctx, res, *st); err != nil {
 		return err
 	}
-	if err := d.applyDeployment(ctx, res, st.key); err != nil {
+	if err := d.applyDeployment(ctx, res, st); err != nil {
 		return err
 	}
-	return d.promoteAndReport(ctx, res)
+	return d.promoteAndReport(ctx, res, *st)
 }
 
 // RunContainer runs the container deployment process.

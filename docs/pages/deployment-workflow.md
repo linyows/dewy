@@ -144,6 +144,44 @@ When the server is not running, **server startup** processing is executed. Appli
 
 After startup/restart processing completion, results are reported through the notification system, enabling operations teams to understand the situation.
 
+### Verification Phase
+
+The verification phase runs in server mode when `--health-path` is set. It is skipped in assets mode and when the option is not set.
+
+Dewy probes `http://127.0.0.1:<port><--health-path>` after the process has started or restarted. The port is the lowest of the configured `--port` values, because the port list is deduplicated and sorted numerically while the flags are parsed. A status of 2xx or 3xx counts as success. Attempts repeat every two seconds until the response succeeds or `--health-timeout` (30 seconds by default) is exhausted.
+
+On a restart, the probe waits for the worker swap to finish first. server-starter answers the restart signal by spawning a new worker beside the old one, both sharing the inherited listening socket, and stops the old one only once the new one has survived its startup window. A probe sent during that window can be answered by the release being replaced. Dewy therefore reads the server-starter status file until it reports a single worker with a newer generation, for up to 30 seconds. If that state is not reached in time, the probe runs anyway and a warning records that its result may come from the previous release.
+
+```bash
+# Log example for a successful verification
+DEBUG: Verifying deployment url=http://127.0.0.1:8000/health
+DEBUG: Health check passed url=http://127.0.0.1:8000/health attempts=2
+```
+
+When the probe does not succeed within the budget, Dewy rolls the deployment back:
+
+1. The failed version is recorded in the cache under the `blocked` key. While that record stands, the same version is skipped on every subsequent poll, so a version that does not start is downloaded and deployed once rather than on every tick.
+2. The `current` symlink is pointed back at the release directory it referenced before the deploy, and the `current` cache key is restored to the previous version.
+3. The server is restarted so it runs the restored release.
+4. An important notification reports both the health check failure and the version that was restored.
+
+```bash
+# Log example for a rollback
+ERROR: Deployment verification failed tag=v1.2.4 error="health check failed after 15 attempts within 30s: unhealthy status 503"
+INFO: Rolling back from=v1.2.4 to=v1.2.3 release=/opt/app/releases/20250908T101500Z
+INFO: Send SIGHUP for server restart pid=12345
+```
+
+The record names a `<tag>--<artifact>` cache key, which does not change when the same tag is republished with different contents. Republishing under the same tag therefore does not release it. Three things do: publishing a different version and seeing it deploy, running without `--health-path` (the record is only consulted while health verification is on), and deleting the `blocked` entry from the cache store.
+
+`--no-rollback` keeps the failed release in place. The version is still recorded and still notified; only the symlink restore and the restart are skipped.
+
+Two cases have no previous release to restore: the first deployment on a host, and a failure whose previous version is the same as the failed one. Dewy records the version and notifies the failure without changing the symlink.
+
+The rollback is also triggered when the process fails to start at all, not only when the health check fails. A deploy that failed before the server existed leaves nothing to restart, so the rollback starts the server on the restored release rather than restarting it.
+
+While a version is blocked, a server that is found stopped is started again on the release the `current` symlink points at. Blocking a version stops it from being deployed; it does not stop the host from running the release it already has.
+
 ## Deployment Skip Conditions
 
 Dewy includes functionality to automatically skip unnecessary deployment processing for efficient operation. This achieves system resource conservation and stable operation.
@@ -439,8 +477,8 @@ Key differences between container and binary deployment workflows:
 | **Artifact Format** | tar.gz, zip archives | OCI Image (multi-layer) |
 | **Deployment Strategy** | In-place update + SIGHUP | Rolling update with proxy |
 | **Downtime** | Minimal (restart time) | Zero (atomic proxy switch) |
-| **Rollback** | Previous release directory | Automatic on health check failure |
-| **Health Check** | Process-based | HTTP/TCP via localhost |
+| **Rollback** | Automatic on health check failure, or previous release directory | Automatic on health check failure |
+| **Health Check** | HTTP via localhost (with `--health-path`) | HTTP/TCP via localhost |
 | **Traffic Management** | server-starter (port handoff) | Built-in reverse proxy |
 | **Network Security** | N/A | Localhost-only (127.0.0.1) |
 

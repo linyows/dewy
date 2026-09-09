@@ -30,4 +30,14 @@ const (
 	// defaultAdminReadHeaderTimeout caps how long the admin HTTP server
 	// waits for request headers; mitigates Slowloris.
 	defaultAdminReadHeaderTimeout = 5 * time.Second
+
+	// defaultWorkerSwapTimeout bounds how long a server deploy waits for
+	// server-starter to retire the previous worker before the health check
+	// probes. It is separate from --health-timeout so that raising the probe
+	// budget does not also stretch this wait.
+	defaultWorkerSwapTimeout = 30 * time.Second
+
+	// workerSwapPollInterval is how often the server-starter status file is
+	// re-read while waiting for the swap.
+	workerSwapPollInterval = 200 * time.Millisecond
 )
