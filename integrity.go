@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/linyows/dewy/artifact"
-	"github.com/linyows/dewy/internal/checksum"
+	"github.com/linyows/dewy/checksum"
 	"github.com/linyows/dewy/registry"
 )
 

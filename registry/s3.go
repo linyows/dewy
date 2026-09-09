@@ -14,7 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	awslogging "github.com/aws/smithy-go/logging"
-	"github.com/linyows/dewy/internal/checksum"
+	"github.com/linyows/dewy/checksum"
 	"github.com/linyows/dewy/internal/scheme"
 	"github.com/linyows/dewy/logging"
 )

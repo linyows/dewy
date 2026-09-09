@@ -12,8 +12,8 @@ import (
 
 	"github.com/google/go-github/v73/github"
 	"github.com/google/go-querystring/query"
+	"github.com/linyows/dewy/checksum"
 	"github.com/linyows/dewy/client"
-	"github.com/linyows/dewy/internal/checksum"
 	"github.com/linyows/dewy/internal/scheme"
 	"github.com/linyows/dewy/logging"
 )

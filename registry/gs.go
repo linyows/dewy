@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
-	"github.com/linyows/dewy/internal/checksum"
+	"github.com/linyows/dewy/checksum"
 	"github.com/linyows/dewy/internal/scheme"
 	"github.com/linyows/dewy/logging"
 	"google.golang.org/api/iterator"
