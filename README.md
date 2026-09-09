@@ -69,7 +69,7 @@ $ dewy server --registry ghr://linyows/myapp \
   -p 8000 --health-path /health -- /opt/myapp/current/myapp
 ```
 
-A version that fails its health check is recorded and is not deployed again until a different version is published, so a release that does not start is deployed once rather than on every poll. Pass `--no-rollback` to keep the failed release in place and only record and notify the failure.
+A version that fails its health check is recorded and is not deployed again until a different version is published, so a release that does not start is deployed once rather than on every poll. The record is keyed by tag and artifact name, so republishing the same tag does not release it; publishing a different version, running without `--health-path`, or deleting the `blocked` entry from the cache store does. Pass `--no-rollback` to keep the failed release in place and only record and notify the failure.
 
 ### Assets Command
 

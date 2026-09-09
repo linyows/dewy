@@ -54,6 +54,24 @@ func TestRunCLI(t *testing.T) {
 			expectExit:  ExitErr,
 			expectError: "Error: --registry is not set",
 		},
+		{
+			name:        "health path is rejected by the assets command",
+			args:        []string{"--registry", "ghr://o/r", "--health-path", "/health", "assets"},
+			expectExit:  ExitErr,
+			expectError: "Error: --health-path is not supported by the assets command",
+		},
+		{
+			name:        "no-rollback is rejected outside the server command",
+			args:        []string{"--registry", "img://ghcr.io/o/r", "--no-rollback", "--port", "8080", "container"},
+			expectExit:  ExitErr,
+			expectError: "Error: --no-rollback is only supported by the server command",
+		},
+		{
+			name:        "health path requires a port on the server command",
+			args:        []string{"--registry", "ghr://o/r", "--health-path", "/health", "server", "myapp"},
+			expectExit:  ExitErr,
+			expectError: "Error: --health-path requires --port",
+		},
 	}
 
 	for _, tt := range tests {

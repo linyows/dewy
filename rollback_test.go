@@ -66,9 +66,7 @@ func TestServerHealthURL(t *testing.T) {
 		want  string
 	}{
 		{"plain port", []string{"8000"}, "/health", "http://127.0.0.1:8000/health"},
-		{"host and port", []string{"127.0.0.1:9000"}, "/health", "http://127.0.0.1:9000/health"},
 		{"path without a leading slash", []string{"8000"}, "health", "http://127.0.0.1:8000/health"},
-		{"first port wins", []string{"8000", "8001"}, "/health", "http://127.0.0.1:8000/health"},
 		{"no port", nil, "/health", ""},
 	}
 
@@ -152,6 +150,8 @@ func portOf(t *testing.T, rawURL string) string {
 func TestRollbackServer_RestoresPreviousRelease(t *testing.T) {
 	hup := catchHUP(t)
 	d, oldRelease, newRelease := newRollbackTestDewy(t)
+	// A server that is up is restarted onto the restored release.
+	d.isServerRunning = true
 
 	st := cacheState{
 		key:         "v2.0.0--app.tar.gz",
@@ -251,6 +251,7 @@ func TestRollbackServer_NoRollbackFlag(t *testing.T) {
 func TestResolveCacheState_SkipsBlockedVersion(t *testing.T) {
 	d := newPhaseTestDewy(t)
 	d.config.Command = SERVER
+	d.config.Health.Path = "/health"
 
 	res := &registry.CurrentResponse{ID: "id", Tag: "v2.0.0", ArtifactURL: "ghr://linyows/dewy/tag/v2.0.0/app.tar.gz"}
 	key := d.cachekeyName(res)
@@ -270,6 +271,7 @@ func TestResolveCacheState_SkipsBlockedVersion(t *testing.T) {
 func TestResolveCacheState_DoesNotSkipOtherVersions(t *testing.T) {
 	d := newPhaseTestDewy(t)
 	d.config.Command = SERVER
+	d.config.Health.Path = "/health"
 
 	if err := d.cache.Write(blockedkeyName, []byte("v2.0.0--app.tar.gz")); err != nil {
 		t.Fatalf("cache.Write: %v", err)
@@ -314,5 +316,246 @@ func TestTagFromCacheKey(t *testing.T) {
 		if got := tagFromCacheKey(tt.key); got != tt.want {
 			t.Errorf("tagFromCacheKey(%q) = %q, want %q", tt.key, got, tt.want)
 		}
+	}
+}
+
+func TestServerHealthURLUsesTheLowestPort(t *testing.T) {
+	// The probe port comes from the parsed port list, which is deduplicated
+	// and sorted numerically, so it is the lowest port rather than the one
+	// given first.
+	ports, err := parsePorts([]string{"9000", "8080"})
+	if err != nil {
+		t.Fatalf("parsePorts: %v", err)
+	}
+
+	d := newPhaseTestDewy(t)
+	d.config.Starter = &StarterConfig{ports: ports}
+	d.config.Health.Path = "/health"
+
+	if got, want := d.serverHealthURL(), "http://127.0.0.1:8080/health"; got != want {
+		t.Errorf("serverHealthURL() = %q, want %q", got, want)
+	}
+}
+
+func TestRollbackServer_StartsAServerThatNeverCameUp(t *testing.T) {
+	hup := catchHUP(t)
+	d, oldRelease, _ := newRollbackTestDewy(t)
+	// A deploy can fail before the server exists: the starter could not be
+	// created, so nothing is running and there is nothing to send SIGHUP to.
+	d.isServerRunning = false
+
+	st := cacheState{
+		key:         "v2.0.0--app.tar.gz",
+		prevKey:     "v1.0.0--app.tar.gz",
+		prevRelease: oldRelease,
+	}
+	res := &registry.CurrentResponse{ID: "id", Tag: "v2.0.0"}
+
+	d.rollbackServer(context.Background(), res, st, errors.New("starter failure"))
+
+	if got := currentTarget(t, d); got != oldRelease {
+		t.Errorf("current points at %q, want the previous release %q", got, oldRelease)
+	}
+	if got := d.blockedVersion(); got != st.key {
+		t.Errorf("blockedVersion() = %q, want %q", got, st.key)
+	}
+
+	// The test config has no command, so starting cannot succeed. What matters
+	// is that the rollback tried to start rather than signaling a process
+	// that is not there, and that it says so instead of reporting success.
+	select {
+	case <-hup:
+		t.Error("rollback signaled a restart although no server was running")
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	notify, ok := d.notifier.(*mockNotify)
+	if !ok {
+		t.Fatalf("notifier is %T, want *mockNotify", d.notifier)
+	}
+	msgs := notify.messages
+	if len(msgs) != 1 || !strings.Contains(msgs[0], "bringing the server up failed") {
+		t.Errorf("notifications = %v, want one message reporting that the server could not be started", msgs)
+	}
+}
+
+func TestResolveCacheState_IgnoresBlockedWithoutHealthPath(t *testing.T) {
+	d := newPhaseTestDewy(t)
+	d.config.Command = SERVER
+
+	res := &registry.CurrentResponse{ID: "id", Tag: "v2.0.0", ArtifactURL: "ghr://linyows/dewy/tag/v2.0.0/app.tar.gz"}
+	if err := d.cache.Write(blockedkeyName, []byte(d.cachekeyName(res))); err != nil {
+		t.Fatalf("cache.Write: %v", err)
+	}
+
+	st, err := d.resolveCacheState(context.Background(), res)
+	if err != nil {
+		t.Fatalf("resolveCacheState: %v", err)
+	}
+	if st.skip {
+		t.Error("without --health-path the marker must not be consulted, so dropping the option releases the version")
+	}
+}
+
+func TestRecoverBlockedServer(t *testing.T) {
+	t.Run("no-op in assets mode", func(t *testing.T) {
+		d := newPhaseTestDewy(t)
+		d.config.Command = ASSETS
+		d.notifier = &mockNotify{}
+
+		d.recoverBlockedServer(context.Background(), "v1.0.0--app.tar.gz")
+
+		notify, _ := d.notifier.(*mockNotify)
+		if len(notify.messages) != 0 {
+			t.Errorf("notifications = %v, want none in assets mode", notify.messages)
+		}
+	})
+
+	t.Run("no-op while the server is running", func(t *testing.T) {
+		d, _, _ := newRollbackTestDewy(t)
+		d.isServerRunning = true
+
+		d.recoverBlockedServer(context.Background(), "v1.0.0--app.tar.gz")
+
+		notify, _ := d.notifier.(*mockNotify)
+		if len(notify.messages) != 0 {
+			t.Errorf("notifications = %v, want none while the server is up", notify.messages)
+		}
+	})
+
+	t.Run("starts a stopped server and adopts its version", func(t *testing.T) {
+		d, _, _ := newRollbackTestDewy(t)
+		d.isServerRunning = false
+
+		d.recoverBlockedServer(context.Background(), "v1.0.0--app.tar.gz")
+
+		if d.cVer != "v1.0.0" {
+			t.Errorf("cVer = %q, want the running version v1.0.0", d.cVer)
+		}
+		// The test config has no command, so the start fails and is reported
+		// as an error rather than as a successful recovery.
+		notify, _ := d.notifier.(*mockNotify)
+		if notify.errorCount == 0 {
+			t.Error("a failed recovery must be notified as an error")
+		}
+	})
+}
+
+func TestStarterStatus(t *testing.T) {
+	dir := t.TempDir()
+
+	tests := []struct {
+		name    string
+		content string
+		want    []int
+	}{
+		{"one worker", "3:1234\n", []int{3}},
+		{"a swap in progress", "2:1200\n3:1234\n", []int{2, 3}},
+		{"blank lines are ignored", "\n3:1234\n\n", []int{3}},
+		{"a half-written line is ignored", "3", nil},
+		{"a non-numeric generation is ignored", "old:1234\n", nil},
+		{"empty file", "", nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(dir, "status")
+			if err := os.WriteFile(path, []byte(tt.content), 0600); err != nil {
+				t.Fatalf("WriteFile: %v", err)
+			}
+			got := starterStatus(path)
+			if len(got) != len(tt.want) {
+				t.Fatalf("starterStatus() = %v, want %v", got, tt.want)
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Fatalf("starterStatus() = %v, want %v", got, tt.want)
+				}
+			}
+		})
+	}
+
+	t.Run("missing file", func(t *testing.T) {
+		if got := starterStatus(filepath.Join(dir, "absent")); got != nil {
+			t.Errorf("starterStatus() = %v, want nil for a missing file", got)
+		}
+	})
+
+	t.Run("unconfigured path", func(t *testing.T) {
+		if got := starterStatus(""); got != nil {
+			t.Errorf("starterStatus() = %v, want nil when no status file is configured", got)
+		}
+	})
+}
+
+func TestAwaitWorkerSwap(t *testing.T) {
+	newDewy := func(t *testing.T, content string) (*Dewy, string) {
+		t.Helper()
+		d := newPhaseTestDewy(t)
+		path := filepath.Join(t.TempDir(), "status")
+		if content != "" {
+			if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+				t.Fatalf("WriteFile: %v", err)
+			}
+		}
+		d.config.Starter = &StarterConfig{ports: []string{"8000"}, statusfile: path}
+		return d, path
+	}
+
+	t.Run("the new worker is alone", func(t *testing.T) {
+		d, _ := newDewy(t, "4:2000\n")
+		if !d.awaitWorkerSwap(context.Background(), 3, time.Second) {
+			t.Error("awaitWorkerSwap() = false, want true once only the new generation is left")
+		}
+	})
+
+	t.Run("waits for the old worker to go", func(t *testing.T) {
+		d, path := newDewy(t, "3:1000\n4:2000\n")
+		go func() {
+			time.Sleep(100 * time.Millisecond)
+			_ = os.WriteFile(path, []byte("4:2000\n"), 0600)
+		}()
+		if !d.awaitWorkerSwap(context.Background(), 3, 3*time.Second) {
+			t.Error("awaitWorkerSwap() = false, want true after the old worker exits")
+		}
+	})
+
+	t.Run("gives up when the old worker stays", func(t *testing.T) {
+		d, _ := newDewy(t, "3:1000\n4:2000\n")
+		if d.awaitWorkerSwap(context.Background(), 3, 300*time.Millisecond) {
+			t.Error("awaitWorkerSwap() = true, want false while the previous worker is still alive")
+		}
+	})
+
+	t.Run("gives up when the generation did not advance", func(t *testing.T) {
+		d, _ := newDewy(t, "3:1000\n")
+		if d.awaitWorkerSwap(context.Background(), 3, 300*time.Millisecond) {
+			t.Error("awaitWorkerSwap() = true, want false when the worker was not replaced")
+		}
+	})
+
+	t.Run("no status file configured", func(t *testing.T) {
+		d := newPhaseTestDewy(t)
+		d.config.Starter = &StarterConfig{ports: []string{"8000"}}
+		if d.awaitWorkerSwap(context.Background(), 3, time.Second) {
+			t.Error("awaitWorkerSwap() = true, want false when no status file is configured")
+		}
+	})
+}
+
+func TestLatestGeneration(t *testing.T) {
+	d := newPhaseTestDewy(t)
+	d.config.Starter = &StarterConfig{ports: []string{"8000"}}
+	if got := d.latestGeneration(); got != -1 {
+		t.Errorf("latestGeneration() = %d, want -1 without a status file", got)
+	}
+
+	path := filepath.Join(t.TempDir(), "status")
+	if err := os.WriteFile(path, []byte("2:1200\n5:1500\n"), 0600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	d.config.Starter = &StarterConfig{ports: []string{"8000"}, statusfile: path}
+	if got := d.latestGeneration(); got != 5 {
+		t.Errorf("latestGeneration() = %d, want 5", got)
 	}
 }

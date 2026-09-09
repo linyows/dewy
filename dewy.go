@@ -329,6 +329,9 @@ func (d *Dewy) Run() error {
 		return err
 	}
 	if st.skip {
+		if st.blocked {
+			d.recoverBlockedServer(ctx, st.prevKey)
+		}
 		return nil
 	}
 

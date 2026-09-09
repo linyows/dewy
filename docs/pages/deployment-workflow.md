@@ -148,7 +148,9 @@ After startup/restart processing completion, results are reported through the no
 
 The verification phase runs in server mode when `--health-path` is set. It is skipped in assets mode and when the option is not set.
 
-Dewy probes `http://127.0.0.1:<first --port><--health-path>` after the process has started or restarted. A status of 2xx or 3xx counts as success. Attempts repeat every two seconds until the response succeeds or `--health-timeout` (30 seconds by default) is exhausted.
+Dewy probes `http://127.0.0.1:<port><--health-path>` after the process has started or restarted. The port is the lowest of the configured `--port` values, because the port list is deduplicated and sorted numerically while the flags are parsed. A status of 2xx or 3xx counts as success. Attempts repeat every two seconds until the response succeeds or `--health-timeout` (30 seconds by default) is exhausted.
+
+On a restart, the probe waits for the worker swap to finish first. server-starter answers the restart signal by spawning a new worker beside the old one, both sharing the inherited listening socket, and stops the old one only once the new one has survived its startup window. A probe sent during that window can be answered by the release being replaced. Dewy therefore reads the server-starter status file until it reports a single worker with a newer generation, for up to 30 seconds. If that state is not reached in time, the probe runs anyway and a warning records that its result may come from the previous release.
 
 ```bash
 # Log example for a successful verification
@@ -170,13 +172,15 @@ INFO: Rolling back from=v1.2.4 to=v1.2.3 release=/opt/app/releases/20250908T1015
 INFO: Send SIGHUP for server restart pid=12345
 ```
 
-The record is cleared as soon as a deployment passes its health check, so a version republished under the same tag after a fix is deployed again.
+The record names a `<tag>--<artifact>` cache key, which does not change when the same tag is republished with different contents. Republishing under the same tag therefore does not release it. Three things do: publishing a different version and seeing it deploy, running without `--health-path` (the record is only consulted while health verification is on), and deleting the `blocked` entry from the cache store.
 
 `--no-rollback` keeps the failed release in place. The version is still recorded and still notified; only the symlink restore and the restart are skipped.
 
 Two cases have no previous release to restore: the first deployment on a host, and a failure whose previous version is the same as the failed one. Dewy records the version and notifies the failure without changing the symlink.
 
-The rollback is also triggered when the process fails to start at all, not only when the health check fails.
+The rollback is also triggered when the process fails to start at all, not only when the health check fails. A deploy that failed before the server existed leaves nothing to restart, so the rollback starts the server on the restored release rather than restarting it.
+
+While a version is blocked, a server that is found stopped is started again on the release the `current` symlink points at. Blocking a version stops it from being deployed; it does not stop the host from running the release it already has.
 
 ## Deployment Skip Conditions
 

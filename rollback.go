@@ -4,7 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,7 +15,13 @@ import (
 // blockedkeyName is the cache key holding the cache key of the release that
 // failed its post-deploy health check. While it is set, that exact release is
 // skipped on every subsequent tick, so a broken version is downloaded and
-// deployed once rather than on every poll. Any other version clears it.
+// deployed once rather than on every poll.
+//
+// The marker names a "tag--artifact" cache key, which does not change when the
+// same tag is republished with different contents. Three things clear it:
+// publishing a different version and seeing it deploy, running without
+// --health-path (the marker is only consulted while health verification is
+// on), and deleting the "blocked" entry from the cache store.
 const blockedkeyName = "blocked"
 
 // verifyServerHealth probes the managed server after a start or restart and
@@ -35,9 +42,13 @@ func (d *Dewy) verifyServerHealth(ctx context.Context) error {
 	return d.probeHealth(ctx, u, d.serverHealthTimeout())
 }
 
-// serverHealthURL builds the probe URL from the first configured port and
+// serverHealthURL builds the probe URL from the lowest configured port and
 // --health-path. It returns an empty string when the server runs without a
 // port, which is a supported configuration for job workers.
+//
+// The port list is deduplicated and sorted numerically while the flags are
+// parsed, so the first entry is the lowest port number rather than the first
+// one given on the command line.
 func (d *Dewy) serverHealthURL() string {
 	if d.config.Starter == nil {
 		return ""
@@ -47,12 +58,7 @@ func (d *Dewy) serverHealthURL() string {
 		return ""
 	}
 
-	// A port spec may carry a host part ("127.0.0.1:8000"); the probe always
-	// goes to the loopback address, so only the port number is used.
 	port := ports[0]
-	if _, p, err := net.SplitHostPort(port); err == nil {
-		port = p
-	}
 
 	path := d.config.Health.Path
 	if !strings.HasPrefix(path, "/") {
@@ -124,20 +130,80 @@ func (d *Dewy) rollbackServer(ctx context.Context, res *registry.CurrentResponse
 	d.cVer = prevTag
 	d.Unlock()
 
-	if err := d.restartServer(); err != nil {
-		d.logger.Error("Restart failure during rollback", slog.String("error", err.Error()))
-		d.notifier.SendImportant(ctx, failed+fmt.Sprintf(". Rolled back to `%s` but the restart failed: %s", prevTag, err))
+	if err := d.restoreServer(ctx); err != nil {
+		d.logger.Error("Server failure during rollback", slog.String("error", err.Error()))
+		d.notifier.SendImportant(ctx, failed+fmt.Sprintf(". Rolled back to `%s` but bringing the server up failed: %s", prevTag, err))
 		return
 	}
-	d.recordServerRestart(ctx, "rollback")
 	d.recordRollback(ctx)
 
 	d.notifier.SendImportant(ctx, failed+fmt.Sprintf(". Rolled back to `%s`", prevTag))
 }
 
+// restoreServer brings the managed server up on the release the rollback just
+// restored. A running server is restarted; a server that never came up is
+// started.
+//
+// The distinction matters because a deploy can fail before the server exists:
+// startServer returns an error when server-starter cannot be created at all
+// (an occupied port, for instance), and restartServer would then send SIGHUP
+// to a process with no starter loop to receive it, leaving nothing running
+// while reporting a successful rollback.
+func (d *Dewy) restoreServer(ctx context.Context) error {
+	d.RLock()
+	running := d.isServerRunning
+	d.RUnlock()
+
+	if !running {
+		return d.startServer()
+	}
+	if err := d.restartServer(); err != nil {
+		return err
+	}
+	d.recordServerRestart(ctx, "rollback")
+	return nil
+}
+
+// recoverBlockedServer starts the managed server when it is down while a
+// version is blocked.
+//
+// The blocked skip returns before the redeploy-from-cache path that used to
+// bring a stopped server back up, so without this a server that dies while a
+// version is blocked would never be restarted. The release directory and the
+// "current" symlink already point at the release to run - the rollback
+// restored them - so only the process is missing.
+func (d *Dewy) recoverBlockedServer(ctx context.Context, currentKey string) {
+	if d.config.Command != SERVER {
+		return
+	}
+
+	d.RLock()
+	running := d.isServerRunning
+	d.RUnlock()
+	if running {
+		return
+	}
+
+	d.Lock()
+	if d.cVer == "" {
+		d.cVer = tagFromCacheKey(currentKey)
+	}
+	tag := d.cVer
+	d.Unlock()
+
+	d.logger.Warn("Starting the stopped server while a version is blocked",
+		slog.String("version", tag))
+
+	if err := d.startServer(); err != nil {
+		d.logger.Error("Server failure", slog.String("error", err.Error()))
+		d.notifier.SendError(ctx, err)
+		return
+	}
+	d.notifier.SendImportant(ctx, fmt.Sprintf("Server started for `%s` while a newer version is blocked", tag))
+}
+
 // clearBlockedVersion removes the blocked marker after a release passes its
-// health check. Without this, a version that failed once and was later fixed
-// under the same tag would stay blocked forever.
+// health check, so a host that recovers is not left skipping versions.
 func (d *Dewy) clearBlockedVersion() {
 	if _, err := d.cache.Read(blockedkeyName); err != nil {
 		return
@@ -169,4 +235,97 @@ func (d *Dewy) recordRollback(ctx context.Context) {
 		return
 	}
 	d.telemetry.Metrics().DeploymentRollbacks.Add(ctx, 1, d.commandAttr())
+}
+
+// starterStatus reports the worker generations server-starter currently has
+// alive. It writes one "<generation>:<pid>" line per worker: the current one
+// plus any old workers it has not stopped yet.
+//
+// A missing or half-written file yields no generations rather than an error;
+// the caller polls, so a truncated read is retried on the next pass.
+func starterStatus(path string) []int {
+	if path == "" {
+		return nil
+	}
+	data, err := os.ReadFile(path) //nolint:gosec // G304: the path is dewy's own status file
+	if err != nil {
+		return nil
+	}
+
+	var generations []int
+	for line := range strings.SplitSeq(string(data), "\n") {
+		gen, _, ok := strings.Cut(strings.TrimSpace(line), ":")
+		if !ok {
+			continue
+		}
+		n, err := strconv.Atoi(gen)
+		if err != nil {
+			continue
+		}
+		generations = append(generations, n)
+	}
+	return generations
+}
+
+// latestGeneration returns the highest worker generation server-starter
+// reports, or -1 when it reports none.
+func (d *Dewy) latestGeneration() int {
+	latest := -1
+	for _, gen := range starterStatus(d.starterStatusFile()) {
+		if gen > latest {
+			latest = gen
+		}
+	}
+	return latest
+}
+
+// starterStatusFile returns the path the managed server-starter writes its
+// worker status to, or an empty string when none is configured.
+func (d *Dewy) starterStatusFile() string {
+	if d.config.Starter == nil {
+		return ""
+	}
+	return d.config.Starter.StatusFile()
+}
+
+// awaitWorkerSwap waits until server-starter reports exactly one worker and
+// its generation is newer than before.
+//
+// Without it the health check is meaningless on a restart. server-starter
+// answers SIGHUP by spawning a new worker beside the old one, both sharing the
+// inherited listening socket, and only stops the old one once the new one has
+// survived its startup window. A probe sent in that window is as likely to be
+// answered by the release being replaced as by the new one, so a release that
+// never came up would still be judged healthy.
+//
+// It reports whether the swap was observed. A false return means the status
+// file never reached that state - it is not configured, server-starter is not
+// writing it, or an old worker is ignoring its stop signal - and the caller
+// probes anyway rather than failing a deploy over a missing status file.
+func (d *Dewy) awaitWorkerSwap(ctx context.Context, before int, budget time.Duration) bool {
+	if d.starterStatusFile() == "" {
+		return false
+	}
+
+	deadline, cancel := context.WithTimeout(ctx, budget)
+	defer cancel()
+
+	for {
+		generations := starterStatus(d.starterStatusFile())
+		if len(generations) == 1 && generations[0] > before {
+			d.logger.Debug("Worker swap complete",
+				slog.Int("generation", generations[0]))
+			return true
+		}
+
+		select {
+		case <-deadline.Done():
+			d.logger.Warn("Timed out waiting for the worker swap; the health check may reach the previous release",
+				slog.Int("previous_generation", before),
+				slog.Any("live_generations", generations),
+				slog.Duration("waited", budget))
+			return false
+		case <-time.After(workerSwapPollInterval):
+		}
+	}
 }

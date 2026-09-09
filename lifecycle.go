@@ -67,6 +67,10 @@ type cacheState struct {
 	// the new one fails its health check.
 	prevKey     string
 	prevRelease string
+	// blocked marks a skip caused by the version having failed its health
+	// check, as opposed to it already being deployed. The two need telling
+	// apart because a blocked skip still has to keep a stopped server running.
+	blocked bool
 }
 
 // resolveCacheState inspects the local cache to decide whether the artifact
@@ -80,19 +84,24 @@ type cacheState struct {
 func (d *Dewy) resolveCacheState(_ context.Context, res *registry.CurrentResponse) (cacheState, error) {
 	st := cacheState{key: d.cachekeyName(res)}
 
-	// A release that failed its health check is deployed once, not on every
-	// tick. The marker is cleared as soon as a different version appears or
-	// the same one passes (see clearBlockedVersion).
-	if blocked := d.blockedVersion(); blocked != "" && blocked == st.key {
-		d.logger.Warn("Deploy skipped: this version failed its health check",
-			slog.String("tag", res.Tag),
-			slog.String("cache_key", st.key))
-		st.skip = true
-		return st, nil
-	}
-
 	currentkeyValue, _ := d.cache.Read(currentkeyName)
 	st.prevKey = string(currentkeyValue)
+
+	// A release that failed its health check is deployed once, not on every
+	// tick. The marker is only consulted while health verification is on, so
+	// dropping --health-path is enough to deploy the version again; see
+	// blockedkeyName for the rest of the lifecycle.
+	if d.config.Health.Path != "" {
+		if blocked := d.blockedVersion(); blocked != "" && blocked == st.key {
+			d.logger.Warn("Deploy skipped: this version failed its health check",
+				slog.String("tag", res.Tag),
+				slog.String("cache_key", st.key))
+			st.skip = true
+			st.blocked = true
+			return st, nil
+		}
+	}
+
 	list, err := d.cache.List()
 	if err != nil {
 		return st, err
@@ -196,9 +205,16 @@ func (d *Dewy) promoteAndReport(ctx context.Context, res *registry.CurrentRespon
 	d.Unlock()
 
 	if d.config.Command == SERVER {
+		// Read the live worker generation before the restart so the wait below
+		// can tell the new worker from the one it replaces.
+		generation := d.latestGeneration()
+
 		if err := d.startOrRestartServer(ctx); err != nil {
 			d.rollbackServer(ctx, res, st, err)
 			return err
+		}
+		if d.config.Health.Path != "" {
+			d.awaitWorkerSwap(ctx, generation, defaultWorkerSwapTimeout)
 		}
 		if err := d.verifyServerHealth(ctx); err != nil {
 			d.rollbackServer(ctx, res, st, err)

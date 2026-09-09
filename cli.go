@@ -8,6 +8,8 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"strconv"
@@ -277,6 +279,15 @@ func (c *cli) run() int {
 		conf.MaxBackoffInterval = time.Duration(c.MaxBackoffInterval) * time.Second
 	}
 
+	// --health-path and --health-timeout are general options because both the
+	// server and the container command use them, but the rollback they drive
+	// is specific to the server command. Rejecting the unsupported
+	// combinations is clearer than accepting and ignoring them.
+	if c.NoRollback && c.command != "server" {
+		fmt.Fprintf(c.env.Err, "Error: --no-rollback is only supported by the server command\n")
+		return ExitErr
+	}
+
 	switch c.command {
 	case "server":
 		if err := c.configureServerCommand(&conf); err != nil {
@@ -287,6 +298,10 @@ func (c *cli) run() int {
 			return ExitErr
 		}
 	default:
+		if c.HealthPath != "" {
+			fmt.Fprintf(c.env.Err, "Error: --health-path is not supported by the assets command\n")
+			return ExitErr
+		}
 		conf.Command = ASSETS
 	}
 
@@ -346,7 +361,7 @@ func (c *cli) configureServerCommand(conf *Config) error {
 			cmdArgs = c.args[1:]
 		}
 	}
-	conf.Starter = &StarterConfig{
+	starter := &StarterConfig{
 		ports:     parsedPorts,
 		command:   command,
 		args:      cmdArgs,
@@ -361,11 +376,19 @@ func (c *cli) configureServerCommand(conf *Config) error {
 		conf.Health.Timeout = time.Duration(c.HealthTimeout) * time.Second
 	}
 
-	if c.HealthPath != "" && len(parsedPorts) == 0 {
-		fmt.Fprintf(c.env.Err, "Error: --health-path requires --port\n")
-		return fmt.Errorf("--health-path requires --port")
+	if c.HealthPath != "" {
+		if len(parsedPorts) == 0 {
+			fmt.Fprintf(c.env.Err, "Error: --health-path requires --port\n")
+			return fmt.Errorf("--health-path requires --port")
+		}
+		// The health check must not probe before server-starter has retired
+		// the previous worker, and its status file is the only report of when
+		// that happened. It is written only when a path is configured, so ask
+		// for one whenever the check is on.
+		starter.statusfile = filepath.Join(os.TempDir(), fmt.Sprintf("dewy-starter-%d.status", os.Getpid()))
 	}
 
+	conf.Starter = starter
 	return nil
 }
 
