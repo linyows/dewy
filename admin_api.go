@@ -14,18 +14,16 @@ import (
 
 // startAdminAPI starts the admin API server on TCP localhost.
 func (d *Dewy) startAdminAPI(ctx context.Context) error {
-	// Default admin port is 17539 (DEWY: D=4, E=5, W=23, Y=25 -> 4+5+2+3+2+5=21, but 17539 is more unique)
 	adminPort := d.config.AdminPort
 	if adminPort == 0 {
-		adminPort = 17539
+		adminPort = defaultAdminPort
 	}
 
 	// Try to bind to the port, increment if already in use
 	var listener net.Listener
 	var err error
-	maxAttempts := 10
 
-	for i := range maxAttempts {
+	for i := range adminPortMaxAttempts {
 		currentPort := adminPort + i
 		addr := fmt.Sprintf("localhost:%d", currentPort)
 		listener, err = net.Listen("tcp", addr)
@@ -42,7 +40,7 @@ func (d *Dewy) startAdminAPI(ctx context.Context) error {
 	}
 
 	if listener == nil {
-		return fmt.Errorf("failed to bind admin API after %d attempts: %w", maxAttempts, err)
+		return fmt.Errorf("failed to bind admin API after %d attempts: %w", adminPortMaxAttempts, err)
 	}
 
 	// Create HTTP mux for admin API
