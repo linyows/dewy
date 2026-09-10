@@ -9,10 +9,10 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
+	"github.com/linyows/dewy/internal/ociauth"
 	"github.com/linyows/dewy/logging"
 )
 
@@ -77,27 +77,11 @@ func NewOCI(ctx context.Context, u string, log *logging.Logger) (*OCI, error) {
 	return oci, nil
 }
 
-// loadCredentials loads credentials from environment variables.
+// loadCredentials loads credentials from environment variables. The same
+// resolution backs the image pull in the container package, so the tag list
+// and the pull authenticate as the same identity.
 func (o *OCI) loadCredentials() {
-	// Generic credentials
-	if username := os.Getenv("DOCKER_USERNAME"); username != "" {
-		o.username = username
-		o.password = os.Getenv("DOCKER_PASSWORD")
-		return
-	}
-
-	// GitHub Container Registry
-	if strings.Contains(o.Registry, "ghcr.io") {
-		if token := os.Getenv("GITHUB_TOKEN"); token != "" {
-			o.username = "token"
-			o.password = token
-			return
-		}
-	}
-
-	// AWS ECR - will use aws-cli credentials
-	// Google Artifact Registry - will use gcloud credentials
-	// TODO: Phase 2 implementation
+	o.username, o.password = ociauth.Credentials(o.Registry)
 }
 
 // normalizeDockerHub rewrites Docker Hub hostnames to the actual registry API host.

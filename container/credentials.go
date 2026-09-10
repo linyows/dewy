@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/linyows/dewy/internal/ociauth"
 )
 
 // extractRegistry extracts the registry host from an image reference.
@@ -43,36 +44,6 @@ func extractRegistry(imageRef string) string {
 	return "docker.io"
 }
 
-// getCredentials returns username and password for the given registry from environment variables.
-func getCredentials(registry string) (username, password string) {
-	// GitHub Container Registry
-	if strings.Contains(registry, "ghcr.io") {
-		if token := os.Getenv("GITHUB_TOKEN"); token != "" {
-			return "token", token
-		}
-	}
-
-	// AWS ECR - check for ECR-specific credentials first
-	if strings.Contains(registry, ".ecr.") && strings.Contains(registry, ".amazonaws.com") {
-		if token := os.Getenv("AWS_ECR_PASSWORD"); token != "" {
-			return "AWS", token
-		}
-	}
-
-	// Google Artifact Registry / Container Registry
-	if strings.Contains(registry, "gcr.io") || strings.Contains(registry, "-docker.pkg.dev") {
-		if token := os.Getenv("GCR_TOKEN"); token != "" {
-			return "_json_key", token
-		}
-	}
-
-	// Generic credentials (fallback)
-	username = os.Getenv("DOCKER_USERNAME")
-	password = os.Getenv("DOCKER_PASSWORD")
-
-	return username, password
-}
-
 // isAuthError checks if the error message indicates an authentication failure.
 func isAuthError(output string) bool {
 	lowerOutput := strings.ToLower(output)
@@ -94,7 +65,7 @@ func isAuthError(output string) bool {
 
 // Login authenticates with the specified registry using credentials from environment variables.
 func (r *Runtime) Login(ctx context.Context, registry string) error {
-	username, password := getCredentials(registry)
+	username, password := ociauth.Credentials(registry)
 	if username == "" || password == "" {
 		r.logger.Debug("No credentials found for registry", slog.String("registry", registry))
 		return nil

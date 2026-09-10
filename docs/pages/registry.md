@@ -319,16 +319,38 @@ img://registry.example.com/<repository>
 
 ### Authentication
 
-Dewy uses Docker's authentication system. Authenticate using `docker login`:
+Dewy talks to the registry twice per poll: it queries the registry API for the
+tag list, then pulls the selected image through the container runtime. Both
+use the credentials read from these environment variables.
+
+| Variables | Registry | Sent as |
+| --- | --- | --- |
+| `DOCKER_USERNAME`, `DOCKER_PASSWORD` | Any | The username and password as given |
+| `GITHUB_TOKEN` | ghcr.io | Username `token`, the token as the password |
+| `AWS_ECR_PASSWORD` | ECR (`*.ecr.*.amazonaws.com`) | Username `AWS`, the token as the password |
+| `GCR_TOKEN` | gcr.io, `*-docker.pkg.dev` | Username `_json_key`, the service account key JSON as the password |
+
+`DOCKER_USERNAME` takes precedence. When it is set, it is used for every
+registry and the registry-specific variables are ignored.
 
 ```bash
-# Login to registry (credentials saved to ~/.docker/config.json)
-docker login ghcr.io
-docker login docker.io
-
-# Dewy will automatically use these credentials
+export GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxx
 dewy container --registry img://ghcr.io/myorg/myapp
 ```
+
+The image pull additionally falls back to whatever `docker login` has stored
+in `~/.docker/config.json`:
+
+```bash
+docker login ghcr.io
+dewy container --registry img://ghcr.io/myorg/myapp
+```
+
+{% callout type="note" %}
+The tag listing does not read `~/.docker/config.json`. A private registry
+needs one of the environment variables above, even when `docker login` has
+already been run.
+{% /callout %}
 
 ### Examples with Options
 
