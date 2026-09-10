@@ -329,16 +329,32 @@ img://registry.example.com/<repository>
 
 ### 認証
 
-Dewyは、Dockerの認証システムを使用します。`docker login`で認証してください：
+Dewyは1回のポーリングでレジストリに2回アクセスします。レジストリAPIでタグ一覧を取得し、選択したイメージをコンテナランタイムでpullします。どちらも以下の環境変数から読み取った認証情報を使用します。
+
+| 環境変数 | 対象レジストリ | 送信される値 |
+| --- | --- | --- |
+| `DOCKER_USERNAME`, `DOCKER_PASSWORD` | すべて | 指定されたユーザー名とパスワード |
+| `GITHUB_TOKEN` | ghcr.io | ユーザー名は`token`、パスワードはトークン |
+| `AWS_ECR_PASSWORD` | ECR（`*.ecr.*.amazonaws.com`） | ユーザー名は`AWS`、パスワードはトークン |
+| `GCR_TOKEN` | gcr.io、`*-docker.pkg.dev` | ユーザー名は`_json_key`、パスワードはサービスアカウントキーのJSON |
+
+`DOCKER_USERNAME`が優先されます。これが設定されている場合、すべてのレジストリでこの値が使われ、レジストリ固有の環境変数は無視されます。
 
 ```bash
-# レジストリにログイン（認証情報は~/.docker/config.jsonに保存されます）
-docker login ghcr.io
-docker login docker.io
-
-# Dewyは自動的にこれらの認証情報を使用します
+export GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxx
 dewy container --registry img://ghcr.io/myorg/myapp
 ```
+
+イメージのpullは、上記に該当する環境変数がない場合、`docker login`が`~/.docker/config.json`に保存した認証情報も利用します。
+
+```bash
+docker login ghcr.io
+dewy container --registry img://ghcr.io/myorg/myapp
+```
+
+{% callout type="note" %}
+タグ一覧の取得は`~/.docker/config.json`を読みません。プライベートレジストリを使う場合は、`docker login`済みであっても上記の環境変数のいずれかが必要です。
+{% /callout %}
 
 ### オプション付きの例
 
