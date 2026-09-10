@@ -189,7 +189,8 @@ func (d *Dewy) downloadAndCache(ctx context.Context, res *registry.CurrentRespon
 
 // applyDeployment sends the "downloaded" notification and runs the deploy
 // lifecycle (before-hook + extract + symlink swap + after-hook lives inside
-// d.deploy).
+// d.deploy). A deploy that never went live gives the "current" cache key
+// back to the release that is still running.
 func (d *Dewy) applyDeployment(ctx context.Context, res *registry.CurrentResponse, st *cacheState) error {
 	msg := fmt.Sprintf("Downloaded artifact for `%s`", res.Tag)
 	d.logger.Info("Download notification", slog.String("message", msg))
@@ -197,7 +198,37 @@ func (d *Dewy) applyDeployment(ctx context.Context, res *registry.CurrentRespons
 
 	prevRelease, err := d.deploy(st.key)
 	st.prevRelease = prevRelease
-	return err
+	if err != nil {
+		d.restoreCurrentKey(st.prevKey)
+		return err
+	}
+	return nil
+}
+
+// restoreCurrentKey points the "current" cache key back at the release that
+// was live before this tick.
+//
+// downloadAndCache claims the pointer for the new key before the release is
+// extracted, so leaving it there after a deploy that never went live would
+// make the next tick read the failed version as the deployed one and skip it.
+// The running server would stay on the old release with nothing left to retry
+// the deploy. An empty prevKey means there was no previous release, so the
+// pointer is removed rather than restored.
+//
+// Failures are logged rather than returned: the caller already has the error
+// that stopped the deploy, and replacing it would hide the cause.
+func (d *Dewy) restoreCurrentKey(prevKey string) {
+	var err error
+	if prevKey == "" {
+		err = d.cache.Delete(currentkeyName)
+	} else {
+		err = d.cache.Write(currentkeyName, []byte(prevKey))
+	}
+	if err != nil {
+		d.logger.Warn("Failed to restore the current cache key",
+			slog.String("cache_key", prevKey),
+			slog.String("error", err.Error()))
+	}
 }
 
 // promoteAndReport finalizes a server/assets deploy: saves the version,
@@ -392,7 +423,8 @@ func (d *Dewy) pullContainerImage(ctx context.Context, res *registry.CurrentResp
 
 // applyContainerDeployment runs the before-hook and the rolling deployment,
 // records telemetry, and returns the number of replicas successfully
-// deployed. The runtime is the one resolveContainerState already created
+// deployed. A failing before-hook aborts the deploy before any container is
+// replaced. The runtime is the one resolveContainerState already created
 // (and pullContainerImage already used); deployContainer reuses it rather
 // than creating a duplicate. The after-hook runs in promoteContainerAndReport
 // so it only fires once the deploy is considered final.
@@ -402,7 +434,12 @@ func (d *Dewy) applyContainerDeployment(ctx context.Context, res *registry.Curre
 		d.notifier.SendHookResult(ctx, "Before Deploy", beforeResult)
 	}
 	if beforeErr != nil {
+		// Same gate as the server path: a failed before-deploy hook stops the
+		// deploy rather than starting new containers past it. No container has
+		// been touched yet, so the running replicas keep serving and the next
+		// poll retries from the pulled image.
 		d.logger.Error("Before deploy hook failure", slog.String("error", beforeErr.Error()))
+		return 0, fmt.Errorf("before deploy hook failed: %w", beforeErr)
 	}
 
 	deployStart := time.Now()
