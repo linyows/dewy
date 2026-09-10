@@ -241,7 +241,9 @@ gsutil cp myapp_linux_amd64.tar.gz \
 
 ## Artifact Verification
 
-To ensure artifact integrity, it is recommended to place checksum files alongside artifacts.
+Dewy verifies a downloaded artifact against the SHA-256 checksum file published next to it, before the artifact is written to the cache or extracted. A file that does not match its checksum is not deployed, and the deployment fails with an error naming both digests.
+
+Two layouts are recognized. A per-artifact file is named after the artifact:
 
 ```bash
 # Generate SHA256 checksum
@@ -252,7 +254,26 @@ sha256sum myapp_linux_amd64.tar.gz > myapp_linux_amd64.tar.gz.sha256
 # - myapp_linux_amd64.tar.gz.sha256
 ```
 
-In security-focused environments, GPG signatures can also be provided.
+An aggregate file holds one line per artifact, in the format `sha256sum` writes. `checksums.txt` and `SHA256SUMS` are recognized, as are the names release tooling generates such as `myapp_1.2.3_checksums.txt`. GoReleaser produces one by default:
+
+```bash
+sha256sum myapp_*.tar.gz > checksums.txt
+
+# Upload
+# - myapp_linux_amd64.tar.gz
+# - myapp_darwin_arm64.tar.gz
+# - checksums.txt
+```
+
+A file named after the artifact takes precedence over an aggregate one. Recognized extensions for the per-artifact form are `.sha256`, `.sha256sum`, `.sha256.txt` and `.sha256sums`.
+
+Verification is controlled by [`--verify-checksum`](/reference#--verify-checksum). The default, `auto`, verifies whenever a checksum file is published and deploys without verification when none is. `required` also fails the deployment when a release publishes no checksum file. `off` skips the check.
+
+Only a fresh download is verified. An artifact already in the cache was verified when it was first downloaded, whether by this instance or by another one sharing the same cache backend.
+
+Container images are not covered by this option. An image is addressed by its digest and the container runtime verifies it on pull.
+
+In security-focused environments, GPG signatures can also be provided. Dewy does not verify them; use a deploy hook if verification is required.
 
 ```bash
 # Generate GPG signature

@@ -45,6 +45,7 @@ Features
 - Graceful restarts
 - Configurable registries and artifact stores
 - Support for Docker Hub, GHCR, GAR, ECR, and other OCI registries
+- SHA-256 verification of downloaded artifacts
 - Deployment status notifications
 - Structured logging with JSON format support
 - OpenTelemetry-based observability (Prometheus metrics + OTLP export)
@@ -273,6 +274,8 @@ Artifact
 --
 
 The Artifact interface manages application or file content itself. If the registry is not GRPC, artifacts will automatically align with the registry type. Supported types include GitHub Releases, AWS S3, and Google Cloud Storage.
+
+A downloaded artifact is checked against the SHA-256 checksum file published next to it, before it is written to the cache or extracted. Both a per-artifact file (`myapp_linux_amd64.tar.gz.sha256`) and an aggregate one (`checksums.txt`, `SHA256SUMS`, `myapp_1.2.3_checksums.txt`) are recognized. `--verify-checksum` selects the behavior: `auto` (default) verifies whenever a checksum file is published, `required` also fails when a release publishes none, and `off` skips the check. Container images are addressed by digest and verified by the container runtime, so they are unaffected.
 
 Cache
 --

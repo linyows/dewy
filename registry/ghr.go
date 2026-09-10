@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/go-github/v73/github"
 	"github.com/google/go-querystring/query"
+	"github.com/linyows/dewy/checksum"
 	"github.com/linyows/dewy/client"
 	"github.com/linyows/dewy/internal/scheme"
 	"github.com/linyows/dewy/logging"
@@ -113,6 +114,11 @@ func (g *GHR) Current(ctx context.Context) (*CurrentResponse, error) {
 	}
 	var artifactName string
 
+	assetNames := make([]string, 0, len(release.Assets))
+	for _, v := range release.Assets {
+		assetNames = append(assetNames, v.GetName())
+	}
+
 	if g.Artifact != "" {
 		artifactName = g.Artifact
 		found := false
@@ -135,12 +141,6 @@ func (g *GHR) Current(ctx context.Context) (*CurrentResponse, error) {
 			}
 		}
 	} else {
-		// Extract asset names
-		var assetNames []string
-		for _, v := range release.Assets {
-			assetNames = append(assetNames, v.GetName())
-		}
-
 		// Use common pattern matching
 		matchedName, found := MatchArtifactByPlatform(assetNames)
 		if !found {
@@ -161,6 +161,12 @@ func (g *GHR) Current(ctx context.Context) (*CurrentResponse, error) {
 
 	au := fmt.Sprintf("%s://%s/%s/tag/%s/%s", scheme.GHR, g.Owner, g.Repo, release.GetTagName(), artifactName)
 
+	var cu string
+	if name := checksum.FindFile(artifactName, assetNames); name != "" {
+		cu = fmt.Sprintf("%s://%s/%s/tag/%s/%s", scheme.GHR, g.Owner, g.Repo, release.GetTagName(), name)
+		g.logger.Debug("Found checksum file", slog.String("name", name))
+	}
+
 	// Extract slot from build metadata
 	slot := extractSlot(release.GetTagName(), g.CalVer)
 
@@ -170,6 +176,7 @@ func (g *GHR) Current(ctx context.Context) (*CurrentResponse, error) {
 		ArtifactURL: au,
 		CreatedAt:   release.PublishedAt.GetTime(),
 		Slot:        slot,
+		ChecksumURL: cu,
 	}, nil
 }
 

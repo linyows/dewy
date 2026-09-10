@@ -109,8 +109,12 @@ type Config struct {
 	BeforeDeployHook string
 	AfterDeployHook  string
 	Health           HealthConfig // Post-deploy health check (server command)
-	Slot             string       // Deployment slot for blue/green deployment (e.g., "blue", "green")
-	CalVer           string       // CalVer format for version identification (e.g., "YYYY.0M.MICRO")
+	// ChecksumMode selects how a downloaded artifact is checked against the
+	// SHA-256 checksum file published next to it. The zero value verifies
+	// whenever a checksum file is available.
+	ChecksumMode ChecksumMode
+	Slot         string // Deployment slot for blue/green deployment (e.g., "blue", "green")
+	CalVer       string // CalVer format for version identification (e.g., "YYYY.0M.MICRO")
 	// MaxBackoffInterval bounds how far consecutive failures may stretch the
 	// polling interval. Zero keeps it fixed.
 	MaxBackoffInterval time.Duration

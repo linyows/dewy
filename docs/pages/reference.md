@@ -120,6 +120,23 @@ dewy server --port 9090 -- /opt/app/current/app
 dewy server --registry ghr://owner/repo -- /opt/worker/current/worker
 ```
 
+### --verify-checksum
+
+Selects how a downloaded artifact is checked against the SHA-256 checksum file published next to it. Accepts `off`, `auto` or `required`. Default is `auto`.
+
+- `auto`: verify when the registry finds a checksum file, and deploy without verification when it does not.
+- `required`: additionally fail the deployment when no checksum file is published.
+- `off`: never fetch a checksum file.
+
+Verification happens before the artifact is written to the cache, so an artifact that does not match is neither extracted nor shared with other instances using the same cache backend. See [Artifact Verification](/artifact#artifact-verification) for the file layouts that are recognized.
+
+Container images are unaffected: an image is addressed by its digest, which the container runtime verifies on pull.
+
+```bash
+# Refuse to deploy a release that publishes no checksum file
+dewy server --registry ghr://owner/repo --verify-checksum required -- /opt/app/current/app
+```
+
 ### --calver
 
 Specifies the CalVer (Calendar Versioning) format for version identification. When set, Dewy uses calendar versioning instead of semantic versioning to detect the latest version.

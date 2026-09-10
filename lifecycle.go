@@ -170,6 +170,13 @@ func (d *Dewy) downloadAndCache(ctx context.Context, res *registry.CurrentRespon
 		return fmt.Errorf("failed artifact.Download: %w", err)
 	}
 
+	// Verify before anything is written to the cache, so a corrupt or
+	// tampered artifact is never staged for extraction and never shared with
+	// the other instances pointed at the same cache backend.
+	if err := d.verifyChecksum(ctx, res, buf.Bytes()); err != nil {
+		return err
+	}
+
 	if err := d.cache.Write(st.key, buf.Bytes()); err != nil {
 		return fmt.Errorf("failed cache.Write cachekeyName: %w", err)
 	}
