@@ -49,8 +49,8 @@ Hook executed after deployment **succeeds**.
 
 **Execution Timing:**
 - After file extraction and symbolic link creation completion
-- After application restart completion (for server command)
-- Final stage of deployment process
+- Before the application is started or restarted (for server command)
+- After the rolling deployment completes (for container command)
 
 **Important Behavior:**
 ```bash
@@ -64,6 +64,36 @@ dewy server --registry ghr://owner/repo \
 After Deploy Hook failure does not affect deployment success status.
 However, errors are logged and notifications are sent if configured.
 {% /callout %}
+
+### Rollback Behavior {% #rollback-behavior %}
+
+Hooks are not executed when a rollback restores the previous release.
+
+With the `server` command and `--health-path`, Dewy verifies the new release after restarting the application. When that health check fails, Dewy records the version as blocked, restores the previous release directory, repoints the `current` symlink, and brings the server up again. Neither the Before Deploy Hook nor the After Deploy Hook runs during those steps.
+
+**Order of operations for a server deployment:**
+
+1. Before Deploy Hook
+2. Artifact extraction and `current` symlink swap
+3. After Deploy Hook
+4. Application start or restart
+5. Health check (only with `--health-path`)
+6. Rollback when step 5 fails
+
+The After Deploy Hook runs at step 3, before the application is restarted and before the health check. It has therefore already run against the new release by the time step 6 restores the previous one. After a rollback:
+
+- The After Deploy Hook has run for a release that is no longer live.
+- No hook has run for the restored release that is now live.
+- A hook that derives state from the release path, such as a symlink of its own, a cache warm-up, or a rendered configuration file, still points at the failed release.
+
+The notifier is updated to the restored release path, so notification content reflects the release that is actually running.
+
+{% callout type="warning" title="Hooks and rollback" %}
+Write the After Deploy Hook so that the state it produces is either independent of a specific release directory, or safe to correct manually after a rollback notification.
+Whether a rollback should run a dedicated hook is under discussion in issue #493.
+{% /callout %}
+
+With the `container` command the situation does not arise. A failed rolling deployment is rolled back inside the deployment step, before the After Deploy Hook runs, so no hook has run against the reverted release.
 
 ## Execution Environment and Constraints {% #execution-environment %}
 
