@@ -979,42 +979,37 @@ func TestHookResultNotification(t *testing.T) {
 		beforeHook   string
 		afterHook    string
 		expectHooks  int
-		expectErrors int
 		expectRunErr bool
 		description  string
 	}{
 		{
-			name:         "successful_hooks",
-			beforeHook:   "echo 'Before hook executed'",
-			afterHook:    "echo 'After hook executed'",
-			expectHooks:  2,
-			expectErrors: 0,
-			description:  "Both hooks should succeed and send notifications",
+			name:        "successful_hooks",
+			beforeHook:  "echo 'Before hook executed'",
+			afterHook:   "echo 'After hook executed'",
+			expectHooks: 2,
+			description: "Both hooks should succeed and send notifications",
 		},
 		{
 			name:         "before_hook_fails",
 			beforeHook:   "exit 1",
 			afterHook:    "echo 'After hook executed'",
 			expectHooks:  1,
-			expectErrors: 1,
 			expectRunErr: true,
 			description:  "Before hook failure should abort the deploy before the after hook",
 		},
 		{
-			name:         "after_hook_fails",
-			beforeHook:   "echo 'Before hook executed'",
-			afterHook:    "exit 1",
-			expectHooks:  2,
-			expectErrors: 0,
-			description:  "After hook failure should not cause deploy error",
+			name:        "after_hook_fails",
+			beforeHook:  "echo 'Before hook executed'",
+			afterHook:   "exit 1",
+			expectHooks: 2,
+			description: "After hook failure should not cause deploy error",
 		},
 		{
-			name:         "no_hooks",
-			beforeHook:   "",
-			afterHook:    "",
-			expectHooks:  0,
-			expectErrors: 0,
-			description:  "No hooks configured should not send hook notifications",
+			name:        "no_hooks",
+			beforeHook:  "",
+			afterHook:   "",
+			expectHooks: 0,
+			description: "No hooks configured should not send hook notifications",
 		},
 	}
 

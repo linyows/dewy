@@ -16,10 +16,10 @@ import (
 )
 
 // deploy extracts the cached artifact into a new release directory and
-// atomically swaps the "current" symlink to point at it. Before- and after-
-// deploy hooks are wrapped around the extract step: a failing before-deploy
-// hook aborts the deploy, and the after-deploy hook runs only once the swap
-// has succeeded.
+// atomically swaps the "current" symlink to point at it. The before-deploy
+// hook gates that work: a non-zero exit aborts the deploy with nothing
+// extracted. The after-deploy hook runs only once the symlink swap has
+// succeeded, so it never fires for a release that did not go live.
 //
 // The release directory the symlink pointed at beforehand is returned so the
 // caller can restore it if the new release fails its health check. It is
