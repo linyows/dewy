@@ -103,8 +103,8 @@ func (d *Dewy) stopAdminAPI(ctx context.Context) error {
 // derived repository name).
 func (d *Dewy) containerListLabels() map[string]string {
 	return map[string]string{
-		"dewy.managed": "true",
-		"dewy.app":     d.appName(),
+		container.LabelManaged: container.LabelManagedValue,
+		container.LabelApp:     d.appName(),
 	}
 }
 
