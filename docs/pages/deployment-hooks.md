@@ -43,6 +43,8 @@ If Before Deploy Hook exits with a non-zero exit code, the entire deployment pro
 This behavior enables safe deployment prevention when preconditions are not met.
 {% /callout %}
 
+Nothing is extracted when the hook fails, and the `current` symlink keeps pointing at the release that is running. Dewy records the run as failed, sends the error notification, and retries the same version on the next poll, so a deploy stopped by a transient cause goes through once that cause is gone. Consecutive failures engage the polling backoff, which widens the interval between retries.
+
 ### After Deploy Hook {% #after-hook %}
 
 Hook executed after deployment **succeeds**.

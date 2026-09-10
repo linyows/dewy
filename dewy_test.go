@@ -980,6 +980,7 @@ func TestHookResultNotification(t *testing.T) {
 		afterHook    string
 		expectHooks  int
 		expectErrors int
+		expectRunErr bool
 		description  string
 	}{
 		{
@@ -994,9 +995,10 @@ func TestHookResultNotification(t *testing.T) {
 			name:         "before_hook_fails",
 			beforeHook:   "exit 1",
 			afterHook:    "echo 'After hook executed'",
-			expectHooks:  2,
-			expectErrors: 0,
-			description:  "Before hook failure should not prevent deploy or after hook",
+			expectHooks:  1,
+			expectErrors: 1,
+			expectRunErr: true,
+			description:  "Before hook failure should abort the deploy before the after hook",
 		},
 		{
 			name:         "after_hook_fails",
@@ -1061,7 +1063,11 @@ func TestHookResultNotification(t *testing.T) {
 
 			// Run deploy
 			err = dewy.Run()
-			if err != nil {
+			if tt.expectRunErr {
+				if err == nil {
+					t.Errorf("%s: Expected an error, but got none", tt.description)
+				}
+			} else if err != nil {
 				t.Errorf("%s: Expected no error, but got: %v", tt.description, err)
 			}
 
@@ -1084,10 +1090,11 @@ func TestHookResultNotification(t *testing.T) {
 
 func TestHookStdoutStderrTrimming(t *testing.T) {
 	tests := []struct {
-		name        string
-		command     string
-		expectTrim  bool
-		description string
+		name         string
+		command      string
+		expectTrim   bool
+		expectRunErr bool
+		description  string
 	}{
 		{
 			name:        "stdout_with_trailing_newlines",
@@ -1096,10 +1103,11 @@ func TestHookStdoutStderrTrimming(t *testing.T) {
 			description: "Stdout with trailing newlines should be trimmed",
 		},
 		{
-			name:        "stderr_with_trailing_spaces",
-			command:     "printf 'error\\n   \\n' >&2; exit 1",
-			expectTrim:  true,
-			description: "Stderr with trailing spaces should be trimmed",
+			name:         "stderr_with_trailing_spaces",
+			command:      "printf 'error\\n   \\n' >&2; exit 1",
+			expectTrim:   true,
+			expectRunErr: true,
+			description:  "Stderr with trailing spaces should be trimmed",
 		},
 		{
 			name:        "clean_output",
@@ -1153,7 +1161,11 @@ func TestHookStdoutStderrTrimming(t *testing.T) {
 
 			// Run deploy
 			err = dewy.Run()
-			if err != nil {
+			if tt.expectRunErr {
+				if err == nil {
+					t.Errorf("%s: Expected an error, but got none", tt.description)
+				}
+			} else if err != nil {
 				t.Errorf("%s: Expected no error, but got: %v", tt.description, err)
 			}
 
@@ -1547,5 +1559,69 @@ func TestTickOptInSkips(t *testing.T) {
 
 	if got := calls.Load(); got != 2 {
 		t.Errorf("registry calls over 10 failing ticks = %d, want 2 (the window opens after the second failure)", got)
+	}
+}
+
+// TestBeforeDeployHookFailureAbortsDeploy covers the gate semantics of the
+// before-deploy hook: a non-zero exit leaves the running release untouched,
+// fails the tick, and still lets the next tick retry the same version.
+func TestBeforeDeployHookFailureAbortsDeploy(t *testing.T) {
+	artifactURL := "ghr://linyows/dewy/tag/v1.2.3/artifact.zip"
+	root := t.TempDir()
+
+	c := DefaultConfig()
+	c.Command = ASSETS
+	c.Registry = "ghr://linyows/dewy"
+	c.BeforeDeployHook = "exit 1"
+	c.Cache = CacheConfig{
+		Type:       FILE,
+		Expiration: 10,
+	}
+
+	dewy, err := New(c, testLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// A cache directory of its own: the test asserts on the absence of a
+	// deployed version, so leftovers from an earlier run would hide the
+	// failure it is checking for.
+	fileKvs := &cache.File{}
+	fileKvs.SetLogger(testLogger().Logger)
+	fileKvs.Default()
+	fileKvs.SetDir(t.TempDir())
+	dewy.cache = fileKvs
+
+	dewy.registry = &mockRegistry{
+		url: artifactURL,
+		tag: "before_hook_abort",
+	}
+	dewy.artifact = &mockArtifact{
+		binary: "dewy",
+		url:    artifactURL,
+	}
+	dewy.notifier = &mockNotify{}
+	dewy.root = root
+
+	err = dewy.Run()
+	if err == nil {
+		t.Error("Expected the deploy to fail when the before hook exits non-zero")
+	} else if !strings.Contains(err.Error(), "before deploy hook failed") {
+		t.Errorf("Expected the before hook to be the cause, but got: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(root, "current")); !os.IsNotExist(err) {
+		t.Errorf("Expected no current symlink after an aborted deploy: %v", err)
+	}
+
+	// The aborted version must not be recorded as deployed, or the next tick
+	// would skip it and the deploy would never happen.
+	dewy.config.BeforeDeployHook = "true"
+	if err := dewy.Run(); err != nil {
+		t.Fatalf("Expected the retry to succeed, but got: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(root, "current", "dewy")); err != nil {
+		t.Errorf("Expected the release to be deployed on the retry: %v", err)
 	}
 }

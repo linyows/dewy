@@ -17,7 +17,9 @@ import (
 
 // deploy extracts the cached artifact into a new release directory and
 // atomically swaps the "current" symlink to point at it. Before- and after-
-// deploy hooks are wrapped around the extract step.
+// deploy hooks are wrapped around the extract step: a failing before-deploy
+// hook aborts the deploy, and the after-deploy hook runs only once the swap
+// has succeeded.
 //
 // The release directory the symlink pointed at beforehand is returned so the
 // caller can restore it if the new release fails its health check. It is
@@ -30,8 +32,14 @@ func (d *Dewy) deploy(key string) (prevRelease string, err error) {
 		d.notifier.SendHookResult(ctx, "Before Deploy", beforeResult)
 	}
 	if beforeErr != nil {
+		// The before-deploy hook is a gate: it takes the backup, drains the
+		// load balancer, checks that the preconditions hold. Extracting the
+		// new release past a failed gate is the unsafe direction, so nothing
+		// is touched and the error is returned. The running release stays as
+		// it is, the tick fails, and the next poll retries the hook from the
+		// cached artifact once the cause is gone.
 		d.logger.Error("Before deploy hook failure", slog.String("error", beforeErr.Error()))
-		// Continue with deploy even if before hook fails
+		return "", fmt.Errorf("before deploy hook failed: %w", beforeErr)
 	}
 
 	defer func() {
