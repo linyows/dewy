@@ -429,17 +429,12 @@ func (d *Dewy) pullContainerImage(ctx context.Context, res *registry.CurrentResp
 // than creating a duplicate. The after-hook runs in promoteContainerAndReport
 // so it only fires once the deploy is considered final.
 func (d *Dewy) applyContainerDeployment(ctx context.Context, res *registry.CurrentResponse, st containerState) (int, error) {
-	beforeResult, beforeErr := d.execHook(d.config.BeforeDeployHook)
-	if beforeResult != nil {
-		d.notifier.SendHookResult(ctx, "Before Deploy", beforeResult)
-	}
-	if beforeErr != nil {
+	if err := d.runDeployHook(ctx, beforeDeployHook, d.config.BeforeDeployHook); err != nil {
 		// Same gate as the server path: a failed before-deploy hook stops the
 		// deploy rather than starting new containers past it. No container has
 		// been touched yet, so the running replicas keep serving and the next
 		// poll retries from the pulled image.
-		d.logger.Error("Before deploy hook failure", slog.String("error", beforeErr.Error()))
-		return 0, fmt.Errorf("before deploy hook failed: %w", beforeErr)
+		return 0, fmt.Errorf("before deploy hook failed: %w", err)
 	}
 
 	deployStart := time.Now()
@@ -463,13 +458,9 @@ func (d *Dewy) promoteContainerAndReport(ctx context.Context, res *registry.Curr
 	d.cVer = res.Tag
 	d.Unlock()
 
-	afterResult, afterErr := d.execHook(d.config.AfterDeployHook)
-	if afterResult != nil {
-		d.notifier.SendHookResult(ctx, "After Deploy", afterResult)
-	}
-	if afterErr != nil {
-		d.logger.Error("After deploy hook failure", slog.String("error", afterErr.Error()))
-	}
+	// The deploy is already final at this point, so a failing after-deploy
+	// hook is logged by runDeployHook and does not fail the run.
+	_ = d.runDeployHook(ctx, afterDeployHook, d.config.AfterDeployHook)
 
 	d.reportDeployment(ctx, res)
 

@@ -27,33 +27,23 @@ import (
 func (d *Dewy) deploy(key string) (prevRelease string, err error) {
 	ctx := context.Background()
 
-	beforeResult, beforeErr := d.execHook(d.config.BeforeDeployHook)
-	if beforeResult != nil {
-		d.notifier.SendHookResult(ctx, "Before Deploy", beforeResult)
-	}
-	if beforeErr != nil {
+	if err := d.runDeployHook(ctx, beforeDeployHook, d.config.BeforeDeployHook); err != nil {
 		// The before-deploy hook is a gate: it takes the backup, drains the
 		// load balancer, checks that the preconditions hold. Extracting the
 		// new release past a failed gate is the unsafe direction, so nothing
 		// is touched and the error is returned. The running release stays as
 		// it is, the tick fails, and the next poll retries the hook from the
 		// cached artifact once the cause is gone.
-		d.logger.Error("Before deploy hook failure", slog.String("error", beforeErr.Error()))
-		return "", fmt.Errorf("before deploy hook failed: %w", beforeErr)
+		return "", fmt.Errorf("before deploy hook failed: %w", err)
 	}
 
 	defer func() {
 		if err != nil {
 			return
 		}
-		// When deploy is success, run after deploy hook
-		afterResult, afterErr := d.execHook(d.config.AfterDeployHook)
-		if afterResult != nil {
-			d.notifier.SendHookResult(ctx, "After Deploy", afterResult)
-		}
-		if afterErr != nil {
-			d.logger.Error("After deploy hook failure", slog.String("error", afterErr.Error()))
-		}
+		// When deploy is success, run after deploy hook. Its failure is
+		// logged by runDeployHook and does not undo a live release.
+		_ = d.runDeployHook(ctx, afterDeployHook, d.config.AfterDeployHook)
 	}()
 	// Read the outgoing target before the swap. A missing or non-symlink
 	// path (first deploy, or a directory left by an older dewy) yields an
