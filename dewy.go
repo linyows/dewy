@@ -38,9 +38,6 @@ const (
 
 	// MaxArtifactSize is the maximum allowed artifact download size (512MB).
 	MaxArtifactSize int64 = 512 * 1024 * 1024
-
-	// defaultProxyIdleTimeout is the default idle timeout for TCP proxy connections.
-	defaultProxyIdleTimeout = 5 * time.Minute
 )
 
 // Dewy struct.
