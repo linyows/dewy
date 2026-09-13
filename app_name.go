@@ -20,22 +20,30 @@ func (d *Dewy) appName() string {
 }
 
 // deriveAppNameFromRegistry pulls the repository segment out of a registry
-// URL of the form "<scheme>://<host>/<path>?<query>". The last path
-// component, with any tag (`:`) and query (`?`) suffix stripped, is the
-// repository name — which is what dewy uses as the default app name.
+// URL of the form "<scheme>://<host>/<path>?<query>". The last non-empty
+// path component, with any tag (`:`) suffix stripped, is the repository name
+// — which is what dewy uses as the default app name. It is scheme-agnostic:
+// "img://ghcr.io/owner/app:v1", "ghr://owner/app" and "s3://region/bucket/app"
+// all yield "app".
+//
+// The query is removed before the path is split, because a query value may
+// itself contain a "/" that is not a path separator. Trailing empty segments
+// are skipped so a URL written with a trailing slash still yields a name.
 //
 // Returns "" if the URL cannot be parsed enough to find a path component.
 func deriveAppNameFromRegistry(registryURL string) string {
-	parts := strings.SplitN(registryURL, "://", 2)
-	if len(parts) != 2 {
+	_, rest, found := strings.Cut(registryURL, "://")
+	if !found {
 		return ""
 	}
-	pathParts := strings.Split(parts[1], "/")
-	if len(pathParts) == 0 {
-		return ""
+	rest, _, _ = strings.Cut(rest, "?")
+
+	segments := strings.Split(rest, "/")
+	for i := len(segments) - 1; i >= 0; i-- {
+		name, _, _ := strings.Cut(segments[i], ":")
+		if name != "" {
+			return name
+		}
 	}
-	last := pathParts[len(pathParts)-1]
-	last = strings.Split(last, "?")[0]
-	last = strings.Split(last, ":")[0]
-	return last
+	return ""
 }

@@ -433,13 +433,14 @@ func (c *cli) configureContainerCommand(conf *Config) error {
 		c.ContainerRuntime = "docker"
 	}
 
-	// Set default name if not specified
+	// Set default name if not specified. Dewy.appName applies the same
+	// fallback when Container.Name is empty, so both paths agree on the
+	// dewy.app label value; resolving it here keeps it visible in the config.
 	appName := c.Name
 	if appName == "" {
-		// Extract app name from registry URL (e.g., img://ghcr.io/owner/myapp:latest -> myapp)
-		appName = extractAppNameFromRegistry(c.Registry)
+		appName = deriveAppNameFromRegistry(c.Registry)
 		if appName == "" {
-			appName = "app" // Fallback if extraction fails
+			appName = "app" // Fallback if derivation fails
 		}
 	}
 
@@ -809,73 +810,4 @@ func (c *cli) displayContainerList(containers []*container.Info) {
 			deployTimeWidth, deployTime,
 			info.Name)
 	}
-}
-
-// extractAppNameFromRegistry extracts application name from registry URL.
-// For container command (img:// scheme):
-//   - img://ghcr.io/owner/myapp:latest -> myapp
-//   - img://docker.io/library/nginx:1.21 -> nginx
-//   - img://gcr.io/project/myapp -> myapp
-//   - img://myapp:latest -> myapp
-//
-// For other commands:
-//   - ghr://owner/myrepo -> myrepo
-//   - s3://region/bucket/path/to/app -> app
-func extractAppNameFromRegistry(registryURL string) string {
-	// Remove scheme (img://, ghr://, s3://, etc.)
-	parts := strings.SplitN(registryURL, "://", 2)
-	if len(parts) != 2 {
-		return ""
-	}
-
-	scheme := parts[0]
-	path := parts[1]
-
-	// For img:// (OCI registry): extract image name
-	// Examples:
-	//   ghcr.io/owner/myapp:latest -> myapp
-	//   docker.io/library/nginx:1.21 -> nginx
-	//   gcr.io/project/myapp -> myapp
-	//   myapp:latest -> myapp
-	if scheme == "img" {
-		// Remove query parameters if present (e.g., ?pre-release=true)
-		if idx := strings.Index(path, "?"); idx != -1 {
-			path = path[:idx]
-		}
-
-		// Split by / to get path components
-		pathParts := strings.Split(path, "/")
-		// Get the last component (image name with possible tag)
-		imageName := pathParts[len(pathParts)-1]
-
-		// Remove tag (everything after :)
-		if idx := strings.Index(imageName, ":"); idx != -1 {
-			imageName = imageName[:idx]
-		}
-
-		return imageName
-	}
-
-	// For ghr (GitHub Releases): owner/repo -> repo
-	if scheme == "ghr" {
-		pathParts := strings.Split(path, "/")
-		if len(pathParts) >= 2 {
-			return pathParts[1]
-		}
-	}
-
-	// For s3: region/bucket/path/to/app -> app
-	if scheme == "s3" {
-		pathParts := strings.Split(path, "/")
-		if len(pathParts) > 0 {
-			// Get last non-empty component
-			for i := len(pathParts) - 1; i >= 0; i-- {
-				if pathParts[i] != "" {
-					return pathParts[i]
-				}
-			}
-		}
-	}
-
-	return ""
 }
