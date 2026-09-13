@@ -8,6 +8,33 @@ import (
 	"time"
 )
 
+// Labels dewy attaches to every container it deploys. Discovery (the deploy
+// path, the reaper, the admin API, the metrics observer) filters on these, so
+// they are part of the package's contract rather than an implementation
+// detail: callers outside this package must reference these constants instead
+// of repeating the strings.
+const (
+	// LabelPrefix is the label namespace dewy reserves for itself. Users
+	// cannot set labels under it because doing so would interfere with
+	// container discovery.
+	LabelPrefix = "dewy."
+
+	// LabelManaged marks a container as deployed by dewy. Its value is
+	// always LabelManagedValue.
+	LabelManaged = LabelPrefix + "managed"
+	// LabelApp scopes a container to one dewy instance's application name.
+	LabelApp = LabelPrefix + "app"
+	// LabelVersion records the deployed tag.
+	LabelVersion = LabelPrefix + "version"
+	// LabelReplica records the 0-based replica index.
+	LabelReplica = LabelPrefix + "replica"
+	// LabelDeployedAt records the deploy time in RFC3339.
+	LabelDeployedAt = LabelPrefix + "deployed_at"
+
+	// LabelManagedValue is the only value LabelManaged ever takes.
+	LabelManagedValue = "true"
+)
+
 // supportedRuntimes is the allowlist of container runtime commands.
 var supportedRuntimes = map[string]bool{
 	"docker": true,

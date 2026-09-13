@@ -34,7 +34,7 @@ func WithCommandRunner(r sysdeps.CommandRunner) Option {
 
 // forbiddenLongOptions are long-form flags that conflict with Dewy management
 // or pose security risks. --label-file is included because its file contents
-// would bypass the reservedLabelPrefix check.
+// would bypass the LabelPrefix check.
 var forbiddenLongOptions = []string{
 	"--detach",
 	"--interactive",
@@ -62,11 +62,6 @@ var forbiddenLongOptions = []string{
 // short (e.g., -qd) are not caught, but extra args are user-supplied so that
 // blind spot does not cross a privilege boundary.
 var forbiddenShortFlagChars = []byte{'d', 'i', 't', 'p'}
-
-// reservedLabelPrefix is the label namespace Dewy uses to track managed
-// containers. Users cannot set labels under this prefix because doing so
-// would interfere with container discovery (FindContainersByLabel).
-const reservedLabelPrefix = "dewy."
 
 // newCLIRuntime creates a new Runtime with the specified command name.
 func newCLIRuntime(cmd string, logger *slog.Logger, drainTime time.Duration, opts ...Option) (*Runtime, error) {
@@ -141,8 +136,8 @@ func validateExtraArgs(args []string) error {
 			return fmt.Errorf("option -%c conflicts with Dewy management and cannot be used", c)
 		}
 
-		if value, ok := extractLabelValue(args, i); ok && strings.HasPrefix(value, reservedLabelPrefix) {
-			return fmt.Errorf("label %q uses reserved prefix %q and cannot be used", value, reservedLabelPrefix)
+		if value, ok := extractLabelValue(args, i); ok && strings.HasPrefix(value, LabelPrefix) {
+			return fmt.Errorf("label %q uses reserved prefix %q and cannot be used", value, LabelPrefix)
 		}
 	}
 	return nil

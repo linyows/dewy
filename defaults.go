@@ -40,4 +40,20 @@ const (
 	// workerSwapPollInterval is how often the server-starter status file is
 	// re-read while waiting for the swap.
 	workerSwapPollInterval = 200 * time.Millisecond
+
+	// defaultProxyIdleTimeout is the default idle timeout for TCP proxy
+	// connections. --proxy-idle-timeout overrides it; 0 disables the timeout.
+	defaultProxyIdleTimeout = 5 * time.Minute
+
+	// defaultAdminPort is the port the admin API listens on when --admin-port
+	// is not given. 17539 has no meaning beyond being unlikely to collide.
+	// Both the server (startAdminAPI) and the client ("dewy container list")
+	// side of the API must agree on it.
+	defaultAdminPort = 17539
+
+	// adminPortMaxAttempts is how many consecutive ports are tried from the
+	// configured one. The server increments on bind failure so several dewy
+	// instances can share a host; the client scans the same range to find
+	// them.
+	adminPortMaxAttempts = 10
 )

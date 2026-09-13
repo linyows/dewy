@@ -49,8 +49,8 @@ type Status struct {
 	Restarts   int
 	ExitCode   int
 	OOMKilled  bool
-	Replica    string // dewy.replica label, "" for pre-upgrade containers
-	Version    string // dewy.version label, "" for pre-upgrade containers
+	Replica    string // LabelReplica value, "" for pre-upgrade containers
+	Version    string // LabelVersion value, "" for pre-upgrade containers
 	StartedAt  time.Time
 	FinishedAt time.Time
 }
@@ -145,8 +145,8 @@ func (r *Runtime) RemoveExited(ctx context.Context, appName string) (int, error)
 	// shared runtime, which is a destructive cross-app action.
 	args := []string{"ps", "-aq",
 		"--filter", "status=exited",
-		"--filter", "label=dewy.managed=true",
-		"--filter", fmt.Sprintf("label=dewy.app=%s", appName)}
+		"--filter", "label=" + LabelManaged + "=" + LabelManagedValue,
+		"--filter", fmt.Sprintf("label=%s=%s", LabelApp, appName)}
 
 	output, err := r.execCommandOutput(ctx, args...)
 	if err != nil {
@@ -180,9 +180,9 @@ func (r *Runtime) RemoveExited(ctx context.Context, appName string) (int, error)
 // backs the whole result so the cost is one exec per call regardless of replica
 // count. An empty appName lists all managed containers.
 func (r *Runtime) InspectManaged(ctx context.Context, appName string) ([]*Status, error) {
-	labels := map[string]string{"dewy.managed": "true"}
+	labels := map[string]string{LabelManaged: LabelManagedValue}
 	if appName != "" {
-		labels["dewy.app"] = appName
+		labels[LabelApp] = appName
 	}
 
 	ids, err := r.findContainerIDs(ctx, labels, true)
@@ -230,8 +230,8 @@ func (r *Runtime) toStatus(in *inspection) *Status {
 		Restarts:   in.RestartCount,
 		ExitCode:   in.State.ExitCode,
 		OOMKilled:  in.State.OOMKilled,
-		Replica:    in.Config.Labels["dewy.replica"],
-		Version:    in.Config.Labels["dewy.version"],
+		Replica:    in.Config.Labels[LabelReplica],
+		Version:    in.Config.Labels[LabelVersion],
 		StartedAt:  parseTime(in.State.StartedAt),
 		FinishedAt: parseTime(in.State.FinishedAt),
 	}
@@ -280,7 +280,7 @@ func (r *Runtime) GetMappedPort(ctx context.Context, containerID string, contain
 func (r *Runtime) GetRunningContainerWithImage(ctx context.Context, imageRef, appName string) (string, error) {
 	output, err := r.execCommandOutput(ctx, "ps",
 		"--filter", fmt.Sprintf("ancestor=%s", imageRef),
-		"--filter", fmt.Sprintf("label=dewy.app=%s", appName),
+		"--filter", fmt.Sprintf("label=%s=%s", LabelApp, appName),
 		"--filter", "status=running",
 		"--format", "{{.ID}}")
 
@@ -329,7 +329,7 @@ func (r *Runtime) GetContainerInfo(ctx context.Context, containerID string, cont
 	}
 
 	deployedAt := startedAt
-	if deployedAtStr, ok := inspect.Config.Labels["dewy.deployed_at"]; ok {
+	if deployedAtStr, ok := inspect.Config.Labels[LabelDeployedAt]; ok {
 		if t, err := time.Parse(time.RFC3339, deployedAtStr); err == nil {
 			deployedAt = t
 		}

@@ -443,8 +443,8 @@ func (c *cli) configureContainerCommand(conf *Config) error {
 		}
 	}
 
-	// ProxyIdleTimeout: -1 means not specified (use default 5min), 0 means disabled, >0 means custom
-	proxyIdleTimeout := 5 * time.Minute
+	// ProxyIdleTimeout: -1 means not specified (use the default), 0 means disabled, >0 means custom
+	proxyIdleTimeout := defaultProxyIdleTimeout
 	if c.ProxyIdleTimeout == 0 {
 		proxyIdleTimeout = 0 // Explicitly disabled
 	} else if c.ProxyIdleTimeout > 0 {
@@ -702,14 +702,13 @@ https://github.com/linyows/dewy
 
 // runContainerList runs the "dewy container list" command.
 func (c *cli) runContainerList() int {
-	// Default admin port
 	adminPort := c.AdminPort
 	if adminPort == 0 {
-		adminPort = 17539
+		adminPort = defaultAdminPort
 	}
 
-	// Try to connect to admin API, scanning through possible ports
-	maxAttempts := 10
+	// Try to connect to admin API, scanning through the same range of ports
+	// that startAdminAPI increments over.
 	client := &http.Client{
 		Timeout: 2 * time.Second,
 	}
@@ -718,7 +717,7 @@ func (c *cli) runContainerList() int {
 	var err error
 	var successPort int
 
-	for i := range maxAttempts {
+	for i := range adminPortMaxAttempts {
 		currentPort := adminPort + i
 		url := fmt.Sprintf("http://localhost:%d/api/containers", currentPort)
 
@@ -732,7 +731,7 @@ func (c *cli) runContainerList() int {
 
 	if resp == nil {
 		fmt.Fprintf(c.env.Err, "Error: no running dewy instances found (tried ports %d-%d)\n",
-			adminPort, adminPort+maxAttempts-1)
+			adminPort, adminPort+adminPortMaxAttempts-1)
 		return ExitErr
 	}
 	defer resp.Body.Close()

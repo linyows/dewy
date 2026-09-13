@@ -27,8 +27,8 @@ func (r *Runtime) Deploy(ctx context.Context, opts RollingDeployOptions, updater
 
 	// Find existing containers
 	existingContainers, err := r.FindContainersByLabel(ctx, map[string]string{
-		"dewy.managed": "true",
-		"dewy.app":     opts.AppName,
+		LabelManaged: LabelManagedValue,
+		LabelApp:     opts.AppName,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to find existing containers: %w", err)
@@ -141,11 +141,11 @@ func (r *Runtime) startAndCheck(ctx context.Context, opts RollingDeployOptions, 
 		ReplicaIndex: replicaIndex,
 		Ports:        ports,
 		Labels: map[string]string{
-			"dewy.managed":     "true",
-			"dewy.app":         opts.AppName,
-			"dewy.deployed_at": time.Now().Format(time.RFC3339),
-			"dewy.replica":     strconv.Itoa(replicaIndex),
-			"dewy.version":     opts.Version,
+			LabelManaged:    LabelManagedValue,
+			LabelApp:        opts.AppName,
+			LabelDeployedAt: time.Now().Format(time.RFC3339),
+			LabelReplica:    strconv.Itoa(replicaIndex),
+			LabelVersion:    opts.Version,
 		},
 		Detach:    true,
 		Command:   opts.Command,
@@ -237,13 +237,14 @@ func (r *Runtime) rollback(ctx context.Context, results []DeployResult, updater 
 	}
 }
 
-// StopManagedContainers stops and removes all containers with dewy.managed=true and matching app name.
+// StopManagedContainers stops and removes all containers labeled as managed
+// by dewy and matching app name.
 func (r *Runtime) StopManagedContainers(ctx context.Context, appName string) (int, int, error) {
 	labels := map[string]string{
-		"dewy.managed": "true",
+		LabelManaged: LabelManagedValue,
 	}
 	if appName != "" {
-		labels["dewy.app"] = appName
+		labels[LabelApp] = appName
 	}
 
 	containerIDs, err := r.FindContainersByLabel(ctx, labels)
