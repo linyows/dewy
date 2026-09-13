@@ -675,12 +675,23 @@ jobs:
   id: create_release
   needs: [start_srv_ghr, start_srv_s3, start_srv_gs, start_srv_ghr_s3cache_b, start_srv_ghr_gscache_b, start_ast_ghr, start_ast_s3, start_ast_gs, start_ctr_oci, start_ctr_podman, start_ctr_dockerhub, start_ctr_mp_oci]
   steps:
+  # Every verify job below depends on this one, so a transient API failure
+  # here skips the whole second half of the suite. The GitHub API can answer
+  # the create request with a 500 while still having created the release, so
+  # an existing release counts as success: that makes the step idempotent and
+  # lets the retry recover instead of failing on "already_exists".
   - name: Create release
     uses: shell
+    retry:
+      max_attempts: 3
+      interval: 5s
     with:
       env:
         GH_TOKEN: "{{ vars.github_token }}"
       cmd: |
+        if gh release view {{ outputs.genver.version }} --repo linyows/dewy-testapp >/dev/null 2>&1; then
+          exit 0
+        fi
         gh release create {{ outputs.genver.version }} \
           --repo linyows/dewy-testapp \
           --title {{ outputs.genver.version }} \
