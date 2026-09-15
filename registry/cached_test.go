@@ -2,6 +2,7 @@ package registry
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -392,5 +393,274 @@ func TestCachedReportPassthrough(t *testing.T) {
 	}
 	if !called {
 		t.Error("upstream Report was not invoked")
+	}
+}
+
+// stubLocker returns a fixed outcome from every Acquire, so the decorator's
+// behavior under contention and under a broken lock backend can be pinned
+// down without racing real goroutines.
+type stubLocker struct {
+	err      error
+	acquires int
+	// onAcquire runs just before a successful Acquire returns, so tests can
+	// simulate a peer winning the race in the window between our read and our
+	// acquisition.
+	onAcquire func()
+	mu        sync.Mutex
+}
+
+func (s *stubLocker) Acquire(_ context.Context, _ string, _ cache.LockOptions) (cache.Lock, error) {
+	s.mu.Lock()
+	s.acquires++
+	fn := s.onAcquire
+	s.mu.Unlock()
+	if s.err != nil {
+		return nil, s.err
+	}
+	if fn != nil {
+		fn()
+	}
+	return noopLock{}, nil
+}
+
+func (s *stubLocker) Acquires() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.acquires
+}
+
+type noopLock struct{}
+
+func (noopLock) Lost() <-chan struct{} { return nil }
+func (noopLock) Unlock() error         { return nil }
+
+var _ cache.Locker = (*stubLocker)(nil)
+
+// seedEntry writes a cache entry directly, bypassing Current, so tests can
+// set up a specific staleness and lock state.
+func seedEntry(t *testing.T, c *Cached, fc *fakeAtomicCache, entry *cachedEntry) {
+	t.Helper()
+	data, err := json.Marshal(entry)
+	if err != nil {
+		t.Fatalf("marshal entry: %v", err)
+	}
+	if err := fc.Write(c.cacheKey, data); err != nil {
+		t.Fatalf("seed entry: %v", err)
+	}
+}
+
+func TestCachedConcurrentCallersHitUpstreamOnce(t *testing.T) {
+	// The reason this decorator exists: a fleet that wakes up together must
+	// produce one upstream request, not one per instance.
+	const instances = 8
+	upstream := &mockUpstream{tag: "v1.2.3", delay: 30 * time.Millisecond}
+	fakeCache := newFakeAtomicCache()
+
+	var wg sync.WaitGroup
+	results := make([]*CurrentResponse, instances)
+	errs := make([]error, instances)
+
+	for i := range instances {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			c := NewCached(upstream, "ghr://test/scope", fakeCache, time.Minute, testLogger())
+			c.wait = 2 * time.Millisecond
+			results[i], errs[i] = c.Current(context.Background())
+		}(i)
+	}
+	wg.Wait()
+
+	for i := range instances {
+		if errs[i] != nil {
+			t.Fatalf("instance %d: %v", i, errs[i])
+		}
+		if results[i] == nil || results[i].Tag != "v1.2.3" {
+			t.Errorf("instance %d got %+v, want tag v1.2.3", i, results[i])
+		}
+	}
+	if got := upstream.Calls(); got != 1 {
+		t.Errorf("want exactly 1 upstream call across %d instances, got %d", instances, got)
+	}
+}
+
+func TestCachedLockBusyServesStale(t *testing.T) {
+	// A peer holds the refresh lock for its entire TTL without publishing.
+	// Adding our own upstream request to whatever is already wrong would
+	// make it worse; the last known response is the better answer.
+	upstream := &mockUpstream{tag: "v2.0.0"}
+	fakeCache := newFakeAtomicCache()
+	busy := &stubLocker{err: fmt.Errorf("%w: registry", cache.ErrLockBusy)}
+	c := NewCached(upstream, "ghr://test/scope", fakeCache, time.Minute, testLogger(), WithLocker(busy))
+	c.wait = 2 * time.Millisecond
+	c.lockTTL = 20 * time.Millisecond
+
+	seedEntry(t, c, fakeCache, &cachedEntry{
+		Response:  &CurrentResponse{Tag: "v1.0.0"},
+		FetchedAt: time.Now().Add(-time.Hour),
+	})
+
+	res, err := c.Current(context.Background())
+	if err != nil {
+		t.Fatalf("Current: %v", err)
+	}
+	if res == nil || res.Tag != "v1.0.0" {
+		t.Errorf("want the stale cached response v1.0.0, got %+v", res)
+	}
+	if got := upstream.Calls(); got != 0 {
+		t.Errorf("want 0 upstream calls while a peer holds the lock, got %d", got)
+	}
+	if busy.Acquires() == 0 {
+		t.Error("expected at least one acquisition attempt")
+	}
+}
+
+func TestCachedLockBusyColdStartFallsBackToUpstream(t *testing.T) {
+	// With nothing cached there is no stale response to serve. Waiting
+	// forever on a peer would deadlock a fleet's first deploy, so the
+	// fallback is a direct upstream call.
+	upstream := &mockUpstream{tag: "v2.0.0"}
+	fakeCache := newFakeAtomicCache()
+	busy := &stubLocker{err: fmt.Errorf("%w: registry", cache.ErrLockBusy)}
+	c := NewCached(upstream, "ghr://test/scope", fakeCache, time.Minute, testLogger(), WithLocker(busy))
+	c.wait = 2 * time.Millisecond
+	c.lockTTL = 20 * time.Millisecond
+
+	res, err := c.Current(context.Background())
+	if err != nil {
+		t.Fatalf("Current: %v", err)
+	}
+	if res == nil || res.Tag != "v2.0.0" {
+		t.Errorf("want the upstream response, got %+v", res)
+	}
+	if got := upstream.Calls(); got != 1 {
+		t.Errorf("want 1 upstream call on cold start, got %d", got)
+	}
+}
+
+func TestCachedLockBackendErrorDegradesGracefully(t *testing.T) {
+	// The lock backend being down must not stop deployments.
+	upstream := &mockUpstream{tag: "v2.0.0"}
+	fakeCache := newFakeAtomicCache()
+	broken := &stubLocker{err: errors.New("lock backend unreachable")}
+	c := NewCached(upstream, "ghr://test/scope", fakeCache, time.Minute, testLogger(), WithLocker(broken))
+	c.wait = 2 * time.Millisecond
+
+	res, err := c.Current(context.Background())
+	if err != nil {
+		t.Fatalf("Current: %v", err)
+	}
+	if res == nil || res.Tag != "v2.0.0" {
+		t.Errorf("want the upstream response, got %+v", res)
+	}
+	if got := upstream.Calls(); got != 1 {
+		t.Errorf("want 1 upstream call when the lock backend is down, got %d", got)
+	}
+	if got := broken.Acquires(); got != 1 {
+		t.Errorf("a broken lock backend must not be retried in a loop, got %d attempts", got)
+	}
+}
+
+func TestCachedHonorsLegacyEntryLock(t *testing.T) {
+	// A peer running a pre-Locker Dewy marks the entry itself. We still wait
+	// for it, so that a fleet mid-upgrade does not double up on upstream.
+	upstream := &mockUpstream{tag: "v2.0.0"}
+	fakeCache := newFakeAtomicCache()
+	c := NewCached(upstream, "ghr://test/scope", fakeCache, time.Minute, testLogger())
+	c.wait = 2 * time.Millisecond
+	c.lockTTL = 100 * time.Millisecond
+
+	// Locked by a legacy peer with 50ms of its lock TTL left.
+	seedEntry(t, c, fakeCache, &cachedEntry{
+		Response:  &CurrentResponse{Tag: "v1.0.0"},
+		FetchedAt: time.Now().Add(-time.Hour),
+		LockedAt:  time.Now().Add(-50 * time.Millisecond),
+		LockedBy:  "legacy-peer:1",
+	})
+
+	start := time.Now()
+	res, err := c.Current(context.Background())
+	if err != nil {
+		t.Fatalf("Current: %v", err)
+	}
+	if elapsed := time.Since(start); elapsed < 40*time.Millisecond {
+		t.Errorf("returned after %v without waiting out the legacy peer's lock", elapsed)
+	}
+	if res == nil || res.Tag != "v2.0.0" {
+		t.Errorf("want the refreshed response after the legacy lock expired, got %+v", res)
+	}
+}
+
+func TestCachedNeverWritesLegacyLockFields(t *testing.T) {
+	// Writing LockedAt would make a pre-Locker peer wait out lockTTL on every
+	// poll, because nothing clears it any more.
+	c, _, fakeCache := newCachedForTest(t, time.Minute)
+	if _, err := c.Current(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := fakeCache.Read(c.cacheKey)
+	if err != nil {
+		t.Fatalf("read published entry: %v", err)
+	}
+	entry := &cachedEntry{}
+	if err := json.Unmarshal(data, entry); err != nil {
+		t.Fatalf("decode published entry: %v", err)
+	}
+	if !entry.LockedAt.IsZero() || entry.LockedBy != "" {
+		t.Errorf("published entry carries a legacy lock: LockedAt=%v LockedBy=%q", entry.LockedAt, entry.LockedBy)
+	}
+}
+
+func TestCachedReleasesLockOnPublish(t *testing.T) {
+	// After a refresh the lock must be free, or the next TTL window would
+	// stall until the lock TTL expired.
+	upstream := &mockUpstream{tag: "v1.2.3"}
+	fakeCache := newFakeAtomicCache()
+	c := NewCached(upstream, "ghr://test/scope", fakeCache, time.Minute, testLogger())
+
+	if _, err := c.Current(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	locker, ok := cache.LockerFor(fakeCache)
+	if !ok {
+		t.Fatal("fake cache should yield a locker")
+	}
+	lk, err := locker.Acquire(context.Background(), c.lockName, cache.LockOptions{TTL: time.Minute, TryOnce: true})
+	if err != nil {
+		t.Fatalf("lock was not released after publish: %v", err)
+	}
+	if err := lk.Unlock(); err != nil {
+		t.Fatalf("Unlock: %v", err)
+	}
+}
+
+func TestCachedRechecksAfterAcquiringLock(t *testing.T) {
+	// A peer can publish in the window between our read and our acquisition.
+	// Without a re-check we would hold the lock and repeat the request that
+	// the peer has already made.
+	upstream := &mockUpstream{tag: "v2.0.0"}
+	fakeCache := newFakeAtomicCache()
+	locker := &stubLocker{}
+	c := NewCached(upstream, "ghr://test/scope", fakeCache, time.Minute, testLogger(), WithLocker(locker))
+	c.wait = 2 * time.Millisecond
+
+	locker.onAcquire = func() {
+		seedEntry(t, c, fakeCache, &cachedEntry{
+			Response:  &CurrentResponse{Tag: "v1.9.0"},
+			FetchedAt: time.Now(),
+		})
+	}
+
+	res, err := c.Current(context.Background())
+	if err != nil {
+		t.Fatalf("Current: %v", err)
+	}
+	if res == nil || res.Tag != "v1.9.0" {
+		t.Errorf("want the peer's freshly published response v1.9.0, got %+v", res)
+	}
+	if got := upstream.Calls(); got != 0 {
+		t.Errorf("want 0 upstream calls when a peer published first, got %d", got)
 	}
 }
