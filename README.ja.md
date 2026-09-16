@@ -301,7 +301,7 @@ S3およびGCS backendの認証は各providerの標準credential chainを使用�
 
 ### Registry result cache
 
-cache URLに `registry-ttl=<duration>` を追加すると、**上流registryのレスポンスそのもの**もインスタンス間で共有されます。有効化すると、TTLウィンドウあたり1台だけが上流registryをpollし、残りは共有キャッシュからレスポンスを読みます（single-flight refresh lockで調停）。上流registry障害時は最後のキャッシュ値を返し続ける（stale-but-usable）ため、一時的なregistry障害でクラスタが止まりません。
+cache URLに `registry-ttl=<duration>` を追加すると、**上流registryのレスポンスそのもの**もインスタンス間で共有されます。有効化すると、TTLウィンドウあたり1台だけが上流registryをpollし、残りは共有キャッシュからレスポンスを読みます（single-flight refresh lockで排他制御）。上流registry障害時は最後のキャッシュ値を返し続ける（stale-but-usable）ため、一時的なregistry障害でクラスタが止まりません。
 
 ```sh
 $ dewy server --registry ghr://owner/repo \

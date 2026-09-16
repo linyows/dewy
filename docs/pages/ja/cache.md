@@ -75,7 +75,7 @@ dewy server --registry ghr://owner/repo \
 
 ### Registry result cache {% #registry-result-cache %}
 
-S3とGCSのcache backendは `registry-ttl=<duration>` query parameterを受け付けます。指定すると**上流registryのレスポンスそのもの**もキャッシュに保存され、同じprefixを共有するDewyインスタンス間で調停して、TTLウィンドウあたり1台だけが上流registryをpollするようになります。GitHub Releasesのようなrate-limit付きregistryを多数のDewyインスタンスでpollする場合に有効です。
+S3とGCSのcache backendは `registry-ttl=<duration>` query parameterを受け付けます。指定すると**上流registryのレスポンスそのもの**もキャッシュに保存されます。同じprefixを共有するDewyインスタンス間では排他制御がかかり、TTLウィンドウあたり1台だけが上流registryをpollするようになります。GitHub Releasesのようなrate-limit付きregistryを多数のDewyインスタンスでpollする場合に有効です。
 
 ```sh
 # 30秒のfreshness windowで共有registry-result cacheを有効化
@@ -91,17 +91,17 @@ dewy server --registry ghr://owner/repo \
 
 refreshは同じprefixの `locks/` 配下に置かれるlock recordで直列化され、結果はconditional write（`If-Match` / `ifGenerationMatch`）で公開されます。上流registry障害時は最後のキャッシュ値を返し続けるため（stale-but-usable）、一時的なregistry障害でクラスタが止まりません。
 
-backendがエラーを返してlockを取得できなかった場合、Dewyは `"failed to acquire registry refresh lock"` を出力し、上流registryを直接pollします。そのtickでは調停が効きませんが、デプロイは継続します。
+backendがエラーを返してlockを取得できなかった場合、Dewyは `"failed to acquire registry refresh lock"` を出力し、上流registryを直接pollします。そのtickでは排他制御が効きませんが、デプロイは継続します。
 
 > 運用上の注意: stale-but-usableは `Dewy.Run()` の通常のエラー経路から上流エラーを隠すため、長期障害が設定済みのnotifierに通知されません。dewyログ内の `"upstream registry failed; serving stale cache"` warningを監視してください。
 
 conditional writeをサポートしないbackend（現状はfile backend）に `registry-ttl` を設定した場合、Dewyは起動時に `"registry-ttl set but cache backend does not support atomic writes; ignoring"` warningを出力し、registry-result cacheを有効化せずに動作を続行します。
 
-### Artifact downloadの調停 {% #download-coordination %}
+### Artifact downloadの排他制御 {% #download-coordination %}
 
-S3とGCSのbackendでは、artifactのdownload自体もインスタンス間で調停されます。設定は不要で、`registry-ttl` とも独立しています。backendがconditional writeをサポートしていれば常に有効です。
+S3とGCSのbackendでは、artifactのdownload自体もインスタンス間で排他制御されます。設定は不要で、`registry-ttl` とも独立しています。backendがconditional writeをサポートしていれば常に有効です。
 
-調停がない場合、同じタイミングでpollしたインスタンスがすべてcacheをmissし、すべてが同じartifactをdownloadします。これはインスタンスあたり最大512MBのリクエストがregistryに向かうことを意味します。
+排他制御がない場合、同じタイミングでpollしたインスタンスがすべてcacheをmissし、すべてが同じartifactをdownloadします。これはインスタンスあたり最大512MBのリクエストがregistryに向かうことを意味します。
 
 1台が `locks/` 配下のartifactごとのlockを取得してdownloadします。残りは `"Deploy deferred: a peer is downloading this artifact"` を出力してそのtickをスキップします。次のpoll時にはartifactが共有cacheに存在するため、downloadせずに通常のcache経路を通ります。スキップしたtickは失敗として扱われません。polling backoffを発動せず、notifierにも通知せず、デプロイとしてもカウントされません。
 
