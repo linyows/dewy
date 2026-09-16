@@ -29,6 +29,10 @@ type Locker interface {
 	// is done. It returns an error for which errors.Is(err, ErrLockBusy)
 	// reports true when the lock could not be taken in time.
 	//
+	// ctx bounds the wait between attempts. Whether it also interrupts an
+	// attempt already in flight is up to the implementation; CASLocker cannot,
+	// because AtomicCache takes no context.
+	//
 	// name is a logical lock name, not a cache key; implementations namespace
 	// it so that lock records cannot collide with cached data.
 	Acquire(ctx context.Context, name string, opts LockOptions) (Lock, error)
@@ -117,6 +121,16 @@ func (r *lockRecord) heldAt(now time.Time) bool {
 // its TTL elapses, and instances whose clocks disagree disagree about when
 // that happens. Backends with a real session primitive should implement
 // Locker themselves instead of using this.
+//
+// There is no background renewal. A holder cannot extend its claim by staying
+// alive, so a slow holder loses the lock exactly like a crashed one; work that
+// can outrun the TTL must select on Lost and stop rather than assume it is
+// still exclusive. Renewing would mean a periodic conditional write per held
+// lock against S3 or GCS, which is a cost on every object-store deployment for
+// a benefit only long critical sections see.
+//
+// Acquire observes ctx between attempts but cannot interrupt a backend call
+// already in flight, because AtomicCache's methods take no context.
 //
 // CASLocker does not support semaphores; Acquire rejects Limit > 1.
 type CASLocker struct {

@@ -167,14 +167,16 @@ A new optional capability, alongside `AtomicCache`:
 type Locker interface {
 	// Acquire blocks until the named lock is held, opts.Wait elapses, or ctx
 	// is done. It returns ErrLockBusy when the lock could not be taken in time.
+	// ctx is observed between attempts; see the note on cancellation below.
 	Acquire(ctx context.Context, name string, opts LockOptions) (Lock, error)
 }
 
 type LockOptions struct {
-	TTL   time.Duration // holder liveness; the lock releases if the holder dies
-	Wait  time.Duration // 0 means "wait until ctx is done"
-	Limit int           // >1 makes this a semaphore with Limit holders
-	Value []byte        // informational holder metadata (node id, tag)
+	TTL     time.Duration // holder liveness; the lock releases if the holder dies
+	Wait    time.Duration // 0 means "wait until ctx is done"
+	TryOnce bool          // return ErrLockBusy instead of waiting at all
+	Limit   int           // >1 makes this a semaphore with Limit holders
+	Value   []byte        // informational holder metadata (node id, tag)
 }
 
 type Lock interface {
@@ -200,7 +202,16 @@ func LockerFor(c Cache) (Locker, bool)
 
 ### CAS emulation
 
-`NewCASLocker(ac AtomicCache)` reproduces today's `registry.Cached` algorithm — a lock record at `locks/<name>` holding `{holder, acquired_at}`, claimed with `WriteIfMatch` and considered abandoned after `TTL` — behind the same interface. `Lost()` is closed when a background renewal CAS fails. This keeps the S3/GCS behavior byte-for-byte equivalent to today while letting the call sites be written against one interface.
+`NewCASLocker(ac AtomicCache)` reproduces today's `registry.Cached` algorithm — a lock record at `locks/<name>` holding `{holder, acquired_at, expires_at}`, claimed with `WriteIfMatch` and considered abandoned once `expires_at` passes — behind the same interface. This keeps the S3/GCS behavior equivalent to today while letting the call sites be written against one interface.
+
+There is deliberately no background renewal. Liveness is the expiry the holder wrote, not a lease it keeps proving, so `Lost()` closes when that expiry is reached (or on `Unlock`) and a holder cannot extend its claim by staying alive. Two consequences follow, and callers need both:
+
+- A holder that is merely slow loses its lock exactly like one that crashed. Work that can outrun the TTL must select on `Lost()` and decline to publish, which is what `Cached.refreshAndPublish` does.
+- Instances whose clocks disagree disagree about when a lock expired. This is the same exposure the pre-Locker timestamp scheme had; only a backend with a server-side session removes it.
+
+Adding renewal would mean a periodic conditional write per held lock against S3 or GCS. That is a real cost on the object-store path for a benefit only slow-critical-section callers see, so it is left to backends that get sessions for free.
+
+**Cancellation.** `AtomicCache.ReadWithVersion` and `WriteIfMatch` take no context — the S3 and GCS backends use the context their constructor was given — so `Acquire` observes `ctx` between attempts but cannot interrupt a backend call already in flight. A hung object-store request therefore outlives a canceled `Acquire`. This is a property of the `AtomicCache` interface rather than of locking, and fixing it means threading a context through those methods and their call sites; it is tracked as a follow-up rather than done here.
 
 ## 3. Registry single-flight (refactor of `registry.Cached`)
 
@@ -219,7 +230,11 @@ read entry
                       else                  → direct upstream (cold-start only)
 ```
 
-`LockedAt`/`LockedBy` stay in the JSON as advisory fields, written by the leader for `consul kv get`-based debugging, but no longer consulted for the claim decision when a native `Locker` is present. The CAS on publish remains, so a leader whose session silently expired still cannot clobber a newer entry.
+The "still stale after lock-wait" arm is reached only under a locker that renews its lease while the holder is alive, which is the Consul case: a slow-but-healthy leader keeps the lock for the follower's entire wait. Under `CASLocker` the lock expires first — the wait is `lockTTL + wait` against a lock of `lockTTL` — so the follower takes the lock over and refreshes, which is the pre-Locker behavior.
+
+`LockedAt`/`LockedBy` stay in the JSON, but the direction of compatibility is the reverse of what it first appears. Dewy no longer *writes* them: a claim that nothing clears would make every pre-Locker peer wait out its whole lock TTL on each poll. Dewy does still *read* them, on every pass and regardless of which locker is in use, because during a rolling upgrade a peer running the old code claims the entry that way and is entitled to be waited for.
+
+The CAS on publish remains, so a leader whose lease expired mid-refresh cannot clobber a newer entry written by its successor. It declines to publish at all in that case; see the CAS emulation notes above.
 
 Notably, the cold-start fallback ("nothing cached, lock busy, upstream directly") is the one case where more than one instance can hit the registry. It is bounded to the first TTL window after a fleet-wide cold start, and it exists so that a Consul outage cannot deadlock a fresh deploy.
 

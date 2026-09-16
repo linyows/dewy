@@ -248,8 +248,13 @@ func (c *Cached) Current(ctx context.Context) (*CurrentResponse, error) {
 				}
 				continue
 			}
-			// The peer held the lock for its whole TTL without publishing.
-			// Serving stale beats adding to the load it is already under.
+			// The peer kept the lock alive for our whole wait without
+			// publishing, so it is slow rather than dead: adding our own
+			// request to whatever it is struggling with would not help.
+			//
+			// Only a locker that renews its lease reaches this branch. Under
+			// CASLocker the lock simply expires and the next caller takes it
+			// over, which is the pre-Locker behavior.
 			if entry != nil && entry.Response != nil {
 				c.warn("peer held the refresh lock past its TTL; serving stale cache", err)
 				return entry.Response, nil
@@ -260,12 +265,20 @@ func (c *Cached) Current(ctx context.Context) (*CurrentResponse, error) {
 
 		case err != nil:
 			// The lock backend is unavailable. Degrade to uncoordinated
-			// behavior rather than blocking deployments.
+			// behavior — every instance polls upstream for itself — rather
+			// than to a frozen one. Serving the cached response here instead
+			// would mean a locker that stays broken stops the fleet from ever
+			// seeing another release.
 			c.warn("failed to acquire registry refresh lock", err)
+			res, uerr := c.inner.Current(ctx)
+			if uerr == nil {
+				return res, nil
+			}
 			if entry != nil && entry.Response != nil {
+				c.warn("upstream registry failed; serving stale cache", uerr)
 				return entry.Response, nil
 			}
-			return c.inner.Current(ctx)
+			return nil, uerr
 		}
 
 		// We hold the lock. Re-read before calling upstream: a peer may have
@@ -279,9 +292,20 @@ func (c *Cached) Current(ctx context.Context) (*CurrentResponse, error) {
 			entry, version = latest, latestVersion
 		}
 
-		res, rerr := c.refreshAndPublish(ctx, entry, version)
+		res, rerr := c.refreshAndPublish(ctx, entry, version, lock.Lost())
 		c.release(lock)
 		return res, rerr
+	}
+}
+
+// lockLost reports whether the refresh lock has been lost. A nil channel —
+// a lock with no liveness signal at all — never reports a loss.
+func lockLost(lost <-chan struct{}) bool {
+	select {
+	case <-lost:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -362,10 +386,14 @@ func (c *Cached) isLocked(entry *cachedEntry) bool {
 // a conditional write. On upstream failure it publishes nothing, leaving the
 // previous entry in place so the cache continues to serve stale-but-usable.
 //
-// The caller releases the lock; the conditional write is still the authority
-// on what gets published, so a leader whose lock silently expired cannot
-// clobber a newer entry written by its successor.
-func (c *Cached) refreshAndPublish(ctx context.Context, prev *cachedEntry, version string) (*CurrentResponse, error) {
+// lost is the refresh lock's liveness channel. An upstream call that outlives
+// the lock is still returned to our own caller, but it is not published: by
+// then a successor holds the lock, and publishing would stamp a response
+// fetched up to a lock TTL ago with a fresh FetchedAt. The conditional write
+// prevents the successor's entry from being clobbered either way; this check
+// also keeps the successor's newer result from being discarded in favor of
+// ours.
+func (c *Cached) refreshAndPublish(ctx context.Context, prev *cachedEntry, version string, lost <-chan struct{}) (*CurrentResponse, error) {
 	res, err := c.inner.Current(ctx)
 	if err != nil {
 		if prev != nil && prev.Response != nil {
@@ -377,6 +405,14 @@ func (c *Cached) refreshAndPublish(ctx context.Context, prev *cachedEntry, versi
 	if c.logger != nil {
 		c.logger.Info("Registry result refreshed from upstream",
 			slog.String("node", c.nodeID))
+	}
+
+	if lockLost(lost) {
+		if c.logger != nil {
+			c.logger.Warn("Refresh lock expired before the result could be published",
+				slog.String("node", c.nodeID))
+		}
+		return res, nil
 	}
 
 	final := &cachedEntry{

@@ -406,7 +406,9 @@ type stubLocker struct {
 	// simulate a peer winning the race in the window between our read and our
 	// acquisition.
 	onAcquire func()
-	mu        sync.Mutex
+	// lock, when set, is handed out instead of a plain held lock.
+	lock cache.Lock
+	mu   sync.Mutex
 }
 
 func (s *stubLocker) Acquire(_ context.Context, _ string, _ cache.LockOptions) (cache.Lock, error) {
@@ -419,6 +421,9 @@ func (s *stubLocker) Acquire(_ context.Context, _ string, _ cache.LockOptions) (
 	}
 	if fn != nil {
 		fn()
+	}
+	if s.lock != nil {
+		return s.lock, nil
 	}
 	return noopLock{}, nil
 }
@@ -433,6 +438,17 @@ type noopLock struct{}
 
 func (noopLock) Lost() <-chan struct{} { return nil }
 func (noopLock) Unlock() error         { return nil }
+
+// lostLock is a lock whose lease has already expired, standing in for a
+// refresh that outlived its lock.
+type lostLock struct{}
+
+func (lostLock) Lost() <-chan struct{} {
+	ch := make(chan struct{})
+	close(ch)
+	return ch
+}
+func (lostLock) Unlock() error { return nil }
 
 var _ cache.Locker = (*stubLocker)(nil)
 
@@ -662,5 +678,89 @@ func TestCachedRechecksAfterAcquiringLock(t *testing.T) {
 	}
 	if got := upstream.Calls(); got != 0 {
 		t.Errorf("want 0 upstream calls when a peer published first, got %d", got)
+	}
+}
+
+func TestCachedLockBackendErrorStillPollsUpstream(t *testing.T) {
+	// A locker that stays broken must not freeze the fleet on the last
+	// response it managed to cache: no new release would ever be deployed.
+	upstream := &mockUpstream{tag: "v2.0.0"}
+	fakeCache := newFakeAtomicCache()
+	broken := &stubLocker{err: errors.New("lock backend unreachable")}
+	c := NewCached(upstream, "ghr://test/scope", fakeCache, time.Minute, testLogger(), WithLocker(broken))
+	c.wait = 2 * time.Millisecond
+
+	seedEntry(t, c, fakeCache, &cachedEntry{
+		Response:  &CurrentResponse{Tag: "v1.0.0"},
+		FetchedAt: time.Now().Add(-time.Hour),
+	})
+
+	res, err := c.Current(context.Background())
+	if err != nil {
+		t.Fatalf("Current: %v", err)
+	}
+	if res == nil || res.Tag != "v2.0.0" {
+		t.Errorf("want the upstream response v2.0.0, got %+v", res)
+	}
+	if got := upstream.Calls(); got != 1 {
+		t.Errorf("want 1 upstream call when the lock backend is down, got %d", got)
+	}
+}
+
+func TestCachedLockBackendErrorFallsBackToStale(t *testing.T) {
+	// Both the locker and upstream are down. The cached response is all
+	// there is, so serve it rather than failing the tick.
+	upstream := &mockUpstream{tag: "v2.0.0", err: errors.New("upstream down")}
+	fakeCache := newFakeAtomicCache()
+	broken := &stubLocker{err: errors.New("lock backend unreachable")}
+	c := NewCached(upstream, "ghr://test/scope", fakeCache, time.Minute, testLogger(), WithLocker(broken))
+	c.wait = 2 * time.Millisecond
+
+	seedEntry(t, c, fakeCache, &cachedEntry{
+		Response:  &CurrentResponse{Tag: "v1.0.0"},
+		FetchedAt: time.Now().Add(-time.Hour),
+	})
+
+	res, err := c.Current(context.Background())
+	if err != nil {
+		t.Fatalf("Current: %v", err)
+	}
+	if res == nil || res.Tag != "v1.0.0" {
+		t.Errorf("want the stale cached response v1.0.0, got %+v", res)
+	}
+}
+
+func TestCachedLockBackendErrorSurfacesUpstreamFailure(t *testing.T) {
+	// Nothing cached, locker down, upstream down: there is no answer to give.
+	upstream := &mockUpstream{err: errors.New("upstream down")}
+	fakeCache := newFakeAtomicCache()
+	broken := &stubLocker{err: errors.New("lock backend unreachable")}
+	c := NewCached(upstream, "ghr://test/scope", fakeCache, time.Minute, testLogger(), WithLocker(broken))
+	c.wait = 2 * time.Millisecond
+
+	if _, err := c.Current(context.Background()); err == nil {
+		t.Fatal("expected the upstream error to surface")
+	}
+}
+
+func TestCachedDoesNotPublishAfterLosingLock(t *testing.T) {
+	// A refresh that outlives its lock must not publish: a successor holds
+	// the lock by then, and our response would be stamped with a FetchedAt it
+	// did not earn.
+	upstream := &mockUpstream{tag: "v2.0.0"}
+	fakeCache := newFakeAtomicCache()
+	expired := &stubLocker{lock: lostLock{}}
+	c := NewCached(upstream, "ghr://test/scope", fakeCache, time.Minute, testLogger(), WithLocker(expired))
+	c.wait = 2 * time.Millisecond
+
+	res, err := c.Current(context.Background())
+	if err != nil {
+		t.Fatalf("Current: %v", err)
+	}
+	if res == nil || res.Tag != "v2.0.0" {
+		t.Errorf("the caller should still get its own result, got %+v", res)
+	}
+	if _, rerr := fakeCache.Read(c.cacheKey); !cache.IsNotFound(rerr) {
+		t.Errorf("entry was published despite the lock being lost (read: %v)", rerr)
 	}
 }
