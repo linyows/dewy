@@ -2,6 +2,7 @@ package dewy
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -18,6 +19,7 @@ import (
 	"github.com/linyows/dewy/artifact"
 	"github.com/linyows/dewy/cache"
 	"github.com/linyows/dewy/container"
+	"github.com/linyows/dewy/internal/sysdeps"
 	"github.com/linyows/dewy/logging"
 	"github.com/linyows/dewy/notifier"
 	"github.com/linyows/dewy/registry"
@@ -59,6 +61,12 @@ type Dewy struct {
 	cVer             string // Current deployed version (tag)
 	telemetry        *telemetry.Provider
 	backoff          *backoff
+	// locker coordinates artifact downloads across instances. It is nil when
+	// the cache backend cannot coordinate, in which case downloads run
+	// uncoordinated as they always have.
+	locker cache.Locker
+	// nodeID identifies this instance in lock records and published indexes.
+	nodeID string
 	sync.RWMutex
 }
 
@@ -92,12 +100,21 @@ func New(c Config, log *logging.Logger) (*Dewy, error) {
 	}
 	c.Registry = fmt.Sprintf("%s://%s", su[0], u.String())
 
+	nodeID := cache.HolderID(sysdeps.RealEnv())
+	locker, ok := cache.LockerFor(kv, cache.WithLockHolderID(nodeID))
+	if !ok {
+		log.Debug("Cache backend cannot coordinate; artifact downloads run uncoordinated",
+			slog.String("cache", c.Cache.URL))
+	}
+
 	return &Dewy{
 		config:          c,
 		cache:           kv,
 		isServerRunning: false,
 		root:            wd,
 		logger:          log,
+		locker:          locker,
+		nodeID:          nodeID,
 		// Inert until Start knows the polling interval.
 		backoff: newBackoff(0, 0),
 	}, nil
@@ -336,6 +353,11 @@ func (d *Dewy) Run() error {
 	// outcome. Skipped ticks above are not deployments and must not be counted.
 	start := time.Now()
 	err = d.runDeploy(ctx, res, &st)
+	if errors.Is(err, errDeferred) {
+		// A peer is fetching this artifact. Nothing was deployed and nothing
+		// failed, so this tick must not count as either.
+		return nil
+	}
 	d.recordDeployment(ctx, time.Since(start), err)
 	return err
 }

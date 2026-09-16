@@ -60,11 +60,21 @@ func TestNew(t *testing.T) {
 		cmp.AllowUnexported(Dewy{}, cache.File{}),
 		// backoff holds a func field that cmp cannot compare; it is asserted
 		// separately below.
-		cmpopts.IgnoreFields(Dewy{}, "RWMutex", "logger", "tcpProxies", "proxyMutex", "containerRuntime", "backoff"),
+		// nodeID is derived from the hostname and pid, so it is asserted
+		// separately below rather than pinned to a literal.
+		cmpopts.IgnoreFields(Dewy{}, "RWMutex", "logger", "tcpProxies", "proxyMutex", "containerRuntime", "backoff", "nodeID"),
 		cmpopts.IgnoreFields(cache.File{}, "mutex", "logger"),
 	}
 	if diff := cmp.Diff(dewy, expect, opts...); diff != "" {
 		t.Error(diff)
+	}
+
+	// The file backend coordinates nothing, so there is no locker to build.
+	if dewy.locker != nil {
+		t.Error("the file cache backend should yield no locker")
+	}
+	if dewy.nodeID == "" {
+		t.Error("New did not derive a node ID")
 	}
 
 	// New leaves the backoff inert; Start installs one based on the interval.

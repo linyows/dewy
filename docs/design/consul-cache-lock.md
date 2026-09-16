@@ -2,7 +2,7 @@
 
 This document describes the design for adding a HashiCorp Consul KV cache backend to dewy, and for using Consul sessions as a distributed lock so that a fleet of dewy instances issues one upstream registry request instead of one per instance.
 
-**Status**: Phase 1 implemented, phases 2-4 proposed
+**Status**: Phases 1-2 implemented, phases 3-4 proposed
 **Author**: @linyows
 **Last Updated**: 2026-09
 
@@ -240,51 +240,61 @@ Notably, the cold-start fallback ("nothing cached, lock busy, upstream directly"
 
 ## 4. Download single-flight
 
-`Dewy.downloadAndCache` gains the coordination:
+`Dewy.downloadAndCache` acquires a per-artifact lock before fetching:
 
 ```go
 func (d *Dewy) downloadAndCache(ctx context.Context, res *registry.CurrentResponse, st cacheState) error {
 	if st.foundInCache {
 		return nil
 	}
-	lk, ok := cache.LockerFor(d.cache)
-	if !ok {
-		return d.download(ctx, res, st) // unchanged path for file backend
+	if d.locker == nil {
+		return d.downloadAndPublish(ctx, res, st, nil) // file backend: single-instance anyway
 	}
 
-	l, err := lk.Acquire(ctx, "artifact/"+st.key, cache.LockOptions{
-		TTL: d.config.Cache.LockTTL, Wait: d.config.Cache.LockWait, Limit: d.config.Cache.DownloadConcurrency,
+	lock, err := d.locker.Acquire(ctx, artifactLockName(st.key), cache.LockOptions{
+		TTL: downloadLockTTL, TryOnce: true, Value: []byte(d.nodeID),
 	})
 	switch {
 	case errors.Is(err, cache.ErrLockBusy):
-		// A peer is downloading and did not finish within lock-wait. Do not
-		// stampede: give up this tick, the next poll will find it published.
-		return errDeferred
+		return errDeferred // a peer is downloading; retry next tick
 	case err != nil:
-		d.logger.Warn("artifact lock unavailable; downloading without coordination", ...)
-		return d.download(ctx, res, st)
+		return d.downloadAndPublish(ctx, res, st, nil) // coordination down; degrade
 	}
-	defer l.Unlock()
+	defer lock.Unlock()
 
-	// Re-check after acquiring: a peer may have published while we waited.
-	if d.blobPublished(st.key) {
-		return d.loadFromShared(ctx, res, st) // verifies sha256 from the blob index
+	// Re-check now that we hold the lock: a peer may have published in between.
+	if idx, err := d.readBlobIndex(st.key); err == nil {
+		return d.stageFromCache(st, idx) // verifies sha256 against the index
 	}
-	return d.downloadAndPublish(ctx, res, st, l.Lost())
+	return d.downloadAndPublish(ctx, res, st, lock.Lost())
 }
 ```
 
 Three points deserve emphasis.
 
-**The re-check after acquiring is what collapses N downloads into 1.** Without it the lock only serializes; with it, every follower that waited finds the artifact already in the shared store and never contacts the registry. This only works when `blob=` points at a store the fleet shares (S3/GCS). With `blob=file` the followers each download in turn: the registry sees a concurrency of 1 instead of N, which is the meaningful protection, but the request count is still N.
+**The re-check after acquiring is what collapses N downloads into 1.** Without it the lock only serializes; with it, every follower that comes back after deferring finds the artifact already in the shared store and never contacts the registry. This only works when `blob=` points at a store the fleet shares (S3/GCS). With `blob=file` the followers each download in turn: the registry sees a concurrency of 1 instead of N, which is the meaningful protection, but the request count is still N.
 
-**`errDeferred` is not a deployment failure.** `Run` translates it to a silent no-op tick, exactly like the slot-mismatch and grace-period skips, so it does not feed `d.backoff` or the error notifier. A fleet rolling out a large artifact would otherwise put every follower into exponential backoff.
+**Followers defer the tick rather than waiting on the lock.** Blocking until the leader finishes would hold the scheduler for the length of a transfer that can run to `MaxArtifactSize`. Deferring costs at most one polling interval, and by the next tick `resolveCacheState` finds the artifact in the shared cache and takes the ordinary cached path without touching the lock at all. So `Acquire` is `TryOnce` and there is no `Wait` to configure.
 
-**`l.Lost()` is threaded into the download.** A 512MB download can outlive a session whose renewal is blocked by a network partition. `downloadAndPublish` selects on `Lost()` and aborts, rather than publishing a blob index entry it no longer has the right to publish. The CAS write of the index entry is the second line of defense.
+**`errDeferred` is not a deployment failure.** `Run` turns it into a silent no-op tick, like the slot-mismatch and grace-period skips, so it neither feeds `d.backoff` nor fires the error notifier and is not counted as a deployment. A fleet rolling out a large artifact would otherwise put every follower into exponential backoff and send one alert per instance.
+
+### What `Lost()` is and is not used for here
+
+The registry refresh declines to publish when its lock expired, because the thing it publishes is a claim about freshness. The download is not like that: the cache key names one tag and one file name, and the bytes are checksum-verified before they are written, so a second instance that takes the lock over writes exactly the same content. Publishing after losing the lock is therefore harmless, and aborting a nearly-complete transfer would throw away the bytes we came for.
+
+So `downloadAndPublish` takes `Lost()` but uses it only to log: a download that outlived its lock means `downloadLockTTL` is too short for artifacts this size, and until it is raised the fleet keeps paying for duplicate transfers. That is a tuning signal for the operator, not a reason to discard work.
 
 ### Integrity across the shared store
 
-Followers that read the artifact from the shared blob store today would skip `verifyChecksum` entirely, because verification happens only on the download path. The blob index closes that gap: the leader records `sha256` (already computed during verification) in `blobs/<cache-key>.json`, and `loadFromShared` verifies the bytes it read against it before staging them. A mismatch deletes the local staging copy and fails the tick, so a corrupted or tampered object in the shared bucket cannot be deployed fleet-wide.
+Followers that read the artifact from the shared blob store would skip `verifyChecksum` entirely, because verification happens only on the download path. The blob index closes that gap: the downloader records `sha256` and `size` in `blobs/<cache-key>.json`, and every read that comes from the cache rather than from a fresh download is checked against it. There are two such reads — the re-check inside `downloadAndCache`, and the staging that `resolveCacheState` does when it finds the key already present — and both go through one helper so neither can drift.
+
+A mismatch deletes the local staging copy and fails the tick. Dropping the copy matters: leaving it would let the next tick read it straight back from disk and skip the check.
+
+A missing index is not a mismatch. Artifacts staged by a Dewy release older than the index have nothing to check against, and failing them would break the upgrade for every instance whose cache was already warm. Where there is a choice — the re-check path, where we hold the lock — unverifiable bytes are not trusted and the artifact is downloaded instead.
+
+### Not covered
+
+The container command pulls images through the runtime rather than through the cache, so `RunContainer` is untouched. An OCI layer cache is per-node and the pull is what populates it, which makes the shared-store re-check inapplicable; serializing pulls across a fleet would need its own design.
 
 ## Failure modes
 
@@ -337,11 +347,13 @@ Following the existing dot-separated OTel naming in `telemetry/telemetry.go`:
 1. **`cache.Locker` + `NewCASLocker` + refactor `registry.Cached` onto it.** Implemented. No new dependency; the S3/GCS path keeps its current semantics and gains test coverage through the new interface. Two things changed beyond the mechanical move:
    - The leader re-reads the entry after acquiring the lock. Previously the claim was itself a conditional write on the entry, so a peer that published in the meantime caused the claim to conflict. With the lock held separately that conflict no longer happens, and without the re-read the leader would repeat a request the peer had already made.
    - `LockedAt`/`LockedBy` are no longer written, but are still honored on read, so a fleet running mixed versions during a rolling upgrade does not double up on upstream.
-2. **Download single-flight** (`errDeferred`, blob index, `loadFromShared`, checksum verification on the shared path). Immediately valuable to existing S3/GCS users — it closes the N-simultaneous-downloads hole.
+2. **Download single-flight** (`errDeferred`, blob index, `stageFromCache`, checksum verification on the shared path). Implemented. Immediately valuable to existing S3/GCS users — it closes the N-simultaneous-downloads hole. Two decisions differ from the original sketch: followers defer their tick instead of waiting on the lock, and a download that outlives its lock still publishes. Both are explained in the section above.
 3. **`cache.Consul` backend** (KV routing, `AtomicCache`, native `Locker`, blob delegation) plus docs.
 4. **Telemetry and e2e.**
 
 Phases 1 and 2 are the agreed first delivery and carry no new dependency. Phase 3 introduces `consul/api` and follows once the coordination semantics are settled.
+
+Note what phase 2 already delivers without Consul: an S3 or GCS fleet gets both single-flight refresh and single-flight download today. Consul's contribution in phase 3 is to extend that to fleets with no shared object store, and to replace the wall-clock expiry with a server-side session.
 
 ## Decisions
 

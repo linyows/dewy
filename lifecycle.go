@@ -139,52 +139,25 @@ func (d *Dewy) resolveCacheState(_ context.Context, res *registry.CurrentRespons
 
 		// Ensure the artifact bytes are present in local staging for
 		// ExtractArchive. Cloud backends populate the local stage on Read;
-		// the file backend reads from disk where it already lives.
-		if _, err := d.cache.Read(st.key); err != nil {
+		// the file backend reads from disk where it already lives. Bytes that
+		// come from a shared backend were verified by whichever instance
+		// downloaded them, not by us, so check them against the digest that
+		// instance published.
+		data, err := d.cache.Read(st.key)
+		if err != nil {
 			return st, fmt.Errorf("failed to load cached artifact: %w", err)
+		}
+		idx, ierr := d.readBlobIndex(st.key)
+		if ierr != nil {
+			idx = nil
+		}
+		if err := d.verifyAgainstIndex(st.key, data, idx); err != nil {
+			return st, err
 		}
 		break
 	}
 
 	return st, nil
-}
-
-// downloadAndCache fetches the artifact bytes from upstream and writes them
-// to the cache. No-op when the artifact is already staged locally.
-func (d *Dewy) downloadAndCache(ctx context.Context, res *registry.CurrentResponse, st cacheState) error {
-	if st.foundInCache {
-		return nil
-	}
-
-	buf := new(bytes.Buffer)
-	if d.artifact == nil {
-		a, err := artifact.New(ctx, res.ArtifactURL, d.logger.Slog())
-		if err != nil {
-			return fmt.Errorf("failed artifact.New: %w", err)
-		}
-		d.artifact = a
-	}
-	err := d.artifact.Download(ctx, &limitedWriter{W: buf, N: MaxArtifactSize})
-	d.artifact = nil
-	if err != nil {
-		return fmt.Errorf("failed artifact.Download: %w", err)
-	}
-
-	// Verify before anything is written to the cache, so a corrupt or
-	// tampered artifact is never staged for extraction and never shared with
-	// the other instances pointed at the same cache backend.
-	if err := d.verifyChecksum(ctx, res, buf.Bytes()); err != nil {
-		return err
-	}
-
-	if err := d.cache.Write(st.key, buf.Bytes()); err != nil {
-		return fmt.Errorf("failed cache.Write cachekeyName: %w", err)
-	}
-	if err := d.cache.Write(currentkeyName, []byte(st.key)); err != nil {
-		return fmt.Errorf("failed cache.Write currentkeyName: %w", err)
-	}
-	d.logger.Info("Cached artifact", slog.String("cache_key", st.key))
-	return nil
 }
 
 // applyDeployment sends the "downloaded" notification and runs the deploy

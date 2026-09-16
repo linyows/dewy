@@ -89,11 +89,27 @@ dewy server --registry ghr://owner/repo \
   -- /opt/myapp/current/myapp
 ```
 
-The cache entry doubles as a refresh lock (single-flight via `If-Match` / `ifGenerationMatch`). On upstream failure the cache continues to serve the last known response (stale-but-usable), so a transient registry outage does not stop the cluster.
+The refresh is serialized by a lock record stored under `locks/` in the same prefix, and the result is published with a conditional write (`If-Match` / `ifGenerationMatch`). On upstream failure the cache continues to serve the last known response (stale-but-usable), so a transient registry outage does not stop the cluster.
+
+If the lock cannot be taken because the backend returns an error, Dewy logs `"failed to acquire registry refresh lock"` and polls the upstream registry directly. Coordination is lost for that tick, but deployments continue.
 
 > Operational note: stale-but-usable hides upstream errors from `Dewy.Run()`'s normal error path, so prolonged outages won't surface via the configured notifier. Watch for the `"upstream registry failed; serving stale cache"` warning in the dewy log to detect them.
 
 If `registry-ttl` is set on a backend that does not support atomic conditional writes (currently the file backend), Dewy logs a `"registry-ttl set but cache backend does not support atomic writes; ignoring"` warning at startup and proceeds without registry-result caching.
+
+### Artifact download coordination {% #download-coordination %}
+
+On the S3 and GCS backends, instances also coordinate the artifact download itself. This needs no configuration and is independent of `registry-ttl`: it is active whenever the backend supports conditional writes.
+
+Without it, instances that poll at the same moment all miss the cache and all download the same artifact, which is up to 512MB per instance against the registry.
+
+One instance takes a per-artifact lock under `locks/` and downloads. The others log `"Deploy deferred: a peer is downloading this artifact"` and skip the tick. On their next poll the artifact is already in the shared cache, and they take the ordinary cached path without downloading. A deferred tick is not treated as a failure: it does not trigger polling backoff, does not notify, and is not counted as a deployment.
+
+The instance that downloads also records the artifact's SHA-256 digest and size in `blobs/<cache key>.json`. Instances that read the artifact from the shared cache check the bytes against that record, because they did not perform the checksum verification that a fresh download goes through. A mismatch fails the tick and deletes the local copy, so the next poll does not read the same bytes back from disk.
+
+Artifacts cached by a Dewy release older than this feature have no digest record. They are used without that check; the record appears once the artifact is downloaded again.
+
+The file backend is single-instance and is unaffected: downloads run exactly as before.
 
 ### Memory {% #memory-cache %}
 

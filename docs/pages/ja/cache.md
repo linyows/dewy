@@ -89,11 +89,27 @@ dewy server --registry ghr://owner/repo \
   -- /opt/myapp/current/myapp
 ```
 
-cacheエントリ自体がrefresh lockを兼ねます（`If-Match` / `ifGenerationMatch`によるsingle-flight）。上流registry障害時は最後のキャッシュ値を返し続けるため（stale-but-usable）、一時的なregistry障害でクラスタが止まりません。
+refreshは同じprefixの `locks/` 配下に置かれるlock recordで直列化され、結果はconditional write（`If-Match` / `ifGenerationMatch`）で公開されます。上流registry障害時は最後のキャッシュ値を返し続けるため（stale-but-usable）、一時的なregistry障害でクラスタが止まりません。
+
+backendがエラーを返してlockを取得できなかった場合、Dewyは `"failed to acquire registry refresh lock"` を出力し、上流registryを直接pollします。そのtickでは調停が効きませんが、デプロイは継続します。
 
 > 運用上の注意: stale-but-usableは `Dewy.Run()` の通常のエラー経路から上流エラーを隠すため、長期障害が設定済みのnotifierに通知されません。dewyログ内の `"upstream registry failed; serving stale cache"` warningを監視してください。
 
 conditional writeをサポートしないbackend（現状はfile backend）に `registry-ttl` を設定した場合、Dewyは起動時に `"registry-ttl set but cache backend does not support atomic writes; ignoring"` warningを出力し、registry-result cacheを有効化せずに動作を続行します。
+
+### Artifact downloadの調停 {% #download-coordination %}
+
+S3とGCSのbackendでは、artifactのdownload自体もインスタンス間で調停されます。設定は不要で、`registry-ttl` とも独立しています。backendがconditional writeをサポートしていれば常に有効です。
+
+調停がない場合、同じタイミングでpollしたインスタンスがすべてcacheをmissし、すべてが同じartifactをdownloadします。これはインスタンスあたり最大512MBのリクエストがregistryに向かうことを意味します。
+
+1台が `locks/` 配下のartifactごとのlockを取得してdownloadします。残りは `"Deploy deferred: a peer is downloading this artifact"` を出力してそのtickをスキップします。次のpoll時にはartifactが共有cacheに存在するため、downloadせずに通常のcache経路を通ります。スキップしたtickは失敗として扱われません。polling backoffを発動せず、notifierにも通知せず、デプロイとしてもカウントされません。
+
+downloadしたインスタンスは、artifactのSHA-256 digestとサイズを `blobs/<cache key>.json` に記録します。共有cacheからartifactを読んだインスタンスは、そのバイト列を記録と照合します。fresh downloadが通るchecksum検証を、これらのインスタンスは経由していないためです。不一致の場合はtickを失敗させ、ローカルのコピーを削除します。次のpollで同じバイト列をディスクから読み直さないようにするためです。
+
+この機能より前のDewyでcacheされたartifactにはdigestの記録がありません。その場合は照合せずに使用し、artifactが再度downloadされた時点で記録が作られます。
+
+file backendは単一インスタンス向けであり、影響を受けません。downloadは従来どおり動作します。
 
 ### メモリ（Memory）{% #memory-cache %}
 
