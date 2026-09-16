@@ -42,7 +42,9 @@ const (
 // without going back to the registry: has a peer already published these
 // bytes, and are the bytes it reads back the ones that were verified.
 type blobIndex struct {
-	SHA256      string    `json:"sha256"`
+	SHA256 string `json:"sha256"`
+	// Size is informational, for operators reading the record. It is not part
+	// of verification: a matching SHA-256 already implies a matching length.
 	Size        int64     `json:"size"`
 	PublishedAt time.Time `json:"published_at"`
 	PublishedBy string    `json:"published_by,omitempty"`
@@ -106,10 +108,34 @@ func (d *Dewy) downloadAndCache(ctx context.Context, res *registry.CurrentRespon
 	// started waiting, and a peer may have published in between. This is what
 	// turns N downloads into one: every follower that queued behind the leader
 	// finds the artifact here instead of fetching it again.
-	if idx, err := d.readBlobIndex(st.key); err == nil {
+	//
+	// Holding the lock means we have a choice, so anything we cannot verify is
+	// downloaded rather than trusted: a truncated or tampered index must not be
+	// a way to get unchecked bytes deployed.
+	idx, err := d.readBlobIndex(st.key)
+	switch {
+	case err == nil && idx.SHA256 != "":
 		d.logger.Info("Artifact already published by a peer; loading from the shared cache",
 			slog.String("cache_key", st.key), slog.String("published_by", idx.PublishedBy))
-		return d.stageFromCache(st, idx)
+		serr := d.stageFromCache(st, idx)
+		if serr == nil {
+			return nil
+		}
+		if !cache.IsNotFound(serr) {
+			return serr
+		}
+		// The index outlived the bytes it describes. Fetch them again rather
+		// than failing every tick until someone removes the index by hand.
+		d.logger.Warn("Artifact index refers to bytes that are gone; downloading instead",
+			slog.String("cache_key", st.key))
+
+	case err == nil:
+		d.logger.Warn("Artifact index carries no digest; downloading instead",
+			slog.String("cache_key", st.key))
+
+	case !cache.IsNotFound(err):
+		d.logger.Warn("Failed to read the artifact index; downloading instead",
+			slog.String("cache_key", st.key), slog.String("error", err.Error()))
 	}
 
 	return d.downloadAndPublish(ctx, res, st, lock.Lost())
@@ -157,8 +183,8 @@ func (d *Dewy) downloadAndPublish(ctx context.Context, res *registry.CurrentResp
 	}
 	d.publishBlobIndex(st.key, buf.Bytes())
 
-	if err := d.cache.Write(currentkeyName, []byte(st.key)); err != nil {
-		return fmt.Errorf("failed cache.Write currentkeyName: %w", err)
+	if err := d.state().Write(currentkeyName, []byte(st.key)); err != nil {
+		return fmt.Errorf("failed to record the current cache key: %w", err)
 	}
 	d.logger.Info("Cached artifact", slog.String("cache_key", st.key))
 	return nil
@@ -174,8 +200,8 @@ func (d *Dewy) stageFromCache(st cacheState, idx *blobIndex) error {
 	if err := d.verifyAgainstIndex(st.key, data, idx); err != nil {
 		return err
 	}
-	if err := d.cache.Write(currentkeyName, []byte(st.key)); err != nil {
-		return fmt.Errorf("failed cache.Write currentkeyName: %w", err)
+	if err := d.state().Write(currentkeyName, []byte(st.key)); err != nil {
+		return fmt.Errorf("failed to record the current cache key: %w", err)
 	}
 	return nil
 }
@@ -198,10 +224,14 @@ func (d *Dewy) verifyAgainstIndex(cacheKey string, data []byte, idx *blobIndex) 
 		return nil
 	}
 	if err := checksum.Verify(data, idx.SHA256); err != nil {
-		// Drop the local copy: leaving it staged would make the next tick read
-		// it straight back from disk and skip this check.
-		if derr := d.cache.Delete(cacheKey); derr != nil {
-			d.logger.Warn("Failed to drop the corrupt cached artifact",
+		// Drop our staged copy: leaving it would make the next tick read it
+		// straight back from disk and skip this check. Only our copy, though —
+		// Delete would remove the object from the shared bucket too, so one
+		// instance's bad disk would cost every other instance a re-download,
+		// and a genuinely tampered object would be quietly replaced instead of
+		// investigated.
+		if derr := cache.RemoveLocal(d.cache, cacheKey); derr != nil {
+			d.logger.Warn("Failed to drop the locally staged artifact",
 				slog.String("cache_key", cacheKey), slog.String("error", derr.Error()))
 		}
 		return fmt.Errorf("cached artifact %s does not match the published digest: %w", cacheKey, err)

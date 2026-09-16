@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -98,6 +99,30 @@ var ErrConflict = errors.New("precondition failed")
 // IsConflict reports whether err indicates a conditional-write precondition mismatch.
 func IsConflict(err error) bool {
 	return errors.Is(err, ErrConflict)
+}
+
+// RemoveLocal deletes a key's locally staged copy, leaving a shared backend
+// untouched.
+//
+// It exists because Delete is not local-only on the cloud backends: it removes
+// the object from the bucket as well. An instance that finds a staged file
+// corrupt must be able to discard its own copy without destroying the artifact
+// for every other instance pointed at the same bucket.
+//
+// Removing nothing is not an error.
+func RemoveLocal(c Cache, key string) error {
+	dir := c.GetDir()
+	if dir == "" {
+		return nil
+	}
+	p, err := validateKeyPath(dir, key)
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
 }
 
 // AtomicCache is an optional capability for cache backends that support

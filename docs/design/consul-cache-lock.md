@@ -40,7 +40,9 @@ So `Current()` — the "is there a new version?" request — is already single-f
 2. **The artifact download is not single-flighted.** `downloadAndCache` (`lifecycle.go`) checks `st.foundInCache` and otherwise downloads. When N instances tick at the same moment they all miss, and all N download the artifact — potentially N × 512MB against GitHub Releases or an OCI registry. The S3 backend accidentally mitigates this only for instances that tick *after* a peer has finished uploading; simultaneous ticks all download.
 3. **The checksum fetch multiplies the same way.** `verifyChecksum` fetches `ChecksumURL` per instance per download.
 4. **The CAS lock has no liveness signal.** `registry.Cached` infers a dead leader from a wall-clock timestamp (`maxLockTTL`, 30s–5m). A leader that is merely slow is indistinguishable from one that crashed, and clock skew between instances directly shifts the decision. A Consul session is a real liveness primitive: it is renewed by the holder and invalidated by the server, so the lock releases automatically when the holder dies.
-5. **`current` is shared in the S3 backend.** Because the S3 backend stores every key, including the instance-local `current` and `blocked` pointers, under the same prefix, instances sharing a prefix overwrite each other's deployment state. The Consul backend must not repeat this.
+5. **`current` is shared in the S3 backend.** Because the S3 backend stores every key, including the instance-local `current` and `blocked` pointers, under the same prefix, instances sharing a prefix overwrite each other's deployment state.
+
+   Fixed in phase 2, and it had to be: making downloads single-flight turns this from a race into the normal path. One instance publishes the artifact and moves `current`; every other instance then reads a pointer saying the deploy already happened on its own node and skips it, permanently. `current` and `blocked` now live in a local state store — `Dewy.state()`, a file cache rooted in the directory the artifact cache stages into — for every backend.
 
 ## Request-count math
 
@@ -122,6 +124,8 @@ dewy server \
 <prefix>/nodes/<node-id>/current            observability mirror of node-local state
 ```
 
+`current` and `blocked` do not appear here because they are no longer in the cache backend at all; see the routing table below.
+
 `<scope-hash>` reuses `registry.cacheKeyForScope`, which already folds in the registry URL and `GOOS`/`GOARCH`.
 
 ### Key routing
@@ -133,7 +137,7 @@ The Consul backend is a router, not a store. `Read`/`Write`/`Delete`/`List` clas
 | `registry-cache/*` | Consul KV | Small, must be shared, needs CAS. |
 | `blobs/*` | Consul KV | Small index of what the blob delegate holds. |
 | artifact keys (`<tag>--<file>`) | blob delegate | Up to 512MB. Never fits in Consul KV. |
-| `current`, `blocked` | blob delegate's local dir, always | Per-instance deployment state. Sharing it would make instances fight over `prevKey`, which is the existing S3 quirk. Mirrored write-only to `nodes/<node-id>/` for `consul kv get`-based debugging. |
+| `current`, `blocked` | local state store, always | Per-instance deployment state, moved out of the cache backend in phase 2. Sharing it makes one instance's progress look like every instance's. Optionally mirrored write-only to `nodes/<node-id>/` for `consul kv get`-based debugging. |
 
 `List()` returns the blob delegate's listing, so `resolveCacheState` keeps its current semantics unchanged.
 
@@ -272,7 +276,11 @@ func (d *Dewy) downloadAndCache(ctx context.Context, res *registry.CurrentRespon
 
 Three points deserve emphasis.
 
-**The re-check after acquiring is what collapses N downloads into 1.** Without it the lock only serializes; with it, every follower that comes back after deferring finds the artifact already in the shared store and never contacts the registry. This only works when `blob=` points at a store the fleet shares (S3/GCS). With `blob=file` the followers each download in turn: the registry sees a concurrency of 1 instead of N, which is the meaningful protection, but the request count is still N.
+**The re-check after acquiring is what collapses N downloads into 1.** Without it the lock only serializes; with it, every follower that comes back after deferring finds the artifact already in the shared store and never contacts the registry.
+
+This only works when the blob store is one the fleet shares (S3/GCS). Under the phase-3 Consul backend with `blob=file` the lock is Consul's but the blobs are local, so no follower ever finds a peer's copy and they each download in turn: the registry sees a concurrency of 1 instead of N, which is the meaningful protection, but the request count is still N.
+
+That is not the same as the plain `file` cache backend, which has no locker at all. There, `downloadAndCache` skips coordination entirely and downloads run exactly as they did before this work — correctly, because that backend is single-instance.
 
 **Followers defer the tick rather than waiting on the lock.** Blocking until the leader finishes would hold the scheduler for the length of a transfer that can run to `MaxArtifactSize`. Deferring costs at most one polling interval, and by the next tick `resolveCacheState` finds the artifact in the shared cache and takes the ordinary cached path without touching the lock at all. So `Acquire` is `TryOnce` and there is no `Wait` to configure.
 
@@ -290,7 +298,13 @@ Followers that read the artifact from the shared blob store would skip `verifyCh
 
 A mismatch deletes the local staging copy and fails the tick. Dropping the copy matters: leaving it would let the next tick read it straight back from disk and skip the check.
 
-A missing index is not a mismatch. Artifacts staged by a Dewy release older than the index have nothing to check against, and failing them would break the upgrade for every instance whose cache was already warm. Where there is a choice — the re-check path, where we hold the lock — unverifiable bytes are not trusted and the artifact is downloaded instead.
+A missing index is not a mismatch. Artifacts staged by a Dewy release older than the index have nothing to check against, and failing them would break the upgrade for every instance whose cache was already warm. Where there is a choice — the re-check path, where we hold the lock — unverifiable bytes are not trusted and the artifact is downloaded instead. That covers an index that is present but carries no digest, an index whose bytes are gone, and an index that cannot be read.
+
+An index that cannot be read is never treated as one that was never written. A malformed record or a backend hiccup would otherwise be a way around the check. Only `cache.ErrNotFound` takes the compatibility path, which is why the file backend now reports that sentinel instead of a bare "File not found" error.
+
+`blobIndex.Size` is recorded for operators reading the record and is not part of verification; a matching SHA-256 already implies a matching length.
+
+A digest failure removes the instance's own staged copy and nothing else. `Cache.Delete` is not local-only on the cloud backends — it removes the object from the bucket — so one instance acting on its own verdict would cost every peer a re-download, and a genuinely tampered object would be quietly replaced rather than investigated. `cache.RemoveLocal` drops the local copy so the next tick re-reads from the shared store, and the error is surfaced.
 
 ### Not covered
 
@@ -347,7 +361,7 @@ Following the existing dot-separated OTel naming in `telemetry/telemetry.go`:
 1. **`cache.Locker` + `NewCASLocker` + refactor `registry.Cached` onto it.** Implemented. No new dependency; the S3/GCS path keeps its current semantics and gains test coverage through the new interface. Two things changed beyond the mechanical move:
    - The leader re-reads the entry after acquiring the lock. Previously the claim was itself a conditional write on the entry, so a peer that published in the meantime caused the claim to conflict. With the lock held separately that conflict no longer happens, and without the re-read the leader would repeat a request the peer had already made.
    - `LockedAt`/`LockedBy` are no longer written, but are still honored on read, so a fleet running mixed versions during a rolling upgrade does not double up on upstream.
-2. **Download single-flight** (`errDeferred`, blob index, `stageFromCache`, checksum verification on the shared path). Implemented. Immediately valuable to existing S3/GCS users — it closes the N-simultaneous-downloads hole. Two decisions differ from the original sketch: followers defer their tick instead of waiting on the lock, and a download that outlives its lock still publishes. Both are explained in the section above.
+2. **Download single-flight** (`errDeferred`, blob index, `stageFromCache`, checksum verification on the shared path, and moving `current`/`blocked` to a local state store). Implemented. Immediately valuable to existing S3/GCS users — it closes the N-simultaneous-downloads hole. Two decisions differ from the original sketch: followers defer their tick instead of waiting on the lock, and a download that outlives its lock still publishes. Both are explained in the section above.
 3. **`cache.Consul` backend** (KV routing, `AtomicCache`, native `Locker`, blob delegation) plus docs.
 4. **Telemetry and e2e.**
 
@@ -360,6 +374,14 @@ Note what phase 2 already delivers without Consul: an S3 or GCS fleet gets both 
 **Coordination and blob storage are composed inside `--cache`, not split across flags.** `consul://<addr>/<prefix>?blob=s3://...` carries both. The alternative — keeping `--cache s3://...` and adding `--lock consul://...` — separates responsibilities more cleanly, but it moves coordination configuration away from the component that performs the coordination, and it introduces a second URL grammar for what is one decision. The cost accepted here is that a single `--cache` value can reference two credential sets and two failure domains; the startup probe (below) validates both before the first tick, and errors name which of the two failed.
 
 **Phases 1 and 2 ship first, without a Consul dependency.** Extracting `cache.Locker` and closing the simultaneous-download hole are valuable on their own to existing S3/GCS users, and they let the coordination semantics be reviewed and tested before the Consul backend is introduced on top.
+
+## Upgrade note
+
+Moving `current` out of the shared cache means an S3 or GCS instance starts with no local record of what it has deployed. On the first tick after the upgrade it treats the running version as undeployed and deploys it once more, which for `dewy server` is one restart per instance. Later ticks are unaffected.
+
+Seeding the local record from the shared one was considered and rejected. If the fleet upgrades while a rollout is in flight, the seeded value can name a version the instance has not actually deployed, and it would skip that version exactly once — reintroducing the bug being fixed, in the case where it is hardest to notice. One extra deploy is the cheaper mistake.
+
+The stale `current` object left in the bucket is never read again and can be removed at leisure.
 
 ## Open Questions
 

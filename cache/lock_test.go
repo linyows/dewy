@@ -448,3 +448,68 @@ func (n *nativeLockCache) Acquire(_ context.Context, _ string, _ LockOptions) (L
 }
 
 var _ Locker = (*nativeLockCache)(nil)
+
+func TestRemoveLocalLeavesTheSharedBackendAlone(t *testing.T) {
+	// The cloud backends delete from the bucket as well as from local
+	// staging, so an instance that finds its own staged copy bad needs a way
+	// to discard it without taking the artifact away from every peer.
+	dir := t.TempDir()
+	f := &File{}
+	f.Default()
+	f.SetDir(dir)
+	f.MaxSize = DefaultMaxSize
+
+	if err := f.Write("blobs/app.json", []byte("staged")); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	if _, err := f.Read("blobs/app.json"); err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+
+	if err := RemoveLocal(f, "blobs/app.json"); err != nil {
+		t.Fatalf("RemoveLocal: %v", err)
+	}
+	if _, err := f.Read("blobs/app.json"); !IsNotFound(err) {
+		t.Errorf("staged copy survived RemoveLocal: %v", err)
+	}
+}
+
+func TestRemoveLocalOnAMissingKeyIsNotAnError(t *testing.T) {
+	f := &File{}
+	f.Default()
+	f.SetDir(t.TempDir())
+	if err := RemoveLocal(f, "absent"); err != nil {
+		t.Errorf("removing nothing should succeed, got %v", err)
+	}
+}
+
+func TestFileWriteCreatesNestedKeyDirectories(t *testing.T) {
+	// Keys name paths now ("blobs/<key>.json"), and OpenFile will not create
+	// the directories along the way.
+	f := &File{}
+	f.Default()
+	f.SetDir(t.TempDir())
+	f.MaxSize = DefaultMaxSize
+
+	if err := f.Write("blobs/nested/app.json", []byte("x")); err != nil {
+		t.Fatalf("Write with a nested key: %v", err)
+	}
+	got, err := f.Read("blobs/nested/app.json")
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if string(got) != "x" {
+		t.Errorf("got %q, want %q", got, "x")
+	}
+}
+
+func TestFileReadReportsNotFound(t *testing.T) {
+	// Callers distinguish "never written" from "could not be read", so the
+	// file backend has to use the package's not-found sentinel.
+	f := &File{}
+	f.Default()
+	f.SetDir(t.TempDir())
+	if _, err := f.Read("absent"); !IsNotFound(err) {
+		t.Errorf("want a not-found error, got %v", err)
+	}
+}

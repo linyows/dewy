@@ -23,15 +23,26 @@ type memCache struct {
 	store    map[string][]byte
 	versions map[string]int64
 	dir      string
+	// readErrs makes Read fail for specific keys, standing in for a backend
+	// that is reachable but unhappy.
+	readErrs map[string]error
 }
 
 func newMemCache(dir string) *memCache {
-	return &memCache{store: map[string][]byte{}, versions: map[string]int64{}, dir: dir}
+	return &memCache{
+		store:    map[string][]byte{},
+		versions: map[string]int64{},
+		readErrs: map[string]error{},
+		dir:      dir,
+	}
 }
 
 func (m *memCache) Read(key string) ([]byte, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if err, ok := m.readErrs[key]; ok {
+		return nil, err
+	}
 	v, ok := m.store[key]
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", cache.ErrNotFound, key)
@@ -101,6 +112,18 @@ func (m *memCache) Has(key string) bool {
 }
 
 var _ cache.AtomicCache = (*memCache)(nil)
+
+// sharedCacheView is one instance's handle on a shared store: the same
+// objects, its own local directory. Two views model two hosts pointed at one
+// bucket, which is what per-instance state has to survive.
+type sharedCacheView struct {
+	*memCache
+	dir string
+}
+
+func (v sharedCacheView) GetDir() string { return v.dir }
+
+var _ cache.AtomicCache = (*sharedCacheView)(nil)
 
 // newSharedCacheTestDewy returns a Dewy whose cache backend supports
 // conditional writes, so that a locker is available the way it is with S3 or
@@ -197,12 +220,15 @@ func TestDownloadAndCache_LoadsWhatAPeerPublished(t *testing.T) {
 	if got := art.GetDownloadCount(); got != 0 {
 		t.Errorf("want 0 downloads when a peer already published, got %d", got)
 	}
-	current, err := kv.Read(currentkeyName)
+	current, err := d.state().Read(currentkeyName)
 	if err != nil {
 		t.Fatalf("read current: %v", err)
 	}
 	if string(current) != st.key {
 		t.Errorf("current = %q, want %q", current, st.key)
+	}
+	if _, err := kv.Read(currentkeyName); err == nil {
+		t.Error("current was written to the shared cache; it is per-instance state")
 	}
 }
 
@@ -273,8 +299,8 @@ func TestDownloadAndCache_RejectsSharedArtifactThatFailsItsDigest(t *testing.T) 
 	if err == nil {
 		t.Fatal("expected a digest mismatch to fail the deploy")
 	}
-	if kv.Has(st.key) {
-		t.Error("the artifact that failed its digest is still cached; the next tick would read it back")
+	if !kv.Has(st.key) {
+		t.Error("one instance's verdict deleted the shared object; every peer would have to re-download")
 	}
 }
 
@@ -411,5 +437,139 @@ func TestResolveCacheState_AllowsCachedArtifactWithNoDigest(t *testing.T) {
 	}
 	if !st.foundInCache {
 		t.Error("want the artifact treated as cached")
+	}
+}
+
+// newFleetMember returns a Dewy sharing kv with its peers but keeping its own
+// local directory, the way two hosts share a bucket.
+func newFleetMember(t *testing.T, kv *memCache) *Dewy {
+	t.Helper()
+	d := newPhaseTestDewy(t)
+	view := sharedCacheView{memCache: kv, dir: t.TempDir()}
+	d.cache = view
+	locker, ok := cache.LockerFor(view, cache.WithLockHolderID(d.nodeID))
+	if !ok {
+		t.Fatal("a conditional-write cache should yield a locker")
+	}
+	d.locker = locker
+	return d
+}
+
+func TestResolveCacheState_FollowerDeploysWhatALeaderPublished(t *testing.T) {
+	// The deploy state pointer says what *this* instance is running. If it
+	// lived in the shared cache, the leader publishing an artifact would look
+	// to every follower like the deploy had already happened on their own
+	// node, and they would skip it forever.
+	kv := newMemCache(t.TempDir())
+	leader := newFleetMember(t, kv)
+	follower := newFleetMember(t, kv)
+	res := testResponse()
+
+	leader.artifact = &mockArtifact{binary: "testapp", url: res.ArtifactURL}
+	if err := leader.downloadAndCache(context.Background(), res, cacheState{key: leader.cachekeyName(res)}); err != nil {
+		t.Fatalf("leader download: %v", err)
+	}
+
+	st, err := follower.resolveCacheState(context.Background(), res)
+	if err != nil {
+		t.Fatalf("follower resolveCacheState: %v", err)
+	}
+	if st.skip {
+		t.Error("the follower skipped a version it has never deployed")
+	}
+	if !st.foundInCache {
+		t.Error("the follower should find the leader's artifact in the shared cache")
+	}
+}
+
+func TestStateIsNotSharedBetweenInstances(t *testing.T) {
+	kv := newMemCache(t.TempDir())
+	a := newFleetMember(t, kv)
+	b := newFleetMember(t, kv)
+
+	if err := a.state().Write(currentkeyName, []byte("a-key")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.state().Read(currentkeyName); !cache.IsNotFound(err) {
+		t.Errorf("one instance's deploy state reached another: %v", err)
+	}
+}
+
+func TestDownloadAndCache_IgnoresIndexWithoutADigest(t *testing.T) {
+	// A truncated or tampered index must not be a way to get bytes deployed
+	// without a check. Holding the lock, we can simply fetch them instead.
+	d, kv := newSharedCacheTestDewy(t)
+	res := testResponse()
+	st := cacheState{key: d.cachekeyName(res)}
+	if err := kv.Write(st.key, []byte("unverifiable bytes")); err != nil {
+		t.Fatal(err)
+	}
+	if err := kv.Write(blobIndexKey(st.key), []byte(`{"sha256":"","size":0}`)); err != nil {
+		t.Fatal(err)
+	}
+
+	art := &mockArtifact{binary: "testapp", url: res.ArtifactURL}
+	d.artifact = art
+
+	if err := d.downloadAndCache(context.Background(), res, st); err != nil {
+		t.Fatalf("downloadAndCache: %v", err)
+	}
+	if got := art.GetDownloadCount(); got != 1 {
+		t.Errorf("want 1 download when the index carries no digest, got %d", got)
+	}
+}
+
+func TestDownloadAndCache_DownloadsWhenTheIndexOutlivedItsArtifact(t *testing.T) {
+	// An index left behind by bytes that are gone must not wedge the deploy;
+	// every tick would otherwise fail until somebody removed it by hand.
+	d, kv := newSharedCacheTestDewy(t)
+	res := testResponse()
+	st := cacheState{key: d.cachekeyName(res)}
+	peerPublishes(t, kv, st.key, []byte("artifact bytes"))
+	if err := kv.Delete(st.key); err != nil {
+		t.Fatal(err)
+	}
+
+	art := &mockArtifact{binary: "testapp", url: res.ArtifactURL}
+	d.artifact = art
+
+	if err := d.downloadAndCache(context.Background(), res, st); err != nil {
+		t.Fatalf("downloadAndCache: %v", err)
+	}
+	if got := art.GetDownloadCount(); got != 1 {
+		t.Errorf("want 1 download when the indexed bytes are gone, got %d", got)
+	}
+}
+
+func TestDownloadAndCache_DownloadsWhenTheIndexCannotBeRead(t *testing.T) {
+	d, kv := newSharedCacheTestDewy(t)
+	res := testResponse()
+	st := cacheState{key: d.cachekeyName(res)}
+	kv.readErrs[blobIndexKey(st.key)] = errors.New("backend unhappy")
+
+	art := &mockArtifact{binary: "testapp", url: res.ArtifactURL}
+	d.artifact = art
+
+	if err := d.downloadAndCache(context.Background(), res, st); err != nil {
+		t.Fatalf("downloadAndCache: %v", err)
+	}
+	if got := art.GetDownloadCount(); got != 1 {
+		t.Errorf("want 1 download when the index cannot be read, got %d", got)
+	}
+}
+
+func TestResolveCacheState_UnreadableIndexFailsRatherThanSkipsVerification(t *testing.T) {
+	// A record we cannot read is not a record that was never written. Treating
+	// the two alike would make a malformed index a way around the check.
+	d, kv := newSharedCacheTestDewy(t)
+	res := testResponse()
+	key := d.cachekeyName(res)
+	if err := kv.Write(key, []byte("artifact bytes")); err != nil {
+		t.Fatal(err)
+	}
+	kv.readErrs[blobIndexKey(key)] = errors.New("backend unhappy")
+
+	if _, err := d.resolveCacheState(context.Background(), res); err == nil {
+		t.Fatal("expected an unreadable index to fail the tick")
 	}
 }

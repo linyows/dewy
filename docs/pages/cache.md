@@ -107,9 +107,19 @@ One instance takes a per-artifact lock under `locks/` and downloads. The others 
 
 The instance that downloads also records the artifact's SHA-256 digest and size in `blobs/<cache key>.json`. Instances that read the artifact from the shared cache check the bytes against that record, because they did not perform the checksum verification that a fresh download goes through. A mismatch fails the tick and deletes the local copy, so the next poll does not read the same bytes back from disk.
 
-Artifacts cached by a Dewy release older than this feature have no digest record. They are used without that check; the record appears once the artifact is downloaded again.
+Artifacts cached by a Dewy release older than this feature have no digest record. They are used without that check; the record appears once the artifact is downloaded again. An index that cannot be read is not treated the same way: only a confirmed absence skips the check, so a malformed record fails the tick rather than passing silently.
+
+A digest failure removes only the local copy. The object in the bucket is left alone, because one instance's disk problem should not cost every other instance a re-download, and an object that was genuinely tampered with should be investigated rather than silently replaced.
 
 The file backend is single-instance and is unaffected: downloads run exactly as before.
+
+### Deployment state is per-instance {% #deployment-state %}
+
+The `current` and `blocked` keys record what **this** instance has deployed. They are stored in the cache backend's local directory, never in a shared bucket: an instance that published an artifact would otherwise look, to every other instance, like the deploy had already happened on their node, and they would skip that version permanently.
+
+{% callout type="warning" title="Upgrading from an earlier release" %}
+Instances using S3 or GCS previously kept `current` in the bucket. After upgrading, each instance starts with no local record and deploys the version it is already running one more time. For `dewy server` that is a single restart per instance; later polls are unaffected. The `current` object left in the bucket is no longer read and can be deleted whenever convenient.
+{% /callout %}
 
 ### Memory {% #memory-cache %}
 

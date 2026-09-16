@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/linyows/dewy/artifact"
+	"github.com/linyows/dewy/cache"
 	"github.com/linyows/dewy/container"
 	"github.com/linyows/dewy/registry"
 )
@@ -84,7 +85,7 @@ type cacheState struct {
 func (d *Dewy) resolveCacheState(_ context.Context, res *registry.CurrentResponse) (cacheState, error) {
 	st := cacheState{key: d.cachekeyName(res)}
 
-	currentkeyValue, _ := d.cache.Read(currentkeyName)
+	currentkeyValue, _ := d.state().Read(currentkeyName)
 	st.prevKey = string(currentkeyValue)
 
 	// A release that failed its health check is deployed once, not on every
@@ -132,7 +133,7 @@ func (d *Dewy) resolveCacheState(_ context.Context, res *registry.CurrentRespons
 			}
 		} else {
 			// Take ownership of the current pointer.
-			if err := d.cache.Write(currentkeyName, []byte(st.key)); err != nil {
+			if err := d.state().Write(currentkeyName, []byte(st.key)); err != nil {
 				return st, err
 			}
 		}
@@ -147,8 +148,14 @@ func (d *Dewy) resolveCacheState(_ context.Context, res *registry.CurrentRespons
 		if err != nil {
 			return st, fmt.Errorf("failed to load cached artifact: %w", err)
 		}
+		// A record we cannot read is not the same as one that was never
+		// written: only a confirmed absence may skip verification, or a
+		// malformed record would be a way to bypass it.
 		idx, ierr := d.readBlobIndex(st.key)
 		if ierr != nil {
+			if !cache.IsNotFound(ierr) {
+				return st, fmt.Errorf("failed to read the artifact index for %s: %w", st.key, ierr)
+			}
 			idx = nil
 		}
 		if err := d.verifyAgainstIndex(st.key, data, idx); err != nil {
@@ -193,9 +200,9 @@ func (d *Dewy) applyDeployment(ctx context.Context, res *registry.CurrentRespons
 func (d *Dewy) restoreCurrentKey(prevKey string) {
 	var err error
 	if prevKey == "" {
-		err = d.cache.Delete(currentkeyName)
+		err = d.state().Delete(currentkeyName)
 	} else {
-		err = d.cache.Write(currentkeyName, []byte(prevKey))
+		err = d.state().Write(currentkeyName, []byte(prevKey))
 	}
 	if err != nil {
 		d.logger.Warn("Failed to restore the current cache key",

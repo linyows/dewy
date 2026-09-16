@@ -107,7 +107,7 @@ func (f *File) Read(key string) ([]byte, error) {
 		return nil, err
 	}
 	if !IsFileExist(p) {
-		return nil, fmt.Errorf("File not found: %s", p)
+		return nil, fmt.Errorf("%w: %s", ErrNotFound, p)
 	}
 
 	content, err := os.ReadFile(p)
@@ -136,6 +136,11 @@ func (f *File) Write(key string, data []byte) error {
 	if err != nil {
 		return err
 	}
+	// Keys may name a path ("blobs/<key>.json"), and OpenFile will not create
+	// the directories along the way.
+	if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil { //nolint:gosec // G301: cache dir, not secrets
+		return err
+	}
 	file, err := os.OpenFile(p, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
@@ -161,7 +166,7 @@ func (f *File) Delete(key string) error {
 		return err
 	}
 	if !IsFileExist(p) {
-		return fmt.Errorf("File not found: %s", p)
+		return fmt.Errorf("%w: %s", ErrNotFound, p)
 	}
 
 	if err := os.Remove(p); err != nil {
