@@ -15,7 +15,7 @@ Dewyは、プラグガブルな抽象化として、Registry, Artifact, Cache, N
 
 - Registry: バージョン管理（GitHub Releases, S3, GCS, OCI Registry, gRPC）
 - Artifact: バイナリ/イメージ取得（対応するRegistry形式）
-- Cache: ダウンロード済みファイル管理（File, Memory, Consul, Redis）
+- Cache: ダウンロード済みファイル管理（File, S3, GCS）
 - Notifier: デプロイ通知（Slack, Mail）
 
 ### デプロイプロセス

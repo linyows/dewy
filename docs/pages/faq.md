@@ -16,7 +16,17 @@ Audit logs are saved as text file names where artifacts are hosted. Currently th
 
 ## How can I handle registry rate limits caused by polling from multiple Dewy instances?
 
-Using HashiCorp Consul or Redis for cache components allows multiple Dewy instances to share cache, which should reduce the total number of requests to the registry. In that case, it would be good to set the registry TTL to an appropriate time. Note that you can specify longer polling intervals using command options.
+Point the instances at one shared cache prefix on S3 or Google Cloud Storage and add `registry-ttl` to the cache URL:
+
+```sh
+dewy server --registry ghr://owner/repo \
+  --cache 's3://ap-northeast-1/mybucket/myapp?registry-ttl=30s' \
+  -- /opt/myapp/current/myapp
+```
+
+One instance per TTL window polls the upstream registry; the rest read the response from the shared cache. Polling is what consumes a rate limit, because it happens every interval per instance whether or not there is a new release, so this is the setting that matters. See [Registry result cache](/cache#registry-result-cache).
+
+Lengthening the polling interval with `--interval` also helps, and the two combine.
 
 ## How can I run multiple Dewy instances on the same host?
 

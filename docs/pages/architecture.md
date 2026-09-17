@@ -15,7 +15,7 @@ Dewy is composed of four interfaces as pluggable abstractions: Registry, Artifac
 
 - Registry: Version management (GitHub Releases, S3, GCS, OCI Registry, gRPC)
 - Artifact: Binary/Image acquisition (corresponding Registry formats)
-- Cache: Downloaded file management (File, Memory, Consul, Redis)
+- Cache: Downloaded file management (File, S3, GCS)
 - Notifier: Deployment notifications (Slack, Mail)
 
 ### Deployment Process

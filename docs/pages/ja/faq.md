@@ -16,7 +16,17 @@ Dewyは削除後のLatestバージョンに変更します。リリースした�
 
 ## 複数Dewyからのポーリングによってレジストリのレートリミットにかかるのはどう対処できますか？
 
-キャッシュコンポーネントにHashicorp Consul やredisを使うと複数Dewyでキャッシュを共有出来るため、レジストリへの総リクエスト数は減るでしょう。その際は、レジストリTTLを適切な時間に設定するのがよいです。 なお、ポーリング間隔を長くするにはコマンドのオプションで指定できます。
+S3またはGoogle Cloud Storageの同じprefixを複数のDewyで共有し、cache URLに `registry-ttl` を付けてください。
+
+```sh
+dewy server --registry ghr://owner/repo \
+  --cache 's3://ap-northeast-1/mybucket/myapp?registry-ttl=30s' \
+  -- /opt/myapp/current/myapp
+```
+
+TTLウィンドウあたり1台だけが上流registryをpollし、残りは共有キャッシュからレスポンスを読みます。rate limitを消費するのはpollingです。新しいリリースの有無にかかわらず、インスタンスごとにinterval間隔で発生するためです。したがって効くのはこの設定です。[Registry result cache](/ja/cache#registry-result-cache)を参照してください。
+
+`--interval` でポーリング間隔を長くするのも有効で、両者は併用できます。
 
 ## 同一ホストで複数のDewyを実行するにはどうすればいいでしょうか？
 
