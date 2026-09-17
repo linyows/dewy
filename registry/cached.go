@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net/url"
@@ -33,11 +32,8 @@ const defaultRefreshWait = 250 * time.Millisecond
 type cachedEntry struct {
 	Response  *CurrentResponse `json:"response,omitempty"`
 	FetchedAt time.Time        `json:"fetched_at"`
-	// LockedAt and LockedBy are how Dewy releases before the cache.Locker
-	// existed marked an in-progress refresh. They are no longer written, but
-	// they are still honored on read so that a fleet mid-upgrade does not
-	// stampede upstream: a new instance still waits for an old peer that
-	// claimed the entry this way.
+	// LockedAt records when a peer began refreshing. Zero means no peer
+	// is currently refreshing.
 	LockedAt time.Time `json:"locked_at"`
 	LockedBy string    `json:"locked_by,omitempty"`
 }
@@ -48,11 +44,11 @@ type cachedEntry struct {
 // that only one of them calls the upstream registry per TTL window. Other
 // instances read the cached response from the shared cache.
 //
-// Refresh is serialized by a cache.Locker: the leader holds the lock while it
-// calls upstream and publishes the result with a conditional write. Followers
-// that find the lock taken back off briefly and re-read; if the entry is
-// still stale once the lock TTL elapses they fall back to the last known
-// response (stale-but-usable).
+// The cache entry doubles as a refresh lock: the leader CAS-updates LockedAt
+// before calling upstream, and clears it (along with the new response) on
+// success. Followers that observe a recent LockedAt back off briefly and
+// re-read; if the entry is still stale on retry they fall back to the last
+// known response (stale-but-usable).
 type Cached struct {
 	inner    Registry
 	cache    cache.AtomicCache
@@ -63,11 +59,6 @@ type Cached struct {
 	clock    sysdeps.Clock
 	nodeID   string
 	cacheKey string
-	// locker serializes the upstream refresh across instances. It is derived
-	// from the cache backend: a native distributed lock when the backend has
-	// one, a conditional-write emulation otherwise.
-	locker   cache.Locker
-	lockName string
 }
 
 // CachedOption configures optional dependencies of a Cached registry.
@@ -94,17 +85,6 @@ func WithEnv(e sysdeps.Env) CachedOption {
 	}
 }
 
-// WithLocker injects the Locker used to serialize upstream refreshes.
-// Defaults to the cache backend's own lock when it has one, and to a
-// conditional-write lock otherwise. A nil locker is ignored.
-func WithLocker(l cache.Locker) CachedOption {
-	return func(x *Cached) {
-		if l != nil {
-			x.locker = l
-		}
-	}
-}
-
 // NewCached wraps inner with a shared registry-result cache backed by
 // atomicCache. ttl controls how long a cached response is considered fresh.
 //
@@ -124,17 +104,9 @@ func NewCached(inner Registry, scope string, atomicCache cache.AtomicCache, ttl 
 		clock:    sysdeps.RealClock(),
 		nodeID:   nodeIDFrom(sysdeps.RealEnv()),
 		cacheKey: cacheKeyForScope(scope),
-		lockName: lockNameForScope(scope),
 	}
 	for _, opt := range opts {
 		opt(c)
-	}
-	// Built after the options so the locker inherits the injected clock and
-	// node ID rather than the real ones.
-	if c.locker == nil {
-		c.locker, _ = cache.LockerFor(atomicCache,
-			cache.WithLockClock(c.clock),
-			cache.WithLockHolderID(c.nodeID))
 	}
 	return c
 }
@@ -156,19 +128,8 @@ func nodeIDFrom(e sysdeps.Env) string {
 // that registry URLs that differ only in query-parameter ordering hash to
 // the same key.
 func cacheKeyForScope(scope string) string {
-	return registryCacheKeyPrefix + scopeHash(scope) + ".json"
-}
-
-// lockNameForScope returns the Locker name guarding the upstream refresh for
-// the given scope. It is derived from the same hash as the cache key so that
-// the lock and the entry it protects always travel together.
-func lockNameForScope(scope string) string {
-	return "registry/" + scopeHash(scope)
-}
-
-func scopeHash(scope string) string {
 	h := sha256.Sum256([]byte(canonicalizeScope(scope) + "|" + runtime.GOOS + "|" + runtime.GOARCH))
-	return hex.EncodeToString(h[:8])
+	return registryCacheKeyPrefix + hex.EncodeToString(h[:8]) + ".json"
 }
 
 // canonicalizeScope returns scope with URL query parameters sorted by key
@@ -203,9 +164,10 @@ func maxLockTTL(ttl time.Duration) time.Duration {
 // shared cache.
 //
 // The loop is bounded by lockTTL rather than a fixed retry count: while a
-// peer holds the refresh lock we keep waiting, so that we do not stampede
-// upstream just because the peer's refresh takes longer than a few hundred
-// milliseconds. Once lockTTL elapses we stop waiting and serve what we have.
+// peer is actively refreshing (LockedAt within lockTTL) we keep waiting so
+// that we do not stampede upstream just because the peer's refresh takes
+// longer than a few hundred milliseconds. If lockTTL elapses without the
+// peer publishing, we treat the lock as abandoned and claim it ourselves.
 func (c *Cached) Current(ctx context.Context) (*CurrentResponse, error) {
 	deadline := c.clock.Now().Add(c.lockTTL + c.wait)
 
@@ -221,8 +183,7 @@ func (c *Cached) Current(ctx context.Context) (*CurrentResponse, error) {
 			return entry.Response, nil
 		}
 
-		// A pre-Locker peer marked the entry as being refreshed. Wait it out
-		// the way that peer expects, up to lockTTL.
+		// A peer is refreshing — wait briefly and try again, up to lockTTL.
 		if entry != nil && c.isLocked(entry) && c.clock.Now().Before(deadline) {
 			if err := c.sleepCtx(ctx, c.wait); err != nil {
 				if entry.Response != nil {
@@ -233,102 +194,30 @@ func (c *Cached) Current(ctx context.Context) (*CurrentResponse, error) {
 			continue
 		}
 
-		// Stale or absent. Exactly one instance gets to call upstream.
-		lock, err := c.acquire(ctx)
-		switch {
-		case errors.Is(err, cache.ErrLockBusy):
-			// A peer is refreshing. Re-read shortly: it will publish and we
-			// will take the fresh hit above.
-			if c.clock.Now().Before(deadline) {
-				if serr := c.sleepCtx(ctx, c.wait); serr != nil {
+		// Either stale, absent, or the peer's lock has expired. Try to claim.
+		claim := buildClaim(entry, c.nodeID, c.clock.Now())
+		newVersion, err := c.writeEntry(claim, version)
+		if err != nil {
+			if cache.IsConflict(err) {
+				// Another node beat us to the claim. Re-read and continue.
+				if err := c.sleepCtx(ctx, c.wait); err != nil {
 					if entry != nil && entry.Response != nil {
 						return entry.Response, nil
 					}
-					return nil, serr
+					return nil, err
 				}
 				continue
 			}
-			// The peer kept the lock alive for our whole wait without
-			// publishing, so it is slow rather than dead: adding our own
-			// request to whatever it is struggling with would not help.
-			//
-			// Only a locker that renews its lease reaches this branch. Under
-			// CASLocker the lock simply expires and the next caller takes it
-			// over, which is the pre-Locker behavior.
+			c.warn("failed to claim registry cache lock", err)
 			if entry != nil && entry.Response != nil {
-				c.warn("peer held the refresh lock past its TTL; serving stale cache", err)
 				return entry.Response, nil
 			}
-			// Nothing cached at all: a cold-start fleet must not deadlock
-			// waiting for a peer, so fall back to a direct upstream call.
 			return c.inner.Current(ctx)
-
-		case err != nil:
-			// The lock backend is unavailable. Degrade to uncoordinated
-			// behavior — every instance polls upstream for itself — rather
-			// than to a frozen one. Serving the cached response here instead
-			// would mean a locker that stays broken stops the fleet from ever
-			// seeing another release.
-			c.warn("failed to acquire registry refresh lock", err)
-			res, uerr := c.inner.Current(ctx)
-			if uerr == nil {
-				return res, nil
-			}
-			if entry != nil && entry.Response != nil {
-				c.warn("upstream registry failed; serving stale cache", uerr)
-				return entry.Response, nil
-			}
-			return nil, uerr
 		}
 
-		// We hold the lock. Re-read before calling upstream: a peer may have
-		// published between our read and our acquisition, and its result is
-		// the one we were about to go and fetch.
-		if latest, latestVersion, rerr := c.readEntry(); rerr == nil || cache.IsNotFound(rerr) {
-			if latest != nil && c.isFresh(latest) {
-				c.release(lock)
-				return latest.Response, nil
-			}
-			entry, version = latest, latestVersion
-		}
-
-		res, rerr := c.refreshAndPublish(ctx, entry, version, lock.Lost())
-		c.release(lock)
-		return res, rerr
+		// We hold the lock — perform the upstream call.
+		return c.refreshAndPublish(ctx, entry, newVersion)
 	}
-}
-
-// lockLost reports whether the refresh lock has been lost. A nil channel —
-// a lock with no liveness signal at all — never reports a loss.
-func lockLost(lost <-chan struct{}) bool {
-	select {
-	case <-lost:
-		return true
-	default:
-		return false
-	}
-}
-
-// release drops the refresh lock, logging rather than propagating a failure:
-// the lock TTL bounds the damage, and the caller has a response to return.
-func (c *Cached) release(lock cache.Lock) {
-	if err := lock.Unlock(); err != nil {
-		c.warn("failed to release registry refresh lock", err)
-	}
-}
-
-// acquire takes the refresh lock without waiting. Waiting is the caller's
-// job: it re-reads the entry between attempts, so that a peer publishing a
-// fresh response ends the wait immediately instead of at lock release.
-func (c *Cached) acquire(ctx context.Context) (cache.Lock, error) {
-	if c.locker == nil {
-		return nil, fmt.Errorf("no locker available for cache backend")
-	}
-	return c.locker.Acquire(ctx, c.lockName, cache.LockOptions{
-		TTL:     c.lockTTL,
-		TryOnce: true,
-		Value:   []byte(c.nodeID),
-	})
 }
 
 // sleepCtx waits d using the injected clock, returning early on ctx cancel.
@@ -376,26 +265,28 @@ func (c *Cached) isFresh(entry *cachedEntry) bool {
 	return entry.Response != nil && c.clock.Now().Sub(entry.FetchedAt) < c.ttl
 }
 
-// isLocked reports whether a pre-Locker peer has marked the entry as being
-// refreshed. Current Dewy never writes these fields; see cachedEntry.
 func (c *Cached) isLocked(entry *cachedEntry) bool {
 	return !entry.LockedAt.IsZero() && c.clock.Now().Sub(entry.LockedAt) < c.lockTTL
 }
 
-// refreshAndPublish calls the upstream registry and publishes the result with
-// a conditional write. On upstream failure it publishes nothing, leaving the
-// previous entry in place so the cache continues to serve stale-but-usable.
-//
-// lost is the refresh lock's liveness channel. An upstream call that outlives
-// the lock is still returned to our own caller, but it is not published: by
-// then a successor holds the lock, and publishing would stamp a response
-// fetched up to a lock TTL ago with a fresh FetchedAt. The conditional write
-// prevents the successor's entry from being clobbered either way; this check
-// also keeps the successor's newer result from being discarded in favor of
-// ours.
-func (c *Cached) refreshAndPublish(ctx context.Context, prev *cachedEntry, version string, lost <-chan struct{}) (*CurrentResponse, error) {
+// buildClaim returns the entry that marks "we are refreshing". The previous
+// Response is preserved so concurrent readers can still serve stale-but-usable.
+func buildClaim(prev *cachedEntry, nodeID string, now time.Time) *cachedEntry {
+	c := &cachedEntry{LockedAt: now, LockedBy: nodeID}
+	if prev != nil {
+		c.Response = prev.Response
+		c.FetchedAt = prev.FetchedAt
+	}
+	return c
+}
+
+// refreshAndPublish calls the upstream registry, then writes the new entry
+// (releasing the lock). On upstream failure it releases the lock with the
+// previous Response so the cache continues to serve stale-but-usable.
+func (c *Cached) refreshAndPublish(ctx context.Context, prev *cachedEntry, version string) (*CurrentResponse, error) {
 	res, err := c.inner.Current(ctx)
 	if err != nil {
+		c.releaseLock(prev, version)
 		if prev != nil && prev.Response != nil {
 			c.warn("upstream registry failed; serving stale cache", err)
 			return prev.Response, nil
@@ -405,14 +296,6 @@ func (c *Cached) refreshAndPublish(ctx context.Context, prev *cachedEntry, versi
 	if c.logger != nil {
 		c.logger.Info("Registry result refreshed from upstream",
 			slog.String("node", c.nodeID))
-	}
-
-	if lockLost(lost) {
-		if c.logger != nil {
-			c.logger.Warn("Refresh lock expired before the result could be published",
-				slog.String("node", c.nodeID))
-		}
-		return res, nil
 	}
 
 	final := &cachedEntry{
@@ -425,6 +308,20 @@ func (c *Cached) refreshAndPublish(ctx context.Context, prev *cachedEntry, versi
 		c.warn("failed to publish refreshed registry cache", werr)
 	}
 	return res, nil
+}
+
+// releaseLock writes back the previous entry without LockedAt. Best effort —
+// any failure is logged and ignored. The lockTTL bound ensures a stuck lock
+// eventually becomes claimable by another node anyway.
+func (c *Cached) releaseLock(prev *cachedEntry, version string) {
+	released := &cachedEntry{}
+	if prev != nil {
+		released.Response = prev.Response
+		released.FetchedAt = prev.FetchedAt
+	}
+	if _, err := c.writeEntry(released, version); err != nil {
+		c.warn("failed to release registry cache lock", err)
+	}
 }
 
 func (c *Cached) warn(msg string, err error) {
