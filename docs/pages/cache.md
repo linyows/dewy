@@ -95,45 +95,6 @@ The cache entry doubles as a refresh lock (single-flight via `If-Match` / `ifGen
 
 If `registry-ttl` is set on a backend that does not support atomic conditional writes (currently the file backend), Dewy logs a `"registry-ttl set but cache backend does not support atomic writes; ignoring"` warning at startup and proceeds without registry-result caching.
 
-### Memory {% #memory-cache %}
-
-{% callout type="warning" title="Not Implemented" %}
-Memory cache is currently not implemented. It is planned for future versions.
-{% /callout %}
-
-High-speed implementation for managing artifacts in memory (planned).
-
-**Expected Features:**
-- Fast access
-- Volatile (data lost on restart)
-- Increased memory usage
-
-### HashiCorp Consul {% #consul-cache %}
-
-{% callout type="warning" title="Not Implemented" %}
-Consul cache is currently not implemented. It is planned for future versions.
-{% /callout %}
-
-Implementation for achieving cache sharing in distributed environments (planned).
-
-**Expected Benefits:**
-- Cache sharing between multiple Dewy instances
-- Reduced requests to registry
-- Rate limiting countermeasures in distributed systems
-
-### Redis {% #redis-cache %}
-
-{% callout type="warning" title="Not Implemented" %}
-Redis cache is currently not implemented. It is planned for future versions.
-{% /callout %}
-
-High-performance distributed cache system integration implementation (planned).
-
-**Expected Features:**
-- Fast distributed caching
-- Automatic expiration with TTL settings
-- Cluster support
-
 ## Cache Directory Configuration {% #cache-directory %}
 
 Dewy determines the cache directory in the following priority order:
@@ -245,7 +206,7 @@ dewy server --registry ghr://owner/repo \
   --interval 30 -- /opt/myapp/current/myapp
 ```
 
-> Note: a shared cache reduces artifact download traffic against the upstream registry. It does not by itself reduce the number of metadata polls each instance makes; that is a separate concern (planned: stale-while-revalidate at the registry layer).
+> Note: a shared cache on its own reduces artifact download traffic against the upstream registry, not the number of metadata polls each instance makes. Add `registry-ttl` to the cache URL to share the registry response as well; see [Registry result cache](#registry-result-cache).
 
 ### Storage Management
 

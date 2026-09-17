@@ -95,45 +95,6 @@ cacheエントリ自体がrefresh lockを兼ねます（`If-Match` / `ifGenerati
 
 conditional writeをサポートしないbackend（現状はfile backend）に `registry-ttl` を設定した場合、Dewyは起動時に `"registry-ttl set but cache backend does not support atomic writes; ignoring"` warningを出力し、registry-result cacheを有効化せずに動作を続行します。
 
-### メモリ（Memory）{% #memory-cache %}
-
-{% callout type="warning" title="未実装" %}
-Memoryキャッシュは現在未実装です。将来のバージョンで対応予定です。
-{% /callout %}
-
-インメモリでアーティファクトを管理する高速な実装（予定）。
-
-**想定される特徴:**
-- 高速なアクセス
-- 揮発性（再起動でデータ消失）
-- メモリ使用量の増加
-
-### HashiCorp Consul {% #consul-cache %}
-
-{% callout type="warning" title="未実装" %}
-Consulキャッシュは現在未実装です。将来のバージョンで対応予定です。
-{% /callout %}
-
-分散環境でのキャッシュ共有を実現する実装（予定）。
-
-**想定される利点:**
-- 複数Dewyインスタンス間でのキャッシュ共有
-- レジストリへのリクエスト削減
-- 分散システムでのレート制限対策
-
-### Redis {% #redis-cache %}
-
-{% callout type="warning" title="未実装" %}
-Redisキャッシュは現在未実装です。将来のバージョンで対応予定です。
-{% /callout %}
-
-高性能な分散キャッシュシステムとの連携実装（予定）。
-
-**想定される特徴:**
-- 高速な分散キャッシュ
-- TTL設定による自動expiration
-- クラスター対応
-
 ## キャッシュディレクトリ設定 {% #cache-directory %}
 
 Dewyは、以下の優先順位でキャッシュディレクトリを決定します：

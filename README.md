@@ -280,7 +280,7 @@ A downloaded artifact is checked against the SHA-256 checksum file published nex
 Cache
 --
 
-The Cache interface stores the current version and downloaded artifacts. Supported implementations are local file (default), AWS S3, and Google Cloud Storage. Memory, HashiCorp Consul, and Redis backends are planned.
+The Cache interface stores the current version and downloaded artifacts. Supported implementations are local file (default), AWS S3, and Google Cloud Storage.
 
 Pointing multiple Dewy instances at the same S3/GCS bucket lets them share artifact downloads: only the first instance to detect a new release pays the upstream download cost, while the rest fetch from the shared cache.
 

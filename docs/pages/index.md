@@ -134,7 +134,7 @@ Yes, absolutely. While Dewy itself is written in Go and examples often feature G
 {% /item %}
 {% item %}
 ### How do I deploy to multiple servers?
-Run Dewy on each server, all pointing to the same registry. Each instance independently polls for updates and deploys the latest version. To avoid registry rate limits, use a shared cache backend like Redis or HashiCorp Consul—this allows multiple Dewy instances to share version information and reduce API calls. All servers automatically converge to the same version.
+Run Dewy on each server, all pointing to the same registry. Each instance independently polls for updates and deploys the latest version. To avoid registry rate limits, point them at one shared S3 or GCS cache prefix and add `registry-ttl` to the cache URL, so that one instance per TTL window polls the registry and the rest read the response from the shared cache. All servers automatically converge to the same version.
 {% /item %}
 {% item %}
 ### How does Dewy fit into my existing CI/CD pipeline?
