@@ -90,7 +90,7 @@ func (d *Dewy) rollbackServer(ctx context.Context, res *registry.CurrentResponse
 		slog.String("tag", res.Tag),
 		slog.String("error", cause.Error()))
 
-	if err := d.cache.Write(blockedkeyName, []byte(st.key)); err != nil {
+	if err := d.state().Write(blockedkeyName, []byte(st.key)); err != nil {
 		d.logger.Error("Failed to record the failed version",
 			slog.String("cache_key", st.key),
 			slog.String("error", err.Error()))
@@ -121,7 +121,7 @@ func (d *Dewy) rollbackServer(ctx context.Context, res *registry.CurrentResponse
 		d.notifier.SendImportant(ctx, failed+fmt.Sprintf(". Rollback to `%s` failed: %s", prevTag, err))
 		return
 	}
-	if err := d.cache.Write(currentkeyName, []byte(st.prevKey)); err != nil {
+	if err := d.state().Write(currentkeyName, []byte(st.prevKey)); err != nil {
 		d.logger.Error("Failed to restore the current cache key", slog.String("error", err.Error()))
 	}
 	d.notifier.OnDeploy(st.prevRelease)
@@ -205,10 +205,10 @@ func (d *Dewy) recoverBlockedServer(ctx context.Context, currentKey string) {
 // clearBlockedVersion removes the blocked marker after a release passes its
 // health check, so a host that recovers is not left skipping versions.
 func (d *Dewy) clearBlockedVersion() {
-	if _, err := d.cache.Read(blockedkeyName); err != nil {
+	if _, err := d.state().Read(blockedkeyName); err != nil {
 		return
 	}
-	if err := d.cache.Delete(blockedkeyName); err != nil {
+	if err := d.state().Delete(blockedkeyName); err != nil {
 		d.logger.Warn("Failed to clear the blocked version", slog.String("error", err.Error()))
 	}
 }
@@ -216,7 +216,7 @@ func (d *Dewy) clearBlockedVersion() {
 // blockedVersion returns the cache key of the release that last failed its
 // health check, or an empty string when there is none.
 func (d *Dewy) blockedVersion() string {
-	v, err := d.cache.Read(blockedkeyName)
+	v, err := d.state().Read(blockedkeyName)
 	if err != nil {
 		return ""
 	}

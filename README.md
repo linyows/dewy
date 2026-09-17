@@ -484,6 +484,7 @@ sequenceDiagram
     participant R as Registry
     participant A as Artifact Store
     participant C as Cache
+    participant L as Local state
     participant F as File System
     participant H as Hooks
     participant App as Application
@@ -495,7 +496,7 @@ sequenceDiagram
     D->>R: Current() - Get latest version
     R-->>D: {ID, Tag, ArtifactURL}
 
-    D->>C: Read("current") - Check current version
+    D->>L: Read("current") - What this instance deployed
     D->>C: List() - Get cached artifacts
     C-->>D: Cached version info
 
@@ -503,7 +504,7 @@ sequenceDiagram
         D->>A: Download(ArtifactURL)
         A-->>D: Artifact binary data
         D->>C: Write(cacheKey, artifact)
-        D->>C: Write("current", cacheKey)
+        D->>L: Write("current", cacheKey)
         Note over D,C: Cache: v1.2.3--app_linux_amd64.tar.gz
     else Version unchanged
         Note over D: Skip deployment - already current

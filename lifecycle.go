@@ -84,7 +84,7 @@ type cacheState struct {
 func (d *Dewy) resolveCacheState(_ context.Context, res *registry.CurrentResponse) (cacheState, error) {
 	st := cacheState{key: d.cachekeyName(res)}
 
-	currentkeyValue, _ := d.cache.Read(currentkeyName)
+	currentkeyValue, _ := d.state().Read(currentkeyName)
 	st.prevKey = string(currentkeyValue)
 
 	// A release that failed its health check is deployed once, not on every
@@ -132,7 +132,7 @@ func (d *Dewy) resolveCacheState(_ context.Context, res *registry.CurrentRespons
 			}
 		} else {
 			// Take ownership of the current pointer.
-			if err := d.cache.Write(currentkeyName, []byte(st.key)); err != nil {
+			if err := d.state().Write(currentkeyName, []byte(st.key)); err != nil {
 				return st, err
 			}
 		}
@@ -180,8 +180,8 @@ func (d *Dewy) downloadAndCache(ctx context.Context, res *registry.CurrentRespon
 	if err := d.cache.Write(st.key, buf.Bytes()); err != nil {
 		return fmt.Errorf("failed cache.Write cachekeyName: %w", err)
 	}
-	if err := d.cache.Write(currentkeyName, []byte(st.key)); err != nil {
-		return fmt.Errorf("failed cache.Write currentkeyName: %w", err)
+	if err := d.state().Write(currentkeyName, []byte(st.key)); err != nil {
+		return fmt.Errorf("failed to record the current cache key: %w", err)
 	}
 	d.logger.Info("Cached artifact", slog.String("cache_key", st.key))
 	return nil
@@ -220,9 +220,9 @@ func (d *Dewy) applyDeployment(ctx context.Context, res *registry.CurrentRespons
 func (d *Dewy) restoreCurrentKey(prevKey string) {
 	var err error
 	if prevKey == "" {
-		err = d.cache.Delete(currentkeyName)
+		err = d.state().Delete(currentkeyName)
 	} else {
-		err = d.cache.Write(currentkeyName, []byte(prevKey))
+		err = d.state().Write(currentkeyName, []byte(prevKey))
 	}
 	if err != nil {
 		d.logger.Warn("Failed to restore the current cache key",

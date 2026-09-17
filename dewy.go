@@ -34,6 +34,9 @@ const (
 	// currentkeyName is a name whose value is the version of the currently running server application.
 	// For example, if you are using a file for the cache store, running `cat current` will show `v1.2.3--app_linux_amd64.tar.gz`, which is a combination of the tag and artifact.
 	// dewy uses this value as a key (**cachekeyName**) to manage the artifacts in the cache store.
+	//
+	// It lives in the local state store, never in a shared cache backend: it
+	// says what *this* instance has deployed. See Dewy.state.
 	currentkeyName = "current"
 
 	// MaxArtifactSize is the maximum allowed artifact download size (512MB).
@@ -101,6 +104,28 @@ func New(c Config, log *logging.Logger) (*Dewy, error) {
 		// Inert until Start knows the polling interval.
 		backoff: newBackoff(0, 0),
 	}, nil
+}
+
+// state returns this instance's own state store, holding the "current" and
+// "blocked" pointers.
+//
+// These record what *this* instance has deployed, so they belong on local disk
+// even when the artifact cache is a bucket shared with other instances. Kept
+// in a shared backend they are read by every instance as if they were its own:
+// the instance that deploys a release first writes "current", and the rest
+// then find a pointer saying the deploy already happened on their node and
+// skip the release, silently and for good.
+//
+// It is derived from d.cache on each use rather than snapshotted at
+// construction, so the two can never end up pointing at different directories.
+func (d *Dewy) state() cache.Cache {
+	f := &cache.File{}
+	f.Default()
+	if dir := d.cache.GetDir(); dir != "" {
+		f.SetDir(dir)
+	}
+	f.SetLogger(d.logger.Slog())
+	return f
 }
 
 // SetTelemetry sets the telemetry provider.

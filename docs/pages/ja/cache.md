@@ -95,6 +95,16 @@ cacheエントリ自体がrefresh lockを兼ねます（`If-Match` / `ifGenerati
 
 conditional writeをサポートしないbackend（現状はfile backend）に `registry-ttl` を設定した場合、Dewyは起動時に `"registry-ttl set but cache backend does not support atomic writes; ignoring"` warningを出力し、registry-result cacheを有効化せずに動作を続行します。
 
+### デプロイ状態はインスタンスごとに持つ {% #deployment-state %}
+
+`current` と `blocked` のキーは、**そのインスタンスが**何をデプロイしたかを記録します。共有バケットではなく、cache backendのローカルディレクトリに保存されます。
+
+共有すると動作しません。最初にリリースをデプロイしたインスタンスが `current` を書くと、同じprefixを共有する他のインスタンスは「自ノードでデプロイ済み」を意味するポインタを読むことになります。それらのインスタンスはそのリリースをスキップします。エラーにも通知にもならず、以降のリリースもスキップし続けます。
+
+{% callout type="warning" title="以前のリリースからのアップグレード" %}
+S3とGCSを使うインスタンスは、これまで `current` をバケットに置いていました。アップグレード後、各インスタンスはローカルに記録が無い状態で起動するため、すでに動作しているバージョンをもう一度だけデプロイします。`dewy server` ではインスタンスあたり1回の再起動にあたります。以降のpollには影響しません。バケットに残る `current` オブジェクトは読まれなくなるので、任意のタイミングで削除できます。
+{% /callout %}
+
 ### メモリ（Memory）{% #memory-cache %}
 
 {% callout type="warning" title="未実装" %}

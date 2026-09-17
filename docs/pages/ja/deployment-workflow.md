@@ -23,6 +23,7 @@ sequenceDiagram
     participant D as Dewy
     participant R as Registry
     participant C as Cache
+    participant L as Local state
     participant F as FileSystem
     participant S as Server
     participant N as Notifier
@@ -34,8 +35,8 @@ sequenceDiagram
             note over D: グレースピリオド判定<br/>(30分以内はスキップ)
         else 正常取得
             R->>D: リリース情報 (tag, artifact URL)
-            D->>C: 現在バージョン確認
-            C->>D: current key の値
+            D->>L: 自インスタンスのデプロイ済みバージョン確認
+            L->>D: current key の値
             D->>C: キャッシュリスト取得
             C->>D: 既存キャッシュファイル一覧
 
@@ -88,6 +89,8 @@ DEBUG: Artifact not found within grace period message="artifact not found" grace
 キャッシュフェーズでは、取得したリリース情報を基にローカルキャッシュの状態を確認します。同じバージョンのアーティファクトが既にキャッシュされている場合、ダウンロード処理をスキップして効率化を図ります。
 
 現在実行中のバージョン情報は `current` キーで管理され、新しいバージョンのキャッシュキー（`tag--artifact`形式）と比較されます。バージョンが同一で、かつサーバーが正常に動作している場合は、すべての後続処理がスキップされます。
+
+`current` キーは**そのインスタンスが**デプロイしたものを記録するため、共有cache backendではなくローカル状態に保存されます。[デプロイ状態はインスタンスごとに持つ](/ja/cache#deployment-state)を参照してください。
 
 ```bash
 # デプロイスキップ時のログ例

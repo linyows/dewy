@@ -95,6 +95,16 @@ The cache entry doubles as a refresh lock (single-flight via `If-Match` / `ifGen
 
 If `registry-ttl` is set on a backend that does not support atomic conditional writes (currently the file backend), Dewy logs a `"registry-ttl set but cache backend does not support atomic writes; ignoring"` warning at startup and proceeds without registry-result caching.
 
+### Deployment state is per-instance {% #deployment-state %}
+
+The `current` and `blocked` keys record what **this** instance has deployed. They are stored in the cache backend's local directory, never in a shared bucket.
+
+Sharing them does not work: the instance that deploys a release first writes `current`, and every other instance sharing the prefix then reads a pointer saying the deploy already happened on its own node. Those instances skip the release, without an error and without a notification, and keep skipping every release after it.
+
+{% callout type="warning" title="Upgrading from an earlier release" %}
+Instances using S3 or GCS previously kept `current` in the bucket. After upgrading, each instance starts with no local record and deploys the version it is already running one more time. For `dewy server` that is a single restart per instance; later polls are unaffected. The `current` object left in the bucket is no longer read and can be deleted whenever convenient.
+{% /callout %}
+
 ### Memory {% #memory-cache %}
 
 {% callout type="warning" title="Not Implemented" %}

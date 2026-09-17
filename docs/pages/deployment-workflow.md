@@ -23,6 +23,7 @@ sequenceDiagram
     participant D as Dewy
     participant R as Registry
     participant C as Cache
+    participant L as Local state
     participant F as FileSystem
     participant S as Server
     participant N as Notifier
@@ -34,8 +35,8 @@ sequenceDiagram
             note over D: Grace period check<br/>(skip if within 30 minutes)
         else Normal acquisition
             R->>D: Release information (tag, artifact URL)
-            D->>C: Check current version
-            C->>D: Value of current key
+            D->>L: Check what this instance deployed
+            L->>D: Value of current key
             D->>C: Get cache list
             C->>D: Existing cache file list
 
@@ -88,6 +89,8 @@ DEBUG: Artifact not found within grace period message="artifact not found" grace
 In the cache phase, local cache status is verified based on retrieved release information. When artifacts of the same version are already cached, download processing is skipped for efficiency.
 
 Currently running version information is managed with the `current` key and compared with the new version's cache key (`tag--artifact` format). When versions are identical and the server is operating normally, all subsequent processing is skipped.
+
+The `current` key records what **this** instance has deployed, so it is kept in local state rather than in a shared cache backend. See [Deployment state is per-instance](/cache#deployment-state).
 
 ```bash
 # Log example when deployment is skipped
