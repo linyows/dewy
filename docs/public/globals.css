@@ -23,6 +23,12 @@
   --hide-table-of-contents-width: 1400px;
 }
 
+.mermaid {
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+
 *,
 *::before,
 *::after {

@@ -42,7 +42,7 @@ probe dag --mermaid e2e/test.yml
 これにより、テスト実行フローを示すMermaid図が生成されます：
 
 ```mermaid
-flowchart TD
+flowchart LR
     subgraph check["Check credentials"]
     end
     subgraph generate_version["Generate version"]
