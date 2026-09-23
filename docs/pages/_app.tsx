@@ -107,7 +107,7 @@ export default function MyApp({ Component, pageProps }: AppProps<MyAppProps>) {
         </div>
       </div>
       <footer>
-        <p>© 2018-{new Date().getFullYear()} <a href="https://github.com/linyows" target="_blank" rel="noopener noreferrer">linyows</a></p>
+        <p>© 2018-{new Date().getFullYear()} <a href="https://tomohisaoda.com/projects" target="_blank" rel="noopener noreferrer">linyows</a></p>
       </footer>
       <style jsx>
         {`
