@@ -22,7 +22,7 @@ require (
 	github.com/mholt/archives v0.1.5
 	github.com/migueleliasweb/go-github-mock v1.5.0
 	github.com/prometheus/client_golang v1.24.1
-	github.com/slack-go/slack v0.24.0
+	github.com/slack-go/slack v0.29.0
 	go.opentelemetry.io/otel v1.46.0
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v1.46.0
 	go.opentelemetry.io/otel/exporters/prometheus v0.68.0
