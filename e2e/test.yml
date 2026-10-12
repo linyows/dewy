@@ -1,6 +1,14 @@
 name: Deploy Testing
 description: Verify that the deployment is correct
 
+secrets:
+  - GITHUB_TOKEN
+  - AWS_ACCESS_KEY_ID
+  - AWS_SECRET_ACCESS_KEY
+  - SLACK_TOKEN
+  - DOCKERHUB_USERNAME
+  - DOCKERHUB_TOKEN
+
 vars:
   github_token: "{{ GITHUB_TOKEN ?? '' }}"
   aws_access_key_id: "{{ AWS_ACCESS_KEY_ID ?? '' }}"
@@ -37,11 +45,12 @@ jobs:
   - name: Generate version string
     id: genver
     uses: hello
-    vars:
+    with:
       version: v3.0.0-{{ unixtime() }}
+    test: res.version startsWith 'v3.0.0-'
     outputs:
-      version: vars.version
-    echo: "Generated version: {{ vars.version }}"
+      version: res.version
+    echo: "Generated version: {{ res.version }}"
 
 - name: Build dewy
   id: build
@@ -70,6 +79,12 @@ jobs:
     - { command: 'container', variant: 'healthfail' }
 
 # Phase 1: Start all dewy instances and wait for initial deployment (parallel)
+#
+# Each start step returns once dewy has written the ready.log text, which marks
+# the initial deployment. with.timeout bounds that wait, and the shell action
+# stops an instance that is not ready by then. The step timeout is set one
+# minute above it, because a step that times out first leaves the instance
+# running.
 
 - name: Start server by Github-Releases registry with Slack notification
   id: start_srv_ghr
@@ -81,6 +96,9 @@ jobs:
     with:
       workdir: ./e2e/server/ghr
       background: true
+      ready:
+        log: Create symlink
+      timeout: 5m
       env:
         GITHUB_TOKEN: "{{ vars.github_token }}"
         AWS_ACCESS_KEY_ID: "{{ vars.aws_access_key_id }}"
@@ -97,24 +115,13 @@ jobs:
         --notifier "slack://random?title=ghr&url=https://github.com/linyows/dewy-testapp&thread=true" \
         -- $PWD/current/dewy-testapp
     test: status == -1
+    timeout: 6m
     outputs:
       pid: res.pid
       log: res.log
     echo: |
       PID: {{ res.pid }}
       Log: {{ res.log }}
-  - name: Wait for initial deployment
-    uses: shell
-    retry:
-      max_attempts: 60
-      interval: 5s
-    with:
-      cmd: |
-        if [ -f "{{ outputs.srv_ghr.log }}" ]; then
-          grep -q 'Create symlink' "{{ outputs.srv_ghr.log }}" && exit 0
-        fi
-        exit 1
-    test: status == 0
 
 - name: Start server by AWS S3 registry with Slack notification
   id: start_srv_s3
@@ -126,6 +133,9 @@ jobs:
     with:
       workdir: ./e2e/server/s3
       background: true
+      ready:
+        log: Create symlink
+      timeout: 5m
       env:
         GITHUB_TOKEN: "{{ vars.github_token }}"
         AWS_ACCESS_KEY_ID: "{{ vars.aws_access_key_id }}"
@@ -138,24 +148,13 @@ jobs:
         --notifier "slack://random?title=s3&url=https://github.com/linyows/dewy-testapp&thread=true" \
         -- $PWD/current/dewy-testapp
     test: status == -1
+    timeout: 6m
     outputs:
       pid: res.pid
       log: res.log
     echo: |
       PID: {{ res.pid }}
       Log: {{ res.log }}
-  - name: Wait for initial deployment
-    uses: shell
-    retry:
-      max_attempts: 60
-      interval: 5s
-    with:
-      cmd: |
-        if [ -f "{{ outputs.srv_s3.log }}" ]; then
-          grep -q 'Create symlink' "{{ outputs.srv_s3.log }}" && exit 0
-        fi
-        exit 1
-    test: status == 0
 
 - name: Start server by GCloud Storage registry with Slack notification
   id: start_srv_gs
@@ -167,6 +166,9 @@ jobs:
     with:
       workdir: ./e2e/server/gs
       background: true
+      ready:
+        log: Create symlink
+      timeout: 5m
       env:
         GITHUB_TOKEN: "{{ vars.github_token }}"
         AWS_ACCESS_KEY_ID: "{{ vars.aws_access_key_id }}"
@@ -179,24 +181,13 @@ jobs:
         --notifier "slack://random?title=gcs&url=https://github.com/linyows/dewy-testapp&thread=true" \
         -- $PWD/current/dewy-testapp
     test: status == -1
+    timeout: 6m
     outputs:
       pid: res.pid
       log: res.log
     echo: |
       PID: {{ res.pid }}
       Log: {{ res.log }}
-  - name: Wait for initial deployment
-    uses: shell
-    retry:
-      max_attempts: 60
-      interval: 5s
-    with:
-      cmd: |
-        if [ -f "{{ outputs.srv_gs.log }}" ]; then
-          grep -q 'Create symlink' "{{ outputs.srv_gs.log }}" && exit 0
-        fi
-        exit 1
-    test: status == 0
 
 - name: Start server by Github-Releases registry with S3 shared cache (A)
   id: start_srv_ghr_s3cache_a
@@ -208,6 +199,9 @@ jobs:
     with:
       workdir: ./e2e/server/ghr-s3cache-a
       background: true
+      ready:
+        log: Create symlink
+      timeout: 5m
       env:
         GITHUB_TOKEN: "{{ vars.github_token }}"
         AWS_ACCESS_KEY_ID: "{{ vars.aws_access_key_id }}"
@@ -218,24 +212,13 @@ jobs:
         --cache "s3://ap-northeast-3/dewy-testapp/.cache/{{ outputs.genver.version }}-s3?registry-ttl=30s" \
         -- $PWD/current/dewy-testapp
     test: status == -1
+    timeout: 6m
     outputs:
       pid: res.pid
       log: res.log
     echo: |
       PID: {{ res.pid }}
       Log: {{ res.log }}
-  - name: Wait for initial deployment
-    uses: shell
-    retry:
-      max_attempts: 60
-      interval: 5s
-    with:
-      cmd: |
-        if [ -f "{{ outputs.srv_ghr_s3cache_a.log }}" ]; then
-          grep -q 'Create symlink' "{{ outputs.srv_ghr_s3cache_a.log }}" && exit 0
-        fi
-        exit 1
-    test: status == 0
 
 - name: Start server by Github-Releases registry with S3 shared cache (B)
   id: start_srv_ghr_s3cache_b
@@ -247,6 +230,9 @@ jobs:
     with:
       workdir: ./e2e/server/ghr-s3cache-b
       background: true
+      ready:
+        log: Create symlink
+      timeout: 5m
       env:
         GITHUB_TOKEN: "{{ vars.github_token }}"
         AWS_ACCESS_KEY_ID: "{{ vars.aws_access_key_id }}"
@@ -257,24 +243,13 @@ jobs:
         --cache "s3://ap-northeast-3/dewy-testapp/.cache/{{ outputs.genver.version }}-s3?registry-ttl=30s" \
         -- $PWD/current/dewy-testapp
     test: status == -1
+    timeout: 6m
     outputs:
       pid: res.pid
       log: res.log
     echo: |
       PID: {{ res.pid }}
       Log: {{ res.log }}
-  - name: Wait for initial deployment
-    uses: shell
-    retry:
-      max_attempts: 60
-      interval: 5s
-    with:
-      cmd: |
-        if [ -f "{{ outputs.srv_ghr_s3cache_b.log }}" ]; then
-          grep -q 'Create symlink' "{{ outputs.srv_ghr_s3cache_b.log }}" && exit 0
-        fi
-        exit 1
-    test: status == 0
 
 - name: Start server by Github-Releases registry with GCS shared cache (A)
   id: start_srv_ghr_gscache_a
@@ -286,6 +261,9 @@ jobs:
     with:
       workdir: ./e2e/server/ghr-gscache-a
       background: true
+      ready:
+        log: Create symlink
+      timeout: 5m
       env:
         GITHUB_TOKEN: "{{ vars.github_token }}"
         GOOGLE_APPLICATION_CREDENTIALS: "{{ vars.google_application_credentials }}"
@@ -295,24 +273,13 @@ jobs:
         --cache "gs://dewy-testapp/.cache/{{ outputs.genver.version }}-gs?registry-ttl=30s" \
         -- $PWD/current/dewy-testapp
     test: status == -1
+    timeout: 6m
     outputs:
       pid: res.pid
       log: res.log
     echo: |
       PID: {{ res.pid }}
       Log: {{ res.log }}
-  - name: Wait for initial deployment
-    uses: shell
-    retry:
-      max_attempts: 60
-      interval: 5s
-    with:
-      cmd: |
-        if [ -f "{{ outputs.srv_ghr_gscache_a.log }}" ]; then
-          grep -q 'Create symlink' "{{ outputs.srv_ghr_gscache_a.log }}" && exit 0
-        fi
-        exit 1
-    test: status == 0
 
 - name: Start server by Github-Releases registry with GCS shared cache (B)
   id: start_srv_ghr_gscache_b
@@ -324,6 +291,9 @@ jobs:
     with:
       workdir: ./e2e/server/ghr-gscache-b
       background: true
+      ready:
+        log: Create symlink
+      timeout: 5m
       env:
         GITHUB_TOKEN: "{{ vars.github_token }}"
         GOOGLE_APPLICATION_CREDENTIALS: "{{ vars.google_application_credentials }}"
@@ -333,24 +303,13 @@ jobs:
         --cache "gs://dewy-testapp/.cache/{{ outputs.genver.version }}-gs?registry-ttl=30s" \
         -- $PWD/current/dewy-testapp
     test: status == -1
+    timeout: 6m
     outputs:
       pid: res.pid
       log: res.log
     echo: |
       PID: {{ res.pid }}
       Log: {{ res.log }}
-  - name: Wait for initial deployment
-    uses: shell
-    retry:
-      max_attempts: 60
-      interval: 5s
-    with:
-      cmd: |
-        if [ -f "{{ outputs.srv_ghr_gscache_b.log }}" ]; then
-          grep -q 'Create symlink' "{{ outputs.srv_ghr_gscache_b.log }}" && exit 0
-        fi
-        exit 1
-    test: status == 0
 
 - name: Start assets by Github-Releases registry
   id: start_ast_ghr
@@ -362,6 +321,9 @@ jobs:
     with:
       workdir: ./e2e/assets/ghr
       background: true
+      ready:
+        log: Create symlink
+      timeout: 5m
       env:
         GITHUB_TOKEN: "{{ vars.github_token }}"
         AWS_ACCESS_KEY_ID: "{{ vars.aws_access_key_id }}"
@@ -371,24 +333,13 @@ jobs:
         rm -rf .dewy;
         ./dewy assets -l debug --registry "ghr://linyows/dewy-testapp?pre-release=true"
     test: status == -1
+    timeout: 6m
     outputs:
       pid: res.pid
       log: res.log
     echo: |
       PID: {{ res.pid }}
       Log: {{ res.log }}
-  - name: Wait for initial deployment
-    uses: shell
-    retry:
-      max_attempts: 60
-      interval: 5s
-    with:
-      cmd: |
-        if [ -f "{{ outputs.ast_ghr.log }}" ]; then
-          grep -q 'Create symlink' "{{ outputs.ast_ghr.log }}" && exit 0
-        fi
-        exit 1
-    test: status == 0
 
 - name: Start assets by AWS S3 registry
   id: start_ast_s3
@@ -400,6 +351,9 @@ jobs:
     with:
       workdir: ./e2e/assets/s3
       background: true
+      ready:
+        log: Create symlink
+      timeout: 5m
       env:
         GITHUB_TOKEN: "{{ vars.github_token }}"
         AWS_ACCESS_KEY_ID: "{{ vars.aws_access_key_id }}"
@@ -409,24 +363,13 @@ jobs:
         rm -rf .dewy;
         ./dewy assets -l debug --registry "s3://ap-northeast-3/dewy-testapp?pre-release=true"
     test: status == -1
+    timeout: 6m
     outputs:
       pid: res.pid
       log: res.log
     echo: |
       PID: {{ res.pid }}
       Log: {{ res.log }}
-  - name: Wait for initial deployment
-    uses: shell
-    retry:
-      max_attempts: 60
-      interval: 5s
-    with:
-      cmd: |
-        if [ -f "{{ outputs.ast_s3.log }}" ]; then
-          grep -q 'Create symlink' "{{ outputs.ast_s3.log }}" && exit 0
-        fi
-        exit 1
-    test: status == 0
 
 - name: Start assets by GCloud Storage registry
   id: start_ast_gs
@@ -438,6 +381,9 @@ jobs:
     with:
       workdir: ./e2e/assets/gs
       background: true
+      ready:
+        log: Create symlink
+      timeout: 5m
       env:
         GITHUB_TOKEN: "{{ vars.github_token }}"
         AWS_ACCESS_KEY_ID: "{{ vars.aws_access_key_id }}"
@@ -447,24 +393,13 @@ jobs:
         rm -rf .dewy;
         ./dewy assets -l debug --registry "gs://dewy-testapp?pre-release=true"
     test: status == -1
+    timeout: 6m
     outputs:
       pid: res.pid
       log: res.log
     echo: |
       PID: {{ res.pid }}
       Log: {{ res.log }}
-  - name: Wait for initial deployment
-    uses: shell
-    retry:
-      max_attempts: 60
-      interval: 5s
-    with:
-      cmd: |
-        if [ -f "{{ outputs.ast_gs.log }}" ]; then
-          grep -q 'Create symlink' "{{ outputs.ast_gs.log }}" && exit 0
-        fi
-        exit 1
-    test: status == 0
 
 - name: Start container by OCI registry
   id: start_ctr_oci
@@ -476,6 +411,9 @@ jobs:
     with:
       workdir: ./e2e/container/img
       background: true
+      ready:
+        log: Starting new container
+      timeout: 15m
       env:
         GITHUB_TOKEN: "{{ vars.github_token }}"
       # --admin-port is pinned so the telemetry check scrapes this instance's
@@ -493,24 +431,13 @@ jobs:
         --drain-time 15 \
         --replicas 3
     test: status == -1
+    timeout: 16m
     outputs:
       pid: res.pid
       log: res.log
     echo: |
       PID: {{ res.pid }}
       Log: {{ res.log }}
-  - name: Wait for initial deployment
-    uses: shell
-    retry:
-      max_attempts: 180
-      interval: 5s
-    with:
-      cmd: |
-        if [ -f "{{ outputs.ctr_oci.log }}" ]; then
-          grep -q 'Starting new container' "{{ outputs.ctr_oci.log }}" && exit 0
-        fi
-        exit 1
-    test: status == 0
 
 - name: Start container with a failing health check
   id: start_ctr_healthfail
@@ -561,6 +488,9 @@ jobs:
     with:
       workdir: ./e2e/container/podman
       background: true
+      ready:
+        log: Starting new container
+      timeout: 15m
       env:
         GITHUB_TOKEN: "{{ vars.github_token }}"
       cmd: |
@@ -569,24 +499,13 @@ jobs:
         --health-path /health \
         --replicas 3
     test: status == -1
+    timeout: 16m
     outputs:
       pid: res.pid
       log: res.log
     echo: |
       PID: {{ res.pid }}
       Log: {{ res.log }}
-  - name: Wait for initial deployment
-    uses: shell
-    retry:
-      max_attempts: 180
-      interval: 5s
-    with:
-      cmd: |
-        if [ -f "{{ outputs.ctr_podman.log }}" ]; then
-          grep -q 'Starting new container' "{{ outputs.ctr_podman.log }}" && exit 0
-        fi
-        exit 1
-    test: status == 0
 
 - name: Start container by Docker Hub registry
   id: start_ctr_dockerhub
@@ -598,6 +517,9 @@ jobs:
     with:
       workdir: ./e2e/container/dockerhub
       background: true
+      ready:
+        log: Starting new container
+      timeout: 15m
       env:
         DOCKER_USERNAME: "{{ vars.dockerhub_username }}"
         DOCKER_PASSWORD: "{{ vars.dockerhub_token }}"
@@ -609,24 +531,13 @@ jobs:
         --health-path /health \
         --replicas 3
     test: status == -1
+    timeout: 16m
     outputs:
       pid: res.pid
       log: res.log
     echo: |
       PID: {{ res.pid }}
       Log: {{ res.log }}
-  - name: Wait for initial deployment
-    uses: shell
-    retry:
-      max_attempts: 180
-      interval: 5s
-    with:
-      cmd: |
-        if [ -f "{{ outputs.ctr_dockerhub.log }}" ]; then
-          grep -q 'Starting new container' "{{ outputs.ctr_dockerhub.log }}" && exit 0
-        fi
-        exit 1
-    test: status == 0
 
 - name: Start container with multiple ports by OCI registry
   id: start_ctr_mp_oci
@@ -638,6 +549,9 @@ jobs:
     with:
       workdir: ./e2e/container/multiport
       background: true
+      ready:
+        log: Starting new container
+      timeout: 15m
       env:
         GITHUB_TOKEN: "{{ vars.github_token }}"
       cmd: |
@@ -650,24 +564,13 @@ jobs:
         --health-path /health \
         --replicas 2
     test: status == -1
+    timeout: 16m
     outputs:
       pid: res.pid
       log: res.log
     echo: |
       PID: {{ res.pid }}
       Log: {{ res.log }}
-  - name: Wait for initial deployment
-    uses: shell
-    retry:
-      max_attempts: 180
-      interval: 5s
-    with:
-      cmd: |
-        if [ -f "{{ outputs.ctr_mp_oci.log }}" ]; then
-          grep -q 'Starting new container' "{{ outputs.ctr_mp_oci.log }}" && exit 0
-        fi
-        exit 1
-    test: status == 0
 
 # Phase 2: Create new version (after ALL dewy instances have deployed initial version)
 
