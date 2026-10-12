@@ -89,10 +89,10 @@ jobs:
     - name: Set up Cloud SDK
       uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
     - name: Run probe
-      uses: linyows/probe-action@b7e74ef27bc83dfa93f121c0f0fe9649abf33c43 # v1.1.0
+      uses: mozership/probe-action@831b8b6c6aa0c8a61aa75b58f36a08da5c579e83 # v1.3.0
       with:
         path: e2e/test.yml
-        version: v1.9.0
+        version: v1.25.0
       env:
         # For gh CLI to create releases
         GH_TOKEN: ${{ secrets.GH_TOKEN }}
