@@ -92,7 +92,7 @@ jobs:
       uses: mozership/probe-action@831b8b6c6aa0c8a61aa75b58f36a08da5c579e83 # v1.3.0
       with:
         path: e2e/test.yml
-        version: v1.25.0
+        version: v1.27.0
       env:
         # For gh CLI to create releases
         GH_TOKEN: ${{ secrets.GH_TOKEN }}
