@@ -14,14 +14,12 @@ steps:
       fi
       exit 1
   test: status == 0
-
 - name: Wait for stabilization
   wait: 30s
   uses: shell
   with:
     cmd: "echo 'Waiting for system stabilization after new version detection'"
   test: status == 0
-
 - name: Verify server telemetry metrics
   id: metrics
   # Only the telemetry-enabled server variant passes metrics_port; others skip.
@@ -41,13 +39,11 @@ steps:
     res.body contains "reason=\"deploy\""
   echo: |
     {{ join(filter(split(res.body, "\n"), hasPrefix(#, "dewy_")), "\n") }}
-
 - name: Stop dewy
   uses: shell
   with: # Use Process Group ID
     cmd: "kill -TERM -{{ vars.pid }}"
   test: status == 0
-
 - name: Verify no error
   id: noerr
   uses: shell
@@ -59,7 +55,6 @@ steps:
   test: status == 1
   outputs:
     ok: status == 1
-
 - name: Verify two symlinks creates
   id: twosyml
   uses: shell
@@ -69,7 +64,6 @@ steps:
   test: res.stdout == "2"
   outputs:
     ok: res.stdout == "2"
-
 - name: Verify starting two version
   id: twover
   uses: shell
@@ -79,7 +73,6 @@ steps:
   test: res.stdout == "2" || res.stdout == "3"
   outputs:
     ok: res.stdout == "2" || res.stdout == "3"
-
 - name: Verify starting new version
   id: newver
   uses: shell
@@ -90,7 +83,6 @@ steps:
   test: status == 0
   outputs:
     ok: status == 0
-
 - name: Show log
   skipif: outputs.noerr.ok && outputs.twosyml.ok && outputs.twover.ok && outputs.newver.ok
   uses: shell

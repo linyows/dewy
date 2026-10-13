@@ -2,12 +2,12 @@ name: Deploy Testing
 description: Verify that the deployment is correct
 
 secrets:
-  - GITHUB_TOKEN
-  - AWS_ACCESS_KEY_ID
-  - AWS_SECRET_ACCESS_KEY
-  - SLACK_TOKEN
-  - DOCKERHUB_USERNAME
-  - DOCKERHUB_TOKEN
+- GITHUB_TOKEN
+- AWS_ACCESS_KEY_ID
+- AWS_SECRET_ACCESS_KEY
+- SLACK_TOKEN
+- DOCKERHUB_USERNAME
+- DOCKERHUB_TOKEN
 
 vars:
   github_token: "{{ GITHUB_TOKEN ?? '' }}"
@@ -17,6 +17,18 @@ vars:
   slack_token: "{{ SLACK_TOKEN ?? '' }}"
   dockerhub_username: "{{ DOCKERHUB_USERNAME ?? '' }}"
   dockerhub_token: "{{ DOCKERHUB_TOKEN ?? '' }}"
+
+# Every shell step runs with these credentials. A step that needs another
+# variable adds it in its own env, which is merged with this one.
+defaults:
+  shell:
+    env:
+      GITHUB_TOKEN: "{{ vars.github_token }}"
+      GH_TOKEN: "{{ vars.github_token }}"
+      AWS_ACCESS_KEY_ID: "{{ vars.aws_access_key_id }}"
+      AWS_SECRET_ACCESS_KEY: "{{ vars.aws_secret_access_key }}"
+      GOOGLE_APPLICATION_CREDENTIALS: "{{ vars.google_application_credentials }}"
+      SLACK_TOKEN: "{{ vars.slack_token }}"
 
 jobs:
 - name: Check credentials
@@ -85,7 +97,6 @@ jobs:
 # stops an instance that is not ready by then. The step timeout is set one
 # minute above it, because a step that times out first leaves the instance
 # running.
-
 - name: Start server by Github-Releases registry with Slack notification
   id: start_srv_ghr
   needs: [build]
@@ -99,12 +110,6 @@ jobs:
       ready:
         log: Create symlink
       timeout: 5m
-      env:
-        GITHUB_TOKEN: "{{ vars.github_token }}"
-        AWS_ACCESS_KEY_ID: "{{ vars.aws_access_key_id }}"
-        AWS_SECRET_ACCESS_KEY: "{{ vars.aws_secret_access_key }}"
-        GOOGLE_APPLICATION_CREDENTIALS: "{{ vars.google_application_credentials }}"
-        SLACK_TOKEN: "{{ vars.slack_token }}"
       # --admin-port is pinned outside the container variants' band (17600 for
       # the OCI variant, 17539+ auto-increment for the others) so this server
       # instance's /metrics is scraped deterministically.
@@ -136,12 +141,6 @@ jobs:
       ready:
         log: Create symlink
       timeout: 5m
-      env:
-        GITHUB_TOKEN: "{{ vars.github_token }}"
-        AWS_ACCESS_KEY_ID: "{{ vars.aws_access_key_id }}"
-        AWS_SECRET_ACCESS_KEY: "{{ vars.aws_secret_access_key }}"
-        GOOGLE_APPLICATION_CREDENTIALS: "{{ vars.google_application_credentials }}"
-        SLACK_TOKEN: "{{ vars.slack_token }}"
       cmd: |
         ./dewy server -p 8001 -l debug \
         --registry "s3://ap-northeast-3/dewy-testapp?pre-release=true" \
@@ -169,12 +168,6 @@ jobs:
       ready:
         log: Create symlink
       timeout: 5m
-      env:
-        GITHUB_TOKEN: "{{ vars.github_token }}"
-        AWS_ACCESS_KEY_ID: "{{ vars.aws_access_key_id }}"
-        AWS_SECRET_ACCESS_KEY: "{{ vars.aws_secret_access_key }}"
-        GOOGLE_APPLICATION_CREDENTIALS: "{{ vars.google_application_credentials }}"
-        SLACK_TOKEN: "{{ vars.slack_token }}"
       cmd: |
         ./dewy server -p 8002 -l debug \
         --registry "gs://dewy-testapp?pre-release=true" \
@@ -202,10 +195,6 @@ jobs:
       ready:
         log: Create symlink
       timeout: 5m
-      env:
-        GITHUB_TOKEN: "{{ vars.github_token }}"
-        AWS_ACCESS_KEY_ID: "{{ vars.aws_access_key_id }}"
-        AWS_SECRET_ACCESS_KEY: "{{ vars.aws_secret_access_key }}"
       cmd: |
         ./dewy server -p 8003 -l debug \
         --registry "ghr://linyows/dewy-testapp?pre-release=true" \
@@ -233,10 +222,6 @@ jobs:
       ready:
         log: Create symlink
       timeout: 5m
-      env:
-        GITHUB_TOKEN: "{{ vars.github_token }}"
-        AWS_ACCESS_KEY_ID: "{{ vars.aws_access_key_id }}"
-        AWS_SECRET_ACCESS_KEY: "{{ vars.aws_secret_access_key }}"
       cmd: |
         ./dewy server -p 8004 -l debug \
         --registry "ghr://linyows/dewy-testapp?pre-release=true" \
@@ -264,9 +249,6 @@ jobs:
       ready:
         log: Create symlink
       timeout: 5m
-      env:
-        GITHUB_TOKEN: "{{ vars.github_token }}"
-        GOOGLE_APPLICATION_CREDENTIALS: "{{ vars.google_application_credentials }}"
       cmd: |
         ./dewy server -p 8005 -l debug \
         --registry "ghr://linyows/dewy-testapp?pre-release=true" \
@@ -294,9 +276,6 @@ jobs:
       ready:
         log: Create symlink
       timeout: 5m
-      env:
-        GITHUB_TOKEN: "{{ vars.github_token }}"
-        GOOGLE_APPLICATION_CREDENTIALS: "{{ vars.google_application_credentials }}"
       cmd: |
         ./dewy server -p 8006 -l debug \
         --registry "ghr://linyows/dewy-testapp?pre-release=true" \
@@ -324,11 +303,6 @@ jobs:
       ready:
         log: Create symlink
       timeout: 5m
-      env:
-        GITHUB_TOKEN: "{{ vars.github_token }}"
-        AWS_ACCESS_KEY_ID: "{{ vars.aws_access_key_id }}"
-        AWS_SECRET_ACCESS_KEY: "{{ vars.aws_secret_access_key }}"
-        GOOGLE_APPLICATION_CREDENTIALS: "{{ vars.google_application_credentials }}"
       cmd: |
         rm -rf .dewy;
         ./dewy assets -l debug --registry "ghr://linyows/dewy-testapp?pre-release=true"
@@ -354,11 +328,6 @@ jobs:
       ready:
         log: Create symlink
       timeout: 5m
-      env:
-        GITHUB_TOKEN: "{{ vars.github_token }}"
-        AWS_ACCESS_KEY_ID: "{{ vars.aws_access_key_id }}"
-        AWS_SECRET_ACCESS_KEY: "{{ vars.aws_secret_access_key }}"
-        GOOGLE_APPLICATION_CREDENTIALS: "{{ vars.google_application_credentials }}"
       cmd: |
         rm -rf .dewy;
         ./dewy assets -l debug --registry "s3://ap-northeast-3/dewy-testapp?pre-release=true"
@@ -384,11 +353,6 @@ jobs:
       ready:
         log: Create symlink
       timeout: 5m
-      env:
-        GITHUB_TOKEN: "{{ vars.github_token }}"
-        AWS_ACCESS_KEY_ID: "{{ vars.aws_access_key_id }}"
-        AWS_SECRET_ACCESS_KEY: "{{ vars.aws_secret_access_key }}"
-        GOOGLE_APPLICATION_CREDENTIALS: "{{ vars.google_application_credentials }}"
       cmd: |
         rm -rf .dewy;
         ./dewy assets -l debug --registry "gs://dewy-testapp?pre-release=true"
@@ -414,8 +378,6 @@ jobs:
       ready:
         log: Starting new container
       timeout: 15m
-      env:
-        GITHUB_TOKEN: "{{ vars.github_token }}"
       # --admin-port is pinned so the telemetry check scrapes this instance's
       # /metrics, not a sibling variant that grabbed 17539 first (see the
       # metrics_port note on the OCI verify job).
@@ -449,8 +411,6 @@ jobs:
     with:
       workdir: ./e2e/container/healthfail
       background: true
-      env:
-        GITHUB_TOKEN: "{{ vars.github_token }}"
       # The probe targets container port 9999, which nothing inside the image
       # listens on: the testapp serves 3333 only. Every probe is refused and
       # the deploy fails on purpose. Targeting a dead port rather than a
@@ -491,8 +451,6 @@ jobs:
       ready:
         log: Starting new container
       timeout: 15m
-      env:
-        GITHUB_TOKEN: "{{ vars.github_token }}"
       cmd: |
         ./dewy container --runtime podman -p 7300 -l debug \
         --registry "img://ghcr.io/linyows/dewy-testapp?pre-release=true" \
@@ -552,8 +510,6 @@ jobs:
       ready:
         log: Starting new container
       timeout: 15m
-      env:
-        GITHUB_TOKEN: "{{ vars.github_token }}"
       cmd: |
         ./dewy container \
         --name dewy-testapp-multiport \
@@ -573,7 +529,6 @@ jobs:
       Log: {{ res.log }}
 
 # Phase 2: Create new version (after ALL dewy instances have deployed initial version)
-
 - name: Create new version
   id: create_release
   needs: [start_srv_ghr, start_srv_s3, start_srv_gs, start_srv_ghr_s3cache_b, start_srv_ghr_gscache_b, start_ast_ghr, start_ast_s3, start_ast_gs, start_ctr_oci, start_ctr_podman, start_ctr_dockerhub, start_ctr_mp_oci]
@@ -581,8 +536,6 @@ jobs:
   - name: Create release
     uses: shell
     with:
-      env:
-        GH_TOKEN: "{{ vars.github_token }}"
       cmd: |
         gh release create {{ outputs.genver.version }} \
           --repo linyows/dewy-testapp \
@@ -595,15 +548,12 @@ jobs:
       max_attempts: 10
       interval: 2s
     with:
-      env:
-        GH_TOKEN: "{{ vars.github_token }}"
       cmd: |
         gh release view {{ outputs.genver.version }} \
           --repo linyows/dewy-testapp
     test: status == 0
 
 # Phase 3: Wait for new version and verify (parallel)
-
 - name: Verify server by Github-Releases registry
   needs: [create_release]
   steps:
@@ -838,7 +788,6 @@ jobs:
 # and writes the result to the shared cache. Without sharing, each pair would
 # do this 4 times (2 instances * 2 versions). With sharing, ideal total is 2.
 # We allow up to 3 to absorb a single race on either deploy cycle.
-
 - name: Verify shared cache reduces upstream downloads (S3 pair)
   needs: [verify_srv_ghr_s3cache_a, verify_srv_ghr_s3cache_b]
   steps:
@@ -875,7 +824,6 @@ jobs:
 # (~36-60 calls per pair). With registry-ttl=30s and shared single-flight,
 # only the leader of each TTL window calls upstream (~10-15 per pair).
 # We assert <=20 to absorb startup races and timing variance.
-
 - name: Verify registry result cache reduces upstream polls (S3 pair)
   needs: [verify_srv_ghr_s3cache_a, verify_srv_ghr_s3cache_b]
   steps:
