@@ -576,13 +576,9 @@ e2e/
 ├── README.md                          # This file
 ├── test.yml                           # Main test definition (Probe format)
 ├── jobs/                              # Reusable verification job definitions
-│   ├── server.yml                     # Server start + verify (standalone)
 │   ├── server-verify.yml              # Server verification steps
-│   ├── assets.yml                     # Assets start + verify (standalone)
 │   ├── assets-verify.yml              # Assets verification steps
-│   ├── container.yml                  # Container start + verify (standalone)
 │   ├── container-verify.yml           # Container verification steps
-│   ├── container-multiport.yml        # Multi-port start + verify (standalone)
 │   └── container-multiport-verify.yml # Multi-port verification steps
 ├── server/{ghr,s3,gs,ghr-s3cache-{a,b},ghr-gscache-{a,b}}/  # Working directories for server tests
 ├── assets/{ghr,s3,gs}/                # Working directories for assets tests

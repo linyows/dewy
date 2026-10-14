@@ -17,3 +17,14 @@ jobs:
           go-version-file: go.mod
       - name: golangci-lint
         uses: reviewdog/action-golangci-lint@c76cceaaab89abe74e649d2e34c6c9adc26662d2 # v2.10.0
+  probe-fmt:
+    name: Probe fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: mozership/probe-action@831b8b6c6aa0c8a61aa75b58f36a08da5c579e83 # v1.3.0
+        with:
+          version: v1.27.0
+          install-only: true
+      - name: Check the e2e workflows are formatted
+        run: probe fmt --check e2e
