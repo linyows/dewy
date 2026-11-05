@@ -106,7 +106,12 @@ dewy server --registry ghr://owner/repo --slot green -- /opt/myapp/current/myapp
 
 # Without --slot - deploys any version (backward compatible)
 dewy server --registry ghr://owner/repo -- /opt/myapp/current/myapp
+
+# The assets command takes --slot the same way
+dewy assets --registry s3://ap-northeast-1/mybucket/myapp --slot green
 ```
+
+While no version carries the slot given to `--slot` yet, Dewy waits without reporting an error.
 
 ## Calendar Versioning (CalVer) {% #calver %}
 

@@ -183,6 +183,7 @@ func FindLatestCalVerWithSlot(versionNames []string, format, slot string, allowP
 
 	var latestVersion *CalVer
 	var latestName string
+	otherSlotSeen := false
 
 	for _, name := range versionNames {
 		ver := f.Parse(name)
@@ -197,6 +198,7 @@ func FindLatestCalVerWithSlot(versionNames []string, format, slot string, allowP
 
 		// Slot filtering: if slot is specified, only match versions with that build metadata
 		if slot != "" && ver.BuildMetadata != slot {
+			otherSlotSeen = true
 			continue
 		}
 
@@ -207,6 +209,12 @@ func FindLatestCalVerWithSlot(versionNames []string, format, slot string, allowP
 	}
 
 	if latestVersion == nil {
+		// Versions exist but none for this slot: nothing to deploy yet.
+		// With no versions at all it stays an error, since that usually
+		// means a misconfigured registry.
+		if otherSlotSeen {
+			return nil, "", &SlotNotFoundError{Slot: slot}
+		}
 		return nil, "", fmt.Errorf("no valid versioned object found")
 	}
 

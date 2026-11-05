@@ -106,7 +106,12 @@ dewy server --registry ghr://owner/repo --slot green -- /opt/myapp/current/myapp
 
 # --slotなし - すべてのバージョンをデプロイ（後方互換）
 dewy server --registry ghr://owner/repo -- /opt/myapp/current/myapp
+
+# assetsコマンドでも同じように--slotを指定できる
+dewy assets --registry s3://ap-northeast-1/mybucket/myapp --slot green
 ```
+
+`--slot`で指定したスロットのバージョンがまだない間は、Dewyはエラーを報告せずに待機します。
 
 ## カレンダーバージョニング（CalVer） {% #calver %}
 

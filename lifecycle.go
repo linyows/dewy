@@ -41,6 +41,9 @@ func (d *Dewy) resolveCurrent(ctx context.Context) (*registry.CurrentResponse, e
 				return nil, nil
 			}
 		}
+		if d.isSlotNotFound(err) {
+			return nil, nil
+		}
 		d.logger.Error("Current failure", slog.String("error", err.Error()))
 		return nil, err
 	}
@@ -54,6 +57,19 @@ func (d *Dewy) resolveCurrent(ctx context.Context) (*registry.CurrentResponse, e
 	}
 
 	return res, nil
+}
+
+// isSlotNotFound reports whether err means the registry has versions but
+// none for the configured slot. That is a normal state for one side of a
+// blue/green pair, so the tick is skipped instead of reported as a failure.
+func (d *Dewy) isSlotNotFound(err error) bool {
+	var slotErr *registry.SlotNotFoundError
+	if !errors.As(err, &slotErr) {
+		return false
+	}
+	d.logger.Debug("Deploy skipped: no version for slot",
+		slog.String("slot", slotErr.Slot))
+	return true
 }
 
 // cacheState carries Run state across phases.
@@ -337,6 +353,9 @@ func (d *Dewy) reportDeployment(ctx context.Context, res *registry.CurrentRespon
 func (d *Dewy) resolveContainerCurrent(ctx context.Context) (*registry.CurrentResponse, error) {
 	res, err := d.registry.Current(ctx)
 	if err != nil {
+		if d.isSlotNotFound(err) {
+			return nil, nil
+		}
 		d.logger.Error("Failed to get current image", slog.String("error", err.Error()))
 		return nil, err
 	}

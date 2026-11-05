@@ -90,6 +90,16 @@ func New(c Config, log *logging.Logger) (*Dewy, error) {
 		q.Set("calver", c.CalVer)
 		u.RawQuery = q.Encode()
 	}
+	// The registry needs the slot to pick the latest version within it:
+	// checking the slot only after the overall latest is chosen never
+	// deploys a slot whose version ties with, or sorts below, another slot.
+	// Being part of the URL also keeps the shared registry-result cache
+	// key separate per slot.
+	if c.Slot != "" {
+		q := u.Query()
+		q.Set("slot", c.Slot)
+		u.RawQuery = q.Encode()
+	}
 	c.Registry = fmt.Sprintf("%s://%s", su[0], u.String())
 
 	return &Dewy{

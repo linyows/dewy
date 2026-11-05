@@ -11,6 +11,7 @@ The E2E tests ensure that dewy can:
 3. **Notify** deployment events to Slack (server command with Slack notifier)
 4. **Manage containers** including health checks, replica scaling, and non-root execution
 5. **Handle multiple port mappings** with TCP proxy for container deployments
+6. **Deploy each blue/green slot** (`--slot`) its own version, even when both slots carry the same version
 
 All of the above are verified across every supported combination of commands and registries:
 
@@ -24,6 +25,8 @@ All of the above are verified across every supported combination of commands and
 | `assets` | GitHub Releases (`ghr`) | Static asset download and symlink management |
 | `assets` | AWS S3 (`s3`) | Same as above, sourced from S3 |
 | `assets` | Google Cloud Storage (`gs`) | Same as above, sourced from GCS |
+| `assets` (slot) | AWS S3 (`s3`) | Pair of instances with `--slot blue` and `--slot green` on a prefix that holds `v1.0.0+blue` and `v1.0.0+green` |
+| `assets` (slot) | Google Cloud Storage (`gs`) | Same as above, sourced from GCS |
 | `container` | OCI / ghcr.io (`img`) | Container deployment with 3 replicas |
 | `container` | Docker Hub (`img`) | Same as above, sourced from Docker Hub |
 | `container` (multi-port) | OCI / ghcr.io (`img`) | Container deployment with 2 replicas and 2 port mappings |
@@ -35,6 +38,12 @@ All of the above are verified across every supported combination of commands and
 - Two symlinks created (initial + updated version)
 - Two versions started/downloaded (initial + new)
 - New version string appears in log
+
+**Slot pairs (assets with `--slot blue` / `--slot green`):**
+- After the S3 / GCS assets verification passes, the run's new version is copied to `slot-e2e/<version>/v1.0.0+blue/` and `v1.0.0+green/` in the same bucket, and removed at the end of the run
+- Each instance deploys once (one `Create symlink`) with no errors
+- Each slot directory holds exactly one audit file (`shipped_to_...`). An instance that deployed the other slot's version would leave two in that directory and none in its own
+- Slot versions are not released from `dewy-testapp`: a `+` tag would be picked up as a new version by the other instances, and is not a valid container image tag. The other instances watch the bucket root, where `slot-e2e` is not a version and is ignored
 
 **Shared cache pairs (server with `--cache s3://...?registry-ttl=30s` / `gs://...?registry-ttl=30s`):**
 - All of the above for each instance in the pair
@@ -318,45 +327,45 @@ flowchart LR
         job_26_step6 --> job_26_step7
         job_26_step7 --> job_26_step8
     end
-    subgraph job_27["Verify assets by AWS S3 registry"]
+    subgraph verify_ast_s3["Verify assets by AWS S3 registry"]
         direction TB
-        job_27_step0["Assets verify"]
-        job_27_step1["Wait for new version download"]
-        job_27_step2["Wait for stabilization"]
-        job_27_step3["Stop dewy"]
-        job_27_step4["Verify no error"]
-        job_27_step5["Verify two symlinks creates"]
-        job_27_step6["Verify starting two version"]
-        job_27_step7["Verify starting new version"]
-        job_27_step8["Show log"]
-        job_27_step0 --> job_27_step1
-        job_27_step1 --> job_27_step2
-        job_27_step2 --> job_27_step3
-        job_27_step3 --> job_27_step4
-        job_27_step4 --> job_27_step5
-        job_27_step5 --> job_27_step6
-        job_27_step6 --> job_27_step7
-        job_27_step7 --> job_27_step8
+        verify_ast_s3_step0["Assets verify"]
+        verify_ast_s3_step1["Wait for new version download"]
+        verify_ast_s3_step2["Wait for stabilization"]
+        verify_ast_s3_step3["Stop dewy"]
+        verify_ast_s3_step4["Verify no error"]
+        verify_ast_s3_step5["Verify two symlinks creates"]
+        verify_ast_s3_step6["Verify starting two version"]
+        verify_ast_s3_step7["Verify starting new version"]
+        verify_ast_s3_step8["Show log"]
+        verify_ast_s3_step0 --> verify_ast_s3_step1
+        verify_ast_s3_step1 --> verify_ast_s3_step2
+        verify_ast_s3_step2 --> verify_ast_s3_step3
+        verify_ast_s3_step3 --> verify_ast_s3_step4
+        verify_ast_s3_step4 --> verify_ast_s3_step5
+        verify_ast_s3_step5 --> verify_ast_s3_step6
+        verify_ast_s3_step6 --> verify_ast_s3_step7
+        verify_ast_s3_step7 --> verify_ast_s3_step8
     end
-    subgraph job_28["Verify assets by GCloud Storage registry"]
+    subgraph verify_ast_gs["Verify assets by GCloud Storage registry"]
         direction TB
-        job_28_step0["Assets verify"]
-        job_28_step1["Wait for new version download"]
-        job_28_step2["Wait for stabilization"]
-        job_28_step3["Stop dewy"]
-        job_28_step4["Verify no error"]
-        job_28_step5["Verify two symlinks creates"]
-        job_28_step6["Verify starting two version"]
-        job_28_step7["Verify starting new version"]
-        job_28_step8["Show log"]
-        job_28_step0 --> job_28_step1
-        job_28_step1 --> job_28_step2
-        job_28_step2 --> job_28_step3
-        job_28_step3 --> job_28_step4
-        job_28_step4 --> job_28_step5
-        job_28_step5 --> job_28_step6
-        job_28_step6 --> job_28_step7
-        job_28_step7 --> job_28_step8
+        verify_ast_gs_step0["Assets verify"]
+        verify_ast_gs_step1["Wait for new version download"]
+        verify_ast_gs_step2["Wait for stabilization"]
+        verify_ast_gs_step3["Stop dewy"]
+        verify_ast_gs_step4["Verify no error"]
+        verify_ast_gs_step5["Verify two symlinks creates"]
+        verify_ast_gs_step6["Verify starting two version"]
+        verify_ast_gs_step7["Verify starting new version"]
+        verify_ast_gs_step8["Show log"]
+        verify_ast_gs_step0 --> verify_ast_gs_step1
+        verify_ast_gs_step1 --> verify_ast_gs_step2
+        verify_ast_gs_step2 --> verify_ast_gs_step3
+        verify_ast_gs_step3 --> verify_ast_gs_step4
+        verify_ast_gs_step4 --> verify_ast_gs_step5
+        verify_ast_gs_step5 --> verify_ast_gs_step6
+        verify_ast_gs_step6 --> verify_ast_gs_step7
+        verify_ast_gs_step7 --> verify_ast_gs_step8
     end
     subgraph job_29["Verify container by OCI registry"]
         direction TB
@@ -502,6 +511,100 @@ flowchart LR
         direction TB
         job_37_step0["Count #quot;Registry result refreshed from upstream#quot; log lines across GCS pair"]
     end
+    subgraph prepare_slot_s3["Prepare slot versions on AWS S3"]
+        direction TB
+        prepare_slot_s3_step0["Copy the new version to each slot"]
+    end
+    subgraph prepare_slot_gs["Prepare slot versions on GCloud Storage"]
+        direction TB
+        prepare_slot_gs_step0["Copy the new version to each slot"]
+    end
+    subgraph start_ast_s3_slot_blue["Start assets by AWS S3 registry on the blue slot"]
+        direction TB
+        start_ast_s3_slot_blue_step0["Start dewy"]
+    end
+    subgraph start_ast_s3_slot_green["Start assets by AWS S3 registry on the green slot"]
+        direction TB
+        start_ast_s3_slot_green_step0["Start dewy"]
+    end
+    subgraph start_ast_gs_slot_blue["Start assets by GCloud Storage registry on the blue slot"]
+        direction TB
+        start_ast_gs_slot_blue_step0["Start dewy"]
+    end
+    subgraph start_ast_gs_slot_green["Start assets by GCloud Storage registry on the green slot"]
+        direction TB
+        start_ast_gs_slot_green_step0["Start dewy"]
+    end
+    subgraph verify_ast_s3_slot_blue["Verify assets by AWS S3 registry on the blue slot"]
+        direction TB
+        verify_ast_s3_slot_blue_step0["Assets slot verify"]
+        verify_ast_s3_slot_blue_step1["Wait for the audit file"]
+        verify_ast_s3_slot_blue_step2["Stop dewy"]
+        verify_ast_s3_slot_blue_step3["Verify one audit file in the slot directory"]
+        verify_ast_s3_slot_blue_step4["Verify no error"]
+        verify_ast_s3_slot_blue_step5["Verify one symlink created"]
+        verify_ast_s3_slot_blue_step6["Show log"]
+        verify_ast_s3_slot_blue_step0 --> verify_ast_s3_slot_blue_step1
+        verify_ast_s3_slot_blue_step1 --> verify_ast_s3_slot_blue_step2
+        verify_ast_s3_slot_blue_step2 --> verify_ast_s3_slot_blue_step3
+        verify_ast_s3_slot_blue_step3 --> verify_ast_s3_slot_blue_step4
+        verify_ast_s3_slot_blue_step4 --> verify_ast_s3_slot_blue_step5
+        verify_ast_s3_slot_blue_step5 --> verify_ast_s3_slot_blue_step6
+    end
+    subgraph verify_ast_s3_slot_green["Verify assets by AWS S3 registry on the green slot"]
+        direction TB
+        verify_ast_s3_slot_green_step0["Assets slot verify"]
+        verify_ast_s3_slot_green_step1["Wait for the audit file"]
+        verify_ast_s3_slot_green_step2["Stop dewy"]
+        verify_ast_s3_slot_green_step3["Verify one audit file in the slot directory"]
+        verify_ast_s3_slot_green_step4["Verify no error"]
+        verify_ast_s3_slot_green_step5["Verify one symlink created"]
+        verify_ast_s3_slot_green_step6["Show log"]
+        verify_ast_s3_slot_green_step0 --> verify_ast_s3_slot_green_step1
+        verify_ast_s3_slot_green_step1 --> verify_ast_s3_slot_green_step2
+        verify_ast_s3_slot_green_step2 --> verify_ast_s3_slot_green_step3
+        verify_ast_s3_slot_green_step3 --> verify_ast_s3_slot_green_step4
+        verify_ast_s3_slot_green_step4 --> verify_ast_s3_slot_green_step5
+        verify_ast_s3_slot_green_step5 --> verify_ast_s3_slot_green_step6
+    end
+    subgraph verify_ast_gs_slot_blue["Verify assets by GCloud Storage registry on the blue slot"]
+        direction TB
+        verify_ast_gs_slot_blue_step0["Assets slot verify"]
+        verify_ast_gs_slot_blue_step1["Wait for the audit file"]
+        verify_ast_gs_slot_blue_step2["Stop dewy"]
+        verify_ast_gs_slot_blue_step3["Verify one audit file in the slot directory"]
+        verify_ast_gs_slot_blue_step4["Verify no error"]
+        verify_ast_gs_slot_blue_step5["Verify one symlink created"]
+        verify_ast_gs_slot_blue_step6["Show log"]
+        verify_ast_gs_slot_blue_step0 --> verify_ast_gs_slot_blue_step1
+        verify_ast_gs_slot_blue_step1 --> verify_ast_gs_slot_blue_step2
+        verify_ast_gs_slot_blue_step2 --> verify_ast_gs_slot_blue_step3
+        verify_ast_gs_slot_blue_step3 --> verify_ast_gs_slot_blue_step4
+        verify_ast_gs_slot_blue_step4 --> verify_ast_gs_slot_blue_step5
+        verify_ast_gs_slot_blue_step5 --> verify_ast_gs_slot_blue_step6
+    end
+    subgraph verify_ast_gs_slot_green["Verify assets by GCloud Storage registry on the green slot"]
+        direction TB
+        verify_ast_gs_slot_green_step0["Assets slot verify"]
+        verify_ast_gs_slot_green_step1["Wait for the audit file"]
+        verify_ast_gs_slot_green_step2["Stop dewy"]
+        verify_ast_gs_slot_green_step3["Verify one audit file in the slot directory"]
+        verify_ast_gs_slot_green_step4["Verify no error"]
+        verify_ast_gs_slot_green_step5["Verify one symlink created"]
+        verify_ast_gs_slot_green_step6["Show log"]
+        verify_ast_gs_slot_green_step0 --> verify_ast_gs_slot_green_step1
+        verify_ast_gs_slot_green_step1 --> verify_ast_gs_slot_green_step2
+        verify_ast_gs_slot_green_step2 --> verify_ast_gs_slot_green_step3
+        verify_ast_gs_slot_green_step3 --> verify_ast_gs_slot_green_step4
+        verify_ast_gs_slot_green_step4 --> verify_ast_gs_slot_green_step5
+        verify_ast_gs_slot_green_step5 --> verify_ast_gs_slot_green_step6
+    end
+    subgraph job_48["Remove slot versions"]
+        direction TB
+        job_48_step0["Remove from AWS S3"]
+        job_48_step1["Remove from GCloud Storage"]
+        job_48_step0 --> job_48_step1
+    end
 
     check --> generate_version
     generate_version --> build
@@ -540,8 +643,8 @@ flowchart LR
     create_release --> verify_srv_ghr_gscache_a
     create_release --> verify_srv_ghr_gscache_b
     create_release --> job_26
-    create_release --> job_27
-    create_release --> job_28
+    create_release --> verify_ast_s3
+    create_release --> verify_ast_gs
     create_release --> job_29
     create_release --> job_30
     create_release --> job_31
@@ -555,6 +658,20 @@ flowchart LR
     verify_srv_ghr_s3cache_b --> job_36
     verify_srv_ghr_gscache_a --> job_37
     verify_srv_ghr_gscache_b --> job_37
+    verify_ast_s3 --> prepare_slot_s3
+    verify_ast_gs --> prepare_slot_gs
+    prepare_slot_s3 --> start_ast_s3_slot_blue
+    prepare_slot_s3 --> start_ast_s3_slot_green
+    prepare_slot_gs --> start_ast_gs_slot_blue
+    prepare_slot_gs --> start_ast_gs_slot_green
+    start_ast_s3_slot_blue --> verify_ast_s3_slot_blue
+    start_ast_s3_slot_green --> verify_ast_s3_slot_green
+    start_ast_gs_slot_blue --> verify_ast_gs_slot_blue
+    start_ast_gs_slot_green --> verify_ast_gs_slot_green
+    verify_ast_s3_slot_blue --> job_48
+    verify_ast_s3_slot_green --> job_48
+    verify_ast_gs_slot_blue --> job_48
+    verify_ast_gs_slot_green --> job_48
 ```
 
 ### Phase Details

@@ -15,7 +15,10 @@ type GRPC struct {
 	NoTLS    bool   `schema:"no-tls"`
 	Artifact string `schema:"artifact"`
 	CalVer   string `schema:"calver"`
-	cl       pb.RegistryServiceClient
+	// Slot is accepted so the slot query parameter decodes, but the gRPC
+	// server picks the version, so the slot is only checked on the response.
+	Slot string `schema:"slot"`
+	cl   pb.RegistryServiceClient
 }
 
 func NewGRPC(ctx context.Context, u string) (*GRPC, error) {
