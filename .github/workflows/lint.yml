@@ -24,7 +24,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: mozership/probe-action@831b8b6c6aa0c8a61aa75b58f36a08da5c579e83 # v1.3.0
         with:
-          version: v1.27.0
+          version: v1.30.0
           install-only: true
       - name: Check the e2e workflows are formatted
         run: probe fmt --check e2e
