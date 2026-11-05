@@ -111,9 +111,7 @@ dewy server --registry ghr://owner/repo -- /opt/myapp/current/myapp
 dewy assets --registry s3://ap-northeast-1/mybucket/myapp --slot green
 ```
 
-`--slot`を指定すると、Dewyはそのスロットを持つバージョンの中から最新を選びます。
-そのため、`v1.2.3+blue`と`v1.2.3+green`はそれぞれのスロットにデプロイされます。
-スロットを持つバージョンがまだない間は、エラーを報告せずに待機します。
+`--slot`で指定したスロットのバージョンがまだない間は、Dewyはエラーを報告せずに待機します。
 
 ## カレンダーバージョニング（CalVer） {% #calver %}
 
