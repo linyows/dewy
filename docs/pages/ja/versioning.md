@@ -106,7 +106,14 @@ dewy server --registry ghr://owner/repo --slot green -- /opt/myapp/current/myapp
 
 # --slotなし - すべてのバージョンをデプロイ（後方互換）
 dewy server --registry ghr://owner/repo -- /opt/myapp/current/myapp
+
+# assetsコマンドでも同じように--slotを指定できる
+dewy assets --registry s3://ap-northeast-1/mybucket/myapp --slot green
 ```
+
+`--slot`を指定すると、Dewyはそのスロットを持つバージョンの中から最新を選びます。
+そのため、`v1.2.3+blue`と`v1.2.3+green`はそれぞれのスロットにデプロイされます。
+スロットを持つバージョンがまだない間は、エラーを報告せずに待機します。
 
 ## カレンダーバージョニング（CalVer） {% #calver %}
 
