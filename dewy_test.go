@@ -32,6 +32,38 @@ func testLogger() *logging.Logger {
 	return logging.SetupLogger("INFO", "text", io.Discard)
 }
 
+// TestNewAddsRegistryQuery checks that --calver and --slot reach the
+// registry as URL query parameters. The registry needs the slot to pick the
+// latest version within it, and the registry-result cache keys on the URL.
+func TestNewAddsRegistryQuery(t *testing.T) {
+	tests := []struct {
+		desc   string
+		calver string
+		slot   string
+		want   string
+	}{
+		{"nothing added", "", "", "s3://ap-northeast-1/bucket?pre-release=true"},
+		{"slot", "", "green", "s3://ap-northeast-1/bucket?pre-release=true&slot=green"},
+		{"calver and slot", "YYYY.0M.MICRO", "blue", "s3://ap-northeast-1/bucket?calver=YYYY.0M.MICRO&pre-release=true&slot=blue"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			c := DefaultConfig()
+			c.Registry = "s3://ap-northeast-1/bucket?pre-release=true"
+			c.CalVer = tt.calver
+			c.Slot = tt.slot
+			d, err := New(c, testLogger())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if d.config.Registry != tt.want {
+				t.Errorf("registry = %s, want %s", d.config.Registry, tt.want)
+			}
+		})
+	}
+}
+
 func TestNew(t *testing.T) {
 	reg := "ghr://linyows/dewy?pre-release=true"
 	c := DefaultConfig()

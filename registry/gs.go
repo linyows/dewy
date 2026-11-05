@@ -28,6 +28,7 @@ type GS struct {
 	Artifact   string `schema:"artifact"`
 	PreRelease bool   `schema:"pre-release"`
 	CalVer     string `schema:"calver"`
+	Slot       string `schema:"slot"`
 	client     GSClient
 	logger     *logging.Logger
 }
@@ -269,9 +270,9 @@ func (g *GS) LatestVersion(ctx context.Context) (string, Version, error) {
 	var latestName string
 	var err error
 	if g.CalVer != "" {
-		latestVersion, latestName, err = FindLatestCalVer(versionNames, g.CalVer, g.PreRelease)
+		latestVersion, latestName, err = FindLatestCalVerWithSlot(versionNames, g.CalVer, g.Slot, g.PreRelease)
 	} else {
-		latestVersion, latestName, err = FindLatestSemVer(versionNames, g.PreRelease)
+		latestVersion, latestName, err = FindLatestSemVerWithSlot(versionNames, g.Slot, g.PreRelease)
 	}
 	if err != nil {
 		return "", nil, err

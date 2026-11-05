@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -47,6 +48,17 @@ func TestNewS3(t *testing.T) {
 				Prefix:   "myteam/myapp/",
 				Endpoint: "http://localhost:9999/foobar",
 				Artifact: "myapp-linux-x86_64.zip",
+			},
+			false,
+			nil,
+		},
+		{
+			"slot is decoded from the query",
+			"s3://ap-northeast-1/mybucket?slot=green",
+			&S3{
+				Region: "ap-northeast-1",
+				Bucket: "mybucket",
+				Slot:   "green",
 			},
 			false,
 			nil,
@@ -172,6 +184,106 @@ func TestS3LatestVersion(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestS3LatestVersionWithSlot(t *testing.T) {
+	// S3 lists common prefixes in lexicographic order, so "+blue" always
+	// comes before "+green". Build metadata is ignored when comparing
+	// versions, so without slot filtering the first of a tie wins and a
+	// green instance never sees its own version.
+	tie := [][]types.CommonPrefix{
+		{
+			{Prefix: aws.String("app/v1.0.0+blue/")},
+			{Prefix: aws.String("app/v1.0.0+green/")},
+		},
+	}
+	// The other slot is ahead: each slot must still get its own latest.
+	ahead := [][]types.CommonPrefix{
+		{
+			{Prefix: aws.String("app/v1.0.0+blue/")},
+			{Prefix: aws.String("app/v1.0.0+green/")},
+			{Prefix: aws.String("app/v1.1.0+blue/")},
+		},
+	}
+
+	tests := []struct {
+		desc           string
+		pages          [][]types.CommonPrefix
+		slot           string
+		expectedPrefix string
+		expectedVer    string
+	}{
+		{"blue in a tie", tie, "blue", "app/v1.0.0+blue/", "v1.0.0+blue"},
+		{"green in a tie", tie, "green", "app/v1.0.0+green/", "v1.0.0+green"},
+		{"blue ahead of green", ahead, "blue", "app/v1.1.0+blue/", "v1.1.0+blue"},
+		{"green behind blue", ahead, "green", "app/v1.0.0+green/", "v1.0.0+green"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			s := &S3{
+				Bucket: "foobar",
+				Prefix: "app/",
+				Slot:   tt.slot,
+				pager:  &MockListObjectsV2Pager{Pages: tt.pages},
+				cl:     &MockS3Client{},
+			}
+
+			gotPrefix, gotVer, err := s.LatestVersion(context.Background())
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if gotPrefix != tt.expectedPrefix {
+				t.Errorf("prefix = %s, want %s", gotPrefix, tt.expectedPrefix)
+			}
+			if gotVer.String() != tt.expectedVer {
+				t.Errorf("version = %s, want %s", gotVer, tt.expectedVer)
+			}
+			if gotVer.GetBuildMetadata() != tt.slot {
+				t.Errorf("slot = %s, want %s", gotVer.GetBuildMetadata(), tt.slot)
+			}
+		})
+	}
+}
+
+func TestS3LatestVersionSlotNotFound(t *testing.T) {
+	t.Run("other slots exist", func(t *testing.T) {
+		s := &S3{
+			Bucket: "foobar",
+			Prefix: "app/",
+			Slot:   "green",
+			pager: &MockListObjectsV2Pager{Pages: [][]types.CommonPrefix{
+				{{Prefix: aws.String("app/v1.0.0+blue/")}},
+			}},
+			cl: &MockS3Client{},
+		}
+		_, _, err := s.LatestVersion(context.Background())
+		var slotErr *SlotNotFoundError
+		if !errors.As(err, &slotErr) {
+			t.Fatalf("expected SlotNotFoundError, got %v", err)
+		}
+		if slotErr.Slot != "green" {
+			t.Errorf("slot = %s, want green", slotErr.Slot)
+		}
+	})
+
+	t.Run("no versions at all", func(t *testing.T) {
+		s := &S3{
+			Bucket: "foobar",
+			Prefix: "app/",
+			Slot:   "green",
+			pager:  &MockListObjectsV2Pager{Pages: [][]types.CommonPrefix{{}}},
+			cl:     &MockS3Client{},
+		}
+		_, _, err := s.LatestVersion(context.Background())
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+		var slotErr *SlotNotFoundError
+		if errors.As(err, &slotErr) {
+			t.Errorf("an empty registry must stay a plain error, got %v", err)
+		}
+	})
 }
 
 func TestCustomLogger(t *testing.T) {

@@ -3,6 +3,7 @@ package dewy
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -109,6 +110,45 @@ func TestResolveCurrent_SlotMatch(t *testing.T) {
 	}
 	if res != want {
 		t.Errorf("got res %+v, want %+v", res, want)
+	}
+}
+
+func TestResolveCurrent_SlotNotFound(t *testing.T) {
+	d := newPhaseTestDewy(t)
+	d.config.Slot = "green"
+	d.registry = &mockRegistry{
+		currentFunc: func(ctx context.Context) (*registry.CurrentResponse, error) {
+			// Registries wrap the error, so it must be matched with errors.As.
+			return nil, fmt.Errorf("failed to find latest version: %w",
+				&registry.SlotNotFoundError{Slot: "green"})
+		},
+	}
+
+	res, err := d.resolveCurrent(context.Background())
+	if err != nil {
+		t.Fatalf("expected a skip without error, got %v", err)
+	}
+	if res != nil {
+		t.Errorf("expected nil res, got %+v", res)
+	}
+}
+
+func TestResolveContainerCurrent_SlotNotFound(t *testing.T) {
+	d := newPhaseTestDewy(t)
+	d.config.Slot = "green"
+	d.registry = &mockRegistry{
+		currentFunc: func(ctx context.Context) (*registry.CurrentResponse, error) {
+			return nil, fmt.Errorf("failed to find latest tag: %w",
+				&registry.SlotNotFoundError{Slot: "green"})
+		},
+	}
+
+	res, err := d.resolveContainerCurrent(context.Background())
+	if err != nil {
+		t.Fatalf("expected a skip without error, got %v", err)
+	}
+	if res != nil {
+		t.Errorf("expected nil res, got %+v", res)
 	}
 }
 

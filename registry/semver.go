@@ -97,6 +97,7 @@ func FindLatestSemVer(versionNames []string, allowPreRelease bool) (*SemVer, str
 func FindLatestSemVerWithSlot(versionNames []string, slot string, allowPreRelease bool) (*SemVer, string, error) {
 	var latestVersion *SemVer
 	var latestName string
+	otherSlotSeen := false
 
 	for _, name := range versionNames {
 		if matchSemVerPattern(name, allowPreRelease) {
@@ -104,6 +105,7 @@ func FindLatestSemVerWithSlot(versionNames []string, slot string, allowPreReleas
 			if ver != nil {
 				// Slot filtering: if slot is specified, only match versions with that build metadata
 				if slot != "" && ver.BuildMetadata != slot {
+					otherSlotSeen = true
 					continue
 				}
 				if latestVersion == nil || ver.Compare(latestVersion) > 0 {
@@ -115,6 +117,12 @@ func FindLatestSemVerWithSlot(versionNames []string, slot string, allowPreReleas
 	}
 
 	if latestVersion == nil {
+		// Versions exist but none for this slot: nothing to deploy yet.
+		// With no versions at all it stays an error, since that usually
+		// means a misconfigured registry.
+		if otherSlotSeen {
+			return nil, "", &SlotNotFoundError{Slot: slot}
+		}
 		return nil, "", fmt.Errorf("no valid versioned object found")
 	}
 
