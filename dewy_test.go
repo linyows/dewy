@@ -182,20 +182,19 @@ type mockNotify struct {
 	mu          sync.Mutex
 }
 
+// Send, SendImportant and SendHookResult are not limited by errorCount,
+// matching notifier.ErrorLimitingSender. Tests that depend on the real limiting
+// rules should use notifier.NewErrorLimitingSender instead of this mock.
 func (n *mockNotify) Send(ctx context.Context, msg string) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	if n.errorCount == 0 {
-		n.messages = append(n.messages, msg)
-	}
+	n.messages = append(n.messages, msg)
 }
 
 func (n *mockNotify) SendImportant(ctx context.Context, msg string) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	if n.errorCount == 0 {
-		n.messages = append(n.messages, msg)
-	}
+	n.messages = append(n.messages, msg)
 }
 
 func (n *mockNotify) SendError(ctx context.Context, err error) {
@@ -226,16 +225,14 @@ func (n *mockNotify) ResetErrorCount() {
 func (n *mockNotify) SendHookResult(ctx context.Context, hookType string, result *notifier.HookResult) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	if n.errorCount == 0 {
-		statusIcon := "✓"
-		if !result.Success {
-			statusIcon = "✗"
-		}
-		msg := fmt.Sprintf("%s %s Hook: %s (exit: %d)", statusIcon, hookType, result.Command, result.ExitCode)
-		n.messages = append(n.messages, msg)
-		// Store the actual hook result for detailed testing
-		n.hookResults = append(n.hookResults, result)
+	statusIcon := "✓"
+	if !result.Success {
+		statusIcon = "✗"
 	}
+	msg := fmt.Sprintf("%s %s Hook: %s (exit: %d)", statusIcon, hookType, result.Command, result.ExitCode)
+	n.messages = append(n.messages, msg)
+	// Store the actual hook result for detailed testing
+	n.hookResults = append(n.hookResults, result)
 }
 
 func (n *mockNotify) OnDeploy(dir string) {
@@ -1650,5 +1647,89 @@ func TestBeforeDeployHookFailureAbortsDeploy(t *testing.T) {
 
 	if _, err := os.Stat(filepath.Join(root, "current", "dewy")); err != nil {
 		t.Errorf("Expected the release to be deployed on the retry: %v", err)
+	}
+}
+
+// recordingSender records every message the notifier passes to it.
+type recordingSender struct {
+	mu       sync.Mutex
+	messages []string
+}
+
+func (s *recordingSender) Send(ctx context.Context, msg string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.messages = append(s.messages, msg)
+}
+
+func (s *recordingSender) take() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	msgs := s.messages
+	s.messages = nil
+	return msgs
+}
+
+// A tick that deploys right after the registry recovers must still notify.
+// The error count is reset only after the tick returns, so notifications sent
+// during the deploy used to be dropped once any registry fetch had failed,
+// and the next ticks skip the same version and send nothing.
+// This uses the real notifier.ErrorLimitingSender, not mockNotify.
+func TestTickNotifiesDeployAfterRegistryRecovers(t *testing.T) {
+	artifact := "ghr://linyows/dewy/tag/v1.2.3/artifact.zip"
+
+	for _, failures := range []int{1, 3, 5} {
+		t.Run(fmt.Sprintf("after %d failures", failures), func(t *testing.T) {
+			c := DefaultConfig()
+			c.Command = ASSETS
+			c.Registry = "ghr://linyows/dewy"
+			// A per-test cache, so a version deployed by another subtest does
+			// not turn this deploy into a skip.
+			c.Cache = CacheConfig{Type: FILE, Expiration: 10, URL: "file://" + t.TempDir()}
+			c.AfterDeployHook = "true"
+			d, err := New(c, testLogger())
+			if err != nil {
+				t.Fatal(err)
+			}
+			d.root = t.TempDir()
+
+			var registryDown atomic.Bool
+			registryDown.Store(true)
+			d.registry = &mockRegistry{currentFunc: func(ctx context.Context) (*registry.CurrentResponse, error) {
+				if registryDown.Load() {
+					return nil, errors.New("registry down")
+				}
+				return &registry.CurrentResponse{ID: "id", Tag: "v1.2.3", ArtifactURL: artifact}, nil
+			}}
+			d.artifact = &mockArtifact{binary: "dewy", url: artifact}
+			sender := &recordingSender{}
+			d.notifier = notifier.NewErrorLimitingSender(sender, false, testLogger().Logger)
+			// Leave the backoff disabled so every tick reaches the registry.
+
+			for range failures {
+				d.tick()
+			}
+			if got, want := len(sender.take()), min(failures, 3); got != want {
+				t.Fatalf("error notifications while the registry is down = %d, want %d", got, want)
+			}
+
+			registryDown.Store(false)
+			d.tick()
+
+			msgs := sender.take()
+			for _, want := range []string{"Downloaded artifact for `v1.2.3`", "After Deploy Hook Result"} {
+				if !slices.ContainsFunc(msgs, func(m string) bool { return strings.Contains(m, want) }) {
+					t.Errorf("recovery tick notifications = %q, want one containing %q", msgs, want)
+				}
+			}
+
+			// The registry fails again: notifications start over from count 1.
+			registryDown.Store(true)
+			d.tick()
+			msgs = sender.take()
+			if len(msgs) != 1 || !strings.Contains(msgs[0], "count: 1") {
+				t.Errorf("notifications after the next failure = %q, want one error with count 1", msgs)
+			}
+		})
 	}
 }

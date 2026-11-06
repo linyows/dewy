@@ -54,33 +54,28 @@ const (
 )
 
 // ErrorLimitingSender wraps a Sender implementation with error limiting functionality.
+// Only SendError is limited by the error count. Other notifications are sent
+// regardless of it, because they report progress such as a deploy, and the
+// error count is reset only after the tick that made that progress returns.
 type ErrorLimitingSender struct {
 	underlying Sender
 	errorCount int
 	quiet      bool
-	mu         sync.RWMutex
+	mu         sync.Mutex
 	logger     *slog.Logger
 }
 
-// Send sends a message only if error count is 0 and quiet mode is off.
+// Send sends a message unless quiet mode is on.
 func (e *ErrorLimitingSender) Send(ctx context.Context, message string) {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-
-	if e.errorCount == 0 && !e.quiet {
+	if !e.quiet {
 		e.underlying.Send(ctx, message)
 	}
 }
 
-// SendImportant sends a message regardless of quiet mode (but still respects error count).
+// SendImportant sends a message regardless of quiet mode.
 // Messages are sent within the thread only; reply_broadcast is reserved for errors.
 func (e *ErrorLimitingSender) SendImportant(ctx context.Context, message string) {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-
-	if e.errorCount == 0 {
-		e.underlying.Send(ctx, message)
-	}
+	e.underlying.Send(ctx, message)
 }
 
 // SendError handles error notifications with count limiting.
@@ -136,34 +131,30 @@ func (e *ErrorLimitingSender) OnDeploy(dir string) {
 // SendHookResult sends hook result notification.
 // In quiet mode, only failed hook results are sent.
 func (e *ErrorLimitingSender) SendHookResult(ctx context.Context, hookType string, result *HookResult) {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-
-	if e.errorCount == 0 {
-		if e.quiet && result.Success {
-			return
-		}
-		if attachmentSender, ok := e.underlying.(AttachmentSender); ok {
-			attachmentSender.SendHookResult(ctx, hookType, result)
-		} else {
-			// Fallback to regular message for notifiers that don't support attachments
-			statusIcon := "✓"
-			if !result.Success {
-				statusIcon = "✗"
-			}
-			msg := fmt.Sprintf("%s %s Hook Result\n**Command:** `%s`\n**Exit Code:** %d\n**Duration:** %s",
-				statusIcon, hookType, result.Command, result.ExitCode, result.Duration)
-
-			if result.Stdout != "" {
-				msg += fmt.Sprintf("\n**Stdout:**\n```\n%s\n```", result.Stdout)
-			}
-			if result.Stderr != "" {
-				msg += fmt.Sprintf("\n**Stderr:**\n```\n%s\n```", result.Stderr)
-			}
-
-			e.underlying.Send(ctx, msg)
-		}
+	if e.quiet && result.Success {
+		return
 	}
+	if attachmentSender, ok := e.underlying.(AttachmentSender); ok {
+		attachmentSender.SendHookResult(ctx, hookType, result)
+		return
+	}
+
+	// Fallback to regular message for notifiers that don't support attachments
+	statusIcon := "✓"
+	if !result.Success {
+		statusIcon = "✗"
+	}
+	msg := fmt.Sprintf("%s %s Hook Result\n**Command:** `%s`\n**Exit Code:** %d\n**Duration:** %s",
+		statusIcon, hookType, result.Command, result.ExitCode, result.Duration)
+
+	if result.Stdout != "" {
+		msg += fmt.Sprintf("\n**Stdout:**\n```\n%s\n```", result.Stdout)
+	}
+	if result.Stderr != "" {
+		msg += fmt.Sprintf("\n**Stderr:**\n```\n%s\n```", result.Stderr)
+	}
+
+	e.underlying.Send(ctx, msg)
 }
 
 // New returns Notifier.
@@ -199,12 +190,16 @@ func New(ctx context.Context, url string, logger *slog.Logger) (Notifier, error)
 		quiet = parseQuietFlag(splitted[1])
 	}
 
+	return NewErrorLimitingSender(underlying, quiet, logger), nil
+}
+
+// NewErrorLimitingSender wraps underlying with error limiting and quiet mode.
+func NewErrorLimitingSender(underlying Sender, quiet bool, logger *slog.Logger) *ErrorLimitingSender {
 	return &ErrorLimitingSender{
 		underlying: underlying,
-		errorCount: 0,
 		quiet:      quiet,
 		logger:     logger,
-	}, nil
+	}
 }
 
 // parseQuietFlag parses the quiet parameter from a URL query string.
