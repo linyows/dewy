@@ -268,9 +268,10 @@ Normal Google account passwords cannot be used for authentication.
 
 Dewy limits consecutive error notifications to prevent spam.
 
-- **Limit start**: After 3 consecutive errors, notifications are suppressed
+- **Limit start**: After 3 consecutive errors, error notifications are suppressed
 - **Limit release**: Automatically released when normal operation resumes
-- **Behavior during limits**: Logs are recorded but notifications are not sent
+- **Behavior during limits**: Errors are logged but not notified
+- **Scope**: Only error notifications are limited. Deploy, hook result, and other notifications are sent during the limit, including those from the deploy that ends it
 
 ## Multiple Environment Notification Configuration
 

@@ -2,6 +2,8 @@ package notifier
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -132,18 +134,72 @@ func TestErrorLimitingSender_QuietModeAllowsFailedHookResult(t *testing.T) {
 	}
 }
 
-func TestErrorLimitingSender_SendImportantRespectsErrorCount(t *testing.T) {
-	sender, mock := newTestErrorLimitingSender(true)
+// Only error notifications are limited by the error count. The count is
+// reset after a successful tick returns, so progress notifications sent during
+// that tick (download, hook results, deploy success) must not depend on it.
+func TestErrorLimitingSender_ErrorCountDoesNotSuppressOtherNotifications(t *testing.T) {
+	failed := &HookResult{Command: "exit 1", ExitCode: 1, Success: false}
+	succeeded := &HookResult{Command: "true", ExitCode: 0, Success: true}
+
+	tests := []struct {
+		name         string
+		quiet        bool
+		send         func(context.Context, *ErrorLimitingSender)
+		wantMessages int
+		wantHooks    int
+	}{
+		{"Send", false, func(ctx context.Context, s *ErrorLimitingSender) { s.Send(ctx, "downloaded") }, 1, 0},
+		{"SendImportant", false, func(ctx context.Context, s *ErrorLimitingSender) { s.SendImportant(ctx, "deployed") }, 1, 0},
+		{"SendImportant in quiet mode", true, func(ctx context.Context, s *ErrorLimitingSender) { s.SendImportant(ctx, "deployed") }, 1, 0},
+		{"SendHookResult", false, func(ctx context.Context, s *ErrorLimitingSender) { s.SendHookResult(ctx, "after", succeeded) }, 0, 1},
+		{"failed SendHookResult in quiet mode", true, func(ctx context.Context, s *ErrorLimitingSender) { s.SendHookResult(ctx, "after", failed) }, 0, 1},
+	}
+
+	for _, tt := range tests {
+		for _, errors := range []int{1, maxNotifyErrors, maxNotifyErrors + 5} {
+			t.Run(fmt.Sprintf("%s after %d errors", tt.name, errors), func(t *testing.T) {
+				sender, mock := newTestErrorLimitingSender(tt.quiet)
+				ctx := context.Background()
+				for range errors {
+					sender.SendError(ctx, &testError{msg: "registry down"})
+				}
+				mock.messages = nil
+
+				tt.send(ctx, sender)
+
+				if len(mock.messages) != tt.wantMessages || len(mock.hookResults) != tt.wantHooks {
+					t.Errorf("got messages=%d hookResults=%d, want messages=%d hookResults=%d",
+						len(mock.messages), len(mock.hookResults), tt.wantMessages, tt.wantHooks)
+				}
+			})
+		}
+	}
+}
+
+// After the error count is reset, error notifications start over from 1 and
+// are limited again.
+func TestErrorLimitingSender_ResetRestartsErrorNotifications(t *testing.T) {
+	sender, mock := newTestErrorLimitingSender(false)
 	ctx := context.Background()
 
-	// Trigger an error to increment error count
-	sender.SendError(ctx, &testError{msg: "error"})
-	mock.messages = nil // clear the error message
+	for range maxNotifyErrors + 2 {
+		sender.SendError(ctx, &testError{msg: "registry down"})
+	}
+	if len(mock.messages) != maxNotifyErrors {
+		t.Fatalf("error notifications before reset = %d, want %d", len(mock.messages), maxNotifyErrors)
+	}
 
-	sender.SendImportant(ctx, "should be suppressed due to error count")
+	sender.ResetErrorCount()
+	mock.messages = nil
 
-	if len(mock.messages) != 0 {
-		t.Errorf("expected 0 messages when error count > 0, got %d", len(mock.messages))
+	for range maxNotifyErrors + 2 {
+		sender.SendError(ctx, &testError{msg: "registry down again"})
+	}
+	if len(mock.messages) != maxNotifyErrors {
+		t.Fatalf("error notifications after reset = %d, want %d", len(mock.messages), maxNotifyErrors)
+	}
+	if !strings.Contains(mock.messages[0], "count: 1") {
+		t.Errorf("first error notification after reset = %q, want count 1", mock.messages[0])
 	}
 }
 

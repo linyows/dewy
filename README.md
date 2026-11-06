@@ -319,7 +319,7 @@ Notifier
 The Notifier interface sends deployment status updates. Slack and Mail (SMTP) are available as notification methods.
 
 > [!IMPORTANT]
-> **Error Notification Limiting**: Dewy automatically limits error notifications to prevent spam during persistent failures. After 3 error notifications, further notifications are suppressed until operations return to normal, at which point notification limiting is automatically reset.
+> **Error Notification Limiting**: Dewy automatically limits error notifications to prevent spam during persistent failures. After 3 error notifications, further error notifications are suppressed until operations return to normal, at which point notification limiting is automatically reset. Only error notifications are limited; deploy and hook result notifications are always sent.
 
 ### Quiet Mode
 
