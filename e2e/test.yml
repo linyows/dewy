@@ -81,6 +81,10 @@ jobs:
     - { command: 'server', variant: 'ghr-s3cache-b' }
     - { command: 'server', variant: 'ghr-gscache-a' }
     - { command: 'server', variant: 'ghr-gscache-b' }
+    - { command: 'server', variant: 's3-slot-blue' }
+    - { command: 'server', variant: 's3-slot-green' }
+    - { command: 'server', variant: 'gs-slot-blue' }
+    - { command: 'server', variant: 'gs-slot-green' }
     - { command: 'assets', variant: 'ghr' }
     - { command: 'assets', variant: 's3' }
     - { command: 'assets', variant: 'gs' }
@@ -863,11 +867,13 @@ jobs:
 # Phase 6: Blue/green slots with the same version.
 #
 # The run's new version is copied to slot-e2e/<version>/v1.0.0+blue/ and
-# v1.0.0+green/, and one assets instance per slot watches that prefix. Both
-# directories hold the same version, which differ only in build metadata, so
-# a registry that picks the latest version before checking the slot hands
-# both instances the one that lists first (+blue), and the green instance
-# never deploys.
+# v1.0.0+green/, and one assets instance and one server instance per slot
+# watch that prefix. Both directories hold the same version, which differ
+# only in build metadata, so a registry that picks the latest version before
+# checking the slot hands both slots the one that lists first (+blue), and
+# the green instances never deploy. The assets and server instances of a slot
+# report to the same directory, so each verify counts only the audit files of
+# its own command.
 #
 # The fixtures are copied from the bucket rather than released from
 # dewy-testapp: a "+" tag would be picked up by the other instances as a new
@@ -1016,6 +1022,114 @@ jobs:
       PID: {{ res.pid }}
       Log: {{ res.log }}
 
+- name: Start server by AWS S3 registry on the blue slot
+  id: start_srv_s3_slot_blue
+  needs: [prepare_slot_s3]
+  steps:
+  - name: Start dewy
+    id: srv_s3_slot_blue
+    uses: shell
+    with:
+      workdir: ./e2e/server/s3-slot-blue
+      background: true
+      ready:
+        log: Create symlink
+      timeout: 2m
+      cmd: |
+        rm -rf .dewy;
+        ./dewy server -p 8007 -l debug --slot blue \
+        --registry "s3://ap-northeast-3/dewy-testapp/slot-e2e/{{ outputs.genver.version }}" \
+        -- $PWD/current/dewy-testapp
+    test: status == -1
+    timeout: 3m
+    outputs:
+      pid: res.pid
+      log: res.log
+    echo: |
+      PID: {{ res.pid }}
+      Log: {{ res.log }}
+
+- name: Start server by AWS S3 registry on the green slot
+  id: start_srv_s3_slot_green
+  needs: [prepare_slot_s3]
+  steps:
+  - name: Start dewy
+    id: srv_s3_slot_green
+    uses: shell
+    with:
+      workdir: ./e2e/server/s3-slot-green
+      background: true
+      ready:
+        log: Create symlink
+      timeout: 2m
+      cmd: |
+        rm -rf .dewy;
+        ./dewy server -p 8008 -l debug --slot green \
+        --registry "s3://ap-northeast-3/dewy-testapp/slot-e2e/{{ outputs.genver.version }}" \
+        -- $PWD/current/dewy-testapp
+    test: status == -1
+    timeout: 3m
+    outputs:
+      pid: res.pid
+      log: res.log
+    echo: |
+      PID: {{ res.pid }}
+      Log: {{ res.log }}
+
+- name: Start server by GCloud Storage registry on the blue slot
+  id: start_srv_gs_slot_blue
+  needs: [prepare_slot_gs]
+  steps:
+  - name: Start dewy
+    id: srv_gs_slot_blue
+    uses: shell
+    with:
+      workdir: ./e2e/server/gs-slot-blue
+      background: true
+      ready:
+        log: Create symlink
+      timeout: 2m
+      cmd: |
+        rm -rf .dewy;
+        ./dewy server -p 8009 -l debug --slot blue \
+        --registry "gs://dewy-testapp/slot-e2e/{{ outputs.genver.version }}" \
+        -- $PWD/current/dewy-testapp
+    test: status == -1
+    timeout: 3m
+    outputs:
+      pid: res.pid
+      log: res.log
+    echo: |
+      PID: {{ res.pid }}
+      Log: {{ res.log }}
+
+- name: Start server by GCloud Storage registry on the green slot
+  id: start_srv_gs_slot_green
+  needs: [prepare_slot_gs]
+  steps:
+  - name: Start dewy
+    id: srv_gs_slot_green
+    uses: shell
+    with:
+      workdir: ./e2e/server/gs-slot-green
+      background: true
+      ready:
+        log: Create symlink
+      timeout: 2m
+      cmd: |
+        rm -rf .dewy;
+        ./dewy server -p 8010 -l debug --slot green \
+        --registry "gs://dewy-testapp/slot-e2e/{{ outputs.genver.version }}" \
+        -- $PWD/current/dewy-testapp
+    test: status == -1
+    timeout: 3m
+    outputs:
+      pid: res.pid
+      log: res.log
+    echo: |
+      PID: {{ res.pid }}
+      Log: {{ res.log }}
+
 - name: Verify assets by AWS S3 registry on the blue slot
   id: verify_ast_s3_slot_blue
   needs: [start_ast_s3_slot_blue]
@@ -1076,9 +1190,73 @@ jobs:
     test: res.code == 0
     timeout: 5m
 
+- name: Verify server by AWS S3 registry on the blue slot
+  id: verify_srv_s3_slot_blue
+  needs: [start_srv_s3_slot_blue]
+  steps:
+  - name: Server slot verify
+    uses: embedded
+    with:
+      path: ./e2e/jobs/server-slot-verify.yml
+      vars:
+        pid: "{{ outputs.srv_s3_slot_blue.pid }}"
+        log: "{{ outputs.srv_s3_slot_blue.log }}"
+        new_version: "{{ outputs.genver.version }}"
+        ls_cmd: "aws s3 ls --region ap-northeast-3 s3://dewy-testapp/slot-e2e/{{ outputs.genver.version }}/v1.0.0+blue/"
+    test: res.code == 0
+    timeout: 5m
+
+- name: Verify server by AWS S3 registry on the green slot
+  id: verify_srv_s3_slot_green
+  needs: [start_srv_s3_slot_green]
+  steps:
+  - name: Server slot verify
+    uses: embedded
+    with:
+      path: ./e2e/jobs/server-slot-verify.yml
+      vars:
+        pid: "{{ outputs.srv_s3_slot_green.pid }}"
+        log: "{{ outputs.srv_s3_slot_green.log }}"
+        new_version: "{{ outputs.genver.version }}"
+        ls_cmd: "aws s3 ls --region ap-northeast-3 s3://dewy-testapp/slot-e2e/{{ outputs.genver.version }}/v1.0.0+green/"
+    test: res.code == 0
+    timeout: 5m
+
+- name: Verify server by GCloud Storage registry on the blue slot
+  id: verify_srv_gs_slot_blue
+  needs: [start_srv_gs_slot_blue]
+  steps:
+  - name: Server slot verify
+    uses: embedded
+    with:
+      path: ./e2e/jobs/server-slot-verify.yml
+      vars:
+        pid: "{{ outputs.srv_gs_slot_blue.pid }}"
+        log: "{{ outputs.srv_gs_slot_blue.log }}"
+        new_version: "{{ outputs.genver.version }}"
+        ls_cmd: "gcloud storage ls gs://dewy-testapp/slot-e2e/{{ outputs.genver.version }}/v1.0.0+blue/"
+    test: res.code == 0
+    timeout: 5m
+
+- name: Verify server by GCloud Storage registry on the green slot
+  id: verify_srv_gs_slot_green
+  needs: [start_srv_gs_slot_green]
+  steps:
+  - name: Server slot verify
+    uses: embedded
+    with:
+      path: ./e2e/jobs/server-slot-verify.yml
+      vars:
+        pid: "{{ outputs.srv_gs_slot_green.pid }}"
+        log: "{{ outputs.srv_gs_slot_green.log }}"
+        new_version: "{{ outputs.genver.version }}"
+        ls_cmd: "gcloud storage ls gs://dewy-testapp/slot-e2e/{{ outputs.genver.version }}/v1.0.0+green/"
+    test: res.code == 0
+    timeout: 5m
+
 # Runs even when a slot job failed, so a failed run leaves nothing behind.
 - name: Remove slot versions
-  needs: [verify_ast_s3_slot_blue, verify_ast_s3_slot_green, verify_ast_gs_slot_blue, verify_ast_gs_slot_green]
+  needs: [verify_ast_s3_slot_blue, verify_ast_s3_slot_green, verify_ast_gs_slot_blue, verify_ast_gs_slot_green, verify_srv_s3_slot_blue, verify_srv_s3_slot_green, verify_srv_gs_slot_blue, verify_srv_gs_slot_green]
   always: true
   steps:
   - name: Remove from AWS S3

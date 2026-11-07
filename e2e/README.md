@@ -27,6 +27,8 @@ All of the above are verified across every supported combination of commands and
 | `assets` | Google Cloud Storage (`gs`) | Same as above, sourced from GCS |
 | `assets` (slot) | AWS S3 (`s3`) | Pair of instances with `--slot blue` and `--slot green` on a prefix that holds `v1.0.0+blue` and `v1.0.0+green` |
 | `assets` (slot) | Google Cloud Storage (`gs`) | Same as above, sourced from GCS |
+| `server` (slot) | AWS S3 (`s3`) | Same as the assets slot pair, with servers started on each slot |
+| `server` (slot) | Google Cloud Storage (`gs`) | Same as above, sourced from GCS |
 | `container` | OCI / ghcr.io (`img`) | Container deployment with 3 replicas |
 | `container` | OCI / ghcr.io with Podman | Same as above, with `--runtime podman` |
 | `container` | Docker Hub (`img`) | Same as above, sourced from Docker Hub |
@@ -41,10 +43,10 @@ All of the above are verified across every supported combination of commands and
 - Two versions started/downloaded (initial + new)
 - New version string appears in log
 
-**Slot pairs (assets with `--slot blue` / `--slot green`):**
+**Slot pairs (assets and server with `--slot blue` / `--slot green`):**
 - After the S3 / GCS assets verification passes, the run's new version is copied to `slot-e2e/<version>/v1.0.0+blue/` and `v1.0.0+green/` in the same bucket, and removed at the end of the run
-- Each instance deploys once (one `Create symlink`) with no errors
-- Each slot directory holds exactly one audit file (`shipped_to_...`). An instance that deployed the other slot's version would leave two in that directory and none in its own
+- Each instance deploys once (one `Create symlink`) with no errors, and each server instance starts the new version
+- Each slot directory holds exactly one audit file per command. An instance that deployed the other slot's version would leave two of its command in that directory and none in its own. The assets and server instances of a slot report to the same directory; the audit file name carries the command (`shipped_to_<host>_<command>_at_<time>.txt`), so each verify counts only its own
 - Slot versions are not released from `dewy-testapp`: a `+` tag would be picked up as a new version by the other instances, and is not a valid container image tag. The other instances watch the bucket root, where `slot-e2e` is not a version and is ignored
 
 **Shared cache pairs (server with `--cache s3://...?registry-ttl=30s` / `gs://...?registry-ttl=30s`):**
@@ -537,6 +539,22 @@ flowchart LR
         direction TB
         start_ast_gs_slot_green_step0["Start dewy"]
     end
+    subgraph start_srv_s3_slot_blue["Start server by AWS S3 registry on the blue slot"]
+        direction TB
+        start_srv_s3_slot_blue_step0["Start dewy"]
+    end
+    subgraph start_srv_s3_slot_green["Start server by AWS S3 registry on the green slot"]
+        direction TB
+        start_srv_s3_slot_green_step0["Start dewy"]
+    end
+    subgraph start_srv_gs_slot_blue["Start server by GCloud Storage registry on the blue slot"]
+        direction TB
+        start_srv_gs_slot_blue_step0["Start dewy"]
+    end
+    subgraph start_srv_gs_slot_green["Start server by GCloud Storage registry on the green slot"]
+        direction TB
+        start_srv_gs_slot_green_step0["Start dewy"]
+    end
     subgraph verify_ast_s3_slot_blue["Verify assets by AWS S3 registry on the blue slot"]
         direction TB
         verify_ast_s3_slot_blue_step0["Assets slot verify"]
@@ -601,11 +619,83 @@ flowchart LR
         verify_ast_gs_slot_green_step4 --> verify_ast_gs_slot_green_step5
         verify_ast_gs_slot_green_step5 --> verify_ast_gs_slot_green_step6
     end
-    subgraph job_48["Remove slot versions"]
+    subgraph verify_srv_s3_slot_blue["Verify server by AWS S3 registry on the blue slot"]
         direction TB
-        job_48_step0["Remove from AWS S3"]
-        job_48_step1["Remove from GCloud Storage"]
-        job_48_step0 --> job_48_step1
+        verify_srv_s3_slot_blue_step0["Server slot verify"]
+        verify_srv_s3_slot_blue_step1["Wait for the server to start"]
+        verify_srv_s3_slot_blue_step2["Wait for the audit file"]
+        verify_srv_s3_slot_blue_step3["Stop dewy"]
+        verify_srv_s3_slot_blue_step4["Verify one audit file in the slot directory"]
+        verify_srv_s3_slot_blue_step5["Verify no error"]
+        verify_srv_s3_slot_blue_step6["Verify one symlink created"]
+        verify_srv_s3_slot_blue_step7["Show log"]
+        verify_srv_s3_slot_blue_step0 --> verify_srv_s3_slot_blue_step1
+        verify_srv_s3_slot_blue_step1 --> verify_srv_s3_slot_blue_step2
+        verify_srv_s3_slot_blue_step2 --> verify_srv_s3_slot_blue_step3
+        verify_srv_s3_slot_blue_step3 --> verify_srv_s3_slot_blue_step4
+        verify_srv_s3_slot_blue_step4 --> verify_srv_s3_slot_blue_step5
+        verify_srv_s3_slot_blue_step5 --> verify_srv_s3_slot_blue_step6
+        verify_srv_s3_slot_blue_step6 --> verify_srv_s3_slot_blue_step7
+    end
+    subgraph verify_srv_s3_slot_green["Verify server by AWS S3 registry on the green slot"]
+        direction TB
+        verify_srv_s3_slot_green_step0["Server slot verify"]
+        verify_srv_s3_slot_green_step1["Wait for the server to start"]
+        verify_srv_s3_slot_green_step2["Wait for the audit file"]
+        verify_srv_s3_slot_green_step3["Stop dewy"]
+        verify_srv_s3_slot_green_step4["Verify one audit file in the slot directory"]
+        verify_srv_s3_slot_green_step5["Verify no error"]
+        verify_srv_s3_slot_green_step6["Verify one symlink created"]
+        verify_srv_s3_slot_green_step7["Show log"]
+        verify_srv_s3_slot_green_step0 --> verify_srv_s3_slot_green_step1
+        verify_srv_s3_slot_green_step1 --> verify_srv_s3_slot_green_step2
+        verify_srv_s3_slot_green_step2 --> verify_srv_s3_slot_green_step3
+        verify_srv_s3_slot_green_step3 --> verify_srv_s3_slot_green_step4
+        verify_srv_s3_slot_green_step4 --> verify_srv_s3_slot_green_step5
+        verify_srv_s3_slot_green_step5 --> verify_srv_s3_slot_green_step6
+        verify_srv_s3_slot_green_step6 --> verify_srv_s3_slot_green_step7
+    end
+    subgraph verify_srv_gs_slot_blue["Verify server by GCloud Storage registry on the blue slot"]
+        direction TB
+        verify_srv_gs_slot_blue_step0["Server slot verify"]
+        verify_srv_gs_slot_blue_step1["Wait for the server to start"]
+        verify_srv_gs_slot_blue_step2["Wait for the audit file"]
+        verify_srv_gs_slot_blue_step3["Stop dewy"]
+        verify_srv_gs_slot_blue_step4["Verify one audit file in the slot directory"]
+        verify_srv_gs_slot_blue_step5["Verify no error"]
+        verify_srv_gs_slot_blue_step6["Verify one symlink created"]
+        verify_srv_gs_slot_blue_step7["Show log"]
+        verify_srv_gs_slot_blue_step0 --> verify_srv_gs_slot_blue_step1
+        verify_srv_gs_slot_blue_step1 --> verify_srv_gs_slot_blue_step2
+        verify_srv_gs_slot_blue_step2 --> verify_srv_gs_slot_blue_step3
+        verify_srv_gs_slot_blue_step3 --> verify_srv_gs_slot_blue_step4
+        verify_srv_gs_slot_blue_step4 --> verify_srv_gs_slot_blue_step5
+        verify_srv_gs_slot_blue_step5 --> verify_srv_gs_slot_blue_step6
+        verify_srv_gs_slot_blue_step6 --> verify_srv_gs_slot_blue_step7
+    end
+    subgraph verify_srv_gs_slot_green["Verify server by GCloud Storage registry on the green slot"]
+        direction TB
+        verify_srv_gs_slot_green_step0["Server slot verify"]
+        verify_srv_gs_slot_green_step1["Wait for the server to start"]
+        verify_srv_gs_slot_green_step2["Wait for the audit file"]
+        verify_srv_gs_slot_green_step3["Stop dewy"]
+        verify_srv_gs_slot_green_step4["Verify one audit file in the slot directory"]
+        verify_srv_gs_slot_green_step5["Verify no error"]
+        verify_srv_gs_slot_green_step6["Verify one symlink created"]
+        verify_srv_gs_slot_green_step7["Show log"]
+        verify_srv_gs_slot_green_step0 --> verify_srv_gs_slot_green_step1
+        verify_srv_gs_slot_green_step1 --> verify_srv_gs_slot_green_step2
+        verify_srv_gs_slot_green_step2 --> verify_srv_gs_slot_green_step3
+        verify_srv_gs_slot_green_step3 --> verify_srv_gs_slot_green_step4
+        verify_srv_gs_slot_green_step4 --> verify_srv_gs_slot_green_step5
+        verify_srv_gs_slot_green_step5 --> verify_srv_gs_slot_green_step6
+        verify_srv_gs_slot_green_step6 --> verify_srv_gs_slot_green_step7
+    end
+    subgraph job_56["Remove slot versions"]
+        direction TB
+        job_56_step0["Remove from AWS S3"]
+        job_56_step1["Remove from GCloud Storage"]
+        job_56_step0 --> job_56_step1
     end
 
     check --> generate_version
@@ -666,14 +756,26 @@ flowchart LR
     prepare_slot_s3 --> start_ast_s3_slot_green
     prepare_slot_gs --> start_ast_gs_slot_blue
     prepare_slot_gs --> start_ast_gs_slot_green
+    prepare_slot_s3 --> start_srv_s3_slot_blue
+    prepare_slot_s3 --> start_srv_s3_slot_green
+    prepare_slot_gs --> start_srv_gs_slot_blue
+    prepare_slot_gs --> start_srv_gs_slot_green
     start_ast_s3_slot_blue --> verify_ast_s3_slot_blue
     start_ast_s3_slot_green --> verify_ast_s3_slot_green
     start_ast_gs_slot_blue --> verify_ast_gs_slot_blue
     start_ast_gs_slot_green --> verify_ast_gs_slot_green
-    verify_ast_s3_slot_blue --> job_48
-    verify_ast_s3_slot_green --> job_48
-    verify_ast_gs_slot_blue --> job_48
-    verify_ast_gs_slot_green --> job_48
+    start_srv_s3_slot_blue --> verify_srv_s3_slot_blue
+    start_srv_s3_slot_green --> verify_srv_s3_slot_green
+    start_srv_gs_slot_blue --> verify_srv_gs_slot_blue
+    start_srv_gs_slot_green --> verify_srv_gs_slot_green
+    verify_ast_s3_slot_blue --> job_56
+    verify_ast_s3_slot_green --> job_56
+    verify_ast_gs_slot_blue --> job_56
+    verify_ast_gs_slot_green --> job_56
+    verify_srv_s3_slot_blue --> job_56
+    verify_srv_s3_slot_green --> job_56
+    verify_srv_gs_slot_blue --> job_56
+    verify_srv_gs_slot_green --> job_56
 ```
 
 ### Phase Details
@@ -690,7 +792,7 @@ flowchart LR
 
 **Phase 5 (Registry result cache assertions)** runs at the same point and confirms that the number of upstream registry calls across each pair stayed within the expected bound.
 
-**Phase 6 (Blue/green slots)** runs after the S3 and GCS assets verifies. It copies the new version to `slot-e2e/<version>/v1.0.0+blue/` and `v1.0.0+green/`, starts one assets instance per slot, verifies each with `jobs/assets-slot-verify.yml`, and removes the copies even when a slot job failed.
+**Phase 6 (Blue/green slots)** runs after the S3 and GCS assets verifies. It copies the new version to `slot-e2e/<version>/v1.0.0+blue/` and `v1.0.0+green/`, starts one assets instance and one server instance per slot, verifies them with `jobs/assets-slot-verify.yml` and `jobs/server-slot-verify.yml`, and removes the copies even when a slot job failed.
 
 The health check failure variant does not wait for Phase 2: its deployment fails on the first version, so it is verified right after its own start job.
 
@@ -703,12 +805,13 @@ e2e/
 ├── dag/                               # Prints one phase of the job graph for the docs (go run ./e2e/dag)
 ├── jobs/                              # Reusable verification job definitions
 │   ├── server-verify.yml              # Server verification steps
+│   ├── server-slot-verify.yml         # Blue/green slot verification steps for server
 │   ├── assets-verify.yml              # Assets verification steps
-│   ├── assets-slot-verify.yml         # Blue/green slot verification steps
+│   ├── assets-slot-verify.yml         # Blue/green slot verification steps for assets
 │   ├── container-verify.yml           # Container verification steps
 │   ├── container-multiport-verify.yml # Multi-port verification steps
 │   └── container-healthfail-verify.yml # Health check failure verification steps
-├── server/{ghr,s3,gs,ghr-s3cache-{a,b},ghr-gscache-{a,b}}/  # Working directories for server tests
+├── server/{ghr,s3,gs,ghr-s3cache-{a,b},ghr-gscache-{a,b},s3-slot-{blue,green},gs-slot-{blue,green}}/  # Working directories for server tests
 ├── assets/{ghr,s3,gs,s3-slot-{blue,green},gs-slot-{blue,green}}/  # Working directories for assets tests
 └── container/{img,dockerhub,multiport,podman,healthfail}/  # Working directories for container tests
 ```
