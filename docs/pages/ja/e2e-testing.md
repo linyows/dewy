@@ -30,6 +30,8 @@ DewyのE2Eテストは、実際のDewyプロセスを実際のレジストリに
 | `assets` | Google Cloud Storage（`gs`） | 同上（GCSから取得） |
 | `assets`（slot） | AWS S3（`s3`） | ビルドメタデータだけが異なるバージョンを、`--slot blue`と`--slot green`の2インスタンスで扱う |
 | `assets`（slot） | Google Cloud Storage（`gs`） | 同上（GCSから取得） |
+| `server`（slot） | AWS S3（`s3`） | `assets`のslotと同じ構成で、各スロットでサーバーを起動する |
+| `server`（slot） | Google Cloud Storage（`gs`） | 同上（GCSから取得） |
 | `container` | OCI / ghcr.io（`img`） | 3レプリカのコンテナデプロイ、`/metrics`、`--drain-time` |
 | `container` | OCI / ghcr.io（Podman） | 同じデプロイを`--runtime podman`で実行 |
 | `container` | Docker Hub（`img`） | 同じデプロイ（Docker Hubから取得） |
@@ -209,6 +211,7 @@ flowchart LR
 | `container-multiport-verify.yml` | `container`（マルチポート） |
 | `container-healthfail-verify.yml` | `container`（ヘルスチェック失敗） |
 | `assets-slot-verify.yml` | `assets`（slot）、フェーズ6で使用 |
+| `server-slot-verify.yml` | `server`（slot）、フェーズ6で使用 |
 
 ヘルスチェック失敗のバリアントは、フェーズ2を待ちません。
 最初のバージョンでデプロイが失敗するので、検証ジョブは自身の起動ジョブの後に実行します。
@@ -235,11 +238,19 @@ flowchart LR
     start_ast_s3_slot_green["Start assets by AWS S3 registry on the green slot"]
     start_ast_gs_slot_blue["Start assets by GCloud Storage registry on the blue slot"]
     start_ast_gs_slot_green["Start assets by GCloud Storage registry on the green slot"]
+    start_srv_s3_slot_blue["Start server by AWS S3 registry on the blue slot"]
+    start_srv_s3_slot_green["Start server by AWS S3 registry on the green slot"]
+    start_srv_gs_slot_blue["Start server by GCloud Storage registry on the blue slot"]
+    start_srv_gs_slot_green["Start server by GCloud Storage registry on the green slot"]
     verify_ast_s3_slot_blue["Verify assets by AWS S3 registry on the blue slot"]
     verify_ast_s3_slot_green["Verify assets by AWS S3 registry on the green slot"]
     verify_ast_gs_slot_blue["Verify assets by GCloud Storage registry on the blue slot"]
     verify_ast_gs_slot_green["Verify assets by GCloud Storage registry on the green slot"]
-    job_48["Remove slot versions"]
+    verify_srv_s3_slot_blue["Verify server by AWS S3 registry on the blue slot"]
+    verify_srv_s3_slot_green["Verify server by AWS S3 registry on the green slot"]
+    verify_srv_gs_slot_blue["Verify server by GCloud Storage registry on the blue slot"]
+    verify_srv_gs_slot_green["Verify server by GCloud Storage registry on the green slot"]
+    job_56["Remove slot versions"]
 
     verify_srv_ghr_s3cache_a --> job_34
     verify_srv_ghr_s3cache_b --> job_34
@@ -255,14 +266,26 @@ flowchart LR
     prepare_slot_s3 --> start_ast_s3_slot_green
     prepare_slot_gs --> start_ast_gs_slot_blue
     prepare_slot_gs --> start_ast_gs_slot_green
+    prepare_slot_s3 --> start_srv_s3_slot_blue
+    prepare_slot_s3 --> start_srv_s3_slot_green
+    prepare_slot_gs --> start_srv_gs_slot_blue
+    prepare_slot_gs --> start_srv_gs_slot_green
     start_ast_s3_slot_blue --> verify_ast_s3_slot_blue
     start_ast_s3_slot_green --> verify_ast_s3_slot_green
     start_ast_gs_slot_blue --> verify_ast_gs_slot_blue
     start_ast_gs_slot_green --> verify_ast_gs_slot_green
-    verify_ast_s3_slot_blue --> job_48
-    verify_ast_s3_slot_green --> job_48
-    verify_ast_gs_slot_blue --> job_48
-    verify_ast_gs_slot_green --> job_48
+    start_srv_s3_slot_blue --> verify_srv_s3_slot_blue
+    start_srv_s3_slot_green --> verify_srv_s3_slot_green
+    start_srv_gs_slot_blue --> verify_srv_gs_slot_blue
+    start_srv_gs_slot_green --> verify_srv_gs_slot_green
+    verify_ast_s3_slot_blue --> job_56
+    verify_ast_s3_slot_green --> job_56
+    verify_ast_gs_slot_blue --> job_56
+    verify_ast_gs_slot_green --> job_56
+    verify_srv_s3_slot_blue --> job_56
+    verify_srv_s3_slot_green --> job_56
+    verify_srv_gs_slot_blue --> job_56
+    verify_srv_gs_slot_green --> job_56
 ```
 
 
@@ -274,9 +297,9 @@ flowchart LR
 ### フェーズ6：blue/greenスロット
 
 S3とGCSの`assets`バリアントの検証が終わったら、新しいバージョンを同じバケットの`slot-e2e/<version>/v1.0.0+blue/`と`slot-e2e/<version>/v1.0.0+green/`にコピーします。
-このプレフィックスを、スロットごとに1つのインスタンスが参照します。
+このプレフィックスを、スロットごとに`assets`と`server`のインスタンスが1つずつ参照します。
 2つのバージョンはビルドメタデータだけが異なります。
-そのため、スロットを確認する前に最新バージョンを選ぶレジストリは、両方のインスタンスに同じバージョンを渡してしまいます。
+そのため、スロットを確認する前に最新バージョンを選ぶレジストリは、両方のスロットに同じバージョンを渡してしまいます。
 
 スロット用のバージョンは、`dewy-testapp`のリリースとしてではなく、バケット内のコピーとして用意します。
 `+`を含むタグをリリースすると、ほかのインスタンスがそれを新しいバージョンとしてデプロイしてしまい、またコンテナイメージのタグとしても使えないためです。
@@ -312,10 +335,11 @@ S3とGCSの`assets`バリアントの検証が終わったら、新しいバー�
 - 失敗メッセージに`--health-timeout`の値が含まれる。これにより、このフラグが確認の時間を制限していることを確かめる。
 - 失敗したレプリカがロールバックされ、デプロイが成功として報告されない。
 
-**`assets`（slot）：**
+**`assets`（slot）と`server`（slot）：**
 
 - 各インスタンスが1回だけ、エラーなくデプロイする。
-- 各スロットのディレクトリに、監査ファイル（`shipped_to_...`）がちょうど1つある。もう一方のスロットのバージョンをデプロイしたインスタンスがあれば、そのディレクトリには2つ、自分のディレクトリには0個のファイルが残る。
+- `server`のインスタンスが新しいバージョンを起動する。
+- 各スロットのディレクトリに、監査ファイルがコマンドごとにちょうど1つある。もう一方のスロットのバージョンをデプロイしたインスタンスがあれば、そのディレクトリにはそのコマンドのファイルが2つ、自分のディレクトリには0個残る。同じスロットの`assets`と`server`は同じディレクトリに報告するが、監査ファイル名にはコマンドが入る（`shipped_to_<host>_<command>_at_<time>.txt`）ので、それぞれ自分のコマンドのファイルだけを数える。
 
 ## テストの実行
 

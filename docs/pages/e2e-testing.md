@@ -29,6 +29,8 @@ Each run follows the same path as a real release:
 | `assets` | Google Cloud Storage (`gs`) | Same as above, sourced from GCS |
 | `assets` (slot) | AWS S3 (`s3`) | Two instances with `--slot blue` and `--slot green` on versions that differ only in build metadata |
 | `assets` (slot) | Google Cloud Storage (`gs`) | Same as above, sourced from GCS |
+| `server` (slot) | AWS S3 (`s3`) | Same as the `assets` slot pair, with servers started on each slot |
+| `server` (slot) | Google Cloud Storage (`gs`) | Same as above, sourced from GCS |
 | `container` | OCI / ghcr.io (`img`) | Container deployment with 3 replicas, `/metrics`, and `--drain-time` |
 | `container` | OCI / ghcr.io with Podman | Same deployment with `--runtime podman` |
 | `container` | Docker Hub (`img`) | Same deployment, sourced from Docker Hub |
@@ -199,6 +201,7 @@ Each variant has a verify job that runs a shared job definition from `e2e/jobs/`
 | `container-multiport-verify.yml` | `container` (multi-port) |
 | `container-healthfail-verify.yml` | `container` (health check failure) |
 | `assets-slot-verify.yml` | `assets` (slot), in Phase 6 |
+| `server-slot-verify.yml` | `server` (slot), in Phase 6 |
 
 The health check failure variant does not wait for Phase 2. Its deployment fails on the first version, so its verify job runs after its own start job.
 
@@ -224,11 +227,19 @@ flowchart LR
     start_ast_s3_slot_green["Start assets by AWS S3 registry on the green slot"]
     start_ast_gs_slot_blue["Start assets by GCloud Storage registry on the blue slot"]
     start_ast_gs_slot_green["Start assets by GCloud Storage registry on the green slot"]
+    start_srv_s3_slot_blue["Start server by AWS S3 registry on the blue slot"]
+    start_srv_s3_slot_green["Start server by AWS S3 registry on the green slot"]
+    start_srv_gs_slot_blue["Start server by GCloud Storage registry on the blue slot"]
+    start_srv_gs_slot_green["Start server by GCloud Storage registry on the green slot"]
     verify_ast_s3_slot_blue["Verify assets by AWS S3 registry on the blue slot"]
     verify_ast_s3_slot_green["Verify assets by AWS S3 registry on the green slot"]
     verify_ast_gs_slot_blue["Verify assets by GCloud Storage registry on the blue slot"]
     verify_ast_gs_slot_green["Verify assets by GCloud Storage registry on the green slot"]
-    job_48["Remove slot versions"]
+    verify_srv_s3_slot_blue["Verify server by AWS S3 registry on the blue slot"]
+    verify_srv_s3_slot_green["Verify server by AWS S3 registry on the green slot"]
+    verify_srv_gs_slot_blue["Verify server by GCloud Storage registry on the blue slot"]
+    verify_srv_gs_slot_green["Verify server by GCloud Storage registry on the green slot"]
+    job_56["Remove slot versions"]
 
     verify_srv_ghr_s3cache_a --> job_34
     verify_srv_ghr_s3cache_b --> job_34
@@ -244,14 +255,26 @@ flowchart LR
     prepare_slot_s3 --> start_ast_s3_slot_green
     prepare_slot_gs --> start_ast_gs_slot_blue
     prepare_slot_gs --> start_ast_gs_slot_green
+    prepare_slot_s3 --> start_srv_s3_slot_blue
+    prepare_slot_s3 --> start_srv_s3_slot_green
+    prepare_slot_gs --> start_srv_gs_slot_blue
+    prepare_slot_gs --> start_srv_gs_slot_green
     start_ast_s3_slot_blue --> verify_ast_s3_slot_blue
     start_ast_s3_slot_green --> verify_ast_s3_slot_green
     start_ast_gs_slot_blue --> verify_ast_gs_slot_blue
     start_ast_gs_slot_green --> verify_ast_gs_slot_green
-    verify_ast_s3_slot_blue --> job_48
-    verify_ast_s3_slot_green --> job_48
-    verify_ast_gs_slot_blue --> job_48
-    verify_ast_gs_slot_green --> job_48
+    start_srv_s3_slot_blue --> verify_srv_s3_slot_blue
+    start_srv_s3_slot_green --> verify_srv_s3_slot_green
+    start_srv_gs_slot_blue --> verify_srv_gs_slot_blue
+    start_srv_gs_slot_green --> verify_srv_gs_slot_green
+    verify_ast_s3_slot_blue --> job_56
+    verify_ast_s3_slot_green --> job_56
+    verify_ast_gs_slot_blue --> job_56
+    verify_ast_gs_slot_green --> job_56
+    verify_srv_s3_slot_blue --> job_56
+    verify_srv_s3_slot_green --> job_56
+    verify_srv_gs_slot_blue --> job_56
+    verify_srv_gs_slot_green --> job_56
 ```
 
 
@@ -262,7 +285,7 @@ After both instances of a shared-cache pair are verified, two jobs count log lin
 
 ### Phase 6: Blue/green slots
 
-After the S3 and GCS assets variants are verified, the new version is copied in the same bucket to `slot-e2e/<version>/v1.0.0+blue/` and `slot-e2e/<version>/v1.0.0+green/`. One instance per slot watches that prefix. The two versions differ only in build metadata, so a registry that picks the latest version before checking the slot gives both instances the same one.
+After the S3 and GCS assets variants are verified, the new version is copied in the same bucket to `slot-e2e/<version>/v1.0.0+blue/` and `slot-e2e/<version>/v1.0.0+green/`. One `assets` instance and one `server` instance per slot watch that prefix. The two versions differ only in build metadata, so a registry that picks the latest version before checking the slot gives both slots the same one.
 
 The slot versions are copied in the bucket rather than released from `dewy-testapp`, because the other instances would deploy a `+` tag as a new version, and a `+` tag is not a valid container image tag. The last job removes the copies, and runs even when a slot job failed.
 
@@ -295,10 +318,11 @@ The slot versions are copied in the bucket rather than released from `dewy-testa
 - The failure message carries the `--health-timeout` value, which shows the flag bounds the probe.
 - The failed replica is rolled back, and the deployment is never reported as successful.
 
-**`assets` (slot):**
+**`assets` (slot) and `server` (slot):**
 
 - Each instance deploys once with no errors.
-- Each slot directory holds exactly one audit file (`shipped_to_...`). An instance that deployed the other slot's version would leave two files in that directory and none in its own.
+- A `server` instance starts the new version.
+- Each slot directory holds exactly one audit file per command. An instance that deployed the other slot's version would leave two files of its command in that directory and none in its own. The `assets` and `server` instances of a slot report to the same directory, and the audit file name carries the command (`shipped_to_<host>_<command>_at_<time>.txt`), so each counts only its own.
 
 ## Running the Tests
 

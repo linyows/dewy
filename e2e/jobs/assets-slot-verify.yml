@@ -3,8 +3,12 @@ name: Assets Slot Verify
 # The start step already waited for "Create symlink", so the slot's version
 # has been deployed. What is left to check is that the deploy was reported to
 # the slot's own version directory, exactly once. If an instance deployed the
-# other slot's version, that directory would hold two audit files and this
-# slot's directory none.
+# other slot's version, that directory would hold two assets audit files and
+# this slot's directory none.
+#
+# The server instances of the same slot report to the same directory. Audit
+# file names carry the command (shipped_to_<host>_<command>_at_<time>.txt), so
+# only the assets ones are counted here.
 steps:
 - name: Wait for the audit file
   uses: shell
@@ -13,7 +17,7 @@ steps:
     interval: 5s
   with:
     cmd: |
-      {{ vars.ls_cmd }} | grep -q 'shipped_to_'
+      {{ vars.ls_cmd }} | grep -q 'shipped_to_.*_assets_at_'
   test: status == 0
 - name: Stop dewy
   uses: shell
@@ -25,7 +29,7 @@ steps:
   uses: shell
   with:
     cmd: |
-      {{ vars.ls_cmd }} | grep -c 'shipped_to_' | tr -d '\n'
+      {{ vars.ls_cmd }} | grep -c 'shipped_to_.*_assets_at_' | tr -d '\n'
   test: res.stdout == "1"
   outputs:
     ok: res.stdout == "1"
