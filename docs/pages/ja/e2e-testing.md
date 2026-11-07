@@ -39,13 +39,13 @@ DewyのE2Eテストは、実際のDewyプロセスを実際のレジストリに
 ## テストの流れ
 
 このページの図は、ジョブを1つのノードにまとめ、フェーズごとに分けて示します。
-図は`e2e/dag.sh`で出力します。
-このスクリプトは、Probeが出力するジョブの依存関係からステップを省きます。
+図は`e2e/dag`コマンドで出力します。
+このコマンドは、Probeが出力するジョブの依存関係からステップを省きます。
 
 ```bash
-e2e/dag.sh start     # フェーズ0〜2
-e2e/dag.sh verify    # フェーズ3
-e2e/dag.sh followup  # フェーズ4〜6
+go run ./e2e/dag start     # フェーズ0〜2
+go run ./e2e/dag verify    # フェーズ3
+go run ./e2e/dag followup  # フェーズ4〜6
 ```
 
 ステップまで含む全体の図は、[`e2e/README.md`](https://github.com/linyows/dewy/blob/main/e2e/README.md#architecture)にあります（`probe dag --mermaid e2e/test.yml`の出力）。

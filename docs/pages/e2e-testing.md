@@ -37,12 +37,12 @@ Each run follows the same path as a real release:
 
 ## Test Flow
 
-The diagrams in this page show one phase each, with each job as one node. They are printed by `e2e/dag.sh`, which collapses the steps of the full job graph from Probe:
+The diagrams in this page show one phase each, with each job as one node. They are printed by the `e2e/dag` command, which collapses the steps of the full job graph from Probe:
 
 ```bash
-e2e/dag.sh start     # Phase 0 to 2
-e2e/dag.sh verify    # Phase 3
-e2e/dag.sh followup  # Phase 4 to 6
+go run ./e2e/dag start     # Phase 0 to 2
+go run ./e2e/dag verify    # Phase 3
+go run ./e2e/dag followup  # Phase 4 to 6
 ```
 
 The full graph with every step is in [`e2e/README.md`](https://github.com/linyows/dewy/blob/main/e2e/README.md#architecture), printed by `probe dag --mermaid e2e/test.yml`. After changing `e2e/test.yml`, run these commands again and replace the diagrams.
