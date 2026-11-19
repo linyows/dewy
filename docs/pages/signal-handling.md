@@ -87,17 +87,45 @@ package main
 
 import (
     "context"
+    "fmt"
     "log"
+    "net"
     "net/http"
     "os"
     "os/signal"
+    "strconv"
+    "strings"
     "syscall"
     "time"
 )
 
+// listen returns the listening socket passed by server-starter, or opens
+// :8080 when the application is started outside dewy.
+func listen() (net.Listener, error) {
+    spec := os.Getenv("SERVER_STARTER_PORT") // e.g. "8080=3"
+    if spec == "" {
+        return net.Listen("tcp", ":8080")
+    }
+    entry := strings.Split(spec, ";")[0]
+    i := strings.LastIndex(entry, "=")
+    if i < 0 {
+        return nil, fmt.Errorf("invalid SERVER_STARTER_PORT: %q", spec)
+    }
+        // The number after "=" is a file descriptor, not a port.
+    fd, err := strconv.Atoi(entry[i+1:])
+    if err != nil {
+        return nil, fmt.Errorf("invalid SERVER_STARTER_PORT: %q", spec)
+    }
+    return net.FileListener(os.NewFile(uintptr(fd), entry[:i]))
+}
+
 func main() {
+    listener, err := listen()
+    if err != nil {
+        log.Fatal(err)
+    }
+
     server := &http.Server{
-        Addr:    ":8080",
         Handler: http.DefaultServeMux,
     }
 
@@ -118,14 +146,16 @@ func main() {
         }
     }()
 
-    log.Println("Starting server on :8080")
-    if err := server.ListenAndServe(); err != http.ErrServerClosed {
+    log.Printf("Starting server on %s", listener.Addr())
+    if err := server.Serve(listener); err != http.ErrServerClosed {
         log.Printf("Server error: %v", err)
     }
 }
 ```
 
 This example implements graceful shutdown when receiving SIGHUP signals, allowing existing requests to complete before stopping the server.
+
+Under dewy, server-starter has already opened the port given by `--port` and passes the listening socket to the application. `listen` turns that socket into a `net.Listener` instead of binding the port again; binding a port that server-starter holds fails with "address already in use" on Linux, and the inherited socket is what keeps the port open across a graceful restart. With several `--port` values, `SERVER_STARTER_PORT` has one entry per port; see [Multi-Port](/multi-port#server-starter-listeners).
 
 ### Applications with Database Connections
 
@@ -327,8 +357,14 @@ func main() {
         os.Exit(0)
     }()
 
-    log.Println("WebSocket server started on :8080")
-    log.Fatal(http.ListenAndServe(":8080", nil))
+    // listen is the function from the HTTP server example above.
+    listener, err := listen()
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    log.Printf("WebSocket server started on %s", listener.Addr())
+    log.Fatal(http.Serve(listener, nil))
 }
 ```
 

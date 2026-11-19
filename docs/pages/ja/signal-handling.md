@@ -87,17 +87,45 @@ package main
 
 import (
     "context"
+    "fmt"
     "log"
+    "net"
     "net/http"
     "os"
     "os/signal"
+    "strconv"
+    "strings"
     "syscall"
     "time"
 )
 
+// listenはserver-starterから渡された待ち受けソケットを返す。
+// dewyの外で起動した場合は:8080を開く。
+func listen() (net.Listener, error) {
+    spec := os.Getenv("SERVER_STARTER_PORT") // e.g. "8080=3"
+    if spec == "" {
+        return net.Listen("tcp", ":8080")
+    }
+    entry := strings.Split(spec, ";")[0]
+    i := strings.LastIndex(entry, "=")
+    if i < 0 {
+        return nil, fmt.Errorf("invalid SERVER_STARTER_PORT: %q", spec)
+    }
+        // "="の後の数値はポート番号ではなくファイルディスクリプタ
+    fd, err := strconv.Atoi(entry[i+1:])
+    if err != nil {
+        return nil, fmt.Errorf("invalid SERVER_STARTER_PORT: %q", spec)
+    }
+    return net.FileListener(os.NewFile(uintptr(fd), entry[:i]))
+}
+
 func main() {
+    listener, err := listen()
+    if err != nil {
+        log.Fatal(err)
+    }
+
     server := &http.Server{
-        Addr:    ":8080",
         Handler: http.DefaultServeMux,
     }
 
@@ -118,14 +146,16 @@ func main() {
         }
     }()
 
-    log.Println("Starting server on :8080")
-    if err := server.ListenAndServe(); err != http.ErrServerClosed {
+    log.Printf("Starting server on %s", listener.Addr())
+    if err := server.Serve(listener); err != http.ErrServerClosed {
         log.Printf("Server error: %v", err)
     }
 }
 ```
 
 このサンプルでは、SIGHUPシグナルを受信した際にGraceful shutdownを実行し、既存のリクエストを完了させてからサーバーを停止します。
+
+dewyの下では、`--port`で指定したポートはserver-starterがすでに開いており、その待ち受けソケットがアプリケーションに渡されます。`listen`はポートを開き直さずに、そのソケットを`net.Listener`として使います。server-starterが開いているポートを開こうとすると、Linuxでは「address already in use」で失敗します。また、渡されたソケットを使うことで、グレースフルリスタートの間もポートが開いたままになります。`--port`を複数指定した場合、`SERVER_STARTER_PORT`にはポートごとのエントリが`;`区切りで並びます。
 
 ### データベース接続を持つアプリケーション
 
@@ -327,8 +357,14 @@ func main() {
         os.Exit(0)
     }()
 
-    log.Println("WebSocket server started on :8080")
-    log.Fatal(http.ListenAndServe(":8080", nil))
+    // listenは上のHTTPサーバーのサンプルの関数
+    listener, err := listen()
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    log.Printf("WebSocket server started on %s", listener.Addr())
+    log.Fatal(http.Serve(listener, nil))
 }
 ```
 
