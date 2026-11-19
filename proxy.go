@@ -23,7 +23,7 @@ type tcpProxy struct {
 	proxyPort    int
 	listener     net.Listener
 	backends     []tcpBackend
-	backendIndex uint64 // Atomic counter for round-robin
+	backendIndex atomic.Uint64 // Atomic counter for round-robin
 	mu           sync.RWMutex
 	done         chan struct{}
 	logger       *logging.Logger
@@ -226,7 +226,7 @@ func (p *tcpProxy) getNextBackend() (tcpBackend, bool) {
 		return tcpBackend{}, false
 	}
 
-	index := atomic.AddUint64(&p.backendIndex, 1) - 1
+	index := p.backendIndex.Add(1) - 1
 	return p.backends[index%uint64(len(p.backends))], true
 }
 

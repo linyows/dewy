@@ -157,7 +157,7 @@ func (r *Runtime) RemoveExited(ctx context.Context, appName string) (int, error)
 	}
 
 	removed := 0
-	for _, id := range strings.Split(output, "\n") {
+	for id := range strings.SplitSeq(output, "\n") {
 		id = strings.TrimSpace(id)
 		if id == "" {
 			continue

@@ -270,8 +270,7 @@ func (s *S3) WriteIfMatch(key string, version string, data []byte) (string, erro
 // isS3PreconditionFailure reports whether err is the 412 Precondition Failed
 // response S3 returns when If-Match or If-None-Match conditions fail.
 func isS3PreconditionFailure(err error) bool {
-	var apiErr smithy.APIError
-	if errors.As(err, &apiErr) {
+	if apiErr, ok := errors.AsType[smithy.APIError](err); ok {
 		return apiErr.ErrorCode() == "PreconditionFailed"
 	}
 	return false

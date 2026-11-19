@@ -196,8 +196,7 @@ func (r *Runtime) execCommandOutput(ctx context.Context, args ...string) (string
 
 	output, err := r.runner.Output(ctx, r.cmd, args...)
 	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
+		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 			r.logger.Error("Command failed",
 				slog.String("cmd", r.cmd),
 				slog.Any("args", args),

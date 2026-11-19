@@ -1522,7 +1522,7 @@ func TestTickGracePeriodDoesNotBackOff(t *testing.T) {
 		}
 	})
 
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		d.tick()
 	}
 
@@ -1555,7 +1555,7 @@ func TestTickDefaultConfigNeverSkips(t *testing.T) {
 	d.backoff = newBackoff(10*time.Second, d.config.MaxBackoffInterval)
 	d.backoff.clock = clk
 
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		d.tick()
 	}
 
@@ -1577,7 +1577,7 @@ func TestTickOptInSkips(t *testing.T) {
 	d.backoff.clock = clk
 	d.backoff.jitter = identityJitter
 
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		d.tick()
 	}
 

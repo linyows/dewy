@@ -238,8 +238,7 @@ func (g *GS) WriteIfMatch(key string, version string, data []byte) (string, erro
 // isGSPreconditionFailure reports whether err is a 412 Precondition Failed
 // response from GCS (returned when ifGenerationMatch does not hold).
 func isGSPreconditionFailure(err error) bool {
-	var gerr *googleapi.Error
-	if errors.As(err, &gerr) {
+	if gerr, ok := errors.AsType[*googleapi.Error](err); ok {
 		return gerr.Code == 412
 	}
 	return false

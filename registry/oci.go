@@ -409,8 +409,7 @@ func (o *OCI) findLatestTag(tags []string) (string, error) {
 		_, latestTag, err = FindLatestSemVerWithSlot(tags, o.Slot, o.PreRelease)
 	}
 	if err != nil {
-		var slotErr *SlotNotFoundError
-		if errors.As(err, &slotErr) {
+		if slotErr, ok := errors.AsType[*SlotNotFoundError](err); ok {
 			o.logger.Debug("No tag found for slot", "slot", slotErr.Slot, "tags", tags)
 		} else {
 			o.logger.Warn("Failed to find versioned tag", "error", err, "tags", tags)

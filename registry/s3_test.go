@@ -279,8 +279,7 @@ func TestS3LatestVersionSlotNotFound(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected an error")
 		}
-		var slotErr *SlotNotFoundError
-		if errors.As(err, &slotErr) {
+		if _, ok := errors.AsType[*SlotNotFoundError](err); ok {
 			t.Errorf("an empty registry must stay a plain error, got %v", err)
 		}
 	})
