@@ -68,6 +68,9 @@ func TestServerHealthURL(t *testing.T) {
 		{"plain port", []string{"8000"}, "/health", "http://127.0.0.1:8000/health"},
 		{"path without a leading slash", []string{"8000"}, "health", "http://127.0.0.1:8000/health"},
 		{"no port", nil, "/health", ""},
+		{"specific host", []string{"192.168.10.11:8000"}, "/health", "http://192.168.10.11:8000/health"},
+		{"loopback host", []string{"127.0.0.1:8000"}, "/health", "http://127.0.0.1:8000/health"},
+		{"unspecified host probes the loopback", []string{"0.0.0.0:8000"}, "/health", "http://127.0.0.1:8000/health"},
 	}
 
 	for _, tt := range tests {

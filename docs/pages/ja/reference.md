@@ -120,6 +120,22 @@ dewy server --port 9090 -- /opt/app/current/app
 dewy server --registry ghr://owner/repo -- /opt/worker/current/worker
 ```
 
+### --host
+
+`server`コマンドが待ち受けるIPv4アドレスを指定します。指定したアドレスはすべての`--port`に適用されます。省略した場合は、`0.0.0.0`と同じくすべてのIPv4インターフェースで待ち受けます。
+
+このオプションは`--port`を必要とします。受け付けるのはIPv4アドレスだけです。`localhost`のようなホスト名やIPv6アドレスはエラーになります。`assets`コマンドと`container`コマンドではこのオプションを受け付けません。
+
+`--health-path`を指定した場合、ヘルスチェックは指定したアドレスに対してプローブします。`0.0.0.0`を指定した場合と`--host`を省略した場合は`127.0.0.1`に対してプローブします。
+
+```bash
+# ループバックインターフェースでのみ待ち受ける
+dewy server --registry ghr://owner/repo --host 127.0.0.1 --port 8000 -- /opt/app/current/app
+
+# 特定のインターフェースで待ち受ける
+dewy server --registry ghr://owner/repo --host 192.168.10.11 --port 8000-8001 -- /opt/app/current/app
+```
+
 ### --verify-checksum
 
 ダウンロードしたアーティファクトを、併せて公開されているSHA-256チェックサムファイルとどのように照合するかを選択します。`off`、`auto`、`required`のいずれかを指定します。デフォルトは`auto`です。

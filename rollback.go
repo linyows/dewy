@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -49,6 +50,11 @@ func (d *Dewy) verifyServerHealth(ctx context.Context) error {
 // The port list is deduplicated and sorted numerically while the flags are
 // parsed, so the first entry is the lowest port number rather than the first
 // one given on the command line.
+//
+// A port carries a "host:port" form when --host was given. The probe goes to
+// that address, because a server bound to a specific interface does not
+// accept connections on 127.0.0.1. The unspecified address 0.0.0.0 binds
+// every interface, so it is probed through the loopback like a bare port.
 func (d *Dewy) serverHealthURL() string {
 	if d.config.Starter == nil {
 		return ""
@@ -58,14 +64,21 @@ func (d *Dewy) serverHealthURL() string {
 		return ""
 	}
 
+	host := "127.0.0.1"
 	port := ports[0]
+	if h, p, err := net.SplitHostPort(port); err == nil {
+		port = p
+		if ip := net.ParseIP(h); ip != nil && !ip.IsUnspecified() {
+			host = h
+		}
+	}
 
 	path := d.config.Health.Path
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path
 	}
 
-	return fmt.Sprintf("http://127.0.0.1:%s%s", port, path)
+	return fmt.Sprintf("http://%s%s", net.JoinHostPort(host, port), path)
 }
 
 // serverHealthTimeout returns the overall probe budget for the server

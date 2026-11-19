@@ -72,6 +72,24 @@ func TestRunCLI(t *testing.T) {
 			expectExit:  ExitErr,
 			expectError: "Error: --health-path requires --port",
 		},
+		{
+			name:        "host is rejected outside the server command",
+			args:        []string{"--registry", "img://ghcr.io/o/r", "--host", "127.0.0.1", "--port", "8080", "container"},
+			expectExit:  ExitErr,
+			expectError: "Error: --host is only supported by the server command",
+		},
+		{
+			name:        "host requires a port on the server command",
+			args:        []string{"--registry", "ghr://o/r", "--host", "127.0.0.1", "server", "myapp"},
+			expectExit:  ExitErr,
+			expectError: "Error: --host requires --port",
+		},
+		{
+			name:        "host must be an IPv4 address",
+			args:        []string{"--registry", "ghr://o/r", "--host", "::1", "--port", "8080", "server", "myapp"},
+			expectExit:  ExitErr,
+			expectError: "Error: invalid host",
+		},
 	}
 
 	for _, tt := range tests {
@@ -676,10 +694,36 @@ func TestValidateAndDeduplicatePorts(t *testing.T) {
 	}
 }
 
+func TestValidateHost(t *testing.T) {
+	tests := []struct {
+		host    string
+		wantErr bool
+	}{
+		{"127.0.0.1", false},
+		{"192.168.10.11", false},
+		{"0.0.0.0", false},
+		{"::1", true},
+		{"::ffff:127.0.0.1", true},
+		{"[127.0.0.1]", true},
+		{"localhost", true},
+		{"127.0.0.1:8080", true},
+		{"", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.host, func(t *testing.T) {
+			if err := validateHost(tt.host); (err != nil) != tt.wantErr {
+				t.Errorf("validateHost(%q) error = %v, wantErr %v", tt.host, err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestCLI_ConfigureServerCommand(t *testing.T) {
 	tests := []struct {
 		name        string
 		ports       []string
+		host        string
 		args        []string
 		logFormat   string
 		expectPorts []string
@@ -724,6 +768,43 @@ func TestCLI_ConfigureServerCommand(t *testing.T) {
 			logFormat: "text",
 			wantErr:   true,
 		},
+		{
+			name:        "with host",
+			ports:       []string{"8080,8081"},
+			host:        "127.0.0.1",
+			args:        []string{"/opt/app/current/app"},
+			logFormat:   "text",
+			expectPorts: []string{"127.0.0.1:8080", "127.0.0.1:8081"},
+			expectCmd:   "/opt/app/current/app",
+			expectArgs:  nil,
+			wantErr:     false,
+		},
+		{
+			name:        "with unspecified host",
+			ports:       []string{"8080"},
+			host:        "0.0.0.0",
+			args:        []string{"/opt/app/current/app"},
+			logFormat:   "text",
+			expectPorts: []string{"0.0.0.0:8080"},
+			expectCmd:   "/opt/app/current/app",
+			expectArgs:  nil,
+			wantErr:     false,
+		},
+		{
+			name:      "with host but no port",
+			host:      "127.0.0.1",
+			args:      []string{"/opt/app/current/app"},
+			logFormat: "text",
+			wantErr:   true,
+		},
+		{
+			name:      "with invalid host",
+			ports:     []string{"8080"},
+			host:      "localhost",
+			args:      []string{"/opt/app/current/app"},
+			logFormat: "text",
+			wantErr:   true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -731,6 +812,7 @@ func TestCLI_ConfigureServerCommand(t *testing.T) {
 			var errBuf bytes.Buffer
 			cli := &cli{
 				Ports:     tt.ports,
+				Host:      tt.host,
 				args:      tt.args,
 				LogFormat: tt.logFormat,
 				env: Env{
