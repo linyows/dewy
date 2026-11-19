@@ -156,20 +156,17 @@ Here are implementation patterns for applications that utilize dewy's multi-port
 
 Multi-port applications typically provide different functions or configurations for each port.
 
+When dewy starts the application, server-starter has already opened every configured port. The application does not bind the ports itself: it serves on the listening sockets that server-starter passes to it, as shown in [Using the Listeners Passed by server-starter](#server-starter-listeners). Binding a port that server-starter holds fails with "address already in use" on Linux, and the inherited sockets are what keep the ports open across a graceful restart.
+
 ```go
 package main
 
 import (
     "context"
-    "fmt"
     "log"
+    "net"
     "net/http"
-    "os"
-    "os/signal"
-    "strings"
     "sync"
-    "syscall"
-    "time"
 )
 
 type MultiPortServer struct {
@@ -177,39 +174,37 @@ type MultiPortServer struct {
     wg      sync.WaitGroup
 }
 
-func (m *MultiPortServer) Start(ports []string) error {
-    for _, port := range ports {
+func (m *MultiPortServer) Start(listeners []net.Listener) {
+    for _, l := range listeners {
         server := &http.Server{
-            Addr:    ":" + port,
-            Handler: m.createHandler(port),
+            Handler: m.createHandler(listenerPort(l)),
         }
         m.servers = append(m.servers, server)
 
         m.wg.Add(1)
-        go func(s *http.Server, p string) {
+        go func(s *http.Server, l net.Listener) {
             defer m.wg.Done()
-            log.Printf("Starting server on port %s", p)
-            if err := s.ListenAndServe(); err != http.ErrServerClosed {
-                log.Printf("Server error on port %s: %v", p, err)
+            log.Printf("Starting server on %s", l.Addr())
+            if err := s.Serve(l); err != http.ErrServerClosed {
+                log.Printf("Server error on %s: %v", l.Addr(), err)
             }
-        }(server, port)
+        }(server, l)
     }
-    return nil
 }
 
-func (m *MultiPortServer) createHandler(port string) http.Handler {
+func (m *MultiPortServer) createHandler(port int) http.Handler {
     mux := http.NewServeMux()
 
     switch port {
-    case "8080":
+    case 8080:
         // Main API
         mux.HandleFunc("/api/", m.apiHandler)
         mux.HandleFunc("/health", m.healthHandler)
-    case "8090":
+    case 8090:
         // Admin interface
         mux.HandleFunc("/admin/", m.adminHandler)
         mux.HandleFunc("/admin/health", m.adminHealthHandler)
-    case "9090":
+    case 9090:
         // Metrics
         mux.HandleFunc("/metrics", m.metricsHandler)
     }
@@ -226,71 +221,91 @@ func (m *MultiPortServer) Shutdown(ctx context.Context) error {
     m.wg.Wait()
     return nil
 }
+
+// listenerPort returns the TCP port of l, or 0 for a Unix socket.
+func listenerPort(l net.Listener) int {
+    if addr, ok := l.Addr().(*net.TCPAddr); ok {
+        return addr.Port
+    }
+    return 0
+}
 ```
 
 This design provides different functionality on each port while implementing unified shutdown processing.
 
-### Retrieving Port Information from Environment Variables
+### Using the Listeners Passed by server-starter {% #server-starter-listeners %}
 
-You can dynamically retrieve port information using environment variables provided by server-starter.
+server-starter passes the listening sockets to the application as inherited file descriptors and lists them in the `SERVER_STARTER_PORT` environment variable. Entries are joined by `;`, and each entry is `port=fd`, or `host:port=fd` when `--host` is set. For example, `--port 8080,8090` produces `8080=3;8090=4`.
+
+The number after `=` is a file descriptor, not a port. The application turns each descriptor into a `net.Listener` with `os.NewFile` and `net.FileListener`, which detect the socket type from the descriptor itself.
 
 ```go
 package main
 
 import (
+    "context"
+    "fmt"
+    "log"
+    "net"
     "os"
+    "os/signal"
     "strconv"
     "strings"
+    "syscall"
+    "time"
 )
 
-func getServerStarterPorts() ([]string, error) {
-    // Retrieve port information from SERVER_STARTER_PORT environment variable
-    portEnv := os.Getenv("SERVER_STARTER_PORT")
-    if portEnv == "" {
-        // Fallback: application-specific environment variables
-        return getApplicationPorts()
+// inheritedListeners returns the listening sockets passed by server-starter.
+// It returns nil when SERVER_STARTER_PORT is not set, which means the
+// application was not started by dewy.
+func inheritedListeners() ([]net.Listener, error) {
+    spec := os.Getenv("SERVER_STARTER_PORT")
+    if spec == "" {
+        return nil, nil
     }
 
-    var ports []string
-    for _, portSpec := range strings.Split(portEnv, ";") {
-        if portSpec == "" {
-            continue
+    var listeners []net.Listener
+    for _, entry := range strings.Split(spec, ";") {
+        // "8080=3" or "127.0.0.1:8080=3": the target, then the descriptor.
+        i := strings.LastIndex(entry, "=")
+        if i < 0 {
+            return nil, fmt.Errorf("invalid SERVER_STARTER_PORT entry: %q", entry)
+        }
+        target := entry[:i]
+        fd, err := strconv.Atoi(entry[i+1:])
+        if err != nil {
+            return nil, fmt.Errorf("invalid descriptor in %q: %w", entry, err)
         }
 
-        // Parse "name=port" format
-        parts := strings.Split(portSpec, "=")
-        if len(parts) == 2 {
-            ports = append(ports, parts[1])
+        l, err := net.FileListener(os.NewFile(uintptr(fd), target))
+        if err != nil {
+            return nil, fmt.Errorf("cannot use descriptor %d for %s: %w", fd, target, err)
         }
+        listeners = append(listeners, l)
     }
-
-    return ports, nil
-}
-
-func getApplicationPorts() ([]string, error) {
-    // Retrieve from application-specific environment variables
-    portsStr := os.Getenv("APP_PORTS")
-    if portsStr == "" {
-        return []string{"8080"}, nil // Default
-    }
-
-    return strings.Split(portsStr, ","), nil
+    return listeners, nil
 }
 
 func main() {
-    ports, err := getServerStarterPorts()
+    listeners, err := inheritedListeners()
     if err != nil {
         log.Fatal(err)
     }
-
-    server := &MultiPortServer{}
-    if err := server.Start(ports); err != nil {
-        log.Fatal(err)
+    if listeners == nil {
+        // Started directly, for example during development.
+        l, err := net.Listen("tcp", ":8080")
+        if err != nil {
+            log.Fatal(err)
+        }
+        listeners = []net.Listener{l}
     }
 
-    // Signal waiting and shutdown processing
+    server := &MultiPortServer{}
+    server.Start(listeners)
+
+    // server-starter sends SIGTERM to the old worker after a restart.
     sigCh := make(chan os.Signal, 1)
-    signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
+    signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
 
     <-sigCh
 
@@ -303,7 +318,7 @@ func main() {
 }
 ```
 
-This implementation allows applications to automatically adapt to dewy configuration changes.
+The listeners follow the configuration, so the application does not need its own list of ports: changing `--port` changes the sockets it serves on.
 
 ### Port-Specific Routing Configuration
 
@@ -381,7 +396,6 @@ func createServer(config PortConfig) *http.Server {
     }
 
     return &http.Server{
-        Addr:         ":" + config.Port,
         Handler:      handler,
         ReadTimeout:  15 * time.Second,
         WriteTimeout: 15 * time.Second,
@@ -389,6 +403,8 @@ func createServer(config PortConfig) *http.Server {
     }
 }
 ```
+
+Serve each server on the inherited listener for its port, selected with `listenerPort` from the example above. The server has no `Addr`, because it does not open the port itself.
 
 This design allows you to apply different security requirements and performance settings for each port.
 
@@ -402,35 +418,38 @@ package main
 import (
     "context"
     "log"
+    "net"
+    "net/http"
     "sync"
     "time"
 )
 
 type GracefulServer struct {
-    servers []*http.Server
-    mu      sync.RWMutex
+    servers   []*http.Server
+    listeners []net.Listener
+    mu        sync.RWMutex
 }
 
-func (g *GracefulServer) AddServer(server *http.Server) {
+// AddServer registers server to be served on l, an inherited listener.
+func (g *GracefulServer) AddServer(server *http.Server, l net.Listener) {
     g.mu.Lock()
     defer g.mu.Unlock()
     g.servers = append(g.servers, server)
+    g.listeners = append(g.listeners, l)
 }
 
-func (g *GracefulServer) StartAll() error {
+func (g *GracefulServer) StartAll() {
     g.mu.RLock()
     defer g.mu.RUnlock()
 
-    for _, server := range g.servers {
-        go func(s *http.Server) {
-            log.Printf("Starting server on %s", s.Addr)
-            if err := s.ListenAndServe(); err != http.ErrServerClosed {
-                log.Printf("Server error on %s: %v", s.Addr, err)
+    for i, server := range g.servers {
+        go func(s *http.Server, l net.Listener) {
+            log.Printf("Starting server on %s", l.Addr())
+            if err := s.Serve(l); err != http.ErrServerClosed {
+                log.Printf("Server error on %s: %v", l.Addr(), err)
             }
-        }(server)
+        }(server, g.listeners[i])
     }
-
-    return nil
 }
 
 func (g *GracefulServer) ShutdownAll(timeout time.Duration) error {
@@ -447,7 +466,7 @@ func (g *GracefulServer) ShutdownAll(timeout time.Duration) error {
         wg.Add(1)
         go func(s *http.Server) {
             defer wg.Done()
-            log.Printf("Shutting down server on %s", s.Addr)
+            log.Println("Shutting down server")
             if err := s.Shutdown(ctx); err != nil {
                 errors <- err
             }
