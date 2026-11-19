@@ -107,6 +107,31 @@ func (d *Dewy) healthCheckTimeout() time.Duration {
 	return defaultHealthCheckTotalTimeout
 }
 
+// newProbeClient returns the HTTP client for health checks.
+//
+// The probe always targets an address on this host: the loopback, or the
+// address given by --host. It must not go through HTTP_PROXY or HTTPS_PROXY,
+// which an operator may set so dewy can reach a registry. Go skips the proxy
+// only for loopback targets, so a server bound to another interface would be
+// probed through the proxy, and the proxy's own response would decide the
+// health of the release. The transport therefore disables the proxy.
+func newProbeClient() *http.Client {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = nil
+
+	return &http.Client{
+		Timeout:   defaultHealthCheckProbeTimeout,
+		Transport: transport,
+		// Judge the container by the status it returns, not by wherever it
+		// points. Following a redirect would make a 3xx healthy or unhealthy
+		// depending on the target, contradicting the rule below, and would let
+		// a probe that is deliberately pinned to this host leave it.
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+}
+
 // probeHealth polls healthURL until it answers with a success status or the
 // budget runs out. The budget covers every attempt including the back-off
 // between them, so an operator raising --health-timeout buys more attempts
@@ -115,16 +140,8 @@ func (d *Dewy) probeHealth(ctx context.Context, healthURL string, budget time.Du
 	deadlineCtx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
 
-	client := &http.Client{
-		Timeout: defaultHealthCheckProbeTimeout,
-		// Judge the container by the status it returns, not by wherever it
-		// points. Following a redirect would make a 3xx healthy or unhealthy
-		// depending on the target, contradicting the rule below, and would let
-		// a probe that is deliberately pinned to localhost leave the host.
-		CheckRedirect: func(*http.Request, []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}
+	client := newProbeClient()
+	defer client.CloseIdleConnections()
 	attempts := 0
 
 	for {
