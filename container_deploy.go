@@ -116,7 +116,10 @@ func (d *Dewy) healthCheckTimeout() time.Duration {
 // probed through the proxy, and the proxy's own response would decide the
 // health of the release. The transport therefore disables the proxy.
 func newProbeClient() *http.Client {
-	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport := &http.Transport{}
+	if base, ok := http.DefaultTransport.(*http.Transport); ok {
+		transport = base.Clone()
+	}
 	transport.Proxy = nil
 
 	return &http.Client{

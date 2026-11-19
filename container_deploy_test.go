@@ -155,7 +155,7 @@ func TestProbeHealth_IgnoresProxy(t *testing.T) {
 	}))
 	defer proxy.Close()
 
-	cmd := exec.Command(os.Args[0], "-test.run=^TestProbeHealth_IgnoresProxy$", "-test.count=1")
+	cmd := exec.Command(os.Args[0], "-test.run=^TestProbeHealth_IgnoresProxy$", "-test.count=1") //nolint:gosec // G204: re-executes this test binary with fixed arguments
 	cmd.Env = append(os.Environ(),
 		probeProxyChildEnv+"="+app.URL+"/health",
 		"HTTP_PROXY="+proxy.URL,
