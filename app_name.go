@@ -1,6 +1,9 @@
 package dewy
 
-import "strings"
+import (
+	"slices"
+	"strings"
+)
 
 // appName returns the dewy.app label value that this instance's deploys
 // register containers under. Prefers an explicit Config.Container.Name;
@@ -39,8 +42,8 @@ func deriveAppNameFromRegistry(registryURL string) string {
 	rest, _, _ = strings.Cut(rest, "?")
 
 	segments := strings.Split(rest, "/")
-	for i := len(segments) - 1; i >= 0; i-- {
-		name, _, _ := strings.Cut(segments[i], ":")
+	for _, segment := range slices.Backward(segments) {
+		name, _, _ := strings.Cut(segment, ":")
 		if name != "" {
 			return name
 		}

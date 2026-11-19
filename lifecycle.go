@@ -32,8 +32,7 @@ func (d *Dewy) resolveCurrent(ctx context.Context) (*registry.CurrentResponse, e
 	if err != nil {
 		// Within grace period (e.g. CI is still uploading the artifact)
 		// we return (nil, nil) to suppress the alert.
-		var artifactNotFoundErr *registry.ArtifactNotFoundError
-		if errors.As(err, &artifactNotFoundErr) {
+		if artifactNotFoundErr, ok := errors.AsType[*registry.ArtifactNotFoundError](err); ok {
 			if artifactNotFoundErr.IsWithinGracePeriod(defaultArtifactGracePeriod) {
 				d.logger.Debug("Artifact not found within grace period",
 					slog.String("message", artifactNotFoundErr.Message),

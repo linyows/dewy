@@ -136,7 +136,7 @@ func TestBackoffDisabledByDefault(t *testing.T) {
 	b.clock = clk
 	b.jitter = identityJitter
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		if failures, until := b.failure(); !until.IsZero() {
 			t.Fatalf("failure() #%d opened a window until %v, want none when no max is set", failures, until)
 		}
@@ -159,7 +159,7 @@ func TestBackoffDisabledByDefault(t *testing.T) {
 func TestBackoffDisabledWhenBaseIsZero(t *testing.T) {
 	b := newTestBackoff(0, testClock())
 
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		b.failure()
 	}
 
@@ -190,7 +190,7 @@ func TestBackoffIntervalLongerThanCap(t *testing.T) {
 func TestBackoffEqualJitterStaysAboveBase(t *testing.T) {
 	base := 10 * time.Second
 
-	for i := 0; i < 200; i++ {
+	for range 200 {
 		clk := testClock()
 		start := clk.Now()
 		b := newBackoff(base, testBackoffMax) // keeps the real equalJitter
@@ -221,7 +221,7 @@ func TestEqualJitterBounds(t *testing.T) {
 		t.Errorf("equalJitter(1ns) = %v, want 1ns: a duration too small to halve is returned as-is", got)
 	}
 
-	for i := 0; i < 200; i++ {
+	for range 200 {
 		d := 40 * time.Second
 		got := equalJitter(d)
 		if got < d/2 || got >= d {

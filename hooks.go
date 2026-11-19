@@ -82,8 +82,7 @@ func (d *Dewy) execHook(cmd string) (*notifier.HookResult, error) {
 		result.Stderr = strings.TrimSpace(stderr.String())
 		result.Success = false
 
-		var exitError *exec.ExitError
-		if errors.As(err, &exitError) {
+		if exitError, ok := errors.AsType[*exec.ExitError](err); ok {
 			result.ExitCode = exitError.ExitCode()
 		} else {
 			result.ExitCode = 1
