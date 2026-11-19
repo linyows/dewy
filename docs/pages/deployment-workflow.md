@@ -148,7 +148,7 @@ After startup/restart processing completion, results are reported through the no
 
 The verification phase runs in server mode when `--health-path` is set. It is skipped in assets mode and when the option is not set.
 
-Dewy probes `http://127.0.0.1:<port><--health-path>` after the process has started or restarted. The port is the lowest of the configured `--port` values, because the port list is deduplicated and sorted numerically while the flags are parsed. A status of 2xx or 3xx counts as success. Attempts repeat every two seconds until the response succeeds or `--health-timeout` (30 seconds by default) is exhausted.
+Dewy probes `http://<host>:<port><--health-path>` after the process has started or restarted. The host is the `--host` address, or `127.0.0.1` when `--host` is omitted or `0.0.0.0`. The port is the lowest of the configured `--port` values, because the port list is deduplicated and sorted numerically while the flags are parsed. A status of 2xx or 3xx counts as success. Attempts repeat every two seconds until the response succeeds or `--health-timeout` (30 seconds by default) is exhausted.
 
 On a restart, the probe waits for the worker swap to finish first. server-starter answers the restart signal by spawning a new worker beside the old one, both sharing the inherited listening socket, and stops the old one only once the new one has survived its startup window. A probe sent during that window can be answered by the release being replaced. Dewy therefore reads the server-starter status file until it reports a single worker with a newer generation, for up to 30 seconds. If that state is not reached in time, the probe runs anyway and a warning records that its result may come from the previous release.
 

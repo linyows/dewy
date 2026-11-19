@@ -3,8 +3,11 @@ package dewy
 import (
 	"context"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -114,6 +117,111 @@ func TestProbeHealth_DoesNotFollowRedirect(t *testing.T) {
 	if got := targetHits.Load(); got != 0 {
 		t.Errorf("redirect target was requested %d times, want 0", got)
 	}
+}
+
+// probeProxyChildEnv carries the health URL to the child process started by
+// TestProbeHealth_IgnoresProxy. Its presence makes the test act as the child.
+const probeProxyChildEnv = "DEWY_TEST_PROBE_PROXY_URL"
+
+func TestProbeHealth_IgnoresProxy(t *testing.T) {
+	// Go reads the proxy environment variables once per process, so setting
+	// HTTP_PROXY here could be ignored if an earlier test already caused them
+	// to be read. The probe runs in a child process that starts with
+	// HTTP_PROXY set instead.
+	if u := os.Getenv(probeProxyChildEnv); u != "" {
+		d := testDewy(&ContainerConfig{})
+		if err := d.probeHealth(context.Background(), u, 3*time.Second); err != nil {
+			t.Fatalf("probeHealth() error = %v, want nil", err)
+		}
+		return
+	}
+
+	// Go never proxies a loopback target, so the server has to listen on
+	// another interface for the proxy to be used at all, as with --host.
+	var appHits atomic.Int32
+	app := startNonLoopbackServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/health" {
+			appHits.Add(1)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer app.Close()
+
+	// The proxy answers 403, so a probe that goes through it fails.
+	var proxyHits atomic.Int32
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		proxyHits.Add(1)
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer proxy.Close()
+
+	cmd := exec.Command(os.Args[0], "-test.run=^TestProbeHealth_IgnoresProxy$", "-test.count=1") //nolint:gosec // G204: re-executes this test binary with fixed arguments
+	cmd.Env = append(os.Environ(),
+		probeProxyChildEnv+"="+app.URL+"/health",
+		"HTTP_PROXY="+proxy.URL,
+		"http_proxy="+proxy.URL,
+		"NO_PROXY=",
+		"no_proxy=",
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Errorf("probe in child process failed: %v\n%s", err, out)
+	}
+	if got := proxyHits.Load(); got != 0 {
+		t.Errorf("proxy received %d requests, want 0", got)
+	}
+	if got := appHits.Load(); got == 0 {
+		t.Error("server received no requests, want at least 1")
+	}
+}
+
+// startNonLoopbackServer starts handler on an IPv4 address of an interface
+// other than the loopback, or skips the test when there is none. A VPN
+// tunnel or a host firewall can keep the host from reaching its own address,
+// so an address is used only after a request to it gets a response.
+func startNonLoopbackServer(t *testing.T, handler http.Handler) *httptest.Server {
+	t.Helper()
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		t.Skipf("cannot list interfaces: %v", err)
+	}
+	check := &http.Client{Timeout: time.Second, Transport: &http.Transport{}}
+	defer check.CloseIdleConnections()
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			ipnet, ok := addr.(*net.IPNet)
+			if !ok {
+				continue
+			}
+			ip := ipnet.IP.To4()
+			if ip == nil || ip.IsLoopback() || ip.IsLinkLocalUnicast() {
+				continue
+			}
+			l, err := net.Listen("tcp4", net.JoinHostPort(ip.String(), "0"))
+			if err != nil {
+				continue
+			}
+			srv := httptest.NewUnstartedServer(handler)
+			srv.Listener = l
+			srv.Start()
+			resp, err := check.Get(srv.URL + "/reachability")
+			if err != nil {
+				srv.Close()
+				continue
+			}
+			_ = resp.Body.Close()
+			return srv
+		}
+	}
+	t.Skip("no non-loopback IPv4 address reachable from this host")
+	return nil
 }
 
 func TestProbeHealth_RetriesUntilHealthy(t *testing.T) {

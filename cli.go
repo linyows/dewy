@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -43,6 +44,7 @@ type cli struct {
 	Interval           int      `long:"interval" arg:"seconds" short:"i" description:"Polling interval in seconds for checking registry updates (default: 10)"`
 	MaxBackoffInterval int      `long:"max-backoff-interval" arg:"seconds" description:"Stretch the polling interval exponentially while checks keep failing, up to this many seconds (default: 0, disabled; 300 is a reasonable choice)"`
 	Ports              []string `long:"port" short:"p" description:"For server: TCP ports to listen on. For container: port mappings in format 'proxy' or 'proxy:container' (multiple flags supported)"`
+	Host               string   `long:"host" description:"IPv4 address the server command listens on for every --port (e.g., 127.0.0.1). Listens on all interfaces when omitted"`
 	Registry           string   `long:"registry" description:"Registry URL (e.g., ghr://owner/repo, s3://region/bucket/prefix, docker://registry/repo)"`
 	Cache              string   `long:"cache" short:"c" description:"Cache backend URL (e.g., file:///path, s3://region/bucket/prefix, gs://bucket/prefix). Defaults to local file."`
 	Notifier           string   `long:"notifier" description:"Notifier URL for deployment notifications (e.g., slack://channel, mail://smtp:port/recipient)"`
@@ -169,6 +171,7 @@ func (c *cli) showHelp() {
 
 	serverOpts := strings.Join(c.buildHelp([]string{
 		"Ports",
+		"Host",
 		"NoRollback",
 	}), "\n")
 
@@ -295,6 +298,10 @@ func (c *cli) run() int {
 		fmt.Fprintf(c.env.Err, "Error: --no-rollback is only supported by the server command\n")
 		return ExitErr
 	}
+	if c.Host != "" && c.command != "server" {
+		fmt.Fprintf(c.env.Err, "Error: --host is only supported by the server command\n")
+		return ExitErr
+	}
 
 	switch c.command {
 	case "server":
@@ -358,6 +365,23 @@ func (c *cli) configureServerCommand(conf *Config) error {
 		if err != nil {
 			fmt.Fprintf(c.env.Err, "Error: invalid port specification: %s\n", err)
 			return err
+		}
+	}
+
+	if c.Host != "" {
+		if err := validateHost(c.Host); err != nil {
+			fmt.Fprintf(c.env.Err, "Error: invalid host: %s\n", err)
+			return err
+		}
+		if len(parsedPorts) == 0 {
+			fmt.Fprintf(c.env.Err, "Error: --host requires --port\n")
+			return fmt.Errorf("--host requires --port")
+		}
+		// 0.0.0.0 binds every interface, as omitting --host does. Passing
+		// the bare ports keeps SERVER_STARTER_PORT in the "port=fd" form
+		// for the app, as it is without --host.
+		if !net.ParseIP(c.Host).IsUnspecified() {
+			parsedPorts = joinHostPorts(c.Host, parsedPorts)
 		}
 	}
 
@@ -465,6 +489,34 @@ func (c *cli) configureContainerCommand(conf *Config) error {
 		ProxyIdleTimeout: proxyIdleTimeout,
 	}
 	return nil
+}
+
+// validateHost checks the --host value. server-starter listens with "tcp4",
+// so only an IPv4 address can be bound; a hostname or an IPv6 address would
+// either fail at listen time or resolve to something other than what was
+// asked for.
+func validateHost(host string) error {
+	ip := net.ParseIP(host)
+	if ip == nil || ip.To4() == nil || strings.Contains(host, ":") {
+		return fmt.Errorf("%q is not an IPv4 address", host)
+	}
+	// A multicast or broadcast address cannot be bound by a TCP listener.
+	// Rejecting it here reports the mistake at startup, not as a listen
+	// failure on every deployment.
+	if ip.IsMulticast() || ip.Equal(net.IPv4bcast) {
+		return fmt.Errorf("%q is not a unicast address", host)
+	}
+	return nil
+}
+
+// joinHostPorts prefixes each port with host in the "host:port" form that
+// server-starter accepts.
+func joinHostPorts(host string, ports []string) []string {
+	joined := make([]string, len(ports))
+	for i, port := range ports {
+		joined[i] = net.JoinHostPort(host, port)
+	}
+	return joined
 }
 
 // parsePorts parses port specifications from CLI arguments.

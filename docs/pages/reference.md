@@ -120,6 +120,24 @@ dewy server --port 9090 -- /opt/app/current/app
 dewy server --registry ghr://owner/repo -- /opt/worker/current/worker
 ```
 
+### --host
+
+Specifies the IPv4 address the `server` command listens on. The address applies to every `--port`. When omitted, the server listens on all IPv4 interfaces. `0.0.0.0` behaves the same as omitting the option.
+
+The option requires `--port`. Only an IPv4 unicast address is accepted; a hostname such as `localhost`, an IPv6 address, and a multicast or broadcast address are rejected. The `assets` and `container` commands reject this option.
+
+With an address other than `0.0.0.0`, the `SERVER_STARTER_PORT` environment variable passed to the application lists each listener as `host:port=fd` (for example, `127.0.0.1:8000=3`) instead of `port=fd`. An application that parses the variable itself must accept this form.
+
+When `--health-path` is set, the health check probes the given address. With `0.0.0.0` or no `--host`, it probes `127.0.0.1`.
+
+```bash
+# Listen on the loopback interface only
+dewy server --registry ghr://owner/repo --host 127.0.0.1 --port 8000 -- /opt/app/current/app
+
+# Listen on a specific interface
+dewy server --registry ghr://owner/repo --host 192.168.10.11 --port 8000-8001 -- /opt/app/current/app
+```
+
 ### --verify-checksum
 
 Selects how a downloaded artifact is checked against the SHA-256 checksum file published next to it. Accepts `off`, `auto` or `required`. Default is `auto`.
