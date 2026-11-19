@@ -122,9 +122,11 @@ dewy server --registry ghr://owner/repo -- /opt/worker/current/worker
 
 ### --host
 
-Specifies the IPv4 address the `server` command listens on. The address applies to every `--port`. When omitted, the server listens on all IPv4 interfaces, which is the same as `0.0.0.0`.
+Specifies the IPv4 address the `server` command listens on. The address applies to every `--port`. When omitted, the server listens on all IPv4 interfaces. `0.0.0.0` behaves the same as omitting the option.
 
-The option requires `--port`. Only an IPv4 address is accepted; a hostname such as `localhost` or an IPv6 address is rejected. The `assets` and `container` commands reject this option.
+The option requires `--port`. Only an IPv4 unicast address is accepted; a hostname such as `localhost`, an IPv6 address, and a multicast or broadcast address are rejected. The `assets` and `container` commands reject this option.
+
+With an address other than `0.0.0.0`, the `SERVER_STARTER_PORT` environment variable passed to the application lists each listener as `host:port=fd` (for example, `127.0.0.1:8000=3`) instead of `port=fd`. An application that parses the variable itself must accept this form.
 
 When `--health-path` is set, the health check probes the given address. With `0.0.0.0` or no `--host`, it probes `127.0.0.1`.
 

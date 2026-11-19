@@ -377,7 +377,12 @@ func (c *cli) configureServerCommand(conf *Config) error {
 			fmt.Fprintf(c.env.Err, "Error: --host requires --port\n")
 			return fmt.Errorf("--host requires --port")
 		}
-		parsedPorts = joinHostPorts(c.Host, parsedPorts)
+		// 0.0.0.0 binds every interface, as omitting --host does. Passing
+		// the bare ports keeps SERVER_STARTER_PORT in the "port=fd" form
+		// for the app, as it is without --host.
+		if !net.ParseIP(c.Host).IsUnspecified() {
+			parsedPorts = joinHostPorts(c.Host, parsedPorts)
+		}
 	}
 
 	var command string
@@ -494,6 +499,12 @@ func validateHost(host string) error {
 	ip := net.ParseIP(host)
 	if ip == nil || ip.To4() == nil || strings.Contains(host, ":") {
 		return fmt.Errorf("%q is not an IPv4 address", host)
+	}
+	// A multicast or broadcast address cannot be bound by a TCP listener.
+	// Rejecting it here reports the mistake at startup, not as a listen
+	// failure on every deployment.
+	if ip.IsMulticast() || ip.Equal(net.IPv4bcast) {
+		return fmt.Errorf("%q is not a unicast address", host)
 	}
 	return nil
 }
