@@ -42,7 +42,7 @@ func TestMain(m *testing.M) {
 //	ignore-term  like serve, but ignore SIGTERM
 func runHelper() int {
 	mode := "serve"
-	if b, err := os.ReadFile(os.Getenv(modeFileEnv)); err == nil {
+	if b, err := os.ReadFile(os.Getenv(modeFileEnv)); err == nil { //nolint:gosec // G703: the path is a temp file the test itself names
 		mode = strings.TrimSpace(string(b))
 	}
 	if mode == "crash" {
@@ -73,7 +73,7 @@ func runHelper() int {
 			if err != nil {
 				return 2
 			}
-			go func() { _ = http.Serve(ln, mux) }()
+			go serve(ln, mux)
 		}
 	}
 
@@ -88,6 +88,12 @@ func runHelper() int {
 type harness struct {
 	t        *testing.T
 	modeFile string
+}
+
+// serve serves h on ln for the helper worker until the process exits.
+func serve(ln net.Listener, h http.Handler) {
+	srv := &http.Server{Handler: h, ReadHeaderTimeout: 5 * time.Second}
+	_ = srv.Serve(ln)
 }
 
 func newHarness(t *testing.T, mode string) *harness {
@@ -223,8 +229,8 @@ func TestUnspecifiedHostNarrowsFamily(t *testing.T) {
 	}
 	defer func() { _ = s.Shutdown(context.Background()) }()
 
-	v4 := s.Addrs()[0].(*net.TCPAddr)
-	if v4.IP.To4() == nil {
+	v4, ok := s.Addrs()[0].(*net.TCPAddr)
+	if !ok || v4.IP.To4() == nil {
 		t.Errorf("0.0.0.0:0 bound %v, want an IPv4 socket", v4)
 	}
 	probe, err := net.Listen("tcp6", "[::1]:0")
@@ -232,7 +238,7 @@ func TestUnspecifiedHostNarrowsFamily(t *testing.T) {
 		t.Skip("IPv6 is not available")
 	}
 	_ = probe.Close()
-	if both := s.Addrs()[1].(*net.TCPAddr); both.IP.To4() != nil {
+	if both, ok := s.Addrs()[1].(*net.TCPAddr); !ok || both.IP.To4() != nil {
 		t.Errorf("0 bound %v, want a dual-stack IPv6 socket", both)
 	}
 }
