@@ -43,9 +43,10 @@ func (d *Dewy) verifyServerHealth(ctx context.Context) error {
 	return d.probeHealth(ctx, u, d.serverHealthTimeout())
 }
 
-// serverHealthURL builds the probe URL from the lowest configured port and
-// --health-path. It returns an empty string when the server runs without a
-// port, which is a supported configuration for job workers.
+// serverHealthURL builds the probe URL from the lowest configured TCP port
+// and --health-path. It returns an empty string when the server runs without
+// a TCP port, which is a supported configuration for job workers. UDP ports
+// cannot answer an HTTP probe and are skipped.
 //
 // The port list is deduplicated and sorted numerically while the flags are
 // parsed, so the first entry is the lowest port number rather than the first
@@ -61,10 +62,16 @@ func (d *Dewy) serverHealthURL() string {
 	if d.config.Server == nil {
 		return ""
 	}
-	if len(d.config.Server.Addrs) == 0 {
+	port := ""
+	for _, addr := range d.config.Server.Addrs {
+		if !strings.HasSuffix(addr, udpSuffix) {
+			port = addr
+			break
+		}
+	}
+	if port == "" {
 		return ""
 	}
-	port := d.config.Server.Addrs[0]
 
 	host := "127.0.0.1"
 	if h, p, err := net.SplitHostPort(port); err == nil {

@@ -4,7 +4,7 @@ title: Multi-Port Support
 
 # {% $markdoc.frontmatter.title %} {% #overview %}
 
-Dewy provides functionality to simultaneously manage multiple TCP ports for a single application. This feature enables unified deployment of services with different purposes, such as HTTP and HTTPS, API and WebUI, or production and debug endpoints. Dewy opens every port once when the server starts and passes all of them to the application, so a restart replaces the application process without closing any port.
+Dewy provides functionality to simultaneously manage multiple TCP and UDP ports for a single application. This feature enables unified deployment of services with different purposes, such as HTTP and HTTPS, API and WebUI, or production and debug endpoints. Dewy opens every port once when the server starts and passes all of them to the application, so a restart replaces the application process without closing any port.
 
 ## Multi-Port Use Cases
 
@@ -101,6 +101,22 @@ dewy server --registry ghr://myorg/app \
 ```
 
 This example specifies web server ports (80, 443), application instance ports (8080-8085), and metrics port (9090) all at once.
+
+### UDP Ports
+
+A port without a suffix is TCP. Append `/udp` to a port or a range to open a UDP socket instead, as in Docker's port syntax. A `/tcp` suffix is accepted and means the same as no suffix. The same port number can be given for both protocols.
+
+```bash
+# DNS on TCP and UDP port 53, plus HTTP on 8080
+dewy server --registry ghr://myorg/dns \
+  --port 53,53/udp,8080 \
+  -- /opt/dns/current/dns
+
+# A UDP port range
+dewy server --registry ghr://myorg/app --port 6000-6002/udp -- /opt/app/current/app
+```
+
+The `/udp` suffix is available for the `server` command only. `--health-path` probes the lowest TCP port and requires at least one TCP port; UDP ports are not probed.
 
 ## Practical Configuration Examples
 
@@ -237,15 +253,17 @@ This design provides different functionality on each port while implementing uni
 
 Dewy passes the sockets to the application as inherited file descriptors, starting from 3, and lists them in the `DEWY_PORT` environment variable. Dewy also sets the same value in `SERVER_STARTER_PORT`, whose name and format are compatible with server-starter, so applications written for server-starter work without changes. New applications should read `DEWY_PORT`.
 
-Entries are joined by `;`, and each entry is `<address>=<fd>`. `<address>` is the port as configured: `port`, or `host:port` when `--host` is set to an address other than `0.0.0.0` or `::`, with an IPv6 address in brackets. The entries are sorted by port number.
+Entries are joined by `;`, and each entry is `<address>=<fd>`. `<address>` is the port as configured: `port`, or `host:port` when `--host` is set to an address other than `0.0.0.0` or `::`, with an IPv6 address in brackets. A UDP socket carries a `/udp` suffix on the address. The entries are sorted by port number, with the TCP port before the UDP port of the same number.
 
 | `--port` and `--host` | `DEWY_PORT` |
 |---|---|
 | `--port 8080,8090` | `8080=3;8090=4` |
 | `--port 8080 --host 127.0.0.1` | `127.0.0.1:8080=3` |
 | `--port 8080 --host ::1` | `[::1]:8080=3` |
+| `--port 53,53/udp` | `53=3;53/udp=4` |
+| `--port 53/udp --host ::1` | `[::1]:53/udp=3` |
 
-The number after `=` is a file descriptor, not a port. The application turns a descriptor into a `net.Listener` with `os.NewFile` and `net.FileListener`.
+The number after `=` is a file descriptor, not a port. The application turns a TCP descriptor into a `net.Listener` with `os.NewFile` and `net.FileListener`, and a UDP descriptor into a `net.PacketConn` with `net.FilePacketConn`.
 
 A Go application can use the `github.com/linyows/dewy/sock` module instead of parsing the variable itself. The module depends only on the standard library.
 
@@ -253,7 +271,7 @@ A Go application can use the `github.com/linyows/dewy/sock` module instead of pa
 go get github.com/linyows/dewy/sock
 ```
 
-`sock.Listen` takes the same arguments as `net.Listen`. Under dewy, it returns the inherited socket whose port matches the address; the host part is ignored, because `--host` decides the interface. Without dewy, or for a port that dewy did not open, it binds the address itself, so the same code runs on a development machine. `sock.Listeners` returns every inherited socket, for an application that serves whatever `--port` lists. Each inherited socket can be returned once; a second request for it returns `sock.ErrTaken`. When `DEWY_PORT` is not set, the module reads `SERVER_STARTER_PORT`.
+`sock.Listen` and `sock.ListenPacket` take the same arguments as `net.Listen` and `net.ListenPacket`. Under dewy, they return the inherited socket whose port matches the address; the host part is ignored, because `--host` decides the interface. Without dewy, or for a port that dewy did not open, they bind the address themselves, so the same code runs on a development machine. `sock.Listeners` and `sock.PacketConns` return every inherited TCP or UDP socket, for an application that serves whatever `--port` lists. Each inherited socket can be returned once; a second request for it returns `sock.ErrTaken`. When `DEWY_PORT` is not set, the module reads `SERVER_STARTER_PORT`.
 
 ```go
 package main
@@ -270,8 +288,24 @@ import (
     "github.com/linyows/dewy/sock"
 )
 
+// serveUDP answers each datagram on pc with the same payload.
+func serveUDP(pc net.PacketConn) {
+    buf := make([]byte, 65535)
+    for {
+        n, from, err := pc.ReadFrom(buf)
+        if err != nil {
+            return
+        }
+        pc.WriteTo(buf[:n], from)
+    }
+}
+
 func main() {
     listeners, err := sock.Listeners()
+    if err != nil {
+        log.Fatal(err)
+    }
+    packetConns, err := sock.PacketConns()
     if err != nil {
         log.Fatal(err)
     }
@@ -286,6 +320,9 @@ func main() {
 
     server := &MultiPortServer{}
     server.Start(listeners)
+    for _, pc := range packetConns {
+        go serveUDP(pc)
+    }
 
     // dewy sends SIGTERM to the previous worker after a restart.
     sigCh := make(chan os.Signal, 1)
@@ -303,6 +340,8 @@ func main() {
 ```
 
 The sockets follow the configuration, so the application does not need its own list of ports: changing `--port` changes the sockets it serves on.
+
+Dewy keeps these sockets open while it replaces the application process. A UDP datagram that arrives during the replacement is queued on the socket and read by whichever worker reads next. During the replacement, the previous and the new worker read from the same UDP socket, so each datagram is received by only one of them.
 
 ### Port-Specific Routing Configuration
 

@@ -35,6 +35,18 @@ func inheritTCP(t *testing.T) (port string, fd int, addr string) {
 	return port, dupFD(t, ln.(*net.TCPListener)), addr
 }
 
+func inheritUDP(t *testing.T) (port string, fd int, addr string) {
+	t.Helper()
+	pc, err := net.ListenPacket("udp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = pc.Close() })
+	addr = pc.LocalAddr().String()
+	_, port, _ = net.SplitHostPort(addr)
+	return port, dupFD(t, pc.(*net.UDPConn)), addr
+}
+
 type syscallConn interface {
 	SyscallConn() (syscall.RawConn, error)
 }
@@ -63,13 +75,15 @@ func TestParseEntry(t *testing.T) {
 		want    Entry
 		wantErr bool
 	}{
-		{"8080=3", Entry{Addr: "8080", FD: 3}, false},
-		{"127.0.0.1:8080=4", Entry{Addr: "127.0.0.1:8080", FD: 4}, false},
-		{"[::1]:8080=5", Entry{Addr: "[::1]:8080", FD: 5}, false},
-		{"[fe80::1%eth0]:8080=6", Entry{Addr: "[fe80::1%eth0]:8080", FD: 6}, false},
+		{"8080=3", Entry{Addr: "8080", Network: "tcp", FD: 3}, false},
+		{"127.0.0.1:8080=4", Entry{Addr: "127.0.0.1:8080", Network: "tcp", FD: 4}, false},
+		{"[::1]:8080=5", Entry{Addr: "[::1]:8080", Network: "tcp", FD: 5}, false},
+		{"53/udp=6", Entry{Addr: "53", Network: "udp", FD: 6}, false},
+		{"[fe80::1%eth0]:53/udp=7", Entry{Addr: "[fe80::1%eth0]:53", Network: "udp", FD: 7}, false},
 		{"8080", Entry{}, true},
 		{"=3", Entry{}, true},
 		{"8080=x", Entry{}, true},
+		{"/udp=3", Entry{}, true},
 	}
 	for _, tt := range tests {
 		got, err := parseEntry(tt.in)
@@ -97,13 +111,13 @@ func TestEntries(t *testing.T) {
 	})
 
 	t.Run("DEWY_PORT", func(t *testing.T) {
-		t.Setenv(EnvPort, "8080=3;8443=4")
+		t.Setenv(EnvPort, "8080=3;53/udp=4")
 		t.Setenv(EnvPortCompat, "9999=9")
 		got, err := Entries()
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := []Entry{{Addr: "8080", FD: 3}, {Addr: "8443", FD: 4}}
+		want := []Entry{{Addr: "8080", Network: "tcp", FD: 3}, {Addr: "53", Network: "udp", FD: 4}}
 		if fmt.Sprint(got) != fmt.Sprint(want) {
 			t.Errorf("Entries() = %+v, want %+v", got, want)
 		}
@@ -226,16 +240,48 @@ func TestListenWithoutDewy(t *testing.T) {
 		t.Fatalf("Listen() error = %v", err)
 	}
 	_ = ln.Close()
+	pc, err := ListenPacket("udp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("ListenPacket() error = %v", err)
+	}
+	_ = pc.Close()
 	if lns, err := Listeners(); err != nil || lns != nil {
 		t.Errorf("Listeners() = %v, %v, want nil, nil", lns, err)
 	}
 }
 
-func TestListeners(t *testing.T) {
+func TestListenPacketInherited(t *testing.T) {
+	reset(t)
+	tport, tfd, _ := inheritTCP(t)
+	uport, ufd, uaddr := inheritUDP(t)
+	t.Setenv(EnvPort, fmt.Sprintf("%s=%d;%s/udp=%d", tport, tfd, uport, ufd))
+
+	pc, err := ListenPacket("udp", ":"+uport)
+	if err != nil {
+		t.Fatalf("ListenPacket() error = %v", err)
+	}
+	defer func() { _ = pc.Close() }()
+	if got := pc.LocalAddr().String(); got != uaddr {
+		t.Errorf("ListenPacket() returned %s, want the inherited socket %s", got, uaddr)
+	}
+
+	// The TCP entry of another port is not a UDP socket and is not matched.
+	if pcs, err := PacketConns(); err != nil || pcs != nil {
+		t.Errorf("PacketConns() = %v, %v, want nothing left", pcs, err)
+	}
+	lns, err := Listeners()
+	if err != nil || len(lns) != 1 {
+		t.Fatalf("Listeners() = %v, %v, want the TCP socket", lns, err)
+	}
+	_ = lns[0].Close()
+}
+
+func TestListenersAndPacketConns(t *testing.T) {
 	reset(t)
 	p1, fd1, a1 := inheritTCP(t)
 	p2, fd2, a2 := inheritTCP(t)
-	t.Setenv(EnvPort, fmt.Sprintf("%s=%d;%s=%d", p1, fd1, p2, fd2))
+	p3, fd3, a3 := inheritUDP(t)
+	t.Setenv(EnvPort, fmt.Sprintf("%s=%d;%s=%d;%s/udp=%d", p1, fd1, p2, fd2, p3, fd3))
 
 	lns, err := Listeners()
 	if err != nil {
@@ -246,5 +292,16 @@ func TestListeners(t *testing.T) {
 	}
 	for _, l := range lns {
 		_ = l.Close()
+	}
+
+	pcs, err := PacketConns()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pcs) != 1 || pcs[0].LocalAddr().String() != a3 {
+		t.Errorf("PacketConns() = %v, want %s", pcs, a3)
+	}
+	for _, p := range pcs {
+		_ = p.Close()
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/netip"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -42,7 +43,7 @@ type cli struct {
 	LogFormat          string   `long:"log-format" short:"f" arg:"(text|json)" description:"Set log format for output (default: text)"`
 	Interval           int      `long:"interval" arg:"seconds" short:"i" description:"Polling interval in seconds for checking registry updates (default: 10)"`
 	MaxBackoffInterval int      `long:"max-backoff-interval" arg:"seconds" description:"Stretch the polling interval exponentially while checks keep failing, up to this many seconds (default: 0, disabled; 300 is a reasonable choice)"`
-	Ports              []string `long:"port" short:"p" description:"For server: TCP ports to listen on. For container: port mappings in format 'proxy' or 'proxy:container' (multiple flags supported)"`
+	Ports              []string `long:"port" short:"p" description:"For server: ports to listen on; append /udp for UDP (e.g., 8080,53/udp). For container: port mappings in format 'proxy' or 'proxy:container' (multiple flags supported)"`
 	Host               string   `long:"host" description:"IPv4 or IPv6 address the server command listens on for every --port (e.g., 127.0.0.1, ::1). 0.0.0.0 listens on every IPv4 interface and :: on every IPv6 one; when omitted, listens on both"`
 	Registry           string   `long:"registry" description:"Registry URL (e.g., ghr://owner/repo, s3://region/bucket/prefix, docker://registry/repo)"`
 	Cache              string   `long:"cache" short:"c" description:"Cache backend URL (e.g., file:///path, s3://region/bucket/prefix, gs://bucket/prefix). Defaults to local file."`
@@ -405,9 +406,12 @@ func (c *cli) configureServerCommand(conf *Config) error {
 		conf.Health.Timeout = time.Duration(c.HealthTimeout) * time.Second
 	}
 
-	if c.HealthPath != "" && len(parsedPorts) == 0 {
-		fmt.Fprintf(c.env.Err, "Error: --health-path requires --port\n")
-		return fmt.Errorf("--health-path requires --port")
+	// Probing through the shared port needs a TCP port to probe.
+	if c.HealthPath != "" && !slices.ContainsFunc(parsedPorts, func(p string) bool {
+		return !strings.HasSuffix(p, udpSuffix)
+	}) {
+		fmt.Fprintf(c.env.Err, "Error: --health-path requires a TCP --port\n")
+		return fmt.Errorf("--health-path requires a TCP --port")
 	}
 
 	conf.Server = server
@@ -501,11 +505,16 @@ func validateHost(host string) error {
 }
 
 // joinHostPorts prefixes each port with host in the "host:port" form, with an
-// IPv6 address in brackets ("[::1]:8080").
+// IPv6 address in brackets ("[::1]:8080"). A protocol suffix stays at the end
+// ("127.0.0.1:53/udp").
 func joinHostPorts(host string, ports []string) []string {
 	joined := make([]string, len(ports))
 	for i, port := range ports {
-		joined[i] = net.JoinHostPort(host, port)
+		p, udp := strings.CutSuffix(port, udpSuffix)
+		joined[i] = net.JoinHostPort(host, p)
+		if udp {
+			joined[i] += udpSuffix
+		}
 	}
 	return joined
 }
@@ -529,7 +538,33 @@ func parsePorts(portSpecs []string) ([]string, error) {
 	return validateAndDeduplicatePorts(allPorts)
 }
 
-// parsePortSpec parses a single port specification (supports comma-separated and ranges).
+// udpSuffix marks a UDP port in a port specification ("53/udp"), as in
+// Docker's port syntax. A port without it, or with "/tcp", is TCP and is
+// stored without a suffix.
+const (
+	udpSuffix = "/udp"
+	tcpSuffix = "/tcp"
+)
+
+// splitProtocol separates the protocol suffix from a port or port range.
+// It returns the suffix to append to each resulting port: "" for TCP and
+// udpSuffix for UDP.
+func splitProtocol(part string) (string, string, error) {
+	port, proto, found := strings.Cut(part, "/")
+	if !found {
+		return part, "", nil
+	}
+	switch "/" + strings.ToLower(proto) {
+	case tcpSuffix:
+		return port, "", nil
+	case udpSuffix:
+		return port, udpSuffix, nil
+	}
+	return "", "", fmt.Errorf("invalid protocol %q in port specification %s: want tcp or udp", proto, part)
+}
+
+// parsePortSpec parses a single port specification (supports comma-separated
+// lists, ranges and a "/udp" or "/tcp" suffix on each element).
 func parsePortSpec(spec string) ([]string, error) {
 	if spec == "" {
 		return nil, nil
@@ -544,19 +579,26 @@ func parsePortSpec(spec string) ([]string, error) {
 			continue
 		}
 
+		part, suffix, err := splitProtocol(part)
+		if err != nil {
+			return nil, err
+		}
+
 		if strings.Contains(part, "-") {
 			// Range specification (e.g., "8000-8005")
 			rangePorts, err := parsePortRange(part)
 			if err != nil {
 				return nil, err
 			}
-			ports = append(ports, rangePorts...)
+			for _, p := range rangePorts {
+				ports = append(ports, p+suffix)
+			}
 		} else {
 			// Single port
 			if err := validatePort(part); err != nil {
 				return nil, err
 			}
-			ports = append(ports, part)
+			ports = append(ports, part+suffix)
 		}
 	}
 
@@ -622,7 +664,8 @@ func validatePortNumber(port int) error {
 	return nil
 }
 
-// validateAndDeduplicatePorts removes duplicates and sorts ports.
+// validateAndDeduplicatePorts removes duplicates and sorts ports by number,
+// with the TCP port before the UDP port of the same number.
 func validateAndDeduplicatePorts(ports []string) ([]string, error) {
 	if len(ports) == 0 {
 		return ports, nil
@@ -640,11 +683,16 @@ func validateAndDeduplicatePorts(ports []string) ([]string, error) {
 		result = append(result, port)
 	}
 
-	// Sort numerically
+	// Sort numerically; on the same number TCP (no suffix) sorts first.
 	sort.Slice(result, func(i, j int) bool {
-		a, _ := strconv.Atoi(result[i])
-		b, _ := strconv.Atoi(result[j])
-		return a < b
+		a, aUDP := strings.CutSuffix(result[i], udpSuffix)
+		b, bUDP := strings.CutSuffix(result[j], udpSuffix)
+		an, _ := strconv.Atoi(a)
+		bn, _ := strconv.Atoi(b)
+		if an != bn {
+			return an < bn
+		}
+		return !aUDP && bUDP
 	})
 
 	return result, nil

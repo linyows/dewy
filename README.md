@@ -636,6 +636,10 @@ $ dewy server --registry ghr://linyows/myapp \
 # Port ranges
 $ dewy server --registry ghr://linyows/myapp \
   -p 8000-8005 -- /opt/myapp/current/myapp
+
+# TCP and UDP on the same port
+$ dewy server --registry ghr://linyows/myapp \
+  -p 53,53/udp -- /opt/myapp/current/myapp
 ```
 
 Signal Handling

@@ -35,9 +35,9 @@ func TestMain(m *testing.M) {
 
 // runHelper is the worker. Modes:
 //
-//	serve        answer HTTP on every inherited listener with
-//	             "<mode> <pid>"; GET /exit makes it exit 1; SIGTERM makes it
-//	             exit 0
+//	serve        answer HTTP on every inherited TCP listener and every UDP
+//	             datagram with "<mode> <pid>"; GET /exit makes it exit 1;
+//	             SIGTERM makes it exit 0
 //	crash        exit 1 at once
 //	ignore-term  like serve, but ignore SIGTERM
 func runHelper() int {
@@ -69,7 +69,25 @@ func runHelper() int {
 			if err != nil {
 				return 2
 			}
-			ln, err := net.FileListener(os.NewFile(uintptr(fd), entry[:i]))
+			f := os.NewFile(uintptr(fd), entry[:i])
+			if strings.HasSuffix(entry[:i], udpSuffix) {
+				pc, err := net.FilePacketConn(f)
+				if err != nil {
+					return 2
+				}
+				go func() {
+					buf := make([]byte, 512)
+					for {
+						_, from, err := pc.ReadFrom(buf)
+						if err != nil {
+							return
+						}
+						_, _ = pc.WriteTo(fmt.Appendf(nil, "%s %d", mode, os.Getpid()), from)
+					}
+				}()
+				continue
+			}
+			ln, err := net.FileListener(f)
 			if err != nil {
 				return 2
 			}
@@ -138,9 +156,13 @@ func (h *harness) start(cfg Config) *Supervisor {
 	return s
 }
 
-// get returns the body served at addr.
+// get returns the body served at addr: an HTTP response for a TCP address,
+// or the reply datagram for a UDP address.
 func get(t *testing.T, addr net.Addr) string {
 	t.Helper()
+	if _, ok := addr.(*net.UDPAddr); ok {
+		return query(t, addr)
+	}
 	c := http.Client{Timeout: 2 * time.Second}
 	res, err := c.Get("http://" + addr.String() + "/")
 	if err != nil {
@@ -152,6 +174,26 @@ func get(t *testing.T, addr net.Addr) string {
 		t.Fatal(err)
 	}
 	return string(b)
+}
+
+// query sends a datagram to a UDP addr and returns the reply.
+func query(t *testing.T, addr net.Addr) string {
+	t.Helper()
+	conn, err := net.Dial("udp", addr.String())
+	if err != nil {
+		t.Fatalf("dial %s: %v", addr, err)
+	}
+	defer func() { _ = conn.Close() }()
+	_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
+	if _, err := conn.Write([]byte("ping")); err != nil {
+		t.Fatalf("write %s: %v", addr, err)
+	}
+	buf := make([]byte, 512)
+	n, err := conn.Read(buf)
+	if err != nil {
+		t.Fatalf("read %s: %v", addr, err)
+	}
+	return string(buf[:n])
 }
 
 func eventually(t *testing.T, timeout time.Duration, cond func() bool) bool {
@@ -197,6 +239,11 @@ func TestResolveAddr(t *testing.T) {
 		{"127.0.0.1", "", "", true},
 		{"::1:8080", "", "", true},
 		{"127.0.0.1:http", "", "", true},
+		{"53/udp", "udp", ":53", false},
+		{"127.0.0.1:53/udp", "udp4", "127.0.0.1:53", false},
+		{"[::1]:53/udp", "udp6", "[::1]:53", false},
+		{"53/sctp", "", "", true},
+		{"localhost:53/udp", "", "", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.addr, func(t *testing.T) {
@@ -213,10 +260,10 @@ func TestResolveAddr(t *testing.T) {
 
 func TestListenersEnv(t *testing.T) {
 	lns := []*listener{
-		{addr: "8080"}, {addr: "127.0.0.1:8081"}, {addr: "[::1]:8082"},
-		{addr: "0.0.0.0:8083"}, {addr: "[::]:8084"},
+		{addr: "8080"}, {addr: "127.0.0.1:8081"}, {addr: "[::1]:8082"}, {addr: "53/udp"},
+		{addr: "0.0.0.0:8083"}, {addr: "[::]:8084"}, {addr: "0.0.0.0:54/udp"},
 	}
-	want := "8080=3;127.0.0.1:8081=4;[::1]:8082=5;8083=6;8084=7"
+	want := "8080=3;127.0.0.1:8081=4;[::1]:8082=5;53/udp=6;8083=7;8084=8;54/udp=9"
 	if got := listenersEnv(lns); got != want {
 		t.Errorf("listenersEnv() = %q, want %q", got, want)
 	}
@@ -282,14 +329,17 @@ func TestNew(t *testing.T) {
 }
 
 func TestStartServesOnInheritedListeners(t *testing.T) {
-	addrs := []string{"127.0.0.1:0", "0"}
+	addrs := []string{"127.0.0.1:0", "0", "127.0.0.1:0/udp", "0/udp"}
 	if ipv6Available() {
-		addrs = append(addrs, "[::1]:0")
+		addrs = append(addrs, "[::1]:0", "[::1]:0/udp")
 	}
 	h := newHarness(t, "serve")
 	s := h.start(h.config(addrs...))
 
 	for _, addr := range s.Addrs() {
+		if a, ok := addr.(*net.UDPAddr); ok && a.IP.IsUnspecified() {
+			addr = &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: a.Port}
+		}
 		if a, ok := addr.(*net.TCPAddr); ok && a.IP.IsUnspecified() {
 			addr = &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: a.Port}
 		}
@@ -331,8 +381,8 @@ func TestStartFailsWhenCommandIsMissing(t *testing.T) {
 
 func TestRestartReplacesWorker(t *testing.T) {
 	h := newHarness(t, "serve")
-	s := h.start(h.config("127.0.0.1:0"))
-	addr := s.Addrs()[0]
+	s := h.start(h.config("127.0.0.1:0", "127.0.0.1:0/udp"))
+	addr, udpAddr := s.Addrs()[0], s.Addrs()[1]
 	before := get(t, addr)
 
 	h.setMode("serve-v2")
@@ -348,6 +398,9 @@ func TestRestartReplacesWorker(t *testing.T) {
 	after := get(t, addr)
 	if !strings.HasPrefix(after, "serve-v2 ") || after == before {
 		t.Errorf("after Restart got %q (before %q), want the new worker", after, before)
+	}
+	if got := get(t, udpAddr); got != after {
+		t.Errorf("after Restart the UDP socket answered %q, want the new worker %q", got, after)
 	}
 	st := s.Status()
 	if st.Current != 2 || len(st.Workers) != 1 || st.Workers[0].Generation != 2 {

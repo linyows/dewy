@@ -105,6 +105,8 @@ func TestServerHealthURL(t *testing.T) {
 		{"IPv6 host", []string{"[2001:db8::1]:8000"}, "/health", "http://[2001:db8::1]:8000/health"},
 		{"IPv6 unspecified host probes the IPv6 loopback", []string{"[::]:8000"}, "/health", "http://[::1]:8000/health"},
 		{"IPv6 zone is percent-encoded", []string{"[fe80::1%eth0]:8000"}, "/health", "http://[fe80::1%25eth0]:8000/health"},
+		{"UDP ports are skipped", []string{"53/udp", "8000"}, "/health", "http://127.0.0.1:8000/health"},
+		{"only UDP ports", []string{"53/udp"}, "/health", ""},
 	}
 
 	for _, tt := range tests {

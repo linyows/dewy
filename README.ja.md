@@ -637,6 +637,10 @@ $ dewy server --registry ghr://linyows/myapp \
 # ポート範囲指定
 $ dewy server --registry ghr://linyows/myapp \
   -p 8000-8005 -- /opt/myapp/current/myapp
+
+# 同じポートでTCPとUDP
+$ dewy server --registry ghr://linyows/myapp \
+  -p 53,53/udp -- /opt/myapp/current/myapp
 ```
 
 シグナルハンドリング

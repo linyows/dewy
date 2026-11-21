@@ -65,8 +65,10 @@ type Config struct {
 	Dir string
 	// Env is appended to the supervisor's environment for each worker.
 	Env []string
-	// Addrs are the TCP listen addresses: "8080", "127.0.0.1:8080" or
-	// "[::1]:8080". Empty runs the application without sockets.
+	// Addrs are the listen addresses: "8080", "127.0.0.1:8080" or
+	// "[::1]:8080" for TCP, and the same with a "/udp" suffix for UDP
+	// ("53/udp", "[::1]:53/udp"). Empty runs the application without
+	// sockets.
 	Addrs []string
 	// StartupWindow is how long a new worker must stay up before it is
 	// considered started. Zero means DefaultStartupWindow.
@@ -179,7 +181,8 @@ func New(cfg Config) (*Supervisor, error) {
 	}, nil
 }
 
-// Addrs returns the bound address of each socket, in configuration order.
+// Addrs returns the bound address of each socket, in configuration order: a
+// *net.TCPAddr for a TCP address and a *net.UDPAddr for a UDP one.
 // It differs from Config.Addrs when a port of 0 was configured.
 func (s *Supervisor) Addrs() []net.Addr {
 	addrs := make([]net.Addr, len(s.listeners))

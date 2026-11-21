@@ -4,7 +4,7 @@ title: マルチポート対応
 
 # {% $markdoc.frontmatter.title %} {% #overview %}
 
-dewyは単一のアプリケーションで複数のTCPポートを同時に管理する機能を提供します。この機能により、HTTPとHTTPS、API とWebUI、本番用とデバッグ用など、異なる目的のサービスを統合的にデプロイできます。dewyはサーバー起動時にすべてのポートを一度だけ開いてアプリケーションに渡すため、再起動でアプリケーションのプロセスを入れ替える間もポートは閉じません。
+dewyは単一のアプリケーションで複数のTCPポートとUDPポートを同時に管理する機能を提供します。この機能により、HTTPとHTTPS、API とWebUI、本番用とデバッグ用など、異なる目的のサービスを統合的にデプロイできます。dewyはサーバー起動時にすべてのポートを一度だけ開いてアプリケーションに渡すため、再起動でアプリケーションのプロセスを入れ替える間もポートは閉じません。
 
 ## マルチポートのユースケース
 
@@ -73,21 +73,39 @@ dewy server --registry ghr://myorg/app --port 8080-8085 -- /opt/app/current/app
 
 範囲指定では、セキュリティとリソース管理の観点から、最大100ポートまでの制限があります。より多くのポートが必要な場合は、複数の範囲指定を組み合わせてください。
 
+### UDPポート
+
+サフィックスのないポートはTCPです。Dockerのポート指定と同様に、ポートまたは範囲の末尾に`/udp`を付けるとUDPソケットを開きます。`/tcp`も指定でき、サフィックスなしと同じ意味になります。同じポート番号をTCPとUDPの両方で指定することもできます。
+
+```bash
+# TCPとUDPの53番ポートでDNS、8080番ポートでHTTPを提供
+dewy server --registry ghr://myorg/dns \
+  --port 53,53/udp,8080 \
+  -- /opt/dns/current/dns
+
+# UDPのポート範囲
+dewy server --registry ghr://myorg/app --port 6000-6002/udp -- /opt/app/current/app
+```
+
+`/udp`サフィックスは`server`コマンドでのみ使用できます。`--health-path`は最も小さいTCPポートに対してリクエストを送るため、TCPポートが1つ以上必要です。UDPポートにはリクエストを送りません。
+
 ## dewyから渡されたソケットの使い方 {% #inherited-sockets %}
 
 dewyが起動したアプリケーションは、ポートを自分で開きません。dewyはサーバー起動時にすべてのポートを開いており、そのソケットを3番から始まるファイルディスクリプタとしてアプリケーションに渡します。dewyが開いているポートを開こうとすると、Linuxでは「address already in use」で失敗します。
 
 渡したソケットは環境変数`DEWY_PORT`に列挙されます。dewyは同じ値を`SERVER_STARTER_PORT`にも設定します。この変数名と形式はserver-starterと互換性があるため、server-starter向けに書かれたアプリケーションは変更なしで動作します。新しく書くアプリケーションは`DEWY_PORT`を読んでください。
 
-各エントリは`<address>=<fd>`の形式で、`;`で区切られます。`<address>`は指定したポートそのままです。`--host`に`0.0.0.0`または`::`以外のアドレスを指定した場合は`host:port`の形式になり、IPv6アドレスは角括弧で囲まれます。エントリはポート番号の順に並びます。
+各エントリは`<address>=<fd>`の形式で、`;`で区切られます。`<address>`は指定したポートそのままです。`--host`に`0.0.0.0`または`::`以外のアドレスを指定した場合は`host:port`の形式になり、IPv6アドレスは角括弧で囲まれます。UDPソケットのアドレスには`/udp`が付きます。エントリはポート番号の順に並び、同じ番号ではTCPがUDPより先になります。
 
 | `--port`と`--host` | `DEWY_PORT` |
 |---|---|
 | `--port 8080,8090` | `8080=3;8090=4` |
 | `--port 8080 --host 127.0.0.1` | `127.0.0.1:8080=3` |
 | `--port 8080 --host ::1` | `[::1]:8080=3` |
+| `--port 53,53/udp` | `53=3;53/udp=4` |
+| `--port 53/udp --host ::1` | `[::1]:53/udp=3` |
 
-`=`の後の数値はポート番号ではなくファイルディスクリプタです。アプリケーションは、ディスクリプタを`os.NewFile`と`net.FileListener`で`net.Listener`に変換します。
+`=`の後の数値はポート番号ではなくファイルディスクリプタです。アプリケーションは、TCPのディスクリプタを`os.NewFile`と`net.FileListener`で`net.Listener`に、UDPのディスクリプタを`net.FilePacketConn`で`net.PacketConn`に変換します。
 
 Goのアプリケーションは、環境変数を自前で解析する代わりに`github.com/linyows/dewy/sock`モジュールを使えます。このモジュールは標準ライブラリだけに依存します。
 
@@ -95,7 +113,7 @@ Goのアプリケーションは、環境変数を自前で解析する代わり
 go get github.com/linyows/dewy/sock
 ```
 
-`sock.Listen`は`net.Listen`と同じ引数を取ります。dewyの下では、ポートが一致する引き継いだソケットを返します。待ち受けるインターフェースは`--host`で決まるため、アドレスのホスト部分は無視します。dewyの外で動かした場合や、dewyが開いていないポートを指定した場合は自分でアドレスを開くため、開発環境でも同じコードが動きます。`sock.Listeners`は、引き継いだソケットをすべて返します。`--port`で指定されたポートをそのまま提供するアプリケーションに向いています。引き継いだソケットはそれぞれ1回だけ返し、2回目の要求には`sock.ErrTaken`を返します。`DEWY_PORT`がない場合は`SERVER_STARTER_PORT`を読みます。
+`sock.Listen`と`sock.ListenPacket`は`net.Listen`と`net.ListenPacket`と同じ引数を取ります。dewyの下では、ポートが一致する引き継いだソケットを返します。待ち受けるインターフェースは`--host`で決まるため、アドレスのホスト部分は無視します。dewyの外で動かした場合や、dewyが開いていないポートを指定した場合は自分でアドレスを開くため、開発環境でも同じコードが動きます。`sock.Listeners`と`sock.PacketConns`は、引き継いだTCPまたはUDPのソケットをすべて返します。`--port`で指定されたポートをそのまま提供するアプリケーションに向いています。引き継いだソケットはそれぞれ1回だけ返し、2回目の要求には`sock.ErrTaken`を返します。`DEWY_PORT`がない場合は`SERVER_STARTER_PORT`を読みます。
 
 ```go
 package main
@@ -112,8 +130,24 @@ import (
     "github.com/linyows/dewy/sock"
 )
 
+// serveUDPはpcで受け取ったデータグラムをそのまま送り返す。
+func serveUDP(pc net.PacketConn) {
+    buf := make([]byte, 65535)
+    for {
+        n, from, err := pc.ReadFrom(buf)
+        if err != nil {
+            return
+        }
+        pc.WriteTo(buf[:n], from)
+    }
+}
+
 func main() {
     listeners, err := sock.Listeners()
+    if err != nil {
+        log.Fatal(err)
+    }
+    packetConns, err := sock.PacketConns()
     if err != nil {
         log.Fatal(err)
     }
@@ -128,6 +162,9 @@ func main() {
 
     server := &MultiPortServer{}
     server.Start(listeners)
+    for _, pc := range packetConns {
+        go serveUDP(pc)
+    }
 
     // dewyは再起動後に以前のworkerへSIGTERMを送信する
     sigCh := make(chan os.Signal, 1)
@@ -145,3 +182,5 @@ func main() {
 ```
 
 `MultiPortServer`はアプリケーション側で定義する型で、受け取ったリスナーごとに`http.Server`を起動し、`Shutdown`でまとめて停止します。ソケットは設定に従って渡されるため、アプリケーションが独自にポートの一覧を持つ必要はありません。`--port`を変更すれば、アプリケーションが待ち受けるソケットも変わります。
+
+dewyはアプリケーションのプロセスを入れ替える間もソケットを開いたままにします。入れ替え中に届いたUDPデータグラムはソケットのキューに入り、次に読み出したworkerが受け取ります。入れ替えの間は以前のworkerと新しいworkerが同じUDPソケットから読み出すため、各データグラムを受け取るのはどちらか一方だけです。

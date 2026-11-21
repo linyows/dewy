@@ -16,7 +16,9 @@ import (
 // The value is a ";"-separated list of "<address>=<fd>" entries, one per
 // listener, in the order the addresses were configured. <address> is the
 // address exactly as configured ("8080", "127.0.0.1:8080", "[::1]:8080") and
-// <fd> is the file descriptor number the socket has in the worker.
+// <fd> is the file descriptor number the socket has in the worker. A UDP
+// socket is marked with a "/udp" suffix on the address ("53/udp=4"); the
+// worker opens it with net.FilePacketConn instead of net.FileListener.
 const EnvListeners = "DEWY_PORT"
 
 // EnvListenersCompat carries the same value as EnvListeners under the name
@@ -29,14 +31,18 @@ const EnvListenersCompat = "SERVER_STARTER_PORT"
 // remaining files from 3 on.
 const firstListenerFD = 3
 
-// listener is a listening socket the supervisor owns for the whole life of
-// the managed application. Workers come and go; the socket stays open, so a
-// connection arriving during a worker swap waits in the kernel's accept queue
-// instead of being refused.
+// udpSuffix marks a UDP address ("53/udp", "[::1]:53/udp").
+const udpSuffix = "/udp"
+
+// listener is a socket the supervisor owns for the whole life of the managed
+// application: a listening TCP socket or a bound UDP socket. Workers come and
+// go; the socket stays open, so a TCP connection arriving during a worker
+// swap waits in the kernel's accept queue instead of being refused, and a
+// UDP datagram is queued on the socket for whichever worker reads next.
 type listener struct {
 	addr  string // as configured; used verbatim in EnvListeners
 	local net.Addr
-	sock  io.Closer // the net.Listener
+	sock  io.Closer // the net.Listener or net.PacketConn
 	file  *os.File  // dup of the socket's descriptor, handed to each worker
 }
 
@@ -46,7 +52,9 @@ func (l *listener) close() {
 }
 
 // resolveAddr maps a configured address to the network and address passed to
-// net.Listen.
+// net.Listen, or to net.ListenPacket for a UDP address. The rules below are
+// the same for UDP, with "udp", "udp4" and "udp6" in place of the TCP
+// networks.
 //
 //   - "8080" listens on every interface. The "tcp" network is dual stack: Go
 //     opens an IPv6 socket that also accepts IPv4 connections, and falls back
@@ -61,11 +69,17 @@ func (l *listener) close() {
 // addresses, or to a different one on each start, and would make the bound
 // interface depend on DNS.
 func resolveAddr(addr string) (network, address string, err error) {
-	if isPort(addr) {
-		return "tcp", ":" + addr, nil
+	proto := "tcp"
+	hostport := addr
+	if a, ok := strings.CutSuffix(addr, udpSuffix); ok {
+		proto, hostport = "udp", a
 	}
 
-	host, port, err := net.SplitHostPort(addr)
+	if isPort(hostport) {
+		return proto, ":" + hostport, nil
+	}
+
+	host, port, err := net.SplitHostPort(hostport)
 	if err != nil {
 		return "", "", fmt.Errorf("invalid listen address %q: %w", addr, err)
 	}
@@ -77,9 +91,9 @@ func resolveAddr(addr string) (network, address string, err error) {
 		return "", "", fmt.Errorf("invalid listen address %q: host must be an IP address", addr)
 	}
 	if ip.Is4() {
-		return "tcp4", net.JoinHostPort(ip.String(), port), nil
+		return proto + "4", net.JoinHostPort(ip.String(), port), nil
 	}
-	return "tcp6", net.JoinHostPort(ip.String(), port), nil
+	return proto + "6", net.JoinHostPort(ip.String(), port), nil
 }
 
 // isPort reports whether s is a decimal port number in 0-65535. Port 0 asks
@@ -124,7 +138,7 @@ func openListeners(addrs []string) ([]*listener, error) {
 	return lns, nil
 }
 
-// filer is implemented by *net.TCPListener.
+// filer is implemented by *net.TCPListener and *net.UDPConn.
 type filer interface {
 	File() (*os.File, error)
 }
@@ -132,12 +146,23 @@ type filer interface {
 // bind opens the socket for network and address and duplicates its
 // descriptor for the workers.
 func bind(network, address string) (*listener, error) {
-	ln, err := net.Listen(network, address)
-	if err != nil {
-		return nil, err
+	var (
+		sock  io.Closer
+		local net.Addr
+	)
+	if strings.HasPrefix(network, "udp") {
+		pc, err := net.ListenPacket(network, address)
+		if err != nil {
+			return nil, err
+		}
+		sock, local = pc, pc.LocalAddr()
+	} else {
+		ln, err := net.Listen(network, address)
+		if err != nil {
+			return nil, err
+		}
+		sock, local = ln, ln.Addr()
 	}
-	var sock io.Closer = ln
-	local := ln.Addr()
 
 	fl, ok := sock.(filer)
 	if !ok {
@@ -167,12 +192,16 @@ func listenersEnv(lns []*listener) string {
 // working when the address family is narrowed. Other addresses are listed as
 // configured.
 func envAddr(addr string) string {
-	host, port, err := net.SplitHostPort(addr)
+	hostport, udp := strings.CutSuffix(addr, udpSuffix)
+	host, port, err := net.SplitHostPort(hostport)
 	if err != nil {
 		return addr
 	}
 	if ip, err := netip.ParseAddr(host); err != nil || !ip.IsUnspecified() {
 		return addr
+	}
+	if udp {
+		return port + udpSuffix
 	}
 	return port
 }

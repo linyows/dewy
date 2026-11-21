@@ -15,7 +15,7 @@ func TestServerLifecycle(t *testing.T) {
 
 	d := newPhaseTestDewy(t)
 	d.config.Command = SERVER
-	d.config.Server = &ServerConfig{Command: sleep, Args: []string{"30"}, Addrs: []string{"127.0.0.1:0"}}
+	d.config.Server = &ServerConfig{Command: sleep, Args: []string{"30"}, Addrs: []string{"127.0.0.1:0", "127.0.0.1:0/udp"}}
 	t.Cleanup(func() { _ = d.stopServer() })
 
 	ctx := context.Background()

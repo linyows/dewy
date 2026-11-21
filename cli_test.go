@@ -70,7 +70,13 @@ func TestRunCLI(t *testing.T) {
 			name:        "health path requires a port on the server command",
 			args:        []string{"--registry", "ghr://o/r", "--health-path", "/health", "server", "myapp"},
 			expectExit:  ExitErr,
-			expectError: "Error: --health-path requires --port",
+			expectError: "Error: --health-path requires a TCP --port",
+		},
+		{
+			name:        "health path requires a TCP port on the server command",
+			args:        []string{"--registry", "ghr://o/r", "--health-path", "/health", "--port", "53/udp", "server", "myapp"},
+			expectExit:  ExitErr,
+			expectError: "Error: --health-path requires a TCP --port",
 		},
 		{
 			name:        "host is rejected outside the server command",
@@ -432,6 +438,18 @@ func TestParsePorts(t *testing.T) {
 			input:   []string{"0"},
 			wantErr: true,
 		},
+		{
+			name:     "udp ports sort by number, tcp first",
+			input:    []string{"53/udp", "8080", "53", "5353/UDP"},
+			expected: []string{"53", "53/udp", "5353/udp", "8080"},
+			wantErr:  false,
+		},
+		{
+			name:     "tcp suffix is dropped",
+			input:    []string{"8080/tcp", "8080"},
+			expected: []string{"8080"},
+			wantErr:  false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -499,6 +517,22 @@ func TestParsePortSpec(t *testing.T) {
 		{
 			name:    "invalid range format",
 			input:   "8080-8081-8082",
+			wantErr: true,
+		},
+		{
+			name:     "udp port and range",
+			input:    "53/udp,6000-6002/udp,8080",
+			expected: []string{"53/udp", "6000/udp", "6001/udp", "6002/udp", "8080"},
+			wantErr:  false,
+		},
+		{
+			name:    "unknown protocol",
+			input:   "53/sctp",
+			wantErr: true,
+		},
+		{
+			name:    "protocol without port",
+			input:   "/udp",
 			wantErr: true,
 		},
 	}
@@ -786,6 +820,17 @@ func TestCLI_ConfigureServerCommand(t *testing.T) {
 			args:        []string{"/opt/app/current/app"},
 			logFormat:   "text",
 			expectPorts: []string{"127.0.0.1:8080", "127.0.0.1:8081"},
+			expectCmd:   "/opt/app/current/app",
+			expectArgs:  nil,
+			wantErr:     false,
+		},
+		{
+			name:        "with IPv6 host and a UDP port",
+			ports:       []string{"8080,53/udp"},
+			host:        "::1",
+			args:        []string{"/opt/app/current/app"},
+			logFormat:   "text",
+			expectPorts: []string{"[::1]:53/udp", "[::1]:8080"},
 			expectCmd:   "/opt/app/current/app",
 			expectArgs:  nil,
 			wantErr:     false,
