@@ -77,7 +77,7 @@ sudo mv dewy /usr/local/bin/
 
 ```bash
 # Install directly from latest main branch
-go install github.com/linyows/dewy/cmd/dewy@latest
+go install github.com/linyows/dewy/cmd/dewy@main
 ```
 
 ### 3. Provisioning Tools
