@@ -2,6 +2,7 @@ package supervisor
 
 import (
 	"encoding/json"
+	"net"
 	"os"
 	"path/filepath"
 	"testing"
@@ -18,6 +19,12 @@ type contract struct {
 		Addrs []string `json:"addrs"`
 		Env   string   `json:"env"`
 	} `json:"port"`
+	Health []struct {
+		Name string `json:"name"`
+		Addr string `json:"addr"`
+		FD   int    `json:"fd"`
+		Env  string `json:"env"`
+	} `json:"health"`
 }
 
 func loadContract(t *testing.T) contract {
@@ -42,6 +49,20 @@ func TestContractListenersEnv(t *testing.T) {
 			}
 			if got := listenersEnv(lns); got != tt.Env {
 				t.Errorf("listenersEnv(%q) = %q, want %q", tt.Addrs, got, tt.Env)
+			}
+		})
+	}
+}
+
+func TestContractHealthEnv(t *testing.T) {
+	for _, tt := range loadContract(t).Health {
+		t.Run(tt.Name, func(t *testing.T) {
+			addr, err := net.ResolveTCPAddr("tcp", tt.Addr)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := healthEnv(addr, tt.FD); got != tt.Env {
+				t.Errorf("healthEnv(%s, %d) = %q, want %q", addr, tt.FD, got, tt.Env)
 			}
 		})
 	}

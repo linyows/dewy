@@ -201,6 +201,12 @@ func openHealthListener() (*listener, error) {
 	return l, nil
 }
 
+// healthEnv builds the EnvHealthPort value for a health socket bound to addr
+// and inherited as descriptor fd: a single entry in the EnvListeners format.
+func healthEnv(addr net.Addr, fd int) string {
+	return addr.String() + "=" + strconv.Itoa(fd)
+}
+
 // listenersEnv builds the EnvListeners value for lns.
 func listenersEnv(lns []*listener) string {
 	entries := make([]string, len(lns))

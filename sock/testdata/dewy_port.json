@@ -39,5 +39,9 @@
         {"addr": "6000", "network": "udp", "fd": 6}
       ]
     }
+  ],
+  "health": [
+    {"name": "IPv4 loopback", "addr": "127.0.0.1:41234", "fd": 5, "env": "127.0.0.1:41234=5"},
+    {"name": "IPv6 loopback without --port", "addr": "[::1]:41234", "fd": 3, "env": "[::1]:41234=3"}
   ]
 }

@@ -21,6 +21,12 @@ type contract struct {
 			FD      uintptr `json:"fd"`
 		} `json:"entries"`
 	} `json:"port"`
+	Health []struct {
+		Name string  `json:"name"`
+		Addr string  `json:"addr"`
+		FD   uintptr `json:"fd"`
+		Env  string  `json:"env"`
+	} `json:"health"`
 }
 
 func loadContract(t *testing.T) contract {
@@ -50,6 +56,20 @@ func TestContractEntries(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, want) {
 				t.Errorf("Entries() = %+v, want %+v", got, want)
+			}
+		})
+	}
+}
+
+func TestContractHealthEntry(t *testing.T) {
+	for _, tt := range loadContract(t).Health {
+		t.Run(tt.Name, func(t *testing.T) {
+			got, err := parseEntry(tt.Env)
+			if err != nil {
+				t.Fatalf("parseEntry(%q) error = %v", tt.Env, err)
+			}
+			if got.Addr != tt.Addr || got.FD != tt.FD {
+				t.Errorf("parseEntry(%q) = %+v, want address %s and descriptor %d", tt.Env, got, tt.Addr, tt.FD)
 			}
 		})
 	}

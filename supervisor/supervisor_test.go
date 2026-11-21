@@ -119,7 +119,7 @@ func runHelper() int {
 			}
 			fmt.Fprintf(w, "%s %d", mode, os.Getpid())
 		})
-		go func() { _ = http.Serve(ln, hmux) }()
+		go serve(ln, hmux)
 	}
 
 	for range sigs {

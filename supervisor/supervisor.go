@@ -430,7 +430,7 @@ func (s *Supervisor) spawn() (*worker, error) {
 		defer health.close()
 		fd := firstListenerFD + len(cmd.ExtraFiles)
 		cmd.ExtraFiles = append(cmd.ExtraFiles, health.file)
-		cmd.Env = append(slices.Clip(cmd.Env), fmt.Sprintf("%s=%s=%d", EnvHealthPort, health.local, fd))
+		cmd.Env = append(slices.Clip(cmd.Env), EnvHealthPort+"="+healthEnv(health.local, fd))
 	}
 
 	s.mu.Lock()
