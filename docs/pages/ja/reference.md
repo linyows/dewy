@@ -522,6 +522,43 @@ SMTPサーバーを通じてメール通知を送信します。認証情報と�
 smtp://user:password@host:port/to@example.com
 ```
 
+## 環境変数 {% #environment-variables %}
+
+dewyは、1つ目のグループの環境変数を認証と接続先の指定に使います。2つ目のグループの環境変数は、dewyが起動するアプリケーションに設定します。詳細はそれぞれのリンク先のページに記載しています。
+
+### dewyが読む環境変数 {% #variables-dewy-reads %}
+
+| 環境変数 | 対象 | 説明 |
+|----------|------|------|
+| `GH_TOKEN` | `ghr://` | GitHubのPersonal Access Token。`GITHUB_TOKEN`より優先されるため、GitHub Actionsが設定するトークンで置き換わりません。[レジストリ](/ja/registry)を参照 |
+| `GITHUB_TOKEN` | `ghr://`、`img://ghcr.io/...` | GitHubのPersonal Access Token。`GH_TOKEN`がない場合に使います。GitHub Container Registryではパスワードとして使います |
+| `GITHUB_APP_ID` | `ghr://` | GitHub AppのID。設定するとトークンではなくGitHub Appで認証します |
+| `GITHUB_APP_INSTALLATION_ID` | `ghr://` | GitHub AppのインストールID。`GITHUB_APP_ID`と合わせて必須です |
+| `GITHUB_APP_PRIVATE_KEY` | `ghr://` | PEM形式のGitHub Appの秘密鍵。`GITHUB_APP_PRIVATE_KEY_PATH`より優先されます |
+| `GITHUB_APP_PRIVATE_KEY_PATH` | `ghr://` | GitHub Appの秘密鍵ファイルのパス |
+| `GITHUB_API_URL` | `ghr://` | GitHub Enterprise ServerのAPIエンドポイント（例: `https://github.example.com/api/v3/`） |
+| `GITHUB_ENDPOINT` | `ghr://` | `GITHUB_API_URL`と同じです。`GITHUB_API_URL`がない場合に使います |
+| `GITHUB_ARTIFACT` | `ghr://` | アーティファクト名。レジストリURLに`artifact`パラメータがない場合に使います。互換性のために残しているもので、URLパラメータの使用を推奨します |
+| `AWS_ENDPOINT_URL` | `s3://`のレジストリ、アーティファクト、キャッシュ | S3互換サービスのエンドポイント。URLに`endpoint`パラメータがない場合に使います。指定するとパス形式のアドレスでアクセスします |
+| `DOCKER_USERNAME`、`DOCKER_PASSWORD` | `img://`、containerコマンド | 任意のOCIレジストリのユーザー名とパスワード。`DOCKER_USERNAME`は以下のレジストリ別の環境変数より優先されます |
+| `AWS_ECR_PASSWORD` | `img://`、containerコマンド | Amazon ECRのトークン。`aws ecr get-login-password`の出力です |
+| `GCR_TOKEN` | `img://`、containerコマンド | Google Container RegistryとArtifact Registryのサービスアカウントキー（JSON） |
+| `SLACK_TOKEN` | `slack://` | SlackのBot Token。Slack通知に必須です。[通知](/ja/notifier)を参照 |
+| `MAIL_USERNAME`、`MAIL_PASSWORD`、`MAIL_FROM` | `smtp://` | SMTPのユーザー名、パスワード、送信元アドレス。通知URLで指定していない値に使います |
+| `DEWY_CACHEDIR` | `file://`キャッシュ | ローカルファイルキャッシュのディレクトリ。デフォルトは作業ディレクトリ配下の`.dewy/cache`です。[キャッシュ](/ja/cache)を参照 |
+
+S3とGCSは、`AWS_ACCESS_KEY_ID`、`AWS_SECRET_ACCESS_KEY`、`AWS_PROFILE`、`GOOGLE_APPLICATION_CREDENTIALS`など、各SDKの標準の認証情報も読みます。これらはdewy自身では解釈しません。
+
+### dewyがアプリケーションに設定する環境変数 {% #variables-dewy-sets %}
+
+`server`コマンドは、dewy自身の環境変数に加えて、以下の環境変数をアプリケーションのプロセスに設定します。Goのアプリケーションは`github.com/linyows/dewy/sock`モジュールでこれらを読めます。[マルチポート](/ja/multi-port#inherited-sockets)を参照してください。
+
+| 環境変数 | 説明 |
+|----------|------|
+| `DEWY_PORT` | アプリケーションに渡すソケット。`--port`ごとに`<address>=<fd>`のエントリが`;`区切りで並びます（例: `8080=3;53/udp=4`）。`--port`を指定した場合だけ設定します。[マルチポート](/ja/multi-port#inherited-sockets)を参照 |
+| `SERVER_STARTER_PORT` | `DEWY_PORT`と同じ値。server-starter向けに書かれたアプリケーションのためのものです |
+| `DEWY_HEALTH_PORT` | このプロセスのヘルスチェック用ソケット。`<address>=<fd>`の形式です（例: `127.0.0.1:41234=5`）。`--health-before-switch`を指定した場合だけ設定します。[マルチポート](/ja/multi-port#health-socket)を参照 |
+
 ## 終了コード
 
 Dewyは以下の終了コードを使用して実行結果を示します。スクリプトやCI/CDパイプラインでの処理分岐に活用できます。

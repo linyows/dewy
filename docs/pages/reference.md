@@ -534,6 +534,43 @@ Sends email notifications through SMTP server. Authentication credentials and se
 smtp://user:password@host:port/to@example.com
 ```
 
+## Environment Variables {% #environment-variables %}
+
+Dewy reads the variables in the first group to authenticate and to locate services, and sets the variables in the second group for the application it runs. Each variable is described in detail on the linked page.
+
+### Variables Dewy Reads {% #variables-dewy-reads %}
+
+| Variable | Used by | Description |
+|----------|---------|-------------|
+| `GH_TOKEN` | `ghr://` | GitHub personal access token. Takes precedence over `GITHUB_TOKEN`, so a token set by GitHub Actions does not replace it. See [Registry](/registry) |
+| `GITHUB_TOKEN` | `ghr://`, `img://ghcr.io/...` | GitHub personal access token, used when `GH_TOKEN` is not set. For GitHub Container Registry it is the password |
+| `GITHUB_APP_ID` | `ghr://` | GitHub App ID. When it is set, GitHub App authentication is used instead of a token |
+| `GITHUB_APP_INSTALLATION_ID` | `ghr://` | GitHub App installation ID. Required with `GITHUB_APP_ID` |
+| `GITHUB_APP_PRIVATE_KEY` | `ghr://` | GitHub App private key in PEM format. Takes precedence over `GITHUB_APP_PRIVATE_KEY_PATH` |
+| `GITHUB_APP_PRIVATE_KEY_PATH` | `ghr://` | Path to the GitHub App private key file |
+| `GITHUB_API_URL` | `ghr://` | API endpoint of GitHub Enterprise Server (for example, `https://github.example.com/api/v3/`) |
+| `GITHUB_ENDPOINT` | `ghr://` | Same as `GITHUB_API_URL`, used when `GITHUB_API_URL` is not set |
+| `GITHUB_ARTIFACT` | `ghr://` | Artifact name, used when the registry URL has no `artifact` parameter. Kept for compatibility; prefer the URL parameter |
+| `AWS_ENDPOINT_URL` | `s3://` registry, artifact and cache | Endpoint of an S3-compatible service, used when the URL has no `endpoint` parameter. Path-style addressing is used with it |
+| `DOCKER_USERNAME`, `DOCKER_PASSWORD` | `img://`, container command | Username and password for any OCI registry. `DOCKER_USERNAME` takes precedence over the registry-specific variables below |
+| `AWS_ECR_PASSWORD` | `img://`, container command | Token for Amazon ECR, as printed by `aws ecr get-login-password` |
+| `GCR_TOKEN` | `img://`, container command | Service account key JSON for Google Container Registry and Artifact Registry |
+| `SLACK_TOKEN` | `slack://` | Slack bot token. Required for Slack notifications. See [Notifier](/notifier) |
+| `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM` | `smtp://` | SMTP username, password and sender address, used for the values the notifier URL does not give |
+| `DEWY_CACHEDIR` | `file://` cache | Directory of the local file cache. Defaults to `.dewy/cache` under the working directory. See [Cache](/cache) |
+
+S3 and GCS also read the standard credentials of each SDK, such as `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_PROFILE` and `GOOGLE_APPLICATION_CREDENTIALS`. Dewy does not interpret them itself.
+
+### Variables Dewy Sets for the Application {% #variables-dewy-sets %}
+
+The `server` command sets these variables in the environment of the application process, in addition to the environment Dewy itself runs with. A Go application can read them with the `github.com/linyows/dewy/sock` module; see [Multi-Port](/multi-port#inherited-sockets).
+
+| Variable | Description |
+|----------|-------------|
+| `DEWY_PORT` | The sockets passed to the application, one `<address>=<fd>` entry per `--port`, joined by `;` (for example, `8080=3;53/udp=4`). Set only when `--port` is given. See [Multi-Port](/multi-port#inherited-sockets) |
+| `SERVER_STARTER_PORT` | The same value as `DEWY_PORT`, for applications written for server-starter |
+| `DEWY_HEALTH_PORT` | The health check socket of this process in the `<address>=<fd>` form (for example, `127.0.0.1:41234=5`). Set only with `--health-before-switch`. See [Multi-Port](/multi-port#health-socket) |
+
 ## Exit Codes
 
 Dewy uses the following exit codes to indicate execution results. These can be used for processing branches in scripts and CI/CD pipelines.
