@@ -160,6 +160,18 @@ dewy server --registry ghr://owner/repo --host 192.168.10.11 --port 8000-8001 --
 dewy server --registry ghr://owner/repo --host ::1 --port 8000 -- /opt/app/current/app
 ```
 
+### --startup-wait
+
+Specifies, in seconds, how long a new process must stay up before it can replace the previous one. Applies to the `server` command only. Default is 1 second; `0` also selects the default, and a negative value is rejected.
+
+On a restart (a deployment, a rollback, or `SIGUSR1`), Dewy starts the new process beside the previous one and waits this long. If the new process exits within this time, the restart fails and the previous process keeps serving. A deployment whose restart fails follows the rollback flow described under `--health-path`. The first process started by `dewy server` is also required to stay up for this time.
+
+Raise the value for an application that can fail after a few seconds of initialization, such as one that loads its configuration or connects to a database after it starts.
+
+```bash
+dewy server --registry ghr://owner/repo --port 8000 --startup-wait 5 -- /opt/app/current/app
+```
+
 ### --verify-checksum
 
 Selects how a downloaded artifact is checked against the SHA-256 checksum file published next to it. Accepts `off`, `auto` or `required`. Default is `auto`.

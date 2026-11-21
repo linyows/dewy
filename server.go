@@ -29,6 +29,9 @@ type ServerConfig struct {
 	// listens on every interface; "host:port" listens on that IP address.
 	// The list is deduplicated and sorted by port.
 	Addrs []string
+	// StartupWait is how long a new process must stay up before it can
+	// replace the previous one. Zero means supervisor.DefaultStartupWindow.
+	StartupWait time.Duration
 }
 
 // managedServer is the process supervisor as dewy uses it. It is an
@@ -49,6 +52,7 @@ func (d *Dewy) supervisorConfig() supervisor.Config {
 		cfg.Command = c.Command
 		cfg.Args = c.Args
 		cfg.Addrs = c.Addrs
+		cfg.StartupWindow = c.StartupWait
 	}
 	return cfg
 }

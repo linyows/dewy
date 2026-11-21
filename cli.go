@@ -54,6 +54,7 @@ type cli struct {
 	HealthPath         string   `long:"health-path" description:"HTTP path to probe after a deployment (e.g., /health). For server: probed on the lowest TCP --port after the switch; a failure rolls the release back. For container: probed on every new replica"`
 	HealthTimeout      int      `long:"health-timeout" description:"Overall health check budget in seconds, covering every attempt (default: 30)"`
 	NoRollback         bool     `long:"no-rollback" description:"Keep the new release in place when its health check fails (server command). The failed version is still recorded so it is not deployed again"`
+	StartupWait        int      `long:"startup-wait" arg:"seconds" description:"Seconds a new process must stay up before it can replace the previous one (server command, default: 1)"`
 	// Container-specific options
 	Replicas         int      `long:"replicas" description:"Number of container replicas to run (default: 1)"`
 	DrainTime        int      `long:"drain-time" description:"Drain time in seconds after traffic switch (default: 30 for container command)"`
@@ -173,6 +174,7 @@ func (c *cli) showHelp() {
 		"Ports",
 		"Host",
 		"NoRollback",
+		"StartupWait",
 	}), "\n")
 
 	containerOpts := strings.Join(c.buildHelp([]string{
@@ -302,6 +304,10 @@ func (c *cli) run() int {
 		fmt.Fprintf(c.env.Err, "Error: --host is only supported by the server command\n")
 		return ExitErr
 	}
+	if c.StartupWait != 0 && c.command != "server" {
+		fmt.Fprintf(c.env.Err, "Error: --startup-wait is only supported by the server command\n")
+		return ExitErr
+	}
 
 	switch c.command {
 	case "server":
@@ -392,10 +398,15 @@ func (c *cli) configureServerCommand(conf *Config) error {
 			cmdArgs = c.args[1:]
 		}
 	}
+	if c.StartupWait < 0 {
+		fmt.Fprintf(c.env.Err, "Error: --startup-wait must not be negative\n")
+		return fmt.Errorf("negative --startup-wait")
+	}
 	server := &ServerConfig{
-		Command: command,
-		Args:    cmdArgs,
-		Addrs:   parsedPorts,
+		Command:     command,
+		Args:        cmdArgs,
+		Addrs:       parsedPorts,
+		StartupWait: time.Duration(c.StartupWait) * time.Second,
 	}
 
 	conf.Health = HealthConfig{

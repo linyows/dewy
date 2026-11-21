@@ -85,6 +85,12 @@ func TestRunCLI(t *testing.T) {
 			expectError: "Error: --host is only supported by the server command",
 		},
 		{
+			name:        "startup-wait is rejected outside the server command",
+			args:        []string{"--registry", "img://ghcr.io/o/r", "--startup-wait", "3", "--port", "8080", "container"},
+			expectExit:  ExitErr,
+			expectError: "Error: --startup-wait is only supported by the server command",
+		},
+		{
 			name:        "host requires a port on the server command",
 			args:        []string{"--registry", "ghr://o/r", "--host", "127.0.0.1", "server", "myapp"},
 			expectExit:  ExitErr,
@@ -1024,4 +1030,41 @@ func TestDisplayContainerList(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCLI_ConfigureServerCommand_SwitchOptions(t *testing.T) {
+	t.Run("options are carried into the server config", func(t *testing.T) {
+		var errBuf bytes.Buffer
+		c := &cli{
+			Ports:       []string{"53/udp"},
+			StartupWait: 3,
+			args:        []string{"/opt/app/current/app"},
+			env:         Env{Err: &errBuf},
+		}
+		conf := DefaultConfig()
+		if err := c.configureServerCommand(&conf); err != nil {
+			t.Fatalf("configureServerCommand() error = %v (%s)", err, errBuf.String())
+		}
+		want := ServerConfig{
+			Command:     "/opt/app/current/app",
+			Addrs:       []string{"53/udp"},
+			StartupWait: 3 * time.Second,
+		}
+		if !reflect.DeepEqual(*conf.Server, want) {
+			t.Errorf("Server = %+v, want %+v", *conf.Server, want)
+		}
+	})
+
+	t.Run("negative durations", func(t *testing.T) {
+		for _, c := range []*cli{
+			{StartupWait: -1, args: []string{"app"}},
+		} {
+			var errBuf bytes.Buffer
+			c.env = Env{Err: &errBuf}
+			conf := DefaultConfig()
+			if err := c.configureServerCommand(&conf); err == nil {
+				t.Errorf("configureServerCommand(%+v) error = nil, want an error", c)
+			}
+		}
+	})
 }

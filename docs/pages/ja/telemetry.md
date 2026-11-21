@@ -118,7 +118,7 @@ dewy container --otlp-endpoint otel-collector.internal:4317 \
 |-----------|------|------|------|
 | `dewy.server.restarts.total` | Counter | {restart} | 監督下サーバーの再起動回数。`reason` ラベル（`deploy` / `signal` / `rollback`）付き |
 
-`reason="deploy"` は新しいリリースによる再起動、`reason="signal"` は `SIGUSR1` による再起動、`reason="rollback"` はヘルスチェック失敗後に以前のリリースへ戻すための再起動をカウントします。再起動が拒否された場合（新しいプロセスが起動待ち時間内に終了した場合）のロールバックはサーバーを再起動しないため、ここではカウントされません。
+`reason="deploy"` は新しいリリースによる再起動、`reason="signal"` は `SIGUSR1` による再起動、`reason="rollback"` はヘルスチェック失敗後に以前のリリースへ戻すための再起動をカウントします。再起動が拒否された場合（新しいプロセスが `--startup-wait` 内に終了した場合）のロールバックはサーバーを再起動しないため、ここではカウントされません。
 
 > server モードではアプリケーションのクラッシュは報告されません。dewy は予期せず終了したワーカーを再起動しますが、その終了回数をメトリクスとしてカウントする機能はまだ実装されていません。container モードはコンテナランタイムが各コンテナの実状態を公開するためアプリのクラッシュを報告できます（container の `restarts` / `status` / `oom_killed` を参照）。
 

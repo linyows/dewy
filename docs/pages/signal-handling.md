@@ -64,7 +64,7 @@ Dewy runs the application as a worker process. Dewy binds the listening sockets 
 A restart proceeds as follows:
 
 1. Dewy starts a new worker beside the current one. Both serve on the same sockets.
-2. Dewy waits for the startup wait (1 second).
+2. Dewy waits for the startup wait (`--startup-wait`, 1 second by default).
 3. The new worker becomes the current worker, and dewy sends SIGTERM to the previous worker.
 4. The previous worker finishes its in-flight requests and exits.
 
@@ -432,7 +432,7 @@ Issues may arise if the process is in a zombie state or if there are insufficien
 
 ### When Restart Fails
 
-A restart fails when the new worker exits within the startup wait (1 second). Dewy logs `Restart failure` with the error, and the previous worker keeps serving. Check the application logs for the reason the new worker exited, such as a configuration error or an incorrect command path after `--`.
+A restart fails when the new worker exits within the startup wait (`--startup-wait`, 1 second by default). Dewy logs `Restart failure` with the error, and the previous worker keeps serving. Check the application logs for the reason the new worker exited, such as a configuration error or an incorrect command path after `--`.
 
 If the restart succeeds but old workers remain, check that the application exits on SIGTERM. Dewy sends SIGTERM to the previous worker after each restart.
 

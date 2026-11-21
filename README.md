@@ -72,6 +72,8 @@ $ dewy server --registry ghr://linyows/myapp \
 
 A version that fails its health check is recorded and is not deployed again until a different version is published, so a release that does not start is deployed once rather than on every poll. The record is keyed by tag and artifact name, so republishing the same tag does not release it; publishing a different version, running without `--health-path`, or deleting the `blocked` entry from the cache store does. Pass `--no-rollback` to keep the failed release in place and only record and notify the failure.
 
+`--startup-wait` (default 1 second) sets how long a new process must stay up before it can replace the previous one.
+
 ### Assets Command
 
 Deploy static files such as HTML, CSS, and JavaScript:

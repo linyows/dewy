@@ -132,7 +132,7 @@ Finally, **After Deploy Hook** is executed if configured. This hook enables auto
 
 In the startup control phase, application startup state is managed when operating in server mode. In assets mode, this processing is skipped since only file placement is the objective.
 
-When a server is already running, **server restart** processing is executed. Dewy starts a new worker process beside the current one. Both serve on the listening sockets that dewy opened when the server started. When the new worker has stayed up for the startup wait (1 second), it becomes the current worker and dewy sends SIGTERM to the previous worker. The sockets stay open throughout, so connections that arrive during the switch are queued by the kernel instead of being refused.
+When a server is already running, **server restart** processing is executed. Dewy starts a new worker process beside the current one. Both serve on the listening sockets that dewy opened when the server started. When the new worker has stayed up for the startup wait (`--startup-wait`, 1 second by default), it becomes the current worker and dewy sends SIGTERM to the previous worker. The sockets stay open throughout, so connections that arrive during the switch are queued by the kernel instead of being refused.
 
 ```bash
 # Log example during server restart
