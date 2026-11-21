@@ -46,3 +46,11 @@ func (d *Dewy) recordServerRestart(ctx context.Context, reason string) {
 	d.telemetry.Metrics().ServerRestarts.Add(ctx, 1,
 		otelmetric.WithAttributes(attribute.String("reason", reason)))
 }
+
+// recordServerCrash counts one unexpected exit of the serving process.
+func (d *Dewy) recordServerCrash(ctx context.Context) {
+	if !d.telemetryOn() {
+		return
+	}
+	d.telemetry.Metrics().ServerCrashes.Add(ctx, 1)
+}

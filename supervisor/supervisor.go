@@ -105,6 +105,11 @@ type Config struct {
 	Stderr io.Writer
 	// Logger records worker lifecycle events. Nil discards them.
 	Logger *slog.Logger
+	// OnCrash, when set, is called each time the current worker exits
+	// without being told to stop, before the supervisor starts a
+	// replacement. err is the exit status. It runs on the goroutine that
+	// waited for the process, so it must return quickly.
+	OnCrash func(w Worker, err error)
 }
 
 // Worker describes one live worker process.
@@ -556,6 +561,9 @@ func (s *Supervisor) wait(w *worker) {
 	switch {
 	case crashed:
 		s.log.Warn("Worker exited unexpectedly", attrs...)
+		if s.cfg.OnCrash != nil {
+			s.cfg.OnCrash(Worker{Generation: w.gen, PID: w.cmd.Process.Pid, StartedAt: w.started}, exitError(err))
+		}
 		go s.recover(w)
 	case stopping:
 		s.log.Info("Worker stopped", attrs...)

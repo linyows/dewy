@@ -2,8 +2,11 @@ package dewy
 
 import (
 	"context"
+	"io"
 	"testing"
 	"time"
+
+	"github.com/linyows/dewy/logging"
 )
 
 func TestRecordHelpersNoopWithoutTelemetry(t *testing.T) {
@@ -17,4 +20,12 @@ func TestRecordHelpersNoopWithoutTelemetry(t *testing.T) {
 	d.recordDeployment(ctx, time.Second, nil)
 	d.recordDeployment(ctx, time.Second, context.Canceled)
 	d.recordServerRestart(ctx, "deploy")
+	d.recordServerCrash(ctx)
+}
+
+func TestSupervisorConfigReportsCrashes(t *testing.T) {
+	d := &Dewy{logger: logging.SetupLogger("error", "text", io.Discard), config: Config{Server: &ServerConfig{Command: "true"}}}
+	if d.supervisorConfig().OnCrash == nil {
+		t.Fatal("supervisorConfig().OnCrash = nil, want crashes reported to telemetry")
+	}
 }

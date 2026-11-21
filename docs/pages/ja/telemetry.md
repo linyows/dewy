@@ -112,15 +112,16 @@ dewy container --otlp-endpoint otel-collector.internal:4317 \
 
 ### サーバーメトリクス
 
-**server モード**では、新しいリリースのデプロイ時や `SIGUSR1` 受信時に dewy が監督下プロセスを再起動し、その回数をカウントします。これはアプリケーション自身の OTel SDK では報告できないイベントです。server モードで telemetry を有効にすると、container モードと同様に Admin API 上の `/metrics` エンドポイントも提供されます。
+**server モード**では、新しいリリースのデプロイ時や `SIGUSR1` 受信時に dewy が監督下プロセスを再起動し、稼働中のプロセスが予期せず終了したときは代わりのプロセスを起動します。dewy はこの両方の回数をカウントします。どちらもアプリケーション自身の OTel SDK では報告できないイベントです。server モードで telemetry を有効にすると、container モードと同様に Admin API 上の `/metrics` エンドポイントも提供されます。
 
 | メトリクス | 種類 | 単位 | 説明 |
 |-----------|------|------|------|
 | `dewy.server.restarts.total` | Counter | {restart} | 監督下サーバーの再起動回数。`reason` ラベル（`deploy` / `signal` / `rollback`）付き |
+| `dewy.server.crashes.total` | Counter | {crash} | 稼働中のプロセスが予期せず終了した回数 |
 
 `reason="deploy"` は新しいリリースによる再起動、`reason="signal"` は `SIGUSR1` による再起動、`reason="rollback"` はヘルスチェック失敗後に以前のリリースへ戻すための再起動をカウントします。再起動が拒否された場合（新しいプロセスが `--startup-wait` 内に終了した場合や、`--health-before-switch` の指定時にヘルスチェックに失敗した場合）のロールバックはサーバーを再起動しないため、ここではカウントされません。
 
-> server モードではアプリケーションのクラッシュは報告されません。dewy は予期せず終了したワーカーを再起動しますが、その終了回数をメトリクスとしてカウントする機能はまだ実装されていません。container モードはコンテナランタイムが各コンテナの実状態を公開するためアプリのクラッシュを報告できます（container の `restarts` / `status` / `oom_killed` を参照）。
+`dewy.server.crashes.total` は、稼働中のプロセスが dewy の指示によらず終了するたびにカウントします。dewy はその後、代わりのプロセスを起動します。起動までの待ち時間は1秒から始まり、終了が続く間は2倍ずつ30秒まで延びます。再起動中に新しいプロセスが `--startup-wait` 内に終了した場合や、`--health-before-switch` の指定時にヘルスチェックに失敗した場合はカウントしません。そのプロセスはリクエストを処理しておらず、以前のプロセスが動き続けるためです。dewy 自身の停止に伴う終了もカウントしません。
 
 ### ヘルスチェックメトリクス
 
@@ -207,6 +208,9 @@ rate(dewy_proxy_errors_total[5m])
 
 # 原因別のサーバー再起動（server モード）
 sum by (reason) (increase(dewy_server_restarts_total[1h]))
+
+# 直近1時間の監督下プロセスのクラッシュ（server モード）
+increase(dewy_server_crashes_total[1h])
 
 # 直近1時間のコンテナ再起動（ゲージなのでincreaseではなくchangesを使う）
 changes(dewy_container_restarts[1h])

@@ -81,6 +81,9 @@ func (d *Dewy) supervisorConfig() supervisor.Config {
 	if d.healthBeforeSwitch() {
 		cfg.HealthCheck = d.probeWorker
 	}
+	cfg.OnCrash = func(supervisor.Worker, error) {
+		d.recordServerCrash(context.Background())
+	}
 	return cfg
 }
 

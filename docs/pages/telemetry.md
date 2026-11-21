@@ -8,7 +8,7 @@ Dewy provides built-in telemetry support based on OpenTelemetry (OTel) for monit
 
 ## Architecture
 
-In **server mode**, Dewy runs as part of the deployed application, so application-level telemetry is best collected through the application's own OTel SDK (e.g., via otel-collector configured with systemd). Dewy still reports what only the supervisor can see — deployment activity and restarts of the managed process (see [Server Metrics](#server-metrics)) — and serves them on the same `/metrics` endpoint when telemetry is enabled.
+In **server mode**, Dewy runs as part of the deployed application, so application-level telemetry is best collected through the application's own OTel SDK (e.g., via otel-collector configured with systemd). Dewy still reports what only the supervisor can see — deployment activity and restarts and crashes of the managed process (see [Server Metrics](#server-metrics)) — and serves them on the same `/metrics` endpoint when telemetry is enabled.
 
 In **container mode**, Dewy operates as a standalone reverse proxy managing container lifecycle. Since it is separate from the application, Dewy needs its own telemetry pipeline. Dewy uses the OpenTelemetry SDK internally and supports two export paths:
 
@@ -114,14 +114,16 @@ The `dewy.deployment.duration` histogram uses the following bucket boundaries:
 ### Server Metrics
 
 In **server mode**, Dewy restarts the managed process when a new release is
-deployed or when it receives `SIGUSR1`, and it counts those restarts — an event
-the application's own OTel SDK cannot report. When telemetry is enabled in
+deployed or when it receives `SIGUSR1`, and starts a replacement when the
+serving process exits unexpectedly. It counts both events, which the
+application's own OTel SDK cannot report. When telemetry is enabled in
 server mode, Dewy also serves the `/metrics` endpoint on the Admin API, the same
 as in container mode.
 
 | Metric | Type | Unit | Description |
 |--------|------|------|-------------|
 | `dewy.server.restarts.total` | Counter | {restart} | Managed-server restarts, labeled `reason` (`deploy`, `signal` or `rollback`) |
+| `dewy.server.crashes.total` | Counter | {crash} | Unexpected exits of the serving process |
 
 `reason="deploy"` counts restarts triggered by a new release; `reason="signal"`
 counts restarts requested via `SIGUSR1`; `reason="rollback"` counts restarts
@@ -130,11 +132,13 @@ after a rejected restart (the new process exited within `--startup-wait` or
 failed the check under `--health-before-switch`) does not restart the server,
 so it is not counted here.
 
-> Application crashes are not reported in server mode. Dewy restarts a worker
-> that exits unexpectedly, but it does not count those exits as a metric yet.
-> Container mode does report app crashes, because the container runtime exposes
-> each container's real state (see the container `restarts`/`status`/`oom_killed`
-> metrics).
+`dewy.server.crashes.total` counts each exit of the serving process that Dewy
+did not request. Dewy then starts a replacement after a delay that begins at
+one second and doubles up to 30 seconds while the process keeps exiting. The
+counter does not include a new process that exits within `--startup-wait` or
+fails the check under `--health-before-switch` during a restart, because that
+process never served and the previous process keeps running. Exits during Dewy's own shutdown are
+not counted either.
 
 ### Health Check Metrics
 
@@ -239,6 +243,9 @@ rate(dewy_proxy_errors_total[5m])
 
 # Server restarts by cause (server mode)
 sum by (reason) (increase(dewy_server_restarts_total[1h]))
+
+# Crashes of the managed process in the last hour (server mode)
+increase(dewy_server_crashes_total[1h])
 
 # Container restarts in the last hour (gauge: use changes, not increase)
 changes(dewy_container_restarts[1h])

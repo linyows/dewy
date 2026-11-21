@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -437,7 +438,10 @@ func TestRestartReplacesWorker(t *testing.T) {
 
 func TestRestartKeepsCurrentWorkerWhenNewOneExits(t *testing.T) {
 	h := newHarness(t, "serve")
-	s := h.start(h.config("127.0.0.1:0"))
+	cfg := h.config("127.0.0.1:0")
+	var crashes atomic.Int32
+	cfg.OnCrash = func(Worker, error) { crashes.Add(1) }
+	s := h.start(cfg)
 	addr := s.Addrs()[0]
 	before := get(t, addr)
 
@@ -451,6 +455,9 @@ func TestRestartKeepsCurrentWorkerWhenNewOneExits(t *testing.T) {
 	}
 	if st := s.Status(); st.Current != 1 || len(st.Workers) != 1 {
 		t.Errorf("Status() = %+v, want only generation 1", st)
+	}
+	if n := crashes.Load(); n != 0 {
+		t.Errorf("OnCrash called %d times for a rejected new worker, want 0", n)
 	}
 }
 
@@ -470,7 +477,15 @@ func TestRestartCanceled(t *testing.T) {
 
 func TestCrashedWorkerIsRestarted(t *testing.T) {
 	h := newHarness(t, "serve")
-	s := h.start(h.config("127.0.0.1:0"))
+	cfg := h.config("127.0.0.1:0")
+	crashes := make(chan Worker, 4)
+	cfg.OnCrash = func(w Worker, err error) {
+		if err == nil {
+			t.Error("OnCrash got a nil exit status")
+		}
+		crashes <- w
+	}
+	s := h.start(cfg)
 	addr := s.Addrs()[0]
 
 	c := http.Client{Timeout: time.Second}
@@ -486,6 +501,17 @@ func TestCrashedWorkerIsRestarted(t *testing.T) {
 	}
 	if got := get(t, addr); !strings.HasPrefix(got, "serve ") {
 		t.Errorf("GET after recovery = %q, want a response from the new worker", got)
+	}
+	select {
+	case w := <-crashes:
+		if w.Generation != 1 || w.PID == 0 {
+			t.Errorf("OnCrash got %+v, want generation 1 with its PID", w)
+		}
+	default:
+		t.Fatal("OnCrash was not called for the crashed worker")
+	}
+	if n := len(crashes); n != 0 {
+		t.Errorf("OnCrash called %d more times, want once", n)
 	}
 }
 
