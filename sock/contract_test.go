@@ -16,8 +16,9 @@ type contract struct {
 		Addrs   []string `json:"addrs"`
 		Env     string   `json:"env"`
 		Entries []struct {
-			Addr string  `json:"addr"`
-			FD   uintptr `json:"fd"`
+			Addr    string  `json:"addr"`
+			Network string  `json:"network"`
+			FD      uintptr `json:"fd"`
 		} `json:"entries"`
 	} `json:"port"`
 }
@@ -45,7 +46,7 @@ func TestContractEntries(t *testing.T) {
 			}
 			want := make([]Entry, len(tt.Entries))
 			for i, e := range tt.Entries {
-				want[i] = Entry{Addr: e.Addr, FD: e.FD}
+				want[i] = Entry{Addr: e.Addr, Network: e.Network, FD: e.FD}
 			}
 			if !reflect.DeepEqual(got, want) {
 				t.Errorf("Entries() = %+v, want %+v", got, want)
