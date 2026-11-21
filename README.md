@@ -63,7 +63,7 @@ $ dewy server --registry ghr://linyows/myapp \
   --notifier slack://general?title=myapp -p 8000 -l info -- /opt/myapp/current/myapp
 ```
 
-Add `--health-path` to verify the application after a deployment. Dewy probes the path on the first `--port` once the process has started, and restores the previous release if the probe does not succeed within `--health-timeout` (30 seconds by default):
+Add `--health-path` to verify the application after a deployment. Dewy probes the path on the lowest TCP `--port` once the process has started, and restores the previous release if the probe does not succeed within `--health-timeout` (30 seconds by default):
 
 ```sh
 $ dewy server --registry ghr://linyows/myapp \
@@ -645,8 +645,7 @@ Dewy responds to various system signals for process management:
 
 - **SIGHUP**: Ignored (Dewy continues operation)
 - **SIGUSR1**: Triggers manual server restart
-- **SIGINT, SIGTERM, SIGQUIT**: Initiates graceful shutdown
-- **Internal SIGHUP**: Used internally for server restarts
+- **SIGINT, SIGTERM, SIGQUIT**: Initiates graceful shutdown (SIGTERM to the application, SIGKILL after 30 seconds)
 
 ### Manual Server Restart
 

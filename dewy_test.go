@@ -81,7 +81,7 @@ func TestNew(t *testing.T) {
 				Type:       FILE,
 				Expiration: 10,
 			},
-			Starter: nil,
+			Server: nil,
 		},
 		cache:           dewy.cache,
 		isServerRunning: false,

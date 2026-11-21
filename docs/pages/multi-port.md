@@ -4,7 +4,7 @@ title: Multi-Port Support
 
 # {% $markdoc.frontmatter.title %} {% #overview %}
 
-Dewy provides functionality to simultaneously manage multiple TCP ports for a single application. This feature enables unified deployment of services with different purposes, such as HTTP and HTTPS, API and WebUI, or production and debug endpoints. Integration with the server-starter library enables independent process management and graceful restarts for each port.
+Dewy provides functionality to simultaneously manage multiple TCP ports for a single application. This feature enables unified deployment of services with different purposes, such as HTTP and HTTPS, API and WebUI, or production and debug endpoints. Dewy opens every port once when the server starts and passes all of them to the application, so a restart replaces the application process without closing any port.
 
 ## Multi-Port Use Cases
 
@@ -156,7 +156,7 @@ Here are implementation patterns for applications that utilize dewy's multi-port
 
 Multi-port applications typically provide different functions or configurations for each port.
 
-When dewy starts the application, server-starter has already opened every configured port. The application does not bind the ports itself: it serves on the listening sockets that server-starter passes to it, as shown in [Using the Listeners Passed by server-starter](#server-starter-listeners). Binding a port that server-starter holds fails with "address already in use" on Linux, and the inherited sockets are what keep the ports open across a graceful restart.
+When dewy starts the application, dewy has already opened every configured port. The application does not bind the ports itself: it serves on the sockets that dewy passes to it, as shown in [Using the Sockets Passed by dewy](#inherited-sockets). Binding a port that dewy holds fails with "address already in use" on Linux, and the inherited sockets are what keep the ports open across a restart.
 
 ```go
 package main
@@ -233,11 +233,19 @@ func listenerPort(l net.Listener) int {
 
 This design provides different functionality on each port while implementing unified shutdown processing.
 
-### Using the Listeners Passed by server-starter {% #server-starter-listeners %}
+### Using the Sockets Passed by dewy {% #inherited-sockets %}
 
-server-starter passes the listening sockets to the application as inherited file descriptors and lists them in the `SERVER_STARTER_PORT` environment variable. Entries are joined by `;`, and each entry is `port=fd`, or `host:port=fd` when `--host` is set. For example, `--port 8080,8090` produces `8080=3;8090=4`.
+Dewy passes the sockets to the application as inherited file descriptors, starting from 3, and lists them in the `DEWY_PORT` environment variable. Dewy also sets the same value in `SERVER_STARTER_PORT`, whose name and format are compatible with server-starter, so applications written for server-starter work without changes. New applications should read `DEWY_PORT`.
 
-The number after `=` is a file descriptor, not a port. The application turns each descriptor into a `net.Listener` with `os.NewFile` and `net.FileListener`, which detect the socket type from the descriptor itself.
+Entries are joined by `;`, and each entry is `<address>=<fd>`. `<address>` is the port as configured: `port`, or `host:port` when `--host` is set to an address other than `0.0.0.0` or `::`, with an IPv6 address in brackets. The entries are sorted by port number.
+
+| `--port` and `--host` | `DEWY_PORT` |
+|---|---|
+| `--port 8080,8090` | `8080=3;8090=4` |
+| `--port 8080 --host 127.0.0.1` | `127.0.0.1:8080=3` |
+| `--port 8080 --host ::1` | `[::1]:8080=3` |
+
+The number after `=` is a file descriptor, not a port. The application turns a descriptor into a `net.Listener` with `os.NewFile` and `net.FileListener`.
 
 ```go
 package main
@@ -255,31 +263,31 @@ import (
     "time"
 )
 
-// inheritedListeners returns the listening sockets passed by server-starter.
-// It returns nil when SERVER_STARTER_PORT is not set, which means the
-// application was not started by dewy.
+// inheritedListeners returns the listening sockets passed by dewy. It
+// returns nil when DEWY_PORT is not set, which means the application was
+// not started by dewy.
 func inheritedListeners() ([]net.Listener, error) {
-    spec := os.Getenv("SERVER_STARTER_PORT")
+    spec := os.Getenv("DEWY_PORT")
     if spec == "" {
         return nil, nil
     }
 
     var listeners []net.Listener
     for _, entry := range strings.Split(spec, ";") {
-        // "8080=3" or "127.0.0.1:8080=3": the target, then the descriptor.
+        // "8080=3" or "[::1]:8080=3": the address, then the descriptor.
         i := strings.LastIndex(entry, "=")
         if i < 0 {
-            return nil, fmt.Errorf("invalid SERVER_STARTER_PORT entry: %q", entry)
+            return nil, fmt.Errorf("invalid DEWY_PORT entry: %q", entry)
         }
-        target := entry[:i]
+        addr := entry[:i]
         fd, err := strconv.Atoi(entry[i+1:])
         if err != nil {
             return nil, fmt.Errorf("invalid descriptor in %q: %w", entry, err)
         }
 
-        l, err := net.FileListener(os.NewFile(uintptr(fd), target))
+        l, err := net.FileListener(os.NewFile(uintptr(fd), addr))
         if err != nil {
-            return nil, fmt.Errorf("cannot use descriptor %d for %s: %w", fd, target, err)
+            return nil, fmt.Errorf("cannot use descriptor %d for %s: %w", fd, addr, err)
         }
         listeners = append(listeners, l)
     }
@@ -303,7 +311,7 @@ func main() {
     server := &MultiPortServer{}
     server.Start(listeners)
 
-    // server-starter sends SIGTERM to the old worker after a restart.
+    // dewy sends SIGTERM to the previous worker after a restart.
     sigCh := make(chan os.Signal, 1)
     signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
 
@@ -318,7 +326,7 @@ func main() {
 }
 ```
 
-The listeners follow the configuration, so the application does not need its own list of ports: changing `--port` changes the sockets it serves on.
+The sockets follow the configuration, so the application does not need its own list of ports: changing `--port` changes the sockets it serves on.
 
 ### Port-Specific Routing Configuration
 
@@ -577,7 +585,7 @@ sudo kill -TERM <process_id>
 while sudo lsof -i :8080 > /dev/null; do sleep 1; done
 ```
 
-When specifying multiple ports, if binding fails on some ports, the entire application may fail to start. Check error logs to identify problematic port numbers and address them.
+Dewy binds every configured port when the server starts. If any port cannot be bound, dewy closes the ports it has already opened and does not start the application. The error log names the address that failed.
 
 ### Addressing Permission Issues
 
@@ -611,7 +619,7 @@ journalctl -u dewy | grep "port.*8080"
 tail -f /var/log/dewy.log | grep -E "(port|bind|listen)"
 ```
 
-You can also verify that port information is correctly transmitted by checking environment variables from server-starter.
+You can also verify that port information is correctly transmitted by checking the `DEWY_PORT` environment variable that dewy passes to the application.
 
 ### Common Configuration Mistakes and Solutions
 

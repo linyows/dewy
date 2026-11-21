@@ -9,8 +9,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"os"
-	"path/filepath"
+	"net/netip"
 	"reflect"
 	"sort"
 	"strconv"
@@ -44,14 +43,14 @@ type cli struct {
 	Interval           int      `long:"interval" arg:"seconds" short:"i" description:"Polling interval in seconds for checking registry updates (default: 10)"`
 	MaxBackoffInterval int      `long:"max-backoff-interval" arg:"seconds" description:"Stretch the polling interval exponentially while checks keep failing, up to this many seconds (default: 0, disabled; 300 is a reasonable choice)"`
 	Ports              []string `long:"port" short:"p" description:"For server: TCP ports to listen on. For container: port mappings in format 'proxy' or 'proxy:container' (multiple flags supported)"`
-	Host               string   `long:"host" description:"IPv4 address the server command listens on for every --port (e.g., 127.0.0.1). Listens on all interfaces when omitted"`
+	Host               string   `long:"host" description:"IPv4 or IPv6 address the server command listens on for every --port (e.g., 127.0.0.1, ::1). 0.0.0.0 listens on every IPv4 interface and :: on every IPv6 one; when omitted, listens on both"`
 	Registry           string   `long:"registry" description:"Registry URL (e.g., ghr://owner/repo, s3://region/bucket/prefix, docker://registry/repo)"`
 	Cache              string   `long:"cache" short:"c" description:"Cache backend URL (e.g., file:///path, s3://region/bucket/prefix, gs://bucket/prefix). Defaults to local file."`
 	Notifier           string   `long:"notifier" description:"Notifier URL for deployment notifications (e.g., slack://channel, mail://smtp:port/recipient)"`
 	VerifyChecksum     string   `long:"verify-checksum" arg:"(off|auto|required)" description:"How to check a downloaded artifact against the SHA-256 checksum file published next to it: auto verifies when one is published, required also fails when none is, off skips the check (default: auto)"`
 	BeforeDeployHook   string   `long:"before-deploy-hook" description:"Shell command to execute before deployment begins"`
 	AfterDeployHook    string   `long:"after-deploy-hook" description:"Shell command to execute after successful deployment"`
-	HealthPath         string   `long:"health-path" description:"HTTP path to probe after a deployment (e.g., /health). For server: probed on the first --port after the process starts; a failure rolls the release back. For container: probed on every new replica"`
+	HealthPath         string   `long:"health-path" description:"HTTP path to probe after a deployment (e.g., /health). For server: probed on the lowest TCP --port after the switch; a failure rolls the release back. For container: probed on every new replica"`
 	HealthTimeout      int      `long:"health-timeout" description:"Overall health check budget in seconds, covering every attempt (default: 30)"`
 	NoRollback         bool     `long:"no-rollback" description:"Keep the new release in place when its health check fails (server command). The failed version is still recorded so it is not deployed again"`
 	// Container-specific options
@@ -377,12 +376,11 @@ func (c *cli) configureServerCommand(conf *Config) error {
 			fmt.Fprintf(c.env.Err, "Error: --host requires --port\n")
 			return fmt.Errorf("--host requires --port")
 		}
-		// 0.0.0.0 binds every interface, as omitting --host does. Passing
-		// the bare ports keeps SERVER_STARTER_PORT in the "port=fd" form
-		// for the app, as it is without --host.
-		if !net.ParseIP(c.Host).IsUnspecified() {
-			parsedPorts = joinHostPorts(c.Host, parsedPorts)
-		}
+		// 0.0.0.0 listens on every IPv4 interface and :: on every IPv6
+		// interface, while omitting --host listens on both. DEWY_PORT still
+		// lists an unspecified address as a bare port, as it does without
+		// --host.
+		parsedPorts = joinHostPorts(c.Host, parsedPorts)
 	}
 
 	var command string
@@ -393,11 +391,10 @@ func (c *cli) configureServerCommand(conf *Config) error {
 			cmdArgs = c.args[1:]
 		}
 	}
-	starter := &StarterConfig{
-		ports:     parsedPorts,
-		command:   command,
-		args:      cmdArgs,
-		logformat: c.LogFormat,
+	server := &ServerConfig{
+		Command: command,
+		Args:    cmdArgs,
+		Addrs:   parsedPorts,
 	}
 
 	conf.Health = HealthConfig{
@@ -408,19 +405,12 @@ func (c *cli) configureServerCommand(conf *Config) error {
 		conf.Health.Timeout = time.Duration(c.HealthTimeout) * time.Second
 	}
 
-	if c.HealthPath != "" {
-		if len(parsedPorts) == 0 {
-			fmt.Fprintf(c.env.Err, "Error: --health-path requires --port\n")
-			return fmt.Errorf("--health-path requires --port")
-		}
-		// The health check must not probe before server-starter has retired
-		// the previous worker, and its status file is the only report of when
-		// that happened. It is written only when a path is configured, so ask
-		// for one whenever the check is on.
-		starter.statusfile = filepath.Join(os.TempDir(), fmt.Sprintf("dewy-starter-%d.status", os.Getpid()))
+	if c.HealthPath != "" && len(parsedPorts) == 0 {
+		fmt.Fprintf(c.env.Err, "Error: --health-path requires --port\n")
+		return fmt.Errorf("--health-path requires --port")
 	}
 
-	conf.Starter = starter
+	conf.Server = server
 	return nil
 }
 
@@ -491,26 +481,27 @@ func (c *cli) configureContainerCommand(conf *Config) error {
 	return nil
 }
 
-// validateHost checks the --host value. server-starter listens with "tcp4",
-// so only an IPv4 address can be bound; a hostname or an IPv6 address would
-// either fail at listen time or resolve to something other than what was
-// asked for.
+// validateHost checks the --host value. It must be an IPv4 or IPv6 address
+// literal, without brackets; an IPv6 link-local address may carry a zone
+// ("fe80::1%eth0"). A hostname is rejected because it may resolve to several
+// addresses, or to a different one on each start, and would make the bound
+// interface depend on DNS.
 func validateHost(host string) error {
-	ip := net.ParseIP(host)
-	if ip == nil || ip.To4() == nil || strings.Contains(host, ":") {
-		return fmt.Errorf("%q is not an IPv4 address", host)
+	ip, err := netip.ParseAddr(host)
+	if err != nil {
+		return fmt.Errorf("%q is not an IP address", host)
 	}
 	// A multicast or broadcast address cannot be bound by a TCP listener.
 	// Rejecting it here reports the mistake at startup, not as a listen
 	// failure on every deployment.
-	if ip.IsMulticast() || ip.Equal(net.IPv4bcast) {
+	if ip.IsMulticast() || ip == netip.AddrFrom4([4]byte{255, 255, 255, 255}) {
 		return fmt.Errorf("%q is not a unicast address", host)
 	}
 	return nil
 }
 
-// joinHostPorts prefixes each port with host in the "host:port" form that
-// server-starter accepts.
+// joinHostPorts prefixes each port with host in the "host:port" form, with an
+// IPv6 address in brackets ("[::1]:8080").
 func joinHostPorts(host string, ports []string) []string {
 	joined := make([]string, len(ports))
 	for i, port := range ports {

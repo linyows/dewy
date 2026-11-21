@@ -2,6 +2,7 @@ package dewy
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -59,6 +60,7 @@ type Dewy struct {
 	cVer             string // Current deployed version (tag)
 	telemetry        *telemetry.Provider
 	backoff          *backoff
+	server           managedServer // Process supervisor of the managed application (server command)
 	sync.RWMutex
 }
 
@@ -254,20 +256,16 @@ func (d *Dewy) waitSigs(ctx context.Context) {
 			continue
 
 		case syscall.SIGUSR1:
-			// restartServer only signals this process (SIGHUP to self), so it
-			// "succeeds" even in assets mode or before the managed process has
-			// started — but nothing actually restarts. Only count a signal
-			// restart when there is a running managed server to restart, so the
-			// metric does not report phantom restarts.
-			d.RLock()
-			hasServer := d.config.Command == SERVER && d.isServerRunning
-			d.RUnlock()
-			if err := d.restartServer(); err != nil {
+			// A restart needs a running managed server; in assets mode or
+			// before the first start there is nothing to replace.
+			err := d.restartServer(ctx)
+			switch {
+			case errors.Is(err, errNoServer):
+				d.logger.Warn("Restart skipped", slog.String("reason", err.Error()))
+			case err != nil:
 				d.logger.Error("Restart failure", slog.String("error", err.Error()))
-			} else {
-				if hasServer {
-					d.recordServerRestart(ctx, "signal")
-				}
+			default:
+				d.recordServerRestart(ctx, "signal")
 				msg := fmt.Sprintf("Restarted receiving by `%s` signal", "SIGUSR1")
 				d.logger.Info("Restart notification", slog.String("message", msg))
 				d.notifier.Send(ctx, msg)
@@ -276,6 +274,13 @@ func (d *Dewy) waitSigs(ctx context.Context) {
 
 		case syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:
 			d.job.Quit <- true
+
+			// Stop the managed application and release its ports. Its
+			// workers may already be gone when the signal was sent to the
+			// whole process group; stopServer then only closes the sockets.
+			if err := d.stopServer(); err != nil {
+				d.logger.Error("Failed to stop server", slog.String("error", err.Error()))
+			}
 
 			// Stop managed containers and reverse proxy if running
 			if d.config.Command == CONTAINER {

@@ -39,12 +39,14 @@ In Supervisor Mode, Dewy acts as the main process and launches applications as c
 
 ### Graceful Restart
 
-For the `server` command, Dewy uses [server-starter](https://github.com/lestrrat-go/server-starter) to achieve graceful restarts. When a new version is detected:
+For the `server` command, Dewy binds the listening sockets for `--port` once when the server starts and keeps them open until Dewy shuts down. The application runs as a worker process that inherits these sockets. When a new version is detected:
 
-1. Dewy sends SIGHUP to trigger a graceful restart
-2. The new application process starts and inherits the listening socket
-3. The old process finishes handling existing requests and exits
-4. Zero-downtime deployment is achieved
+1. Dewy starts a new worker process beside the current one; it inherits the same listening sockets
+2. Once the new worker has stayed up for the startup wait (1 second), Dewy sends SIGTERM to the previous worker
+3. The previous worker finishes handling existing requests and exits
+4. The sockets stay open throughout, so connections that arrive during the switch are queued instead of refused
+
+If the new worker exits within the startup wait, the previous worker keeps serving and the deployment is treated as failed. See [Signal Handling](/signal-handling) for the restart and shutdown behavior.
 
 ## Proxy Mode (container)
 
@@ -99,8 +101,8 @@ Containers are started with localhost-only port bindings (`127.0.0.1::containerP
 | Deployment unit | Archive (tar.gz, zip) | OCI image |
 | Process management | Child process | Container runtime |
 | Load balancing | External (or single process) | Built-in TCP proxy |
-| Graceful restart | SIGHUP + server-starter | Rolling update |
+| Graceful restart | Worker replacement on Dewy-owned sockets | Rolling update |
 | Replicas | Single process | Multiple containers |
-| Health check | N/A | HTTP endpoint |
+| Health check | HTTP endpoint (`--health-path`) | HTTP endpoint |
 
 In this way, Dewy communicates with a central registry to achieve pull-based deployment for both binary applications and containerized workloads.

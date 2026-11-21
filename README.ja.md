@@ -646,8 +646,7 @@ Dewyはプロセス管理のための各種システムシグナルに対応し�
 
 - **SIGHUP**: 無視（Dewyは動作を継続）
 - **SIGUSR1**: 手動サーバー再起動をトリガー
-- **SIGINT, SIGTERM, SIGQUIT**: グレースフルシャットダウンを開始
-- **内部SIGHUP**: サーバー再起動に内部的に使用
+- **SIGINT, SIGTERM, SIGQUIT**: グレースフルシャットダウンを開始（アプリケーションにSIGTERMを送信し、30秒後にSIGKILL）
 
 ### 手動サーバー再起動
 

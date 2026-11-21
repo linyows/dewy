@@ -121,17 +121,19 @@ as in container mode.
 
 | Metric | Type | Unit | Description |
 |--------|------|------|-------------|
-| `dewy.server.restarts.total` | Counter | {restart} | Managed-server restarts, labeled `reason` (`deploy` or `signal`) |
+| `dewy.server.restarts.total` | Counter | {restart} | Managed-server restarts, labeled `reason` (`deploy`, `signal` or `rollback`) |
 
 `reason="deploy"` counts restarts triggered by a new release; `reason="signal"`
-counts restarts requested via `SIGUSR1`.
+counts restarts requested via `SIGUSR1`; `reason="rollback"` counts restarts
+that restore the previous release after a failed health check. A rollback
+after a rejected restart (the new process exited within its startup wait) does
+not restart the server, so it is not counted here.
 
-> Application crashes are not reported in server mode. The underlying
-> server-starter supervisor absorbs a crashed worker (it auto-respawns it) and
-> exposes no hook for Dewy to observe, so a crash counter cannot be produced
-> meaningfully without a supervisor-side change. Container mode does report app
-> crashes, because the container runtime exposes each container's real state
-> (see the container `restarts`/`status`/`oom_killed` metrics).
+> Application crashes are not reported in server mode. Dewy restarts a worker
+> that exits unexpectedly, but it does not count those exits as a metric yet.
+> Container mode does report app crashes, because the container runtime exposes
+> each container's real state (see the container `restarts`/`status`/`oom_killed`
+> metrics).
 
 ### Health Check Metrics
 

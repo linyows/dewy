@@ -4,7 +4,7 @@ title: マルチポート対応
 
 # {% $markdoc.frontmatter.title %} {% #overview %}
 
-dewyは単一のアプリケーションで複数のTCPポートを同時に管理する機能を提供します。この機能により、HTTPとHTTPS、API とWebUI、本番用とデバッグ用など、異なる目的のサービスを統合的にデプロイできます。server-starterライブラリと連携することで、各ポートに対して独立したプロセス管理とグレースフルリスタートが可能になります。
+dewyは単一のアプリケーションで複数のTCPポートを同時に管理する機能を提供します。この機能により、HTTPとHTTPS、API とWebUI、本番用とデバッグ用など、異なる目的のサービスを統合的にデプロイできます。dewyはサーバー起動時にすべてのポートを一度だけ開いてアプリケーションに渡すため、再起動でアプリケーションのプロセスを入れ替える間もポートは閉じません。
 
 ## マルチポートのユースケース
 
@@ -72,3 +72,99 @@ dewy server --registry ghr://myorg/app --port 8080-8085 -- /opt/app/current/app
 ```
 
 範囲指定では、セキュリティとリソース管理の観点から、最大100ポートまでの制限があります。より多くのポートが必要な場合は、複数の範囲指定を組み合わせてください。
+
+## dewyから渡されたソケットの使い方 {% #inherited-sockets %}
+
+dewyが起動したアプリケーションは、ポートを自分で開きません。dewyはサーバー起動時にすべてのポートを開いており、そのソケットを3番から始まるファイルディスクリプタとしてアプリケーションに渡します。dewyが開いているポートを開こうとすると、Linuxでは「address already in use」で失敗します。
+
+渡したソケットは環境変数`DEWY_PORT`に列挙されます。dewyは同じ値を`SERVER_STARTER_PORT`にも設定します。この変数名と形式はserver-starterと互換性があるため、server-starter向けに書かれたアプリケーションは変更なしで動作します。新しく書くアプリケーションは`DEWY_PORT`を読んでください。
+
+各エントリは`<address>=<fd>`の形式で、`;`で区切られます。`<address>`は指定したポートそのままです。`--host`に`0.0.0.0`または`::`以外のアドレスを指定した場合は`host:port`の形式になり、IPv6アドレスは角括弧で囲まれます。エントリはポート番号の順に並びます。
+
+| `--port`と`--host` | `DEWY_PORT` |
+|---|---|
+| `--port 8080,8090` | `8080=3;8090=4` |
+| `--port 8080 --host 127.0.0.1` | `127.0.0.1:8080=3` |
+| `--port 8080 --host ::1` | `[::1]:8080=3` |
+
+`=`の後の数値はポート番号ではなくファイルディスクリプタです。アプリケーションは、ディスクリプタを`os.NewFile`と`net.FileListener`で`net.Listener`に変換します。
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+    "net"
+    "os"
+    "os/signal"
+    "strconv"
+    "strings"
+    "syscall"
+    "time"
+)
+
+// inheritedListenersはdewyから渡された待ち受けソケットを返す。
+// DEWY_PORTがない場合、つまりdewyから起動されていない場合はnilを返す。
+func inheritedListeners() ([]net.Listener, error) {
+    spec := os.Getenv("DEWY_PORT")
+    if spec == "" {
+        return nil, nil
+    }
+
+    var listeners []net.Listener
+    for _, entry := range strings.Split(spec, ";") {
+        // "8080=3"や"[::1]:8080=3"：アドレス、続いてディスクリプタ
+        i := strings.LastIndex(entry, "=")
+        if i < 0 {
+            return nil, fmt.Errorf("invalid DEWY_PORT entry: %q", entry)
+        }
+        addr := entry[:i]
+        fd, err := strconv.Atoi(entry[i+1:])
+        if err != nil {
+            return nil, fmt.Errorf("invalid descriptor in %q: %w", entry, err)
+        }
+
+        l, err := net.FileListener(os.NewFile(uintptr(fd), addr))
+        if err != nil {
+            return nil, fmt.Errorf("cannot use descriptor %d for %s: %w", fd, addr, err)
+        }
+        listeners = append(listeners, l)
+    }
+    return listeners, nil
+}
+
+func main() {
+    listeners, err := inheritedListeners()
+    if err != nil {
+        log.Fatal(err)
+    }
+    if listeners == nil {
+        // 開発時など、直接起動された場合
+        l, err := net.Listen("tcp", ":8080")
+        if err != nil {
+            log.Fatal(err)
+        }
+        listeners = []net.Listener{l}
+    }
+
+    server := &MultiPortServer{}
+    server.Start(listeners)
+
+    // dewyは再起動後に以前のworkerへSIGTERMを送信する
+    sigCh := make(chan os.Signal, 1)
+    signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
+
+    <-sigCh
+
+    ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+    defer cancel()
+
+    if err := server.Shutdown(ctx); err != nil {
+        log.Printf("Shutdown error: %v", err)
+    }
+}
+```
+
+`MultiPortServer`はアプリケーション側で定義する型で、受け取ったリスナーごとに`http.Server`を起動し、`Shutdown`でまとめて停止します。ソケットは設定に従って渡されるため、アプリケーションが独自にポートの一覧を持つ必要はありません。`--port`を変更すれば、アプリケーションが待ち受けるソケットも変わります。

@@ -110,7 +110,21 @@ dewy server --notifier slack://webhook-url -- /opt/app/current/app
 
 Specifies the port(s) used by the application server. This option is optional for the `server` command.
 
-When specified, the server-starter manages the application with the given port(s). When omitted, the application runs without port listening (useful for job workers, message queue consumers, etc.).
+When specified, Dewy binds the given port(s) when the server starts, keeps them open until Dewy shuts down, and passes them to the application as inherited file descriptors. When omitted, the application runs without port listening (useful for job workers, message queue consumers, etc.).
+
+A port can be a single number (`8080`), a comma-separated list (`8080,8081`), or a range (`8080-8085`), and the option can be repeated. The ports are TCP. Duplicates are removed, and the ports are sorted by number.
+
+Without `--host`, each port listens on all interfaces. On a host with IPv6, the socket accepts both IPv4 and IPv6 connections.
+
+The application finds the sockets in the `DEWY_PORT` environment variable. The variable lists one `<address>=<fd>` entry per port, joined by `;`. `<address>` is the port as configured, `host:port` when `--host` is set to an address other than `0.0.0.0` or `::`, with an IPv6 address in brackets. `<fd>` is the file descriptor number, starting from 3. Dewy also sets the same value in `SERVER_STARTER_PORT` for applications written for server-starter.
+
+| `--port` and `--host` | `DEWY_PORT` |
+|---|---|
+| `--port 8080` | `8080=3` |
+| `--port 8080 --host 127.0.0.1` | `127.0.0.1:8080=3` |
+| `--port 8080 --host ::1` | `[::1]:8080=3` |
+
+An application opens an entry with `net.FileListener`. See [Multi-Port](/multi-port#inherited-sockets) for sample code.
 
 ```bash
 # With port (HTTP server)
@@ -122,13 +136,13 @@ dewy server --registry ghr://owner/repo -- /opt/worker/current/worker
 
 ### --host
 
-Specifies the IPv4 address the `server` command listens on. The address applies to every `--port`. When omitted, the server listens on all IPv4 interfaces. `0.0.0.0` behaves the same as omitting the option.
+Specifies the IP address the `server` command listens on. The address applies to every `--port`. When omitted, the server listens on all interfaces, accepting both IPv4 and IPv6 connections on a host with IPv6. `0.0.0.0` listens on every IPv4 interface only, and `::` on every IPv6 interface only.
 
-The option requires `--port`. Only an IPv4 unicast address is accepted; a hostname such as `localhost`, an IPv6 address, and a multicast or broadcast address are rejected. The `assets` and `container` commands reject this option.
+The option requires `--port`. An IPv4 or IPv6 unicast address is accepted. Write an IPv6 address without brackets (`::1`); a link-local address may include a zone (`fe80::1%eth0`). A specific IPv6 address listens on IPv6 only. A hostname such as `localhost` and a multicast or broadcast address are rejected. The `assets` and `container` commands reject this option.
 
-With an address other than `0.0.0.0`, the `SERVER_STARTER_PORT` environment variable passed to the application lists each listener as `host:port=fd` (for example, `127.0.0.1:8000=3`) instead of `port=fd`. An application that parses the variable itself must accept this form.
+With an address other than `0.0.0.0` or `::`, the `DEWY_PORT` environment variable passed to the application lists each listener as `host:port=fd` (for example, `127.0.0.1:8000=3` or `[::1]:8000=3`) instead of `port=fd`. An application that parses the variable itself must accept this form. With `0.0.0.0` or `::`, the variable keeps the `port=fd` form.
 
-When `--health-path` is set, the health check probes the given address. With `0.0.0.0` or no `--host`, it probes `127.0.0.1`.
+When `--health-path` is set, the health check probes the given address. With `0.0.0.0` or no `--host`, it probes `127.0.0.1`; with `::`, it probes `::1`.
 
 ```bash
 # Listen on the loopback interface only
@@ -136,6 +150,9 @@ dewy server --registry ghr://owner/repo --host 127.0.0.1 --port 8000 -- /opt/app
 
 # Listen on a specific interface
 dewy server --registry ghr://owner/repo --host 192.168.10.11 --port 8000-8001 -- /opt/app/current/app
+
+# Listen on the IPv6 loopback address only
+dewy server --registry ghr://owner/repo --host ::1 --port 8000 -- /opt/app/current/app
 ```
 
 ### --verify-checksum
@@ -270,7 +287,9 @@ Specifies the HTTP path for health checks. Optional in both commands.
 
 For the `container` command, each new replica is probed at this path and traffic is switched only after it returns a successful response.
 
-For the `server` command, the path is probed after the managed process starts or restarts, on the lowest of the configured `--port` values. A failure triggers a rollback to the previous release. The option requires `--port`; a server running without a port (a job worker, for example) cannot be probed over HTTP. The `assets` command rejects it.
+For the `server` command, the path is probed after the managed process starts or restarts, on the lowest port among the configured `--port` values. On a restart, the probe is sent after the previous process has exited, so that the answer comes from the new process. A failure triggers a rollback to the previous release. The option requires at least one `--port`; a server running without a port (a job worker, for example) cannot be probed over HTTP. The `assets` command rejects it.
+
+Because this probe runs after the switch, a new process that starts but does not answer (for example, one that is deadlocked) receives traffic until the probe fails and the rollback restarts the previous release. Requests sent during that time get no answer.
 
 A response with status 2xx or 3xx counts as success. Redirects are not followed, so a 3xx is judged by its own status.
 

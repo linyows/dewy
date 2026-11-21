@@ -167,10 +167,9 @@ type Metrics struct {
 	HealthCheckFailures otelmetric.Int64Counter
 
 	// Server (process supervision) metric. Recorded in server mode when dewy
-	// restarts the managed process — an event only dewy can see. Crash
-	// detection is intentionally not here: the server-starter supervisor
-	// absorbs worker crashes (auto-respawn) and exposes no hook, so counting
-	// them meaningfully needs a supervisor-side event API (a follow-up).
+	// restarts the managed process — an event only dewy can see. Crashes are
+	// not counted yet: the supervisor restarts a crashed worker on its own
+	// and does not report the event to dewy.
 	ServerRestarts otelmetric.Int64Counter
 
 	// Container metrics are reported asynchronously via a registered observer
@@ -279,7 +278,7 @@ func newMetrics(meter otelmetric.Meter) (*Metrics, error) {
 	}
 
 	if m.ServerRestarts, err = meter.Int64Counter("dewy.server.restarts.total",
-		otelmetric.WithDescription("Total number of managed-server restarts, keyed by reason (deploy|signal)"),
+		otelmetric.WithDescription("Total number of managed-server restarts, keyed by reason (deploy|signal|rollback)"),
 		otelmetric.WithUnit("{restart}"),
 	); err != nil {
 		return nil, err

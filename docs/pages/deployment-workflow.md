@@ -58,7 +58,7 @@ sequenceDiagram
 
                 alt Server mode
                     alt Server running
-                        D->>S: Send SIGHUP (restart)
+                        D->>S: Start new worker, stop previous worker
                         S->>D: Restart complete
                         D->>N: Restart completion notification
                     else Server stopped
@@ -132,15 +132,18 @@ Finally, **After Deploy Hook** is executed if configured. This hook enables auto
 
 In the startup control phase, application startup state is managed when operating in server mode. In assets mode, this processing is skipped since only file placement is the objective.
 
-When a server is already running, **server restart** processing is executed. Dewy sends a SIGHUP signal to its own process and executes a graceful restart through the server-starter library. This method enables switching to new versions while minimizing impact on connected clients.
+When a server is already running, **server restart** processing is executed. Dewy starts a new worker process beside the current one. Both serve on the listening sockets that dewy opened when the server started. When the new worker has stayed up for the startup wait (1 second), it becomes the current worker and dewy sends SIGTERM to the previous worker. The sockets stay open throughout, so connections that arrive during the switch are queued by the kernel instead of being refused.
 
 ```bash
 # Log example during server restart
-INFO: Send SIGHUP for server restart pid=12345
+INFO: Restart server version=v1.2.3
+INFO: Worker replaced generation=2 pid=12346 previous_generation=1
 INFO: Restart notification message="Server restarted for v1.2.3"
 ```
 
-When the server is not running, **server startup** processing is executed. Application processes are started using server-starter and listening on configured ports begins.
+If the new worker exits within the startup wait, the restart fails and the previous worker keeps serving. The deployment is treated as failed and follows the rollback described in the verification phase. Because the previous worker is still running the previous release, the rollback restores the `current` symlink without restarting the server.
+
+When the server is not running, **server startup** processing is executed. Dewy binds the configured ports, keeps them open until dewy shuts down, and starts the first worker. If a port cannot be bound, or the first worker exits within the startup wait, the startup fails and no port is left open.
 
 After startup/restart processing completion, results are reported through the notification system, enabling operations teams to understand the situation.
 
@@ -148,9 +151,11 @@ After startup/restart processing completion, results are reported through the no
 
 The verification phase runs in server mode when `--health-path` is set. It is skipped in assets mode and when the option is not set.
 
-Dewy probes `http://<host>:<port><--health-path>` after the process has started or restarted. The host is the `--host` address, or `127.0.0.1` when `--host` is omitted or `0.0.0.0`. The port is the lowest of the configured `--port` values, because the port list is deduplicated and sorted numerically while the flags are parsed. A status of 2xx or 3xx counts as success. Attempts repeat every two seconds until the response succeeds or `--health-timeout` (30 seconds by default) is exhausted.
+Dewy probes `http://<host>:<port><--health-path>` after the process has started or restarted. The host is the `--host` address, `127.0.0.1` when `--host` is omitted or `0.0.0.0`, and `::1` when `--host` is `::`. An IPv6 host is written in brackets in the URL. The port is the lowest among the configured `--port` values, and `--health-path` requires at least one port. The port list is deduplicated and sorted numerically while the flags are parsed, so this is the lowest port rather than the first one given. A status of 2xx or 3xx counts as success. Attempts repeat every two seconds until the response succeeds or `--health-timeout` (30 seconds by default) is exhausted.
 
-On a restart, the probe waits for the worker swap to finish first. server-starter answers the restart signal by spawning a new worker beside the old one, both sharing the inherited listening socket, and stops the old one only once the new one has survived its startup window. A probe sent during that window can be answered by the release being replaced. Dewy therefore reads the server-starter status file until it reports a single worker with a newer generation, for up to 30 seconds. If that state is not reached in time, the probe runs anyway and a warning records that its result may come from the previous release.
+On a restart, the probe waits for the worker swap to finish first. The new worker starts beside the previous one, both sharing the same listening socket, and the previous one is sent SIGTERM only once the new one has stayed up for its startup window. Until the previous worker has exited, it can still accept connections, so a probe sent in that period can be answered by the release being replaced. Dewy therefore waits until every previous worker has exited, for up to 30 seconds. If they have not exited in time, the probe runs anyway and a warning records that its result may come from the previous release.
+
+Because this probe runs after the switch, it cannot keep a faulty release from receiving traffic. A new worker that stays up but does not answer, for example because it is deadlocked, becomes the current worker and receives connections. Those connections get no answer until the probe exhausts `--health-timeout` and the rollback restarts the previous release.
 
 ```bash
 # Log example for a successful verification
@@ -169,16 +174,16 @@ When the probe does not succeed within the budget, Dewy rolls the deployment bac
 # Log example for a rollback
 ERROR: Deployment verification failed tag=v1.2.4 error="health check failed after 15 attempts within 30s: unhealthy status 503"
 INFO: Rolling back from=v1.2.4 to=v1.2.3 release=/opt/app/releases/20250908T101500Z
-INFO: Send SIGHUP for server restart pid=12345
+INFO: Restart server version=v1.2.3
 ```
 
 The record names a `<tag>--<artifact>` cache key, which does not change when the same tag is republished with different contents. Republishing under the same tag therefore does not release it. Three things do: publishing a different version and seeing it deploy, running without `--health-path` (the record is only consulted while health verification is on), and deleting the `blocked` entry from the cache store.
 
-`--no-rollback` keeps the failed release in place. The version is still recorded and still notified; only the symlink restore and the restart are skipped.
+`--no-rollback` keeps the failed release in place. The version is still recorded and still notified; only the symlink restore and the restart are skipped. When the restart was rejected, the symlink keeps pointing at the failed release while the previous worker continues to run the previous release.
 
 Two cases have no previous release to restore: the first deployment on a host, and a failure whose previous version is the same as the failed one. Dewy records the version and notifies the failure without changing the symlink.
 
-The rollback is also triggered when the process fails to start at all, not only when the health check fails. A deploy that failed before the server existed leaves nothing to restart, so the rollback starts the server on the restored release rather than restarting it.
+The rollback is also triggered when the process fails to start at all, not only when the health check fails. When a restart is rejected, because the new worker exited within the startup wait, the previous worker is still serving the previous release. The rollback then restores the symlink and the `current` cache key without restarting the server, and the notification states that the previous release's process never stopped serving. A deploy that failed before the server existed leaves nothing to restart, so the rollback starts the server on the restored release rather than restarting it.
 
 While a version is blocked, a server that is found stopped is started again on the release the `current` symlink points at. Blocking a version stops it from being deployed; it does not stop the host from running the release it already has.
 
@@ -475,11 +480,11 @@ Key differences between container and binary deployment workflows:
 |--------|------------------|---------------------|
 | **Artifact Source** | GitHub Releases, S3, GCS | OCI Registry (Docker Hub, GHCR, etc.) |
 | **Artifact Format** | tar.gz, zip archives | OCI Image (multi-layer) |
-| **Deployment Strategy** | In-place update + SIGHUP | Rolling update with proxy |
+| **Deployment Strategy** | In-place update + worker replacement | Rolling update with proxy |
 | **Downtime** | Minimal (restart time) | Zero (atomic proxy switch) |
 | **Rollback** | Automatic on health check failure, or previous release directory | Automatic on health check failure |
 | **Health Check** | HTTP via localhost (with `--health-path`) | HTTP/TCP via localhost |
-| **Traffic Management** | server-starter (port handoff) | Built-in reverse proxy |
+| **Traffic Management** | Dewy-owned listening sockets (port handoff) | Built-in reverse proxy |
 | **Network Security** | N/A | Localhost-only (127.0.0.1) |
 
 ### Network Architecture

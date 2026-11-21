@@ -258,16 +258,14 @@ func (d *Dewy) promoteAndReport(ctx context.Context, res *registry.CurrentRespon
 	d.Unlock()
 
 	if d.config.Command == SERVER {
-		// Read the live worker generation before the restart so the wait below
-		// can tell the new worker from the one it replaces.
-		generation := d.latestGeneration()
-
 		if err := d.startOrRestartServer(ctx); err != nil {
 			d.rollbackServer(ctx, res, st, err)
 			return err
 		}
+		// The probe goes through the shared port, and only once the previous
+		// process has exited can the answer come from the new one.
 		if d.config.Health.Path != "" {
-			d.awaitWorkerSwap(ctx, generation, defaultWorkerSwapTimeout)
+			d.awaitWorkerSwap(ctx, defaultWorkerSwapTimeout)
 		}
 		if err := d.verifyServerHealth(ctx); err != nil {
 			d.rollbackServer(ctx, res, st, err)
@@ -299,21 +297,21 @@ func (d *Dewy) startOrRestartServer(ctx context.Context) error {
 
 	var err error
 	if running {
-		err = d.restartServer()
+		err = d.restartServer(ctx)
 		if err == nil {
 			d.recordServerRestart(ctx, "deploy")
 			msg := fmt.Sprintf("Server restarted for `%s`", d.cVer)
-			if len(d.config.Starter.Ports()) == 0 {
+			if d.config.Server == nil || len(d.config.Server.Addrs) == 0 {
 				msg += " without port"
 			}
 			d.logger.Info("Restart notification", slog.String("message", msg))
 			d.notifier.SendImportant(ctx, msg)
 		}
 	} else {
-		err = d.startServer()
+		err = d.startServer(ctx)
 		if err == nil {
 			msg := fmt.Sprintf("Server started for `%s`", d.cVer)
-			if len(d.config.Starter.Ports()) == 0 {
+			if d.config.Server == nil || len(d.config.Server.Addrs) == 0 {
 				msg += " without port"
 			}
 			d.logger.Info("Start notification", slog.String("message", msg))

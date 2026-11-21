@@ -85,8 +85,8 @@ func TestRunCLI(t *testing.T) {
 			expectError: "Error: --host requires --port",
 		},
 		{
-			name:        "host must be an IPv4 address",
-			args:        []string{"--registry", "ghr://o/r", "--host", "::1", "--port", "8080", "server", "myapp"},
+			name:        "host must be an IP address",
+			args:        []string{"--registry", "ghr://o/r", "--host", "localhost", "--port", "8080", "server", "myapp"},
 			expectExit:  ExitErr,
 			expectError: "Error: invalid host",
 		},
@@ -708,8 +708,13 @@ func TestValidateHost(t *testing.T) {
 		{"192.168.10.255", false},
 		{"010.0.0.1", true},
 		{" 127.0.0.1", true},
-		{"::1", true},
-		{"::ffff:127.0.0.1", true},
+		{"::1", false},
+		{"::", false},
+		{"2001:db8::1", false},
+		{"fe80::1%eth0", false},
+		{"::ffff:127.0.0.1", false},
+		{"ff02::1", true},
+		{"[::1]", true},
 		{"[127.0.0.1]", true},
 		{"localhost", true},
 		{"127.0.0.1:8080", true},
@@ -786,12 +791,23 @@ func TestCLI_ConfigureServerCommand(t *testing.T) {
 			wantErr:     false,
 		},
 		{
+			name:        "with IPv6 unspecified host",
+			ports:       []string{"8080"},
+			host:        "::",
+			args:        []string{"/opt/app/current/app"},
+			logFormat:   "text",
+			expectPorts: []string{"[::]:8080"},
+			expectCmd:   "/opt/app/current/app",
+			expectArgs:  nil,
+			wantErr:     false,
+		},
+		{
 			name:        "with unspecified host",
 			ports:       []string{"8080"},
 			host:        "0.0.0.0",
 			args:        []string{"/opt/app/current/app"},
 			logFormat:   "text",
-			expectPorts: []string{"8080"},
+			expectPorts: []string{"0.0.0.0:8080"},
 			expectCmd:   "/opt/app/current/app",
 			expectArgs:  nil,
 			wantErr:     false,
@@ -839,24 +855,20 @@ func TestCLI_ConfigureServerCommand(t *testing.T) {
 					t.Errorf("Expected command SERVER, got %v", conf.Command)
 				}
 
-				if conf.Starter == nil {
-					t.Fatal("Expected Starter to be set")
+				if conf.Server == nil {
+					t.Fatal("Expected Server to be set")
 				}
 
-				if !reflect.DeepEqual(conf.Starter.Ports(), tt.expectPorts) {
-					t.Errorf("Expected ports %v, got %v", tt.expectPorts, conf.Starter.Ports())
+				if !reflect.DeepEqual(conf.Server.Addrs, tt.expectPorts) {
+					t.Errorf("Expected ports %v, got %v", tt.expectPorts, conf.Server.Addrs)
 				}
 
-				if conf.Starter.Command() != tt.expectCmd {
-					t.Errorf("Expected command %q, got %q", tt.expectCmd, conf.Starter.Command())
+				if conf.Server.Command != tt.expectCmd {
+					t.Errorf("Expected command %q, got %q", tt.expectCmd, conf.Server.Command)
 				}
 
-				if !reflect.DeepEqual(conf.Starter.Args(), tt.expectArgs) {
-					t.Errorf("Expected args %v, got %v", tt.expectArgs, conf.Starter.Args())
-				}
-
-				if conf.Starter.LogFormat() != tt.logFormat {
-					t.Errorf("Expected logformat %q, got %q", tt.logFormat, conf.Starter.LogFormat())
+				if !reflect.DeepEqual(conf.Server.Args, tt.expectArgs) {
+					t.Errorf("Expected args %v, got %v", tt.expectArgs, conf.Server.Args)
 				}
 			}
 		})
