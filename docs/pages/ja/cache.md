@@ -75,7 +75,7 @@ dewy server --registry ghr://owner/repo \
 
 ### Registry result cache {% #registry-result-cache %}
 
-S3とGCSのcache backendは `registry-ttl=<duration>` query parameterを受け付けます。指定すると**上流registryのレスポンスそのもの**もキャッシュに保存され、同じprefixを共有するDewyインスタンス間で調停して、TTLウィンドウあたり1台だけが上流registryをpollするようになります。GitHub Releasesのようなrate-limit付きregistryを多数のDewyインスタンスでpollする場合に有効です。
+S3とGCSのcache backendは `registry-ttl=<duration>` query parameterを受け付けます。指定すると**上流registryのレスポンスそのもの**もキャッシュに保存され、同じprefixを共有するDewyインスタンス間でロックによる排他制御を行い、TTLウィンドウあたり1台だけが上流registryをpollするようになります。GitHub Releasesのようなrate-limit付きregistryを多数のDewyインスタンスでpollする場合に有効です。
 
 ```sh
 # 30秒のfreshness windowで共有registry-result cacheを有効化
