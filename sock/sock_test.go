@@ -305,3 +305,35 @@ func TestListenersAndPacketConns(t *testing.T) {
 		_ = p.Close()
 	}
 }
+
+func TestHealthListener(t *testing.T) {
+	reset(t)
+
+	t.Run("unset", func(t *testing.T) {
+		unsetenv(t, EnvHealthPort)
+		ln, err := HealthListener()
+		if err != nil || ln != nil {
+			t.Errorf("HealthListener() = %v, %v, want nil, nil", ln, err)
+		}
+	})
+
+	t.Run("set", func(t *testing.T) {
+		_, fd, addr := inheritTCP(t)
+		t.Setenv(EnvHealthPort, addr+"="+strconv.Itoa(fd))
+		ln, err := HealthListener()
+		if err != nil {
+			t.Fatalf("HealthListener() error = %v", err)
+		}
+		defer func() { _ = ln.Close() }()
+		if got := ln.Addr().String(); got != addr {
+			t.Errorf("HealthListener() returned %s, want %s", got, addr)
+		}
+	})
+
+	t.Run("malformed", func(t *testing.T) {
+		t.Setenv(EnvHealthPort, "127.0.0.1:1")
+		if _, err := HealthListener(); err == nil {
+			t.Error("HealthListener() error = nil, want an error")
+		}
+	})
+}

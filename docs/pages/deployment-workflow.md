@@ -143,13 +143,15 @@ INFO: Restart notification message="Server restarted for v1.2.3"
 
 If the new worker exits within the startup wait, the restart fails and the previous worker keeps serving. The deployment is treated as failed and follows the rollback described in the verification phase. Because the previous worker is still running the previous release, the rollback restores the `current` symlink without restarting the server.
 
-When the server is not running, **server startup** processing is executed. Dewy binds the configured ports, keeps them open until dewy shuts down, and starts the first worker. If a port cannot be bound, or the first worker exits within the startup wait, the startup fails and no port is left open.
+With `--health-before-switch`, the new worker must also pass the health check on its own socket before it becomes the current worker. See [Verification Before the Switch](#verification-before-the-switch).
+
+When the server is not running, **server startup** processing is executed. Dewy binds the configured ports, keeps them open until dewy shuts down, and starts the first worker. If a port cannot be bound, or the first worker exits within the startup wait (or fails the health check under `--health-before-switch`), the startup fails and no port is left open.
 
 After startup/restart processing completion, results are reported through the notification system, enabling operations teams to understand the situation.
 
 ### Verification Phase
 
-The verification phase runs in server mode when `--health-path` is set. It is skipped in assets mode and when the option is not set.
+The verification phase runs in server mode when `--health-path` is set. It is skipped in assets mode and when the option is not set. Without `--health-before-switch`, the probe runs after the switch, as described in this section. With it, the probe runs before the switch; see [Verification Before the Switch](#verification-before-the-switch).
 
 Dewy probes `http://<host>:<port><--health-path>` after the process has started or restarted. The host is the `--host` address, `127.0.0.1` when `--host` is omitted or `0.0.0.0`, and `::1` when `--host` is `::`. An IPv6 host is written in brackets in the URL. The port is the lowest TCP port among the configured `--port` values; UDP ports are not probed, and `--health-path` requires at least one TCP port. The port list is deduplicated and sorted numerically while the flags are parsed, so this is the lowest port rather than the first one given. A status of 2xx or 3xx counts as success. Attempts repeat every two seconds until the response succeeds or `--health-timeout` (30 seconds by default) is exhausted.
 
@@ -183,9 +185,30 @@ The record names a `<tag>--<artifact>` cache key, which does not change when the
 
 Two cases have no previous release to restore: the first deployment on a host, and a failure whose previous version is the same as the failed one. Dewy records the version and notifies the failure without changing the symlink.
 
-The rollback is also triggered when the process fails to start at all, not only when the health check fails. When a restart is rejected, because the new worker exited within the startup wait, the previous worker is still serving the previous release. The rollback then restores the symlink and the `current` cache key without restarting the server, and the notification states that the previous release's process never stopped serving. A deploy that failed before the server existed leaves nothing to restart, so the rollback starts the server on the restored release rather than restarting it.
+The rollback is also triggered when the process fails to start at all, not only when the health check fails. When a restart is rejected, because the new worker exited within the startup wait or failed the check under `--health-before-switch`, the previous worker is still serving the previous release. The rollback then restores the symlink and the `current` cache key without restarting the server, and the notification states that the previous release's process never stopped serving. A deploy that failed before the server existed leaves nothing to restart, so the rollback starts the server on the restored release rather than restarting it.
 
 While a version is blocked, a server that is found stopped is started again on the release the `current` symlink points at. Blocking a version stops it from being deployed; it does not stop the host from running the release it already has.
+
+### Verification Before the Switch {% #verification-before-the-switch %}
+
+`--health-before-switch` moves the probe in front of the switch. It requires `--health-path` and applies to the `server` command.
+
+1. Each new worker receives an extra TCP socket on the loopback interface (`127.0.0.1`, or `::1` when IPv4 is unavailable) that no other worker shares. It is passed as the next inherited file descriptor after the `DEWY_PORT` sockets and announced in `DEWY_HEALTH_PORT`, for example `127.0.0.1:41234=5`.
+2. After the startup wait, Dewy probes `--health-path` on that socket, within `--health-timeout`.
+3. If the probe succeeds, the new worker becomes the current worker and the previous worker is sent SIGTERM. No probe is made after the switch.
+4. If the probe fails (no answer, a status other than 2xx or 3xx, or the worker exits), Dewy kills the new worker. The previous worker keeps serving without interruption. The version is recorded as blocked, and the `current` symlink and cache key are restored to the previous release without a restart.
+
+```bash
+# Log example for a rejected restart
+DEBUG: Verifying new worker url=http://127.0.0.1:41234/health
+ERROR: Server failure error="the new release was not switched in: worker failed the health check: ..."
+ERROR: Deployment verification failed tag=v1.2.4 error="..."
+INFO: Rolling back from=v1.2.4 to=v1.2.3 release=/opt/app/releases/20250908T101500Z
+```
+
+The probe does not use `--port`, so `--health-path` with this option does not require a TCP port. An application that listens only on UDP, or a job worker without `--port`, can be health checked.
+
+The application must serve its health endpoint on the `DEWY_HEALTH_PORT` socket; see [Multi-Port](/multi-port#health-socket) for sample code. Dewy cannot distinguish an application that does not serve the socket from one that is hung, so every deployment of such an application fails. The option is therefore not enabled by default.
 
 ## Deployment Skip Conditions
 

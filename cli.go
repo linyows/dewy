@@ -51,9 +51,10 @@ type cli struct {
 	VerifyChecksum     string   `long:"verify-checksum" arg:"(off|auto|required)" description:"How to check a downloaded artifact against the SHA-256 checksum file published next to it: auto verifies when one is published, required also fails when none is, off skips the check (default: auto)"`
 	BeforeDeployHook   string   `long:"before-deploy-hook" description:"Shell command to execute before deployment begins"`
 	AfterDeployHook    string   `long:"after-deploy-hook" description:"Shell command to execute after successful deployment"`
-	HealthPath         string   `long:"health-path" description:"HTTP path to probe after a deployment (e.g., /health). For server: probed on the lowest TCP --port after the switch; a failure rolls the release back. For container: probed on every new replica"`
+	HealthPath         string   `long:"health-path" description:"HTTP path to probe after a deployment (e.g., /health). For server: probed on the lowest TCP --port after the switch, or on the new process before it with --health-before-switch; a failure rolls the release back. For container: probed on every new replica"`
 	HealthTimeout      int      `long:"health-timeout" description:"Overall health check budget in seconds, covering every attempt (default: 30)"`
 	NoRollback         bool     `long:"no-rollback" description:"Keep the new release in place when its health check fails (server command). The failed version is still recorded so it is not deployed again"`
+	HealthBeforeSwitch bool     `long:"health-before-switch" description:"Probe --health-path on each new process through a socket of its own, announced in DEWY_HEALTH_PORT, before it replaces the previous process (server command). The application must serve its health endpoint on that socket"`
 	StartupWait        int      `long:"startup-wait" arg:"seconds" description:"Seconds a new process must stay up before it can replace the previous one (server command, default: 1)"`
 	// Container-specific options
 	Replicas         int      `long:"replicas" description:"Number of container replicas to run (default: 1)"`
@@ -174,6 +175,7 @@ func (c *cli) showHelp() {
 		"Ports",
 		"Host",
 		"NoRollback",
+		"HealthBeforeSwitch",
 		"StartupWait",
 		"DrainTime",
 	}), "\n")
@@ -305,6 +307,10 @@ func (c *cli) run() int {
 		fmt.Fprintf(c.env.Err, "Error: --host is only supported by the server command\n")
 		return ExitErr
 	}
+	if c.HealthBeforeSwitch && c.command != "server" {
+		fmt.Fprintf(c.env.Err, "Error: --health-before-switch is only supported by the server command\n")
+		return ExitErr
+	}
 	if c.StartupWait != 0 && c.command != "server" {
 		fmt.Fprintf(c.env.Err, "Error: --startup-wait is only supported by the server command\n")
 		return ExitErr
@@ -408,11 +414,12 @@ func (c *cli) configureServerCommand(conf *Config) error {
 		return fmt.Errorf("negative --startup-wait or --drain-time")
 	}
 	server := &ServerConfig{
-		Command:     command,
-		Args:        cmdArgs,
-		Addrs:       parsedPorts,
-		StartupWait: time.Duration(c.StartupWait) * time.Second,
-		DrainTime:   time.Duration(c.DrainTime) * time.Second,
+		Command:            command,
+		Args:               cmdArgs,
+		Addrs:              parsedPorts,
+		StartupWait:        time.Duration(c.StartupWait) * time.Second,
+		DrainTime:          time.Duration(c.DrainTime) * time.Second,
+		HealthBeforeSwitch: c.HealthBeforeSwitch,
 	}
 
 	conf.Health = HealthConfig{
@@ -423,8 +430,14 @@ func (c *cli) configureServerCommand(conf *Config) error {
 		conf.Health.Timeout = time.Duration(c.HealthTimeout) * time.Second
 	}
 
-	// Probing through the shared port needs a TCP port to probe.
-	if c.HealthPath != "" && !slices.ContainsFunc(parsedPorts, func(p string) bool {
+	if c.HealthBeforeSwitch && c.HealthPath == "" {
+		fmt.Fprintf(c.env.Err, "Error: --health-before-switch requires --health-path\n")
+		return fmt.Errorf("--health-before-switch requires --health-path")
+	}
+	// Probing through the shared port needs a TCP port to probe. With
+	// --health-before-switch each process is probed on a socket of its own,
+	// so any --port, or none, will do.
+	if c.HealthPath != "" && !c.HealthBeforeSwitch && !slices.ContainsFunc(parsedPorts, func(p string) bool {
 		return !strings.HasSuffix(p, udpSuffix)
 	}) {
 		fmt.Fprintf(c.env.Err, "Error: --health-path requires a TCP --port\n")

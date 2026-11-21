@@ -126,8 +126,9 @@ as in container mode.
 `reason="deploy"` counts restarts triggered by a new release; `reason="signal"`
 counts restarts requested via `SIGUSR1`; `reason="rollback"` counts restarts
 that restore the previous release after a failed health check. A rollback
-after a rejected restart (the new process exited within `--startup-wait`) does
-not restart the server, so it is not counted here.
+after a rejected restart (the new process exited within `--startup-wait` or
+failed the check under `--health-before-switch`) does not restart the server,
+so it is not counted here.
 
 > Application crashes are not reported in server mode. Dewy restarts a worker
 > that exits unexpectedly, but it does not count those exits as a metric yet.

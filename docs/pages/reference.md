@@ -147,7 +147,7 @@ The option requires `--port`. An IPv4 or IPv6 unicast address is accepted. Write
 
 With an address other than `0.0.0.0` or `::`, the `DEWY_PORT` environment variable passed to the application lists each listener as `host:port=fd` (for example, `127.0.0.1:8000=3` or `[::1]:8000=3`) instead of `port=fd`. An application that parses the variable itself must accept this form. With `0.0.0.0` or `::`, the variable keeps the `port=fd` form.
 
-When `--health-path` is set, the health check probes the given address. With `0.0.0.0` or no `--host`, it probes `127.0.0.1`; with `::`, it probes `::1`.
+When `--health-path` is set without `--health-before-switch`, the health check probes the given address. With `0.0.0.0` or no `--host`, it probes `127.0.0.1`; with `::`, it probes `::1`.
 
 ```bash
 # Listen on the loopback interface only
@@ -170,6 +170,33 @@ Raise the value for an application that can fail after a few seconds of initiali
 
 ```bash
 dewy server --registry ghr://owner/repo --port 8000 --startup-wait 5 -- /opt/app/current/app
+```
+
+### --health-before-switch
+
+Probes `--health-path` on each new process before it replaces the previous one, instead of through `--port` after the switch. Applies to the `server` command only and requires `--health-path`.
+
+With this option, each new process receives one extra TCP socket that no other process shares. The socket listens on a free port on the loopback interface (`127.0.0.1`, or `::1` when IPv4 is unavailable). It is passed as the next inherited file descriptor after the `DEWY_PORT` sockets, and the `DEWY_HEALTH_PORT` environment variable announces it as a single `<address>=<fd>` entry, for example `127.0.0.1:41234=5`. With no `--port`, the descriptor is 3.
+
+After the `--startup-wait` time, Dewy sends requests to `--health-path` on that socket until one succeeds or `--health-timeout` runs out. Only then does the new process replace the previous one.
+
+- On success, the previous process is sent SIGTERM as on any restart. No further probe is made after the switch.
+- On failure (no answer, for example because the process is deadlocked, a status other than 2xx or 3xx, or the process exits), Dewy kills the new process. The previous process never stops serving. During a deployment, the version is recorded as blocked and the `current` symlink is restored to the previous release without a restart, because the previous process is still running. The notification states that the previous release's process never stopped serving. A restart requested with `SIGUSR1` that fails the probe leaves the previous process running and changes nothing else.
+
+The first process that `dewy server` starts is probed on its health socket in the same way. If it fails, the start fails.
+
+The application must serve its health endpoint on the `DEWY_HEALTH_PORT` socket. Dewy cannot distinguish an application that does not serve the socket from one that is hung, so with this option every deployment of such an application fails. For that reason the option is not enabled by default. See [Multi-Port](/multi-port#health-socket) for sample code.
+
+Because the probe does not use `--port`, `--health-path` with this option does not require a TCP `--port`. An application that listens only on UDP ports, or a job worker without `--port`, can be health checked as long as it serves the health socket.
+
+```bash
+# HTTP server probed before the switch
+dewy server --registry ghr://owner/repo --port 8000 \
+  --health-path /health --health-before-switch -- /opt/app/current/app
+
+# Job worker without --port, probed on its health socket
+dewy server --registry ghr://owner/repo \
+  --health-path /health --health-before-switch -- /opt/worker/current/worker
 ```
 
 ### --verify-checksum
@@ -306,7 +333,7 @@ For the `container` command, each new replica is probed at this path and traffic
 
 For the `server` command, the path is probed after the managed process starts or restarts, on the lowest TCP port among the configured `--port` values. On a restart, the probe is sent after the previous process has exited, so that the answer comes from the new process. A failure triggers a rollback to the previous release. The option requires at least one TCP `--port`; UDP ports are not probed, and a server running without a port (a job worker, for example) cannot be probed over HTTP. The `assets` command rejects it.
 
-Because this probe runs after the switch, a new process that starts but does not answer (for example, one that is deadlocked) receives traffic until the probe fails and the rollback restarts the previous release. Requests sent during that time get no answer.
+Because this probe runs after the switch, a new process that starts but does not answer (for example, one that is deadlocked) receives traffic until the probe fails and the rollback restarts the previous release. Requests sent during that time get no answer. [`--health-before-switch`](#--health-before-switch) probes each new process on a socket of its own before the switch, so the previous process keeps serving when the new one fails. With that option, `--health-path` does not require a TCP `--port`.
 
 A response with status 2xx or 3xx counts as success. Redirects are not followed, so a 3xx is judged by its own status.
 

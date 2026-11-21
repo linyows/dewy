@@ -36,6 +36,9 @@ const (
 	// EnvPortCompat carries the same value as EnvPort under the name used
 	// by server-starter. It is read when EnvPort is not set.
 	EnvPortCompat = "SERVER_STARTER_PORT"
+	// EnvHealthPort names the health check socket dewy passes to each
+	// process when the server command runs with --health-before-switch.
+	EnvHealthPort = "DEWY_HEALTH_PORT"
 
 	udpSuffix = "/udp"
 )
@@ -178,6 +181,22 @@ func PacketConns() ([]net.PacketConn, error) {
 		return nil, nil
 	}
 	return pcs, nil
+}
+
+// HealthListener returns the health check socket named by DEWY_HEALTH_PORT.
+// It returns nil when the variable is not set, which means dewy does not
+// probe this process before switching to it. The application serves its
+// health endpoint on the returned listener as well as on its own port.
+func HealthListener() (net.Listener, error) {
+	spec := os.Getenv(EnvHealthPort)
+	if spec == "" {
+		return nil, nil
+	}
+	s, err := parseEntry(spec)
+	if err != nil {
+		return nil, fmt.Errorf("sock: invalid %s: %w", EnvHealthPort, err)
+	}
+	return fileListener(s)
 }
 
 func portSpec() (string, bool) {

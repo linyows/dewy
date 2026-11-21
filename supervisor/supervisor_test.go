@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -40,6 +41,11 @@ func TestMain(m *testing.M) {
 //	             SIGTERM makes it exit 0
 //	crash        exit 1 at once
 //	ignore-term  like serve, but ignore SIGTERM
+//	hang         like serve, but never answer on the health socket, as an
+//	             application stuck in a deadlock would
+//	unhealthy    like serve, but answer 503 on the health socket
+//
+// Every mode except hang serves "/health" on EnvHealthPort when it is set.
 func runHelper() int {
 	mode := "serve"
 	if b, err := os.ReadFile(os.Getenv(modeFileEnv)); err == nil { //nolint:gosec // G703: the path is a temp file the test itself names
@@ -93,6 +99,27 @@ func runHelper() int {
 			}
 			go serve(ln, mux)
 		}
+	}
+
+	if hp := os.Getenv(EnvHealthPort); hp != "" && mode != "hang" {
+		i := strings.LastIndex(hp, "=")
+		fd, err := strconv.Atoi(hp[i+1:])
+		if err != nil {
+			return 2
+		}
+		ln, err := net.FileListener(os.NewFile(uintptr(fd), hp[:i]))
+		if err != nil {
+			return 2
+		}
+		hmux := http.NewServeMux()
+		hmux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
+			if mode == "unhealthy" {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
+			fmt.Fprintf(w, "%s %d", mode, os.Getpid())
+		})
+		go func() { _ = http.Serve(ln, hmux) }()
 	}
 
 	for range sigs {
@@ -531,6 +558,126 @@ func TestBackoff(t *testing.T) {
 			t.Errorf("backoff(%d) = %s, want %s", tt.n, got, tt.want)
 		}
 	}
+}
+
+// probe is a HealthCheckFunc that polls /health until it answers 200. It
+// records every address it was given.
+type probe struct {
+	mu    sync.Mutex
+	addrs []string
+}
+
+func (p *probe) check(ctx context.Context, addr net.Addr) error {
+	p.mu.Lock()
+	p.addrs = append(p.addrs, addr.String())
+	p.mu.Unlock()
+
+	c := http.Client{Timeout: 200 * time.Millisecond}
+	for {
+		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+addr.String()+"/health", nil)
+		res, err := c.Do(req)
+		if err == nil {
+			_ = res.Body.Close()
+			if res.StatusCode == http.StatusOK {
+				return nil
+			}
+			err = fmt.Errorf("status %d", res.StatusCode)
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("%w (last: %v)", ctx.Err(), err)
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
+}
+
+// withBudget bounds a HealthCheckFunc, as dewy's --health-timeout does.
+func withBudget(f HealthCheckFunc, d time.Duration) HealthCheckFunc {
+	return func(ctx context.Context, addr net.Addr) error {
+		ctx, cancel := context.WithTimeout(ctx, d)
+		defer cancel()
+		return f(ctx, addr)
+	}
+}
+
+func TestHealthCheckGatesRestart(t *testing.T) {
+	for _, mode := range []string{"hang", "unhealthy"} {
+		t.Run(mode+" worker is not switched in", func(t *testing.T) {
+			h := newHarness(t, "serve")
+			cfg := h.config("127.0.0.1:0")
+			p := &probe{}
+			cfg.HealthCheck = withBudget(p.check, 500*time.Millisecond)
+			s := h.start(cfg)
+			addr := s.Addrs()[0]
+			before := get(t, addr)
+
+			h.setMode(mode)
+			err := s.Restart(context.Background())
+			if !errors.Is(err, ErrUnhealthy) {
+				t.Fatalf("Restart() error = %v, want ErrUnhealthy", err)
+			}
+			if got := get(t, addr); got != before {
+				t.Errorf("after a rejected Restart got %q, want the previous worker %q", got, before)
+			}
+			if st := s.Status(); st.Current != 1 || len(st.Workers) != 1 {
+				t.Errorf("Status() = %+v, want only generation 1", st)
+			}
+		})
+	}
+
+	t.Run("healthy worker is switched in", func(t *testing.T) {
+		h := newHarness(t, "serve")
+		cfg := h.config("127.0.0.1:0")
+		p := &probe{}
+		cfg.HealthCheck = withBudget(p.check, 2*time.Second)
+		s := h.start(cfg)
+
+		h.setMode("serve-v2")
+		if err := s.Restart(context.Background()); err != nil {
+			t.Fatalf("Restart() error = %v", err)
+		}
+		if st := s.Status(); st.Current != 2 {
+			t.Errorf("Status() = %+v, want generation 2 current", st)
+		}
+
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		if len(p.addrs) != 2 || p.addrs[0] == p.addrs[1] {
+			t.Errorf("health addresses = %v, want one distinct address per worker", p.addrs)
+		}
+		for _, a := range p.addrs {
+			if !strings.HasPrefix(a, "127.0.0.1:") && !strings.HasPrefix(a, "[::1]:") {
+				t.Errorf("health address %q is not on the loopback interface", a)
+			}
+		}
+	})
+
+	t.Run("start fails on a hung first worker", func(t *testing.T) {
+		h := newHarness(t, "hang")
+		cfg := h.config("127.0.0.1:0")
+		cfg.HealthCheck = withBudget((&probe{}).check, 300*time.Millisecond)
+		s, err := New(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = s.Shutdown(context.Background()) }()
+		if err := s.Start(context.Background()); !errors.Is(err, ErrUnhealthy) {
+			t.Fatalf("Start() error = %v, want ErrUnhealthy", err)
+		}
+		if st := s.Status(); len(st.Workers) != 0 {
+			t.Errorf("Status() = %+v, want the rejected worker stopped", st)
+		}
+	})
+
+	t.Run("works without shared sockets", func(t *testing.T) {
+		h := newHarness(t, "serve")
+		cfg := h.config()
+		cfg.HealthCheck = withBudget((&probe{}).check, 2*time.Second)
+		s := h.start(cfg)
+		if err := s.Restart(context.Background()); err != nil {
+			t.Fatalf("Restart() error = %v", err)
+		}
+	})
 }
 
 func TestDrainTimeoutKillsReplacedWorker(t *testing.T) {

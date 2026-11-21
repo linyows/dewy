@@ -184,3 +184,48 @@ func main() {
 `MultiPortServer`はアプリケーション側で定義する型で、受け取ったリスナーごとに`http.Server`を起動し、`Shutdown`でまとめて停止します。ソケットは設定に従って渡されるため、アプリケーションが独自にポートの一覧を持つ必要はありません。`--port`を変更すれば、アプリケーションが待ち受けるソケットも変わります。
 
 dewyはアプリケーションのプロセスを入れ替える間もソケットを開いたままにします。入れ替え中に届いたUDPデータグラムはソケットのキューに入り、次に読み出したworkerが受け取ります。入れ替えの間は以前のworkerと新しいworkerが同じUDPソケットから読み出すため、各データグラムを受け取るのはどちらか一方だけです。
+
+### ヘルスチェック用ソケットの提供 {% #health-socket %}
+
+[`--health-before-switch`](/ja/reference#--health-before-switch)を指定すると、dewyは新しいプロセスごとにループバックインターフェースのTCPソケットをもう1つ渡し、環境変数`DEWY_HEALTH_PORT`に`<address>=<fd>`形式の1つのエントリ（例: `127.0.0.1:41234=5`）として示します。ディスクリプタは`DEWY_PORT`のソケットに続く番号で、`--port`がない場合は3です。dewyは新しいプロセスが以前のプロセスと入れ替わる前に、このソケットへ`--health-path`のリクエストを送るため、アプリケーションはこのソケットでヘルスチェックのエンドポイントを提供する必要があります。トラフィックを受け取るプロセスの状態をチェックに反映させるため、通常のポートと同じハンドラーを使ってください。
+
+`sock.HealthListener`はこのソケットを返します。`DEWY_HEALTH_PORT`がない場合はnilを返します。
+
+```go
+package main
+
+import (
+    "log"
+    "net/http"
+
+    "github.com/linyows/dewy/sock"
+)
+
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+    // データベース接続など、アプリケーションが依存する状態を返す。
+    // リクエストを処理できないプロセスはチェックに失敗する。
+    w.WriteHeader(http.StatusOK)
+}
+
+func main() {
+    mux := http.NewServeMux()
+    mux.HandleFunc("/health", healthHandler)
+
+    // ヘルスソケットは--health-before-switchの指定時だけ渡される
+    health, err := sock.HealthListener()
+    if err != nil {
+        log.Fatal(err)
+    }
+    if health != nil {
+        go http.Serve(health, mux)
+    }
+
+    ln, err := sock.Listen("tcp", ":8080")
+    if err != nil {
+        log.Fatal(err)
+    }
+    log.Fatal(http.Serve(ln, mux))
+}
+```
+
+ヘルスソケットは1つのプロセスだけが持つため、応答は常に以前のプロセスではなく新しいプロセスから返ります。このソケットに対応していないアプリケーションは、`--health-before-switch`の下ではすべてのヘルスチェックに失敗します。

@@ -262,14 +262,19 @@ func (d *Dewy) promoteAndReport(ctx context.Context, res *registry.CurrentRespon
 			d.rollbackServer(ctx, res, st, err)
 			return err
 		}
-		// The probe goes through the shared port, and only once the previous
-		// process has exited can the answer come from the new one.
-		if d.config.Health.Path != "" {
-			d.awaitWorkerSwap(ctx, defaultWorkerSwapTimeout)
-		}
-		if err := d.verifyServerHealth(ctx); err != nil {
-			d.rollbackServer(ctx, res, st, err)
-			return err
+		// With --health-before-switch the new process already passed the
+		// health check on its own socket before it replaced the previous
+		// one, so there is nothing left to verify. Otherwise the probe goes
+		// through the shared port, and only once the previous process has
+		// exited can the answer come from the new one.
+		if !d.healthBeforeSwitch() {
+			if d.config.Health.Path != "" {
+				d.awaitWorkerSwap(ctx, defaultWorkerSwapTimeout)
+			}
+			if err := d.verifyServerHealth(ctx); err != nil {
+				d.rollbackServer(ctx, res, st, err)
+				return err
+			}
 		}
 	}
 

@@ -343,6 +343,51 @@ The sockets follow the configuration, so the application does not need its own l
 
 Dewy keeps these sockets open while it replaces the application process. A UDP datagram that arrives during the replacement is queued on the socket and read by whichever worker reads next. During the replacement, the previous and the new worker read from the same UDP socket, so each datagram is received by only one of them.
 
+### Serving the Health Check Socket {% #health-socket %}
+
+With [`--health-before-switch`](/reference#--health-before-switch), dewy passes each new process one more TCP socket, on the loopback interface, and announces it in the `DEWY_HEALTH_PORT` environment variable as a single `<address>=<fd>` entry, for example `127.0.0.1:41234=5`. The descriptor follows the `DEWY_PORT` sockets, or is 3 when there is no `--port`. Dewy sends `--health-path` requests to this socket before the new process replaces the previous one, so the application must serve its health endpoint there. Serve the same handler as on the regular port, so that the check reflects the state of the process that will receive traffic.
+
+`sock.HealthListener` returns this socket, or nil when `DEWY_HEALTH_PORT` is not set.
+
+```go
+package main
+
+import (
+    "log"
+    "net/http"
+
+    "github.com/linyows/dewy/sock"
+)
+
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+    // Report the state the application depends on, such as its database
+    // connection, so that a process that cannot serve fails the check.
+    w.WriteHeader(http.StatusOK)
+}
+
+func main() {
+    mux := http.NewServeMux()
+    mux.HandleFunc("/health", healthHandler)
+
+    // The health socket is set only under --health-before-switch.
+    health, err := sock.HealthListener()
+    if err != nil {
+        log.Fatal(err)
+    }
+    if health != nil {
+        go http.Serve(health, mux)
+    }
+
+    ln, err := sock.Listen("tcp", ":8080")
+    if err != nil {
+        log.Fatal(err)
+    }
+    log.Fatal(http.Serve(ln, mux))
+}
+```
+
+The health socket belongs to one process only, so the answer always comes from the new process, not from the previous one. An application that does not serve this socket fails every health check under `--health-before-switch`.
+
 ### Port-Specific Routing Configuration
 
 Large-scale applications require detailed routing configuration for each port.

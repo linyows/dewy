@@ -12,8 +12,9 @@
 //
 // A replacement (Restart) starts the new worker next to the current one and
 // stops the current one only after the new worker has stayed up for the
-// startup window. A new worker that exits within that window is reported as
-// an error and the current worker keeps serving.
+// startup window and, when a health check is configured, has passed it on a
+// port of its own. A new worker that exits within that window or fails the
+// health check is reported as an error and the current worker keeps serving.
 // A replaced worker that has not exited after the drain timeout is killed. A current worker that exits
 // on its own is started again after a backoff.
 package supervisor
@@ -27,6 +28,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"slices"
 	"sort"
 	"sync"
 	"syscall"
@@ -52,6 +54,15 @@ const (
 // ErrShutdown is returned by Start and Restart once Shutdown has begun.
 var ErrShutdown = errors.New("supervisor is shut down")
 
+// ErrUnhealthy is wrapped by the error Start and Restart return when the new
+// worker fails the health check.
+var ErrUnhealthy = errors.New("worker failed the health check")
+
+// HealthCheckFunc probes one worker through addr, the loopback address of the
+// health socket only that worker serves. It returns nil once the worker is
+// healthy, and an error when it gives up or ctx ends.
+type HealthCheckFunc func(ctx context.Context, addr net.Addr) error
+
 // Config describes the managed application.
 type Config struct {
 	// Command is the executable to run. A name without a slash is looked up
@@ -74,6 +85,14 @@ type Config struct {
 	// StartupWindow is how long a new worker must stay up before it is
 	// considered started. Zero means DefaultStartupWindow.
 	StartupWindow time.Duration
+	// HealthCheck, when set, gates every new worker: after the startup
+	// window the worker must pass it before it becomes current. Each worker
+	// then gets a TCP socket of its own on the loopback interface, announced
+	// in EnvHealthPort, and the check probes that socket. Because no other
+	// worker shares it, the result is the new worker's own, whereas a probe
+	// through a shared listener may be answered by the worker being
+	// replaced.
+	HealthCheck HealthCheckFunc
 	// DrainTimeout bounds how long a replaced worker may take to exit after
 	// the stop signal before it is killed. Zero waits for it indefinitely.
 	DrainTimeout time.Duration
@@ -112,6 +131,7 @@ type worker struct {
 	started time.Time
 	done    chan struct{} // closed once the process has exited
 	err     error         // exit status; valid after done is closed
+	health  net.Addr      // address of the worker's health socket, or nil
 
 	// stopping is set, under Supervisor.mu, when the supervisor asks the
 	// worker to exit, so its exit is not mistaken for a crash.
@@ -197,8 +217,9 @@ func (s *Supervisor) Addrs() []net.Addr {
 }
 
 // Start runs the first worker and waits for it to stay up for the startup
-// window. It returns an error if the worker cannot be spawned or exits within
-// the window; the caller should then call Shutdown to release the listeners.
+// window and to pass the health check, if one is configured. It returns an
+// error if the worker cannot be spawned, exits within the window or fails the
+// check; the caller should then call Shutdown to release the listeners.
 func (s *Supervisor) Start(ctx context.Context) error {
 	s.opMu.Lock()
 	defer s.opMu.Unlock()
@@ -227,12 +248,14 @@ func (s *Supervisor) Start(ctx context.Context) error {
 }
 
 // Restart replaces the current worker. It starts a new worker, waits for it
-// to stay up for the startup window, makes it current and sends the stop
-// signal to every older worker. It returns once the older workers have been signaled, without
+// to stay up for the startup window and to pass the health check, if one is
+// configured, makes it current and sends the stop signal to every older
+// worker. It returns once the older workers have been signaled, without
 // waiting for them to exit; see WaitRetired. An older worker still running
 // after the drain timeout is killed.
 //
-// If the new worker exits within the window, or ctx ends first, the new worker is stopped, the current worker keeps serving
+// If the new worker exits within the window, fails the health check, or ctx
+// ends first, the new worker is stopped, the current worker keeps serving
 // and an error is returned.
 func (s *Supervisor) Restart(ctx context.Context) error {
 	s.opMu.Lock()
@@ -383,6 +406,11 @@ func (s *Supervisor) Shutdown(ctx context.Context) error {
 
 // spawn starts a new worker process. The worker is registered as live but
 // is not made current; the caller decides that.
+//
+// With a health check configured, the worker also inherits a health socket
+// of its own, placed after the shared sockets. The supervisor closes its copy
+// once the worker has started, so the socket lives exactly as long as the
+// worker holds it.
 func (s *Supervisor) spawn() (*worker, error) {
 	cmd := exec.Command(s.cfg.Command, s.cfg.Args...) //nolint:gosec // G204: the command is the operator's own application
 	cmd.Dir = s.cfg.Dir
@@ -391,6 +419,18 @@ func (s *Supervisor) spawn() (*worker, error) {
 	cmd.Stderr = s.cfg.Stderr
 	for _, l := range s.listeners {
 		cmd.ExtraFiles = append(cmd.ExtraFiles, l.file)
+	}
+
+	var health *listener
+	if s.cfg.HealthCheck != nil {
+		var err error
+		if health, err = openHealthListener(); err != nil {
+			return nil, fmt.Errorf("open health socket: %w", err)
+		}
+		defer health.close()
+		fd := firstListenerFD + len(cmd.ExtraFiles)
+		cmd.ExtraFiles = append(cmd.ExtraFiles, health.file)
+		cmd.Env = append(slices.Clip(cmd.Env), fmt.Sprintf("%s=%s=%d", EnvHealthPort, health.local, fd))
 	}
 
 	s.mu.Lock()
@@ -408,16 +448,60 @@ func (s *Supervisor) spawn() (*worker, error) {
 		started: time.Now(),
 		done:    make(chan struct{}),
 	}
+	if health != nil {
+		w.health = health.local
+	}
 	s.workers[w] = struct{}{}
 	go s.wait(w)
 	return w, nil
 }
 
 // admit decides whether the new worker w may become current: it must stay up
-// for the startup window. A worker that is not admitted has been stopped by
-// the time admit returns.
+// for the startup window and then pass the health check, if one is
+// configured. A worker that is not admitted has been stopped by the time
+// admit returns.
 func (s *Supervisor) admit(ctx context.Context, w *worker) error {
-	return s.settle(ctx, w)
+	if err := s.settle(ctx, w); err != nil {
+		return err
+	}
+	if s.cfg.HealthCheck == nil {
+		return nil
+	}
+
+	// End the probe as soon as the worker exits or Shutdown begins, rather
+	// than letting it run out its budget against a dead socket.
+	hctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go func() {
+		select {
+		case <-w.done:
+		case <-s.closed:
+		case <-hctx.Done():
+		}
+		cancel()
+	}()
+
+	err := s.cfg.HealthCheck(hctx, w.health)
+	if err == nil {
+		s.log.Debug("Worker passed the health check", slog.Int("generation", w.gen))
+		return nil
+	}
+
+	select {
+	case <-w.done:
+		return fmt.Errorf("worker exited during the health check: %w", exitError(w.err))
+	default:
+	}
+	s.kill(w)
+	select {
+	case <-s.closed:
+		return ErrShutdown
+	default:
+	}
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	return fmt.Errorf("%w: %w", ErrUnhealthy, err)
 }
 
 // kill stops a worker that was never made current and waits for it to exit.

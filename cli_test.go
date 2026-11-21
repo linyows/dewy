@@ -85,6 +85,18 @@ func TestRunCLI(t *testing.T) {
 			expectError: "Error: --host is only supported by the server command",
 		},
 		{
+			name:        "health-before-switch requires a health path",
+			args:        []string{"--registry", "ghr://o/r", "--health-before-switch", "--port", "8080", "server", "myapp"},
+			expectExit:  ExitErr,
+			expectError: "Error: --health-before-switch requires --health-path",
+		},
+		{
+			name:        "health-before-switch is rejected outside the server command",
+			args:        []string{"--registry", "img://ghcr.io/o/r", "--health-before-switch", "--health-path", "/health", "--port", "8080", "container"},
+			expectExit:  ExitErr,
+			expectError: "Error: --health-before-switch is only supported by the server command",
+		},
+		{
 			name:        "startup-wait is rejected outside the server command",
 			args:        []string{"--registry", "img://ghcr.io/o/r", "--startup-wait", "3", "--port", "8080", "container"},
 			expectExit:  ExitErr,
@@ -1042,24 +1054,43 @@ func TestCLI_ConfigureServerCommand_SwitchOptions(t *testing.T) {
 	t.Run("options are carried into the server config", func(t *testing.T) {
 		var errBuf bytes.Buffer
 		c := &cli{
-			Ports:       []string{"53/udp"},
-			StartupWait: 3,
-			DrainTime:   10,
-			args:        []string{"/opt/app/current/app"},
-			env:         Env{Err: &errBuf},
+			Ports:              []string{"53/udp"},
+			HealthPath:         "/health",
+			HealthBeforeSwitch: true,
+			StartupWait:        3,
+			DrainTime:          10,
+			args:               []string{"/opt/app/current/app"},
+			env:                Env{Err: &errBuf},
 		}
 		conf := DefaultConfig()
+		// A UDP-only server can still be health checked: the probe goes to
+		// the process's own health socket, not to --port.
 		if err := c.configureServerCommand(&conf); err != nil {
 			t.Fatalf("configureServerCommand() error = %v (%s)", err, errBuf.String())
 		}
 		want := ServerConfig{
-			Command:     "/opt/app/current/app",
-			Addrs:       []string{"53/udp"},
-			StartupWait: 3 * time.Second,
-			DrainTime:   10 * time.Second,
+			Command:            "/opt/app/current/app",
+			Addrs:              []string{"53/udp"},
+			StartupWait:        3 * time.Second,
+			DrainTime:          10 * time.Second,
+			HealthBeforeSwitch: true,
 		}
 		if !reflect.DeepEqual(*conf.Server, want) {
 			t.Errorf("Server = %+v, want %+v", *conf.Server, want)
+		}
+	})
+
+	t.Run("health check without a port", func(t *testing.T) {
+		var errBuf bytes.Buffer
+		c := &cli{
+			HealthPath:         "/health",
+			HealthBeforeSwitch: true,
+			args:               []string{"/opt/app/current/worker"},
+			env:                Env{Err: &errBuf},
+		}
+		conf := DefaultConfig()
+		if err := c.configureServerCommand(&conf); err != nil {
+			t.Fatalf("configureServerCommand() error = %v, want a job worker to be health checked on its own socket", err)
 		}
 	})
 

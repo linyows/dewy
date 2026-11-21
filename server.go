@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"time"
 
 	"github.com/linyows/dewy/supervisor"
@@ -35,6 +36,16 @@ type ServerConfig struct {
 	// DrainTime bounds how long the previous process may take to exit after
 	// SIGTERM, on a restart and on shutdown, before it is killed.
 	DrainTime time.Duration
+	// HealthBeforeSwitch probes --health-path on each new process through
+	// a health socket of its own (DEWY_HEALTH_PORT) before it replaces the
+	// previous one, instead of through the shared port after the switch.
+	HealthBeforeSwitch bool
+}
+
+// healthBeforeSwitch reports whether new processes are probed before they
+// replace the previous one.
+func (d *Dewy) healthBeforeSwitch() bool {
+	return d.config.Server != nil && d.config.Server.HealthBeforeSwitch && d.config.Health.Path != ""
 }
 
 // drainTime returns how long a stopping process may take before it is
@@ -67,7 +78,17 @@ func (d *Dewy) supervisorConfig() supervisor.Config {
 		cfg.Addrs = c.Addrs
 		cfg.StartupWindow = c.StartupWait
 	}
+	if d.healthBeforeSwitch() {
+		cfg.HealthCheck = d.probeWorker
+	}
 	return cfg
+}
+
+// probeWorker probes --health-path on one worker's own health socket.
+func (d *Dewy) probeWorker(ctx context.Context, addr net.Addr) error {
+	u := "http://" + addr.String() + healthPath(d.config.Health.Path)
+	d.logger.Debug("Verifying new worker", slog.String("url", u))
+	return d.probeHealth(ctx, u, d.serverHealthTimeout())
 }
 
 // startServer binds the listen addresses, runs the managed application and

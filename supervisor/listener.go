@@ -1,6 +1,7 @@
 package supervisor
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -20,6 +21,15 @@ import (
 // socket is marked with a "/udp" suffix on the address ("53/udp=4"); the
 // worker opens it with net.FilePacketConn instead of net.FileListener.
 const EnvListeners = "DEWY_PORT"
+
+// EnvHealthPort names the environment variable that announces the worker's
+// health socket when a health check is configured. The value is a single
+// "<address>=<fd>" entry in the EnvListeners format, such as
+// "127.0.0.1:41234=5". The socket is a TCP listener on the loopback
+// interface that only this worker holds; the worker serves its health
+// endpoint on it, and the supervisor probes it before the worker replaces
+// the current one.
+const EnvHealthPort = "DEWY_HEALTH_PORT"
 
 // EnvListenersCompat carries the same value as EnvListeners under the name
 // server-starter uses. The format is compatible with server-starter, so an
@@ -175,6 +185,20 @@ func bind(network, address string) (*listener, error) {
 		return nil, err
 	}
 	return &listener{local: local, sock: sock, file: f}, nil
+}
+
+// openHealthListener binds a TCP socket on a free loopback port, on IPv4 when
+// the host has it and on IPv6 otherwise.
+func openHealthListener() (*listener, error) {
+	l, err := bind("tcp4", "127.0.0.1:0")
+	if err != nil {
+		var err6 error
+		if l, err6 = bind("tcp6", "[::1]:0"); err6 != nil {
+			return nil, errors.Join(err, err6)
+		}
+	}
+	l.addr = l.local.String()
+	return l, nil
 }
 
 // listenersEnv builds the EnvListeners value for lns.

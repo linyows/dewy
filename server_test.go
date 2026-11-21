@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"testing"
 	"time"
+
+	"github.com/linyows/dewy/supervisor"
 )
 
 func TestServerLifecycle(t *testing.T) {
@@ -60,6 +62,28 @@ func TestStartServerFailureReleasesPorts(t *testing.T) {
 	}
 	if d.isServerRunning || d.server != nil {
 		t.Error("a failed start left the server recorded as running")
+	}
+}
+
+func TestStartServerHealthBeforeSwitch(t *testing.T) {
+	sleep, err := exec.LookPath("sleep")
+	if err != nil {
+		t.Skip("sleep is not available")
+	}
+
+	// sleep never serves DEWY_HEALTH_PORT, as an application stuck at
+	// startup would not, so the gate must reject it.
+	d := newPhaseTestDewy(t)
+	d.config.Command = SERVER
+	d.config.Server = &ServerConfig{Command: sleep, Args: []string{"30"}, HealthBeforeSwitch: true}
+	d.config.Health = HealthConfig{Path: "/health", Timeout: 500 * time.Millisecond}
+	t.Cleanup(func() { _ = d.stopServer() })
+
+	if err := d.startServer(context.Background()); !errors.Is(err, supervisor.ErrUnhealthy) {
+		t.Fatalf("startServer() = %v, want supervisor.ErrUnhealthy", err)
+	}
+	if d.isServerRunning {
+		t.Error("isServerRunning = true after a rejected start")
 	}
 }
 
