@@ -89,58 +89,35 @@ dewyが起動したアプリケーションは、ポートを自分で開きま�
 
 `=`の後の数値はポート番号ではなくファイルディスクリプタです。アプリケーションは、ディスクリプタを`os.NewFile`と`net.FileListener`で`net.Listener`に変換します。
 
+Goのアプリケーションは、環境変数を自前で解析する代わりに`github.com/linyows/dewy/sock`モジュールを使えます。このモジュールは標準ライブラリだけに依存します。
+
+```bash
+go get github.com/linyows/dewy/sock
+```
+
+`sock.Listen`は`net.Listen`と同じ引数を取ります。dewyの下では、ポートが一致する引き継いだソケットを返します。待ち受けるインターフェースは`--host`で決まるため、アドレスのホスト部分は無視します。dewyの外で動かした場合や、dewyが開いていないポートを指定した場合は自分でアドレスを開くため、開発環境でも同じコードが動きます。`sock.Listeners`は、引き継いだソケットをすべて返します。`--port`で指定されたポートをそのまま提供するアプリケーションに向いています。引き継いだソケットはそれぞれ1回だけ返し、2回目の要求には`sock.ErrTaken`を返します。`DEWY_PORT`がない場合は`SERVER_STARTER_PORT`を読みます。
+
 ```go
 package main
 
 import (
     "context"
-    "fmt"
     "log"
     "net"
     "os"
     "os/signal"
-    "strconv"
-    "strings"
     "syscall"
     "time"
+
+    "github.com/linyows/dewy/sock"
 )
 
-// inheritedListenersはdewyから渡された待ち受けソケットを返す。
-// DEWY_PORTがない場合、つまりdewyから起動されていない場合はnilを返す。
-func inheritedListeners() ([]net.Listener, error) {
-    spec := os.Getenv("DEWY_PORT")
-    if spec == "" {
-        return nil, nil
-    }
-
-    var listeners []net.Listener
-    for _, entry := range strings.Split(spec, ";") {
-        // "8080=3"や"[::1]:8080=3"：アドレス、続いてディスクリプタ
-        i := strings.LastIndex(entry, "=")
-        if i < 0 {
-            return nil, fmt.Errorf("invalid DEWY_PORT entry: %q", entry)
-        }
-        addr := entry[:i]
-        fd, err := strconv.Atoi(entry[i+1:])
-        if err != nil {
-            return nil, fmt.Errorf("invalid descriptor in %q: %w", entry, err)
-        }
-
-        l, err := net.FileListener(os.NewFile(uintptr(fd), addr))
-        if err != nil {
-            return nil, fmt.Errorf("cannot use descriptor %d for %s: %w", fd, addr, err)
-        }
-        listeners = append(listeners, l)
-    }
-    return listeners, nil
-}
-
 func main() {
-    listeners, err := inheritedListeners()
+    listeners, err := sock.Listeners()
     if err != nil {
         log.Fatal(err)
     }
-    if listeners == nil {
+    if !sock.Inherited() {
         // 開発時など、直接起動された場合
         l, err := net.Listen("tcp", ":8080")
         if err != nil {

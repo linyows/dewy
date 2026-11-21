@@ -103,40 +103,20 @@ package main
 
 import (
     "context"
-    "fmt"
     "log"
-    "net"
     "net/http"
     "os"
     "os/signal"
-    "strconv"
-    "strings"
     "syscall"
     "time"
+
+    "github.com/linyows/dewy/sock"
 )
 
-// listenはdewyから渡された待ち受けソケットを返す。
-// dewyの外で起動した場合は:8080を開く。
-func listen() (net.Listener, error) {
-    spec := os.Getenv("DEWY_PORT") // e.g. "8080=3"
-    if spec == "" {
-        return net.Listen("tcp", ":8080")
-    }
-    entry := strings.Split(spec, ";")[0]
-    i := strings.LastIndex(entry, "=")
-    if i < 0 {
-        return nil, fmt.Errorf("invalid DEWY_PORT: %q", spec)
-    }
-    // The number after "=" is a file descriptor, not a port.
-    fd, err := strconv.Atoi(entry[i+1:])
-    if err != nil {
-        return nil, fmt.Errorf("invalid DEWY_PORT: %q", spec)
-    }
-    return net.FileListener(os.NewFile(uintptr(fd), entry[:i]))
-}
-
 func main() {
-    listener, err := listen()
+    // dewyの下ではdewyがポート8080に開いたソケットを返し、
+    // それ以外では:8080を開く。
+    listener, err := sock.Listen("tcp", ":8080")
     if err != nil {
         log.Fatal(err)
     }
@@ -171,7 +151,7 @@ func main() {
 
 このサンプルでは、SIGTERMシグナルを受信した際にGraceful shutdownを実行し、既存のリクエストを完了させてからサーバーを停止します。dewyは再起動後に以前のworkerへ、dewyの終了時にはすべてのworkerへSIGTERMを送信します。
 
-dewyの下では、`--port`で指定したポートはdewyがすでに開いており、その待ち受けソケットがファイルディスクリプタ3としてアプリケーションに渡されます。`listen`はポートを開き直さずに、そのソケットを`net.Listener`として使います。dewyが開いているポートを開こうとすると、Linuxでは「address already in use」で失敗します。また、渡されたソケットを使うことで、再起動の間もポートが開いたままになります。`--port`を複数指定した場合、`DEWY_PORT`にはポートごとのエントリが`;`区切りで並びます。詳しくは[マルチポート](/ja/multi-port#inherited-sockets)を参照してください。
+dewyの下では、`--port`で指定したポートはdewyがすでに開いており、その待ち受けソケットがファイルディスクリプタ3としてアプリケーションに渡されます。`github.com/linyows/dewy/sock`モジュールの`sock.Listen`は、ポートを開き直さずに、そのソケットを`net.Listener`として返します。dewyが開いているポートを開こうとすると、Linuxでは「address already in use」で失敗します。また、渡されたソケットを使うことで、再起動の間もポートが開いたままになります。`--port`を複数指定した場合、`DEWY_PORT`にはポートごとのエントリが`;`区切りで並びます。詳しくは[マルチポート](/ja/multi-port#inherited-sockets)を参照してください。
 
 ### データベース接続を持つアプリケーション
 
@@ -306,6 +286,7 @@ import (
     "syscall"
 
     "github.com/gorilla/websocket"
+    "github.com/linyows/dewy/sock"
 )
 
 type WebSocketServer struct {
@@ -373,8 +354,7 @@ func main() {
         os.Exit(0)
     }()
 
-    // listenは上のHTTPサーバーのサンプルの関数
-    listener, err := listen()
+    listener, err := sock.Listen("tcp", ":8080")
     if err != nil {
         log.Fatal(err)
     }

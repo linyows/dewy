@@ -103,40 +103,20 @@ package main
 
 import (
     "context"
-    "fmt"
     "log"
-    "net"
     "net/http"
     "os"
     "os/signal"
-    "strconv"
-    "strings"
     "syscall"
     "time"
+
+    "github.com/linyows/dewy/sock"
 )
 
-// listen returns the listening socket passed by dewy, or opens
-// :8080 when the application is started outside dewy.
-func listen() (net.Listener, error) {
-    spec := os.Getenv("DEWY_PORT") // e.g. "8080=3"
-    if spec == "" {
-        return net.Listen("tcp", ":8080")
-    }
-    entry := strings.Split(spec, ";")[0]
-    i := strings.LastIndex(entry, "=")
-    if i < 0 {
-        return nil, fmt.Errorf("invalid DEWY_PORT: %q", spec)
-    }
-    // The number after "=" is a file descriptor, not a port.
-    fd, err := strconv.Atoi(entry[i+1:])
-    if err != nil {
-        return nil, fmt.Errorf("invalid DEWY_PORT: %q", spec)
-    }
-    return net.FileListener(os.NewFile(uintptr(fd), entry[:i]))
-}
-
 func main() {
-    listener, err := listen()
+    // Under dewy this returns the socket dewy opened for port 8080;
+    // otherwise it binds :8080.
+    listener, err := sock.Listen("tcp", ":8080")
     if err != nil {
         log.Fatal(err)
     }
@@ -171,7 +151,7 @@ func main() {
 
 This example implements graceful shutdown when receiving SIGTERM, allowing existing requests to complete before stopping the server. Dewy sends SIGTERM to the previous worker after a restart and to every worker when dewy shuts down.
 
-Under dewy, dewy has already opened the port given by `--port` and passes the listening socket to the application as file descriptor 3. `listen` turns that socket into a `net.Listener` instead of binding the port again; binding a port that dewy holds fails with "address already in use" on Linux, and the inherited socket is what keeps the port open across a restart. With several `--port` values, `DEWY_PORT` has one entry per port; see [Multi-Port](/multi-port#inherited-sockets).
+Under dewy, dewy has already opened the port given by `--port` and passes the listening socket to the application as file descriptor 3. `sock.Listen` from the `github.com/linyows/dewy/sock` module turns that socket into a `net.Listener` instead of binding the port again; binding a port that dewy holds fails with "address already in use" on Linux, and the inherited socket is what keeps the port open across a restart. With several `--port` values, `DEWY_PORT` has one entry per port; see [Multi-Port](/multi-port#inherited-sockets).
 
 ### Applications with Database Connections
 
@@ -306,6 +286,7 @@ import (
     "syscall"
 
     "github.com/gorilla/websocket"
+    "github.com/linyows/dewy/sock"
 )
 
 type WebSocketServer struct {
@@ -373,8 +354,7 @@ func main() {
         os.Exit(0)
     }()
 
-    // listen is the function from the HTTP server example above.
-    listener, err := listen()
+    listener, err := sock.Listen("tcp", ":8080")
     if err != nil {
         log.Fatal(err)
     }

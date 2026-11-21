@@ -247,59 +247,35 @@ Entries are joined by `;`, and each entry is `<address>=<fd>`. `<address>` is th
 
 The number after `=` is a file descriptor, not a port. The application turns a descriptor into a `net.Listener` with `os.NewFile` and `net.FileListener`.
 
+A Go application can use the `github.com/linyows/dewy/sock` module instead of parsing the variable itself. The module depends only on the standard library.
+
+```bash
+go get github.com/linyows/dewy/sock
+```
+
+`sock.Listen` takes the same arguments as `net.Listen`. Under dewy, it returns the inherited socket whose port matches the address; the host part is ignored, because `--host` decides the interface. Without dewy, or for a port that dewy did not open, it binds the address itself, so the same code runs on a development machine. `sock.Listeners` returns every inherited socket, for an application that serves whatever `--port` lists. Each inherited socket can be returned once; a second request for it returns `sock.ErrTaken`. When `DEWY_PORT` is not set, the module reads `SERVER_STARTER_PORT`.
+
 ```go
 package main
 
 import (
     "context"
-    "fmt"
     "log"
     "net"
     "os"
     "os/signal"
-    "strconv"
-    "strings"
     "syscall"
     "time"
+
+    "github.com/linyows/dewy/sock"
 )
 
-// inheritedListeners returns the listening sockets passed by dewy. It
-// returns nil when DEWY_PORT is not set, which means the application was
-// not started by dewy.
-func inheritedListeners() ([]net.Listener, error) {
-    spec := os.Getenv("DEWY_PORT")
-    if spec == "" {
-        return nil, nil
-    }
-
-    var listeners []net.Listener
-    for _, entry := range strings.Split(spec, ";") {
-        // "8080=3" or "[::1]:8080=3": the address, then the descriptor.
-        i := strings.LastIndex(entry, "=")
-        if i < 0 {
-            return nil, fmt.Errorf("invalid DEWY_PORT entry: %q", entry)
-        }
-        addr := entry[:i]
-        fd, err := strconv.Atoi(entry[i+1:])
-        if err != nil {
-            return nil, fmt.Errorf("invalid descriptor in %q: %w", entry, err)
-        }
-
-        l, err := net.FileListener(os.NewFile(uintptr(fd), addr))
-        if err != nil {
-            return nil, fmt.Errorf("cannot use descriptor %d for %s: %w", fd, addr, err)
-        }
-        listeners = append(listeners, l)
-    }
-    return listeners, nil
-}
-
 func main() {
-    listeners, err := inheritedListeners()
+    listeners, err := sock.Listeners()
     if err != nil {
         log.Fatal(err)
     }
-    if listeners == nil {
+    if !sock.Inherited() {
         // Started directly, for example during development.
         l, err := net.Listen("tcp", ":8080")
         if err != nil {
