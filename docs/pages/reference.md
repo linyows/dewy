@@ -340,10 +340,15 @@ dewy server --registry ghr://owner/repo --port 8000 --health-path /health --no-r
 
 ### --drain-time
 
-Specifies the drain time in seconds after traffic switch. The old container is sent SIGTERM once it is removed from the proxy, and is given up to this long to finish in-flight requests before being killed. Default is 30 seconds.
+Specifies the drain time in seconds after traffic switch. Applies to the `server` and `container` commands; the `assets` command rejects it. Default is 30 seconds.
+
+For the `container` command, the old container is sent SIGTERM once it is removed from the proxy, and is given up to this long to finish in-flight requests before being killed.
+
+For the `server` command, the previous process is sent SIGTERM once the new process has replaced it, and is killed with SIGKILL if it is still running after this time. The same limit applies when Dewy shuts down: Dewy sends SIGTERM to every process, and kills the ones still running after this time.
 
 ```bash
 dewy container --registry img://ghcr.io/owner/app --drain-time 60
+dewy server --registry ghr://owner/repo --port 8000 --drain-time 60 -- /opt/app/current/app
 ```
 
 ### --runtime

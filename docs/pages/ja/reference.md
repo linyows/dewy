@@ -328,10 +328,15 @@ dewy server --registry ghr://owner/repo --port 8000 --health-path /health --no-r
 
 ### --drain-time
 
-トラフィック切り替え後のドレイン時間を秒単位で指定します。古いコンテナはプロキシから外された時点で SIGTERM を受け取り、実行中のリクエストを完了するための猶予として最大この時間だけ待ってから強制終了されます。デフォルトは30秒です。
+トラフィック切り替え後のドレイン時間を秒単位で指定します。`server`コマンドと`container`コマンドで使用でき、`assets`コマンドでは受け付けません。デフォルトは30秒です。
+
+`container`コマンドでは、古いコンテナはプロキシから外された時点で SIGTERM を受け取り、実行中のリクエストを完了するための猶予として最大この時間だけ待ってから強制終了されます。
+
+`server`コマンドでは、新しいプロセスと入れ替わった時点で以前のプロセスにSIGTERMを送信し、この時間を過ぎても動作している場合はSIGKILLで強制終了します。dewyの終了時にも同じ制限が適用されます。dewyはすべてのプロセスにSIGTERMを送信し、この時間を過ぎても動作しているプロセスを強制終了します。
 
 ```bash
 dewy container --registry img://ghcr.io/owner/app --drain-time 60
+dewy server --registry ghr://owner/repo --port 8000 --drain-time 60 -- /opt/app/current/app
 ```
 
 ### --runtime

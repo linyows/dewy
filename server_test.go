@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os/exec"
 	"testing"
+	"time"
 )
 
 func TestServerLifecycle(t *testing.T) {
@@ -59,5 +60,16 @@ func TestStartServerFailureReleasesPorts(t *testing.T) {
 	}
 	if d.isServerRunning || d.server != nil {
 		t.Error("a failed start left the server recorded as running")
+	}
+}
+
+func TestDrainTime(t *testing.T) {
+	d := newPhaseTestDewy(t)
+	if got := d.drainTime(); got != defaultServerStopTimeout {
+		t.Errorf("drainTime() = %s, want the default %s", got, defaultServerStopTimeout)
+	}
+	d.config.Server = &ServerConfig{DrainTime: 5 * time.Second}
+	if got := d.drainTime(); got != 5*time.Second {
+		t.Errorf("drainTime() = %s, want 5s", got)
 	}
 }

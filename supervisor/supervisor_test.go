@@ -532,3 +532,38 @@ func TestBackoff(t *testing.T) {
 		}
 	}
 }
+
+func TestDrainTimeoutKillsReplacedWorker(t *testing.T) {
+	h := newHarness(t, "ignore-term")
+	cfg := h.config("127.0.0.1:0")
+	cfg.DrainTimeout = 300 * time.Millisecond
+	s := h.start(cfg)
+
+	h.setMode("serve")
+	if err := s.Restart(context.Background()); err != nil {
+		t.Fatalf("Restart() error = %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := s.WaitRetired(ctx); err != nil {
+		t.Fatalf("WaitRetired() error = %v, want the worker ignoring SIGTERM killed after the drain time", err)
+	}
+	if got := get(t, s.Addrs()[0]); !strings.HasPrefix(got, "serve ") {
+		t.Errorf("GET = %q, want the new worker", got)
+	}
+}
+
+func TestReplacedWorkerIsNotKilledWithoutDrainTimeout(t *testing.T) {
+	h := newHarness(t, "ignore-term")
+	s := h.start(h.config("127.0.0.1:0"))
+
+	h.setMode("serve")
+	if err := s.Restart(context.Background()); err != nil {
+		t.Fatalf("Restart() error = %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	if err := s.WaitRetired(ctx); err == nil {
+		t.Error("WaitRetired() = nil, want the previous worker still alive without a drain timeout")
+	}
+}

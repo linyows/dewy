@@ -91,6 +91,12 @@ func TestRunCLI(t *testing.T) {
 			expectError: "Error: --startup-wait is only supported by the server command",
 		},
 		{
+			name:        "drain-time is rejected by the assets command",
+			args:        []string{"--registry", "ghr://o/r", "--drain-time", "10", "assets"},
+			expectExit:  ExitErr,
+			expectError: "Error: --drain-time is not supported by the assets command",
+		},
+		{
 			name:        "host requires a port on the server command",
 			args:        []string{"--registry", "ghr://o/r", "--host", "127.0.0.1", "server", "myapp"},
 			expectExit:  ExitErr,
@@ -1038,6 +1044,7 @@ func TestCLI_ConfigureServerCommand_SwitchOptions(t *testing.T) {
 		c := &cli{
 			Ports:       []string{"53/udp"},
 			StartupWait: 3,
+			DrainTime:   10,
 			args:        []string{"/opt/app/current/app"},
 			env:         Env{Err: &errBuf},
 		}
@@ -1049,6 +1056,7 @@ func TestCLI_ConfigureServerCommand_SwitchOptions(t *testing.T) {
 			Command:     "/opt/app/current/app",
 			Addrs:       []string{"53/udp"},
 			StartupWait: 3 * time.Second,
+			DrainTime:   10 * time.Second,
 		}
 		if !reflect.DeepEqual(*conf.Server, want) {
 			t.Errorf("Server = %+v, want %+v", *conf.Server, want)
@@ -1058,6 +1066,7 @@ func TestCLI_ConfigureServerCommand_SwitchOptions(t *testing.T) {
 	t.Run("negative durations", func(t *testing.T) {
 		for _, c := range []*cli{
 			{StartupWait: -1, args: []string{"app"}},
+			{DrainTime: -1, args: []string{"app"}},
 		} {
 			var errBuf bytes.Buffer
 			c.env = Env{Err: &errBuf}

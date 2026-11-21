@@ -14,7 +14,8 @@
 // stops the current one only after the new worker has stayed up for the
 // startup window. A new worker that exits within that window is reported as
 // an error and the current worker keeps serving.
-// A current worker that exits on its own is started again after a backoff.
+// A replaced worker that has not exited after the drain timeout is killed. A current worker that exits
+// on its own is started again after a backoff.
 package supervisor
 
 import (
@@ -73,6 +74,9 @@ type Config struct {
 	// StartupWindow is how long a new worker must stay up before it is
 	// considered started. Zero means DefaultStartupWindow.
 	StartupWindow time.Duration
+	// DrainTimeout bounds how long a replaced worker may take to exit after
+	// the stop signal before it is killed. Zero waits for it indefinitely.
+	DrainTimeout time.Duration
 	// StopSignal is sent to a worker that is being replaced or shut down.
 	// Zero means SIGTERM.
 	StopSignal syscall.Signal
@@ -224,8 +228,9 @@ func (s *Supervisor) Start(ctx context.Context) error {
 
 // Restart replaces the current worker. It starts a new worker, waits for it
 // to stay up for the startup window, makes it current and sends the stop
-// signal to every older worker. It returns once the older workers have been
-// signaled, without waiting for them to exit; see WaitRetired.
+// signal to every older worker. It returns once the older workers have been signaled, without
+// waiting for them to exit; see WaitRetired. An older worker still running
+// after the drain timeout is killed.
 //
 // If the new worker exits within the window, or ctx ends first, the new worker is stopped, the current worker keeps serving
 // and an error is returned.
@@ -270,8 +275,26 @@ func (s *Supervisor) Restart(ctx context.Context) error {
 
 	for _, o := range retiring {
 		s.signal(o, s.cfg.StopSignal)
+		if s.cfg.DrainTimeout > 0 {
+			go s.drain(o)
+		}
 	}
 	return nil
+}
+
+// drain kills w if it is still running after the drain timeout.
+func (s *Supervisor) drain(w *worker) {
+	t := time.NewTimer(s.cfg.DrainTimeout)
+	defer t.Stop()
+	select {
+	case <-w.done:
+	case <-t.C:
+		s.log.Warn("Killing worker that did not exit within the drain time",
+			slog.Int("generation", w.gen),
+			slog.Int("pid", w.cmd.Process.Pid),
+			slog.Duration("drain_time", s.cfg.DrainTimeout))
+		s.signal(w, syscall.SIGKILL)
+	}
 }
 
 // WaitRetired waits until every worker other than the current one has

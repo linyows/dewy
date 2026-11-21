@@ -32,6 +32,18 @@ type ServerConfig struct {
 	// StartupWait is how long a new process must stay up before it can
 	// replace the previous one. Zero means supervisor.DefaultStartupWindow.
 	StartupWait time.Duration
+	// DrainTime bounds how long the previous process may take to exit after
+	// SIGTERM, on a restart and on shutdown, before it is killed.
+	DrainTime time.Duration
+}
+
+// drainTime returns how long a stopping process may take before it is
+// killed.
+func (d *Dewy) drainTime() time.Duration {
+	if d.config.Server != nil && d.config.Server.DrainTime > 0 {
+		return d.config.Server.DrainTime
+	}
+	return defaultServerStopTimeout
 }
 
 // managedServer is the process supervisor as dewy uses it. It is an
@@ -46,7 +58,8 @@ type managedServer interface {
 // application.
 func (d *Dewy) supervisorConfig() supervisor.Config {
 	cfg := supervisor.Config{
-		Logger: d.logger.Slog(),
+		Logger:       d.logger.Slog(),
+		DrainTimeout: d.drainTime(),
 	}
 	if c := d.config.Server; c != nil {
 		cfg.Command = c.Command
@@ -77,7 +90,7 @@ func (d *Dewy) startServer(ctx context.Context) error {
 		return err
 	}
 	if err := s.Start(ctx); err != nil {
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), defaultServerStopTimeout)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), d.drainTime())
 		defer cancel()
 		_ = s.Shutdown(shutdownCtx)
 		return err
@@ -110,7 +123,7 @@ func (d *Dewy) restartServer(ctx context.Context) error {
 }
 
 // stopServer stops the managed application and releases its listen
-// addresses. Workers still running after defaultServerStopTimeout are killed. It is a no-op when no server is running.
+// addresses. Workers still running after the drain time are killed. It is a no-op when no server is running.
 func (d *Dewy) stopServer() error {
 	d.Lock()
 	s := d.server
@@ -121,7 +134,7 @@ func (d *Dewy) stopServer() error {
 		return nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultServerStopTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), d.drainTime())
 	defer cancel()
 	return s.Shutdown(ctx)
 }

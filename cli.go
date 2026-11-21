@@ -57,7 +57,7 @@ type cli struct {
 	StartupWait        int      `long:"startup-wait" arg:"seconds" description:"Seconds a new process must stay up before it can replace the previous one (server command, default: 1)"`
 	// Container-specific options
 	Replicas         int      `long:"replicas" description:"Number of container replicas to run (default: 1)"`
-	DrainTime        int      `long:"drain-time" description:"Drain time in seconds after traffic switch (default: 30 for container command)"`
+	DrainTime        int      `long:"drain-time" arg:"seconds" description:"Seconds the previous process (server) or container (container) may take to exit after the switch before it is killed (default: 30)"`
 	ContainerRuntime string   `long:"runtime" description:"Container runtime (docker or podman, default: docker)"`
 	ProxyIdleTimeout int      `long:"proxy-idle-timeout" description:"Proxy idle timeout in seconds (default: 300, 0 to disable)"`
 	Cmd              []string `long:"cmd" description:"Command and arguments to pass to container (can be specified multiple times)"`
@@ -175,6 +175,7 @@ func (c *cli) showHelp() {
 		"Host",
 		"NoRollback",
 		"StartupWait",
+		"DrainTime",
 	}), "\n")
 
 	containerOpts := strings.Join(c.buildHelp([]string{
@@ -308,6 +309,10 @@ func (c *cli) run() int {
 		fmt.Fprintf(c.env.Err, "Error: --startup-wait is only supported by the server command\n")
 		return ExitErr
 	}
+	if c.DrainTime != 0 && c.command != "server" && c.command != "container" {
+		fmt.Fprintf(c.env.Err, "Error: --drain-time is not supported by the assets command\n")
+		return ExitErr
+	}
 
 	switch c.command {
 	case "server":
@@ -398,15 +403,16 @@ func (c *cli) configureServerCommand(conf *Config) error {
 			cmdArgs = c.args[1:]
 		}
 	}
-	if c.StartupWait < 0 {
-		fmt.Fprintf(c.env.Err, "Error: --startup-wait must not be negative\n")
-		return fmt.Errorf("negative --startup-wait")
+	if c.StartupWait < 0 || c.DrainTime < 0 {
+		fmt.Fprintf(c.env.Err, "Error: --startup-wait and --drain-time must not be negative\n")
+		return fmt.Errorf("negative --startup-wait or --drain-time")
 	}
 	server := &ServerConfig{
 		Command:     command,
 		Args:        cmdArgs,
 		Addrs:       parsedPorts,
 		StartupWait: time.Duration(c.StartupWait) * time.Second,
+		DrainTime:   time.Duration(c.DrainTime) * time.Second,
 	}
 
 	conf.Health = HealthConfig{
