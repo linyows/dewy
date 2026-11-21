@@ -151,7 +151,7 @@ func main() {
 
 このサンプルでは、SIGTERMシグナルを受信した際にGraceful shutdownを実行し、既存のリクエストを完了させてからサーバーを停止します。dewyは再起動後に以前のworkerへ、dewyの終了時にはすべてのworkerへSIGTERMを送信します。
 
-dewyの下では、`--port`で指定したポートはdewyがすでに開いており、その待ち受けソケットがファイルディスクリプタ3としてアプリケーションに渡されます。`github.com/linyows/dewy/sock`モジュールの`sock.Listen`は、ポートを開き直さずに、そのソケットを`net.Listener`として返します。dewyが開いているポートを開こうとすると、Linuxでは「address already in use」で失敗します。また、渡されたソケットを使うことで、再起動の間もポートが開いたままになります。`--port`を複数指定した場合、`DEWY_PORT`にはポートごとのエントリが`;`区切りで並びます。詳しくは[マルチポート](/ja/multi-port#inherited-sockets)を参照してください。
+dewyの下では、`--port`で指定したポートはdewyがすでに開いており、その待ち受けソケットがファイルディスクリプタ3としてアプリケーションに渡されます。`github.com/linyows/dewy/sock`モジュールの`sock.Listen`は、ポートを開き直さずに、そのソケットを`net.Listener`として返します。dewyが開いているポートを開こうとすると、Linuxでは「address already in use」で失敗します。また、渡されたソケットを使うことで、再起動の間もポートが開いたままになります。`--port`を複数指定した場合、`DEWY_PORT`にはポートごとのエントリが`;`区切りで並びます。詳しくは[アプリの対応](/ja/application#inherited-sockets)を参照してください。
 
 ### データベース接続を持つアプリケーション
 

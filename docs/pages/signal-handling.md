@@ -151,7 +151,7 @@ func main() {
 
 This example implements graceful shutdown when receiving SIGTERM, allowing existing requests to complete before stopping the server. Dewy sends SIGTERM to the previous worker after a restart and to every worker when dewy shuts down.
 
-Under dewy, dewy has already opened the port given by `--port` and passes the listening socket to the application as file descriptor 3. `sock.Listen` from the `github.com/linyows/dewy/sock` module turns that socket into a `net.Listener` instead of binding the port again; binding a port that dewy holds fails with "address already in use" on Linux, and the inherited socket is what keeps the port open across a restart. With several `--port` values, `DEWY_PORT` has one entry per port; see [Multi-Port](/multi-port#inherited-sockets).
+Under dewy, dewy has already opened the port given by `--port` and passes the listening socket to the application as file descriptor 3. `sock.Listen` from the `github.com/linyows/dewy/sock` module turns that socket into a `net.Listener` instead of binding the port again; binding a port that dewy holds fails with "address already in use" on Linux, and the inherited socket is what keeps the port open across a restart. With several `--port` values, `DEWY_PORT` has one entry per port; see [Application Integration](/application#inherited-sockets).
 
 ### Applications with Database Connections
 

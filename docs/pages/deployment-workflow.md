@@ -208,7 +208,7 @@ INFO: Rolling back from=v1.2.4 to=v1.2.3 release=/opt/app/releases/20250908T1015
 
 The probe does not use `--port`, so `--health-path` with this option does not require a TCP port. An application that listens only on UDP, or a job worker without `--port`, can be health checked.
 
-The application must serve its health endpoint on the `DEWY_HEALTH_PORT` socket; see [Multi-Port](/multi-port#health-socket) for sample code. Dewy cannot distinguish an application that does not serve the socket from one that is hung, so every deployment of such an application fails. The option is therefore not enabled by default.
+The application must serve its health endpoint on the `DEWY_HEALTH_PORT` socket; see [Application Integration](/application#health-checks) for sample code. Dewy cannot distinguish an application that does not serve the socket from one that is hung, so every deployment of such an application fails. The option is therefore not enabled by default.
 
 ## Deployment Skip Conditions
 

@@ -63,6 +63,8 @@ $ dewy server --registry ghr://linyows/myapp \
   --notifier slack://general?title=myapp -p 8000 -l info -- /opt/myapp/current/myapp
 ```
 
+Dewy opens the port before it starts the application and passes the socket to it, so the application serves on that socket instead of binding the port itself. See [Application Integration](https://dewy.linyo.ws/application) for how to get the socket, including the `github.com/linyows/dewy/sock` module for Go.
+
 Add `--health-path` to verify the application after a deployment. Dewy probes the path on the lowest TCP `--port` once the process has started, and restores the previous release if the probe does not succeed within `--health-timeout` (30 seconds by default):
 
 ```sh
