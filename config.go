@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/linyows/dewy/container"
-	starter "github.com/linyows/server-starter"
 )
 
 // Command for CLI.
@@ -104,7 +103,7 @@ type Config struct {
 	Port             int // Port for HTTP server (used by both server and container commands)
 	AdminPort        int // Port for admin API (container command only, default: 17539)
 	Cache            CacheConfig
-	Starter          starter.Config
+	Server           *ServerConfig // Managed application (server command)
 	Container        *ContainerConfig
 	BeforeDeployHook string
 	AfterDeployHook  string

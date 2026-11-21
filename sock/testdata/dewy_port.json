@@ -1,0 +1,47 @@
+{
+  "port": [
+    {
+      "name": "bare ports",
+      "addrs": ["8080", "8443"],
+      "env": "8080=3;8443=4",
+      "entries": [
+        {"addr": "8080", "network": "tcp", "fd": 3},
+        {"addr": "8443", "network": "tcp", "fd": 4}
+      ]
+    },
+    {
+      "name": "IPv4 and IPv6 hosts",
+      "addrs": ["127.0.0.1:8080", "[::1]:8081", "[fe80::1%eth0]:8082"],
+      "env": "127.0.0.1:8080=3;[::1]:8081=4;[fe80::1%eth0]:8082=5",
+      "entries": [
+        {"addr": "127.0.0.1:8080", "network": "tcp", "fd": 3},
+        {"addr": "[::1]:8081", "network": "tcp", "fd": 4},
+        {"addr": "[fe80::1%eth0]:8082", "network": "tcp", "fd": 5}
+      ]
+    },
+    {
+      "name": "unspecified hosts are listed as bare ports",
+      "addrs": ["0.0.0.0:8080", "[::]:8081"],
+      "env": "8080=3;8081=4",
+      "entries": [
+        {"addr": "8080", "network": "tcp", "fd": 3},
+        {"addr": "8081", "network": "tcp", "fd": 4}
+      ]
+    },
+    {
+      "name": "UDP ports carry a suffix",
+      "addrs": ["53", "53/udp", "[::1]:5353/udp", "0.0.0.0:6000/udp"],
+      "env": "53=3;53/udp=4;[::1]:5353/udp=5;6000/udp=6",
+      "entries": [
+        {"addr": "53", "network": "tcp", "fd": 3},
+        {"addr": "53", "network": "udp", "fd": 4},
+        {"addr": "[::1]:5353", "network": "udp", "fd": 5},
+        {"addr": "6000", "network": "udp", "fd": 6}
+      ]
+    }
+  ],
+  "health": [
+    {"name": "IPv4 loopback", "addr": "127.0.0.1:41234", "fd": 5, "env": "127.0.0.1:41234=5"},
+    {"name": "IPv6 loopback without --port", "addr": "[::1]:41234", "fd": 3, "env": "[::1]:41234=3"}
+  ]
+}

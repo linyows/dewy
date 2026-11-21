@@ -9,9 +9,9 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"os"
-	"path/filepath"
+	"net/netip"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -43,20 +43,22 @@ type cli struct {
 	LogFormat          string   `long:"log-format" short:"f" arg:"(text|json)" description:"Set log format for output (default: text)"`
 	Interval           int      `long:"interval" arg:"seconds" short:"i" description:"Polling interval in seconds for checking registry updates (default: 10)"`
 	MaxBackoffInterval int      `long:"max-backoff-interval" arg:"seconds" description:"Stretch the polling interval exponentially while checks keep failing, up to this many seconds (default: 0, disabled; 300 is a reasonable choice)"`
-	Ports              []string `long:"port" short:"p" description:"For server: TCP ports to listen on. For container: port mappings in format 'proxy' or 'proxy:container' (multiple flags supported)"`
-	Host               string   `long:"host" description:"IPv4 address the server command listens on for every --port (e.g., 127.0.0.1). Listens on all interfaces when omitted"`
+	Ports              []string `long:"port" short:"p" description:"For server: ports to listen on; append /udp for UDP (e.g., 8080,53/udp). For container: port mappings in format 'proxy' or 'proxy:container' (multiple flags supported)"`
+	Host               string   `long:"host" description:"IPv4 or IPv6 address the server command listens on for every --port (e.g., 127.0.0.1, ::1). 0.0.0.0 listens on every IPv4 interface and :: on every IPv6 one; when omitted, listens on both"`
 	Registry           string   `long:"registry" description:"Registry URL (e.g., ghr://owner/repo, s3://region/bucket/prefix, docker://registry/repo)"`
 	Cache              string   `long:"cache" short:"c" description:"Cache backend URL (e.g., file:///path, s3://region/bucket/prefix, gs://bucket/prefix). Defaults to local file."`
 	Notifier           string   `long:"notifier" description:"Notifier URL for deployment notifications (e.g., slack://channel, mail://smtp:port/recipient)"`
 	VerifyChecksum     string   `long:"verify-checksum" arg:"(off|auto|required)" description:"How to check a downloaded artifact against the SHA-256 checksum file published next to it: auto verifies when one is published, required also fails when none is, off skips the check (default: auto)"`
 	BeforeDeployHook   string   `long:"before-deploy-hook" description:"Shell command to execute before deployment begins"`
 	AfterDeployHook    string   `long:"after-deploy-hook" description:"Shell command to execute after successful deployment"`
-	HealthPath         string   `long:"health-path" description:"HTTP path to probe after a deployment (e.g., /health). For server: probed on the first --port after the process starts; a failure rolls the release back. For container: probed on every new replica"`
+	HealthPath         string   `long:"health-path" description:"HTTP path to probe after a deployment (e.g., /health). For server: probed on the lowest TCP --port after the switch, or on the new process before it with --health-before-switch; a failure rolls the release back. For container: probed on every new replica"`
 	HealthTimeout      int      `long:"health-timeout" description:"Overall health check budget in seconds, covering every attempt (default: 30)"`
 	NoRollback         bool     `long:"no-rollback" description:"Keep the new release in place when its health check fails (server command). The failed version is still recorded so it is not deployed again"`
+	HealthBeforeSwitch bool     `long:"health-before-switch" description:"Probe --health-path on each new process through a socket of its own, announced in DEWY_HEALTH_PORT, before it replaces the previous process (server command). The application must serve its health endpoint on that socket"`
+	StartupWait        int      `long:"startup-wait" arg:"seconds" description:"Seconds a new process must stay up before it can replace the previous one (server command, default: 1)"`
 	// Container-specific options
 	Replicas         int      `long:"replicas" description:"Number of container replicas to run (default: 1)"`
-	DrainTime        int      `long:"drain-time" description:"Drain time in seconds after traffic switch (default: 30 for container command)"`
+	DrainTime        int      `long:"drain-time" arg:"seconds" description:"Seconds the previous process (server) or container (container) may take to exit after the switch before it is killed (default: 30)"`
 	ContainerRuntime string   `long:"runtime" description:"Container runtime (docker or podman, default: docker)"`
 	ProxyIdleTimeout int      `long:"proxy-idle-timeout" description:"Proxy idle timeout in seconds (default: 300, 0 to disable)"`
 	Cmd              []string `long:"cmd" description:"Command and arguments to pass to container (can be specified multiple times)"`
@@ -173,6 +175,9 @@ func (c *cli) showHelp() {
 		"Ports",
 		"Host",
 		"NoRollback",
+		"HealthBeforeSwitch",
+		"StartupWait",
+		"DrainTime",
 	}), "\n")
 
 	containerOpts := strings.Join(c.buildHelp([]string{
@@ -302,6 +307,18 @@ func (c *cli) run() int {
 		fmt.Fprintf(c.env.Err, "Error: --host is only supported by the server command\n")
 		return ExitErr
 	}
+	if c.HealthBeforeSwitch && c.command != "server" {
+		fmt.Fprintf(c.env.Err, "Error: --health-before-switch is only supported by the server command\n")
+		return ExitErr
+	}
+	if c.StartupWait != 0 && c.command != "server" {
+		fmt.Fprintf(c.env.Err, "Error: --startup-wait is only supported by the server command\n")
+		return ExitErr
+	}
+	if c.DrainTime != 0 && c.command != "server" && c.command != "container" {
+		fmt.Fprintf(c.env.Err, "Error: --drain-time is not supported by the assets command\n")
+		return ExitErr
+	}
 
 	switch c.command {
 	case "server":
@@ -377,12 +394,11 @@ func (c *cli) configureServerCommand(conf *Config) error {
 			fmt.Fprintf(c.env.Err, "Error: --host requires --port\n")
 			return fmt.Errorf("--host requires --port")
 		}
-		// 0.0.0.0 binds every interface, as omitting --host does. Passing
-		// the bare ports keeps SERVER_STARTER_PORT in the "port=fd" form
-		// for the app, as it is without --host.
-		if !net.ParseIP(c.Host).IsUnspecified() {
-			parsedPorts = joinHostPorts(c.Host, parsedPorts)
-		}
+		// 0.0.0.0 listens on every IPv4 interface and :: on every IPv6
+		// interface, while omitting --host listens on both. DEWY_PORT still
+		// lists an unspecified address as a bare port, as it does without
+		// --host.
+		parsedPorts = joinHostPorts(c.Host, parsedPorts)
 	}
 
 	var command string
@@ -393,11 +409,17 @@ func (c *cli) configureServerCommand(conf *Config) error {
 			cmdArgs = c.args[1:]
 		}
 	}
-	starter := &StarterConfig{
-		ports:     parsedPorts,
-		command:   command,
-		args:      cmdArgs,
-		logformat: c.LogFormat,
+	if c.StartupWait < 0 || c.DrainTime < 0 {
+		fmt.Fprintf(c.env.Err, "Error: --startup-wait and --drain-time must not be negative\n")
+		return fmt.Errorf("negative --startup-wait or --drain-time")
+	}
+	server := &ServerConfig{
+		Command:            command,
+		Args:               cmdArgs,
+		Addrs:              parsedPorts,
+		StartupWait:        time.Duration(c.StartupWait) * time.Second,
+		DrainTime:          time.Duration(c.DrainTime) * time.Second,
+		HealthBeforeSwitch: c.HealthBeforeSwitch,
 	}
 
 	conf.Health = HealthConfig{
@@ -408,19 +430,21 @@ func (c *cli) configureServerCommand(conf *Config) error {
 		conf.Health.Timeout = time.Duration(c.HealthTimeout) * time.Second
 	}
 
-	if c.HealthPath != "" {
-		if len(parsedPorts) == 0 {
-			fmt.Fprintf(c.env.Err, "Error: --health-path requires --port\n")
-			return fmt.Errorf("--health-path requires --port")
-		}
-		// The health check must not probe before server-starter has retired
-		// the previous worker, and its status file is the only report of when
-		// that happened. It is written only when a path is configured, so ask
-		// for one whenever the check is on.
-		starter.statusfile = filepath.Join(os.TempDir(), fmt.Sprintf("dewy-starter-%d.status", os.Getpid()))
+	if c.HealthBeforeSwitch && c.HealthPath == "" {
+		fmt.Fprintf(c.env.Err, "Error: --health-before-switch requires --health-path\n")
+		return fmt.Errorf("--health-before-switch requires --health-path")
+	}
+	// Probing through the shared port needs a TCP port to probe. With
+	// --health-before-switch each process is probed on a socket of its own,
+	// so any --port, or none, will do.
+	if c.HealthPath != "" && !c.HealthBeforeSwitch && !slices.ContainsFunc(parsedPorts, func(p string) bool {
+		return !strings.HasSuffix(p, udpSuffix)
+	}) {
+		fmt.Fprintf(c.env.Err, "Error: --health-path requires a TCP --port\n")
+		return fmt.Errorf("--health-path requires a TCP --port")
 	}
 
-	conf.Starter = starter
+	conf.Server = server
 	return nil
 }
 
@@ -491,30 +515,36 @@ func (c *cli) configureContainerCommand(conf *Config) error {
 	return nil
 }
 
-// validateHost checks the --host value. server-starter listens with "tcp4",
-// so only an IPv4 address can be bound; a hostname or an IPv6 address would
-// either fail at listen time or resolve to something other than what was
-// asked for.
+// validateHost checks the --host value. It must be an IPv4 or IPv6 address
+// literal, without brackets; an IPv6 link-local address may carry a zone
+// ("fe80::1%eth0"). A hostname is rejected because it may resolve to several
+// addresses, or to a different one on each start, and would make the bound
+// interface depend on DNS.
 func validateHost(host string) error {
-	ip := net.ParseIP(host)
-	if ip == nil || ip.To4() == nil || strings.Contains(host, ":") {
-		return fmt.Errorf("%q is not an IPv4 address", host)
+	ip, err := netip.ParseAddr(host)
+	if err != nil {
+		return fmt.Errorf("%q is not an IP address", host)
 	}
 	// A multicast or broadcast address cannot be bound by a TCP listener.
 	// Rejecting it here reports the mistake at startup, not as a listen
 	// failure on every deployment.
-	if ip.IsMulticast() || ip.Equal(net.IPv4bcast) {
+	if ip.IsMulticast() || ip == netip.AddrFrom4([4]byte{255, 255, 255, 255}) {
 		return fmt.Errorf("%q is not a unicast address", host)
 	}
 	return nil
 }
 
-// joinHostPorts prefixes each port with host in the "host:port" form that
-// server-starter accepts.
+// joinHostPorts prefixes each port with host in the "host:port" form, with an
+// IPv6 address in brackets ("[::1]:8080"). A protocol suffix stays at the end
+// ("127.0.0.1:53/udp").
 func joinHostPorts(host string, ports []string) []string {
 	joined := make([]string, len(ports))
 	for i, port := range ports {
-		joined[i] = net.JoinHostPort(host, port)
+		p, udp := strings.CutSuffix(port, udpSuffix)
+		joined[i] = net.JoinHostPort(host, p)
+		if udp {
+			joined[i] += udpSuffix
+		}
 	}
 	return joined
 }
@@ -538,7 +568,33 @@ func parsePorts(portSpecs []string) ([]string, error) {
 	return validateAndDeduplicatePorts(allPorts)
 }
 
-// parsePortSpec parses a single port specification (supports comma-separated and ranges).
+// udpSuffix marks a UDP port in a port specification ("53/udp"), as in
+// Docker's port syntax. A port without it, or with "/tcp", is TCP and is
+// stored without a suffix.
+const (
+	udpSuffix = "/udp"
+	tcpSuffix = "/tcp"
+)
+
+// splitProtocol separates the protocol suffix from a port or port range.
+// It returns the suffix to append to each resulting port: "" for TCP and
+// udpSuffix for UDP.
+func splitProtocol(part string) (string, string, error) {
+	port, proto, found := strings.Cut(part, "/")
+	if !found {
+		return part, "", nil
+	}
+	switch "/" + strings.ToLower(proto) {
+	case tcpSuffix:
+		return port, "", nil
+	case udpSuffix:
+		return port, udpSuffix, nil
+	}
+	return "", "", fmt.Errorf("invalid protocol %q in port specification %s: want tcp or udp", proto, part)
+}
+
+// parsePortSpec parses a single port specification (supports comma-separated
+// lists, ranges and a "/udp" or "/tcp" suffix on each element).
 func parsePortSpec(spec string) ([]string, error) {
 	if spec == "" {
 		return nil, nil
@@ -553,19 +609,26 @@ func parsePortSpec(spec string) ([]string, error) {
 			continue
 		}
 
+		part, suffix, err := splitProtocol(part)
+		if err != nil {
+			return nil, err
+		}
+
 		if strings.Contains(part, "-") {
 			// Range specification (e.g., "8000-8005")
 			rangePorts, err := parsePortRange(part)
 			if err != nil {
 				return nil, err
 			}
-			ports = append(ports, rangePorts...)
+			for _, p := range rangePorts {
+				ports = append(ports, p+suffix)
+			}
 		} else {
 			// Single port
 			if err := validatePort(part); err != nil {
 				return nil, err
 			}
-			ports = append(ports, part)
+			ports = append(ports, part+suffix)
 		}
 	}
 
@@ -631,7 +694,8 @@ func validatePortNumber(port int) error {
 	return nil
 }
 
-// validateAndDeduplicatePorts removes duplicates and sorts ports.
+// validateAndDeduplicatePorts removes duplicates and sorts ports by number,
+// with the TCP port before the UDP port of the same number.
 func validateAndDeduplicatePorts(ports []string) ([]string, error) {
 	if len(ports) == 0 {
 		return ports, nil
@@ -649,11 +713,16 @@ func validateAndDeduplicatePorts(ports []string) ([]string, error) {
 		result = append(result, port)
 	}
 
-	// Sort numerically
+	// Sort numerically; on the same number TCP (no suffix) sorts first.
 	sort.Slice(result, func(i, j int) bool {
-		a, _ := strconv.Atoi(result[i])
-		b, _ := strconv.Atoi(result[j])
-		return a < b
+		a, aUDP := strings.CutSuffix(result[i], udpSuffix)
+		b, bUDP := strings.CutSuffix(result[j], udpSuffix)
+		an, _ := strconv.Atoi(a)
+		bn, _ := strconv.Atoi(b)
+		if an != bn {
+			return an < bn
+		}
+		return !aUDP && bUDP
 	})
 
 	return result, nil

@@ -70,7 +70,13 @@ func TestRunCLI(t *testing.T) {
 			name:        "health path requires a port on the server command",
 			args:        []string{"--registry", "ghr://o/r", "--health-path", "/health", "server", "myapp"},
 			expectExit:  ExitErr,
-			expectError: "Error: --health-path requires --port",
+			expectError: "Error: --health-path requires a TCP --port",
+		},
+		{
+			name:        "health path requires a TCP port on the server command",
+			args:        []string{"--registry", "ghr://o/r", "--health-path", "/health", "--port", "53/udp", "server", "myapp"},
+			expectExit:  ExitErr,
+			expectError: "Error: --health-path requires a TCP --port",
 		},
 		{
 			name:        "host is rejected outside the server command",
@@ -79,14 +85,38 @@ func TestRunCLI(t *testing.T) {
 			expectError: "Error: --host is only supported by the server command",
 		},
 		{
+			name:        "health-before-switch requires a health path",
+			args:        []string{"--registry", "ghr://o/r", "--health-before-switch", "--port", "8080", "server", "myapp"},
+			expectExit:  ExitErr,
+			expectError: "Error: --health-before-switch requires --health-path",
+		},
+		{
+			name:        "health-before-switch is rejected outside the server command",
+			args:        []string{"--registry", "img://ghcr.io/o/r", "--health-before-switch", "--health-path", "/health", "--port", "8080", "container"},
+			expectExit:  ExitErr,
+			expectError: "Error: --health-before-switch is only supported by the server command",
+		},
+		{
+			name:        "startup-wait is rejected outside the server command",
+			args:        []string{"--registry", "img://ghcr.io/o/r", "--startup-wait", "3", "--port", "8080", "container"},
+			expectExit:  ExitErr,
+			expectError: "Error: --startup-wait is only supported by the server command",
+		},
+		{
+			name:        "drain-time is rejected by the assets command",
+			args:        []string{"--registry", "ghr://o/r", "--drain-time", "10", "assets"},
+			expectExit:  ExitErr,
+			expectError: "Error: --drain-time is not supported by the assets command",
+		},
+		{
 			name:        "host requires a port on the server command",
 			args:        []string{"--registry", "ghr://o/r", "--host", "127.0.0.1", "server", "myapp"},
 			expectExit:  ExitErr,
 			expectError: "Error: --host requires --port",
 		},
 		{
-			name:        "host must be an IPv4 address",
-			args:        []string{"--registry", "ghr://o/r", "--host", "::1", "--port", "8080", "server", "myapp"},
+			name:        "host must be an IP address",
+			args:        []string{"--registry", "ghr://o/r", "--host", "localhost", "--port", "8080", "server", "myapp"},
 			expectExit:  ExitErr,
 			expectError: "Error: invalid host",
 		},
@@ -432,6 +462,18 @@ func TestParsePorts(t *testing.T) {
 			input:   []string{"0"},
 			wantErr: true,
 		},
+		{
+			name:     "udp ports sort by number, tcp first",
+			input:    []string{"53/udp", "8080", "53", "5353/UDP"},
+			expected: []string{"53", "53/udp", "5353/udp", "8080"},
+			wantErr:  false,
+		},
+		{
+			name:     "tcp suffix is dropped",
+			input:    []string{"8080/tcp", "8080"},
+			expected: []string{"8080"},
+			wantErr:  false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -499,6 +541,22 @@ func TestParsePortSpec(t *testing.T) {
 		{
 			name:    "invalid range format",
 			input:   "8080-8081-8082",
+			wantErr: true,
+		},
+		{
+			name:     "udp port and range",
+			input:    "53/udp,6000-6002/udp,8080",
+			expected: []string{"53/udp", "6000/udp", "6001/udp", "6002/udp", "8080"},
+			wantErr:  false,
+		},
+		{
+			name:    "unknown protocol",
+			input:   "53/sctp",
+			wantErr: true,
+		},
+		{
+			name:    "protocol without port",
+			input:   "/udp",
 			wantErr: true,
 		},
 	}
@@ -708,8 +766,13 @@ func TestValidateHost(t *testing.T) {
 		{"192.168.10.255", false},
 		{"010.0.0.1", true},
 		{" 127.0.0.1", true},
-		{"::1", true},
-		{"::ffff:127.0.0.1", true},
+		{"::1", false},
+		{"::", false},
+		{"2001:db8::1", false},
+		{"fe80::1%eth0", false},
+		{"::ffff:127.0.0.1", false},
+		{"ff02::1", true},
+		{"[::1]", true},
 		{"[127.0.0.1]", true},
 		{"localhost", true},
 		{"127.0.0.1:8080", true},
@@ -786,12 +849,34 @@ func TestCLI_ConfigureServerCommand(t *testing.T) {
 			wantErr:     false,
 		},
 		{
+			name:        "with IPv6 host and a UDP port",
+			ports:       []string{"8080,53/udp"},
+			host:        "::1",
+			args:        []string{"/opt/app/current/app"},
+			logFormat:   "text",
+			expectPorts: []string{"[::1]:53/udp", "[::1]:8080"},
+			expectCmd:   "/opt/app/current/app",
+			expectArgs:  nil,
+			wantErr:     false,
+		},
+		{
+			name:        "with IPv6 unspecified host",
+			ports:       []string{"8080"},
+			host:        "::",
+			args:        []string{"/opt/app/current/app"},
+			logFormat:   "text",
+			expectPorts: []string{"[::]:8080"},
+			expectCmd:   "/opt/app/current/app",
+			expectArgs:  nil,
+			wantErr:     false,
+		},
+		{
 			name:        "with unspecified host",
 			ports:       []string{"8080"},
 			host:        "0.0.0.0",
 			args:        []string{"/opt/app/current/app"},
 			logFormat:   "text",
-			expectPorts: []string{"8080"},
+			expectPorts: []string{"0.0.0.0:8080"},
 			expectCmd:   "/opt/app/current/app",
 			expectArgs:  nil,
 			wantErr:     false,
@@ -839,24 +924,20 @@ func TestCLI_ConfigureServerCommand(t *testing.T) {
 					t.Errorf("Expected command SERVER, got %v", conf.Command)
 				}
 
-				if conf.Starter == nil {
-					t.Fatal("Expected Starter to be set")
+				if conf.Server == nil {
+					t.Fatal("Expected Server to be set")
 				}
 
-				if !reflect.DeepEqual(conf.Starter.Ports(), tt.expectPorts) {
-					t.Errorf("Expected ports %v, got %v", tt.expectPorts, conf.Starter.Ports())
+				if !reflect.DeepEqual(conf.Server.Addrs, tt.expectPorts) {
+					t.Errorf("Expected ports %v, got %v", tt.expectPorts, conf.Server.Addrs)
 				}
 
-				if conf.Starter.Command() != tt.expectCmd {
-					t.Errorf("Expected command %q, got %q", tt.expectCmd, conf.Starter.Command())
+				if conf.Server.Command != tt.expectCmd {
+					t.Errorf("Expected command %q, got %q", tt.expectCmd, conf.Server.Command)
 				}
 
-				if !reflect.DeepEqual(conf.Starter.Args(), tt.expectArgs) {
-					t.Errorf("Expected args %v, got %v", tt.expectArgs, conf.Starter.Args())
-				}
-
-				if conf.Starter.LogFormat() != tt.logFormat {
-					t.Errorf("Expected logformat %q, got %q", tt.logFormat, conf.Starter.LogFormat())
+				if !reflect.DeepEqual(conf.Server.Args, tt.expectArgs) {
+					t.Errorf("Expected args %v, got %v", tt.expectArgs, conf.Server.Args)
 				}
 			}
 		})
@@ -967,4 +1048,63 @@ func TestDisplayContainerList(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCLI_ConfigureServerCommand_SwitchOptions(t *testing.T) {
+	t.Run("options are carried into the server config", func(t *testing.T) {
+		var errBuf bytes.Buffer
+		c := &cli{
+			Ports:              []string{"53/udp"},
+			HealthPath:         "/health",
+			HealthBeforeSwitch: true,
+			StartupWait:        3,
+			DrainTime:          10,
+			args:               []string{"/opt/app/current/app"},
+			env:                Env{Err: &errBuf},
+		}
+		conf := DefaultConfig()
+		// A UDP-only server can still be health checked: the probe goes to
+		// the process's own health socket, not to --port.
+		if err := c.configureServerCommand(&conf); err != nil {
+			t.Fatalf("configureServerCommand() error = %v (%s)", err, errBuf.String())
+		}
+		want := ServerConfig{
+			Command:            "/opt/app/current/app",
+			Addrs:              []string{"53/udp"},
+			StartupWait:        3 * time.Second,
+			DrainTime:          10 * time.Second,
+			HealthBeforeSwitch: true,
+		}
+		if !reflect.DeepEqual(*conf.Server, want) {
+			t.Errorf("Server = %+v, want %+v", *conf.Server, want)
+		}
+	})
+
+	t.Run("health check without a port", func(t *testing.T) {
+		var errBuf bytes.Buffer
+		c := &cli{
+			HealthPath:         "/health",
+			HealthBeforeSwitch: true,
+			args:               []string{"/opt/app/current/worker"},
+			env:                Env{Err: &errBuf},
+		}
+		conf := DefaultConfig()
+		if err := c.configureServerCommand(&conf); err != nil {
+			t.Fatalf("configureServerCommand() error = %v, want a job worker to be health checked on its own socket", err)
+		}
+	})
+
+	t.Run("negative durations", func(t *testing.T) {
+		for _, c := range []*cli{
+			{StartupWait: -1, args: []string{"app"}},
+			{DrainTime: -1, args: []string{"app"}},
+		} {
+			var errBuf bytes.Buffer
+			c.env = Env{Err: &errBuf}
+			conf := DefaultConfig()
+			if err := c.configureServerCommand(&conf); err == nil {
+				t.Errorf("configureServerCommand(%+v) error = nil, want an error", c)
+			}
+		}
+	})
 }

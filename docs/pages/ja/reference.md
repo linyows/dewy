@@ -110,11 +110,30 @@ dewy server --notifier slack://webhook-url -- /opt/app/current/app
 
 アプリケーションサーバーが使用するポートを指定します。`server`コマンドではこのオプションは任意です。
 
-指定した場合、server-starterが指定されたポートでアプリケーションを管理します。省略した場合、アプリケーションはポートをリッスンせずに実行されます（ジョブワーカー、メッセージキューコンシューマーなどに有用）。
+指定した場合、Dewyはサーバー起動時に指定されたポートを開き、Dewyが終了するまで開いたままにして、継承するファイルディスクリプタとしてアプリケーションに渡します。省略した場合、アプリケーションはポートをリッスンせずに実行されます（ジョブワーカー、メッセージキューコンシューマーなどに有用）。
+
+ポートは単一の番号（`8080`）、カンマ区切りの一覧（`8080,8081`）、範囲（`8080-8085`）で指定でき、オプションを繰り返し指定することもできます。サフィックスのないポートはTCPです。`server`コマンドでは、ポートまたは範囲の末尾に`/udp`を付けるとUDPソケットを開きます（`53/udp`、`6000-6002/udp`）。`/tcp`も指定でき、サフィックスなしと同じ意味になります。重複は除去され、ポートは番号順に並びます。同じ番号ではTCPがUDPより先になります。
+
+`--host`を指定しない場合、各ポートはすべてのインターフェースで待ち受けます。IPv6が使えるホストでは、ソケットはIPv4とIPv6の両方の接続を受け付けます。
+
+アプリケーションは、環境変数`DEWY_PORT`からソケットを見つけます。この変数には、ポートごとに`<address>=<fd>`のエントリが`;`区切りで並びます。`<address>`は指定したポートそのままで、`--host`に`0.0.0.0`または`::`以外のアドレスを指定した場合は`host:port`の形式になり、IPv6アドレスは角括弧で囲まれます。UDPのエントリは末尾に`/udp`が付きます。`<fd>`は3から始まるファイルディスクリプタ番号です。server-starter向けに書かれたアプリケーションのために、dewyは同じ値を`SERVER_STARTER_PORT`にも設定します。
+
+| `--port`と`--host` | `DEWY_PORT` |
+|---|---|
+| `--port 8080` | `8080=3` |
+| `--port 8080 --host 127.0.0.1` | `127.0.0.1:8080=3` |
+| `--port 8080 --host ::1` | `[::1]:8080=3` |
+| `--port 53,53/udp` | `53=3;53/udp=4` |
+| `--port 53/udp --host ::1` | `[::1]:53/udp=3` |
+
+アプリケーションは、TCPのエントリを`net.FileListener`で、UDPのエントリを`net.FilePacketConn`で開きます。サンプルコードは[マルチポート](/ja/multi-port#inherited-sockets)を参照してください。
 
 ```bash
 # ポートあり（HTTPサーバー）
 dewy server --port 9090 -- /opt/app/current/app
+
+# TCPとUDP（DNSサーバー）
+dewy server --registry ghr://owner/repo --port 53,53/udp -- /opt/dns/current/dns
 
 # ポートなし（ジョブワーカーなど）
 dewy server --registry ghr://owner/repo -- /opt/worker/current/worker
@@ -122,13 +141,13 @@ dewy server --registry ghr://owner/repo -- /opt/worker/current/worker
 
 ### --host
 
-`server`コマンドが待ち受けるIPv4アドレスを指定します。指定したアドレスはすべての`--port`に適用されます。省略した場合は、すべてのIPv4インターフェースで待ち受けます。`0.0.0.0`を指定した場合は省略した場合と同じ動作になります。
+`server`コマンドが待ち受けるIPアドレスを指定します。指定したアドレスはTCPとUDPのすべての`--port`に適用されます。省略した場合は、すべてのインターフェースで待ち受けます。IPv6が使えるホストでは、IPv4とIPv6の両方の接続を受け付けます。`0.0.0.0`を指定した場合はすべてのIPv4インターフェースだけで、`::`を指定した場合はすべてのIPv6インターフェースだけで待ち受けます。
 
-このオプションは`--port`を必要とします。受け付けるのはIPv4のユニキャストアドレスだけです。`localhost`のようなホスト名、IPv6アドレス、マルチキャストアドレス、ブロードキャストアドレスはエラーになります。`assets`コマンドと`container`コマンドではこのオプションを受け付けません。
+このオプションは`--port`を必要とします。IPv4またはIPv6のユニキャストアドレスを受け付けます。IPv6アドレスは角括弧を付けずに指定します（`::1`）。リンクローカルアドレスにはゾーンを付けられます（`fe80::1%eth0`）。特定のIPv6アドレスを指定した場合はIPv6だけで待ち受けます。`localhost`のようなホスト名、マルチキャストアドレス、ブロードキャストアドレスはエラーになります。`assets`コマンドと`container`コマンドではこのオプションを受け付けません。
 
-`0.0.0.0`以外のアドレスを指定した場合、アプリケーションに渡す環境変数`SERVER_STARTER_PORT`は、各リスナーを`port=fd`ではなく`host:port=fd`の形式（例: `127.0.0.1:8000=3`）で表します。この環境変数を自前で解析するアプリケーションは、この形式に対応する必要があります。
+`0.0.0.0`と`::`以外のアドレスを指定した場合、アプリケーションに渡す環境変数`DEWY_PORT`は、各リスナーを`port=fd`ではなく`host:port=fd`の形式（例: `127.0.0.1:8000=3`、`[::1]:8000=3`）で表します。この環境変数を自前で解析するアプリケーションは、この形式に対応する必要があります。`0.0.0.0`または`::`を指定した場合は`port=fd`の形式のままです。
 
-`--health-path`を指定した場合、ヘルスチェックのリクエストは指定したアドレスに送ります。`0.0.0.0`を指定した場合と`--host`を省略した場合は`127.0.0.1`に送ります。
+`--health-before-switch`なしで`--health-path`を指定した場合、ヘルスチェックのリクエストは指定したアドレスに送ります。`0.0.0.0`を指定した場合と`--host`を省略した場合は`127.0.0.1`に、`::`を指定した場合は`::1`に送ります。
 
 ```bash
 # ループバックインターフェースでのみ待ち受ける
@@ -136,6 +155,48 @@ dewy server --registry ghr://owner/repo --host 127.0.0.1 --port 8000 -- /opt/app
 
 # 特定のインターフェースで待ち受ける
 dewy server --registry ghr://owner/repo --host 192.168.10.11 --port 8000-8001 -- /opt/app/current/app
+
+# IPv6のループバックアドレスでのみ待ち受ける
+dewy server --registry ghr://owner/repo --host ::1 --port 8000 -- /opt/app/current/app
+```
+
+### --startup-wait
+
+新しいプロセスが以前のプロセスと入れ替わるまでに動作し続けている必要がある時間を秒単位で指定します。`server`コマンドでのみ使用できます。デフォルトは1秒です。`0`を指定した場合もデフォルトになり、負の値はエラーになります。
+
+再起動（デプロイ、ロールバック、`SIGUSR1`）では、dewyは以前のプロセスと並べて新しいプロセスを起動し、この時間だけ待ちます。この時間内に新しいプロセスが終了した場合、再起動は失敗し、以前のプロセスがそのままリクエストを処理し続けます。デプロイ中の再起動が失敗した場合は、`--health-path`で説明するロールバックの処理に進みます。`dewy server`が最初に起動するプロセスにも、この時間だけ動作し続けることが求められます。
+
+起動後に設定の読み込みやデータベースへの接続を行うアプリケーションなど、初期化の数秒後に失敗する可能性があるアプリケーションでは値を大きくしてください。
+
+```bash
+dewy server --registry ghr://owner/repo --port 8000 --startup-wait 5 -- /opt/app/current/app
+```
+
+### --health-before-switch
+
+`--health-path`へのリクエストを、切り替え後に`--port`経由で送るのではなく、新しいプロセスが以前のプロセスと入れ替わる前に送ります。`server`コマンドでのみ使用でき、`--health-path`を必要とします。
+
+このオプションを指定すると、新しいプロセスはそれぞれ、他のプロセスと共有しないTCPソケットを1つ追加で受け取ります。このソケットはループバックインターフェース（`127.0.0.1`、IPv4が使えない場合は`::1`）の空きポートで待ち受けます。`DEWY_PORT`のソケットに続くファイルディスクリプタとして渡され、環境変数`DEWY_HEALTH_PORT`に`<address>=<fd>`形式の1つのエントリ（例: `127.0.0.1:41234=5`）として示されます。`--port`がない場合、ディスクリプタは3です。
+
+dewyは`--startup-wait`の時間が経過した後、成功するか`--health-timeout`を使い切るまで、このソケットの`--health-path`にリクエストを送ります。新しいプロセスが以前のプロセスと入れ替わるのは、その後です。
+
+- 成功した場合は、通常の再起動と同様に以前のプロセスにSIGTERMを送信します。切り替え後のリクエストは送りません。
+- 失敗した場合（デッドロックなどで応答がない、2xxと3xx以外のステータスが返る、プロセスが終了する）、dewyは新しいプロセスを強制終了します。以前のプロセスはリクエストの処理を一度も止めません。デプロイ中であれば、そのバージョンをblockedとして記録し、`current`シンボリックリンクを直前のリリースに戻します。以前のプロセスは動作し続けているため、再起動は行いません。通知には、直前のリリースのプロセスがリクエストの処理を止めなかったことが記載されます。`SIGUSR1`による再起動が失敗した場合は、以前のプロセスが動作し続け、それ以外は何も変わりません。
+
+`dewy server`が最初に起動するプロセスにも、同じ方法でヘルスソケットへのリクエストを送ります。失敗した場合は起動に失敗します。
+
+アプリケーションは`DEWY_HEALTH_PORT`のソケットでヘルスチェックのエンドポイントを提供する必要があります。dewyは、このソケットに対応していないアプリケーションと応答しなくなったアプリケーションを区別できないため、このオプションを指定すると、対応していないアプリケーションのデプロイはすべて失敗します。そのため、このオプションはデフォルトでは有効になっていません。サンプルコードは[マルチポート](/ja/multi-port#health-socket)を参照してください。
+
+リクエストは`--port`を経由しないため、このオプションを指定した場合、`--health-path`にTCPの`--port`は必要ありません。UDPポートだけで待ち受けるアプリケーションや、`--port`のないジョブワーカーも、ヘルスソケットに対応していればヘルスチェックできます。
+
+```bash
+# 切り替え前にリクエストを送るHTTPサーバー
+dewy server --registry ghr://owner/repo --port 8000 \
+  --health-path /health --health-before-switch -- /opt/app/current/app
+
+# --portのないジョブワーカーをヘルスソケットでチェックする
+dewy server --registry ghr://owner/repo \
+  --health-path /health --health-before-switch -- /opt/worker/current/worker
 ```
 
 ### --verify-checksum
@@ -258,7 +319,9 @@ dewy container --registry img://ghcr.io/owner/app \
 
 containerコマンドでは、新しいレプリカごとにこのパスへリクエストを送り、成功レスポンスが返ってからトラフィックを切り替えます。
 
-serverコマンドでは、管理対象プロセスの起動または再起動の後に、指定された`--port`のうち最小の番号のポートで、このパスへリクエストを送ります。失敗した場合は直前のリリースへロールバックします。このオプションは`--port`を必要とします。ポートを持たないサーバー（ジョブワーカーなど）にはHTTPのリクエストを送れません。assetsコマンドではこのオプションを受け付けません。
+serverコマンドでは、管理対象プロセスの起動または再起動の後に、指定された`--port`のうち最小の番号のTCPポートで、このパスへリクエストを送ります。再起動の場合は、新しいプロセスからの応答を得るために、以前のプロセスが終了してからリクエストを送ります。失敗した場合は直前のリリースへロールバックします。このオプションはTCPの`--port`を1つ以上必要とします。UDPポートにはリクエストを送りません。ポートを持たないサーバー（ジョブワーカーなど）にはHTTPのリクエストを送れません。assetsコマンドではこのオプションを受け付けません。
+
+このリクエストは切り替え後に送られるため、起動はしたものの応答しない新しいプロセス（デッドロックしたプロセスなど）は、リクエストが失敗してロールバックが直前のリリースを再起動するまでトラフィックを受け取ります。その間に送られたリクエストには応答がありません。[`--health-before-switch`](/ja/reference#--health-before-switch)を指定すると、新しいプロセスごとに専用のソケットで切り替え前にリクエストを送るため、新しいプロセスが失敗しても以前のプロセスがリクエストを処理し続けます。このオプションを指定した場合、`--health-path`にTCPの`--port`は必要ありません。
 
 ステータス2xxまたは3xxのレスポンスを成功として扱います。リダイレクトは追跡しないため、3xxはそのステータス自体で判定されます。
 
@@ -292,10 +355,15 @@ dewy server --registry ghr://owner/repo --port 8000 --health-path /health --no-r
 
 ### --drain-time
 
-トラフィック切り替え後のドレイン時間を秒単位で指定します。古いコンテナはプロキシから外された時点で SIGTERM を受け取り、実行中のリクエストを完了するための猶予として最大この時間だけ待ってから強制終了されます。デフォルトは30秒です。
+トラフィック切り替え後のドレイン時間を秒単位で指定します。`server`コマンドと`container`コマンドで使用でき、`assets`コマンドでは受け付けません。デフォルトは30秒です。
+
+`container`コマンドでは、古いコンテナはプロキシから外された時点で SIGTERM を受け取り、実行中のリクエストを完了するための猶予として最大この時間だけ待ってから強制終了されます。
+
+`server`コマンドでは、新しいプロセスと入れ替わった時点で以前のプロセスにSIGTERMを送信し、この時間を過ぎても動作している場合はSIGKILLで強制終了します。dewyの終了時にも同じ制限が適用されます。dewyはすべてのプロセスにSIGTERMを送信し、この時間を過ぎても動作しているプロセスを強制終了します。
 
 ```bash
 dewy container --registry img://ghcr.io/owner/app --drain-time 60
+dewy server --registry ghr://owner/repo --port 8000 --drain-time 60 -- /opt/app/current/app
 ```
 
 ### --runtime
@@ -453,6 +521,43 @@ SMTPサーバーを通じてメール通知を送信します。認証情報と�
 ```bash
 smtp://user:password@host:port/to@example.com
 ```
+
+## 環境変数 {% #environment-variables %}
+
+dewyは、1つ目のグループの環境変数を認証と接続先の指定に使います。2つ目のグループの環境変数は、dewyが起動するアプリケーションに設定します。詳細はそれぞれのリンク先のページに記載しています。
+
+### dewyが読む環境変数 {% #variables-dewy-reads %}
+
+| 環境変数 | 対象 | 説明 |
+|----------|------|------|
+| `GH_TOKEN` | `ghr://` | GitHubのPersonal Access Token。`GITHUB_TOKEN`より優先されるため、GitHub Actionsが設定するトークンで置き換わりません。[レジストリ](/ja/registry)を参照 |
+| `GITHUB_TOKEN` | `ghr://`、`img://ghcr.io/...` | GitHubのPersonal Access Token。`GH_TOKEN`がない場合に使います。GitHub Container Registryではパスワードとして使います |
+| `GITHUB_APP_ID` | `ghr://` | GitHub AppのID。設定するとトークンではなくGitHub Appで認証します |
+| `GITHUB_APP_INSTALLATION_ID` | `ghr://` | GitHub AppのインストールID。`GITHUB_APP_ID`と合わせて必須です |
+| `GITHUB_APP_PRIVATE_KEY` | `ghr://` | PEM形式のGitHub Appの秘密鍵。`GITHUB_APP_PRIVATE_KEY_PATH`より優先されます |
+| `GITHUB_APP_PRIVATE_KEY_PATH` | `ghr://` | GitHub Appの秘密鍵ファイルのパス |
+| `GITHUB_API_URL` | `ghr://` | GitHub Enterprise ServerのAPIエンドポイント（例: `https://github.example.com/api/v3/`） |
+| `GITHUB_ENDPOINT` | `ghr://` | `GITHUB_API_URL`と同じです。`GITHUB_API_URL`がない場合に使います |
+| `GITHUB_ARTIFACT` | `ghr://` | アーティファクト名。レジストリURLに`artifact`パラメータがない場合に使います。互換性のために残しているもので、URLパラメータの使用を推奨します |
+| `AWS_ENDPOINT_URL` | `s3://`のレジストリ、アーティファクト、キャッシュ | S3互換サービスのエンドポイント。URLに`endpoint`パラメータがない場合に使います。指定するとパス形式のアドレスでアクセスします |
+| `DOCKER_USERNAME`、`DOCKER_PASSWORD` | `img://`、containerコマンド | 任意のOCIレジストリのユーザー名とパスワード。`DOCKER_USERNAME`は以下のレジストリ別の環境変数より優先されます |
+| `AWS_ECR_PASSWORD` | `img://`、containerコマンド | Amazon ECRのトークン。`aws ecr get-login-password`の出力です |
+| `GCR_TOKEN` | `img://`、containerコマンド | Google Container RegistryとArtifact Registryのサービスアカウントキー（JSON） |
+| `SLACK_TOKEN` | `slack://` | SlackのBot Token。Slack通知に必須です。[通知](/ja/notifier)を参照 |
+| `MAIL_USERNAME`、`MAIL_PASSWORD`、`MAIL_FROM` | `smtp://` | SMTPのユーザー名、パスワード、送信元アドレス。通知URLで指定していない値に使います |
+| `DEWY_CACHEDIR` | `file://`キャッシュ | ローカルファイルキャッシュのディレクトリ。デフォルトは作業ディレクトリ配下の`.dewy/cache`です。[キャッシュ](/ja/cache)を参照 |
+
+S3とGCSは、`AWS_ACCESS_KEY_ID`、`AWS_SECRET_ACCESS_KEY`、`AWS_PROFILE`、`GOOGLE_APPLICATION_CREDENTIALS`など、各SDKの標準の認証情報も読みます。これらはdewy自身では解釈しません。
+
+### dewyがアプリケーションに設定する環境変数 {% #variables-dewy-sets %}
+
+`server`コマンドは、dewy自身の環境変数に加えて、以下の環境変数をアプリケーションのプロセスに設定します。Goのアプリケーションは`github.com/linyows/dewy/sock`モジュールでこれらを読めます。[マルチポート](/ja/multi-port#inherited-sockets)を参照してください。
+
+| 環境変数 | 説明 |
+|----------|------|
+| `DEWY_PORT` | アプリケーションに渡すソケット。`--port`ごとに`<address>=<fd>`のエントリが`;`区切りで並びます（例: `8080=3;53/udp=4`）。`--port`を指定した場合だけ設定します。[マルチポート](/ja/multi-port#inherited-sockets)を参照 |
+| `SERVER_STARTER_PORT` | `DEWY_PORT`と同じ値。server-starter向けに書かれたアプリケーションのためのものです |
+| `DEWY_HEALTH_PORT` | このプロセスのヘルスチェック用ソケット。`<address>=<fd>`の形式です（例: `127.0.0.1:41234=5`）。`--health-before-switch`を指定した場合だけ設定します。[マルチポート](/ja/multi-port#health-socket)を参照 |
 
 ## 終了コード
 

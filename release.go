@@ -8,11 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"syscall"
 	"time"
 
 	"github.com/linyows/dewy/cache"
-	starter "github.com/linyows/server-starter"
 )
 
 // deploy extracts the cached artifact into a new release directory and
@@ -103,54 +101,6 @@ func (d *Dewy) preserve(p string) (string, error) {
 	}
 
 	return dst, nil
-}
-
-// restartServer signals the running dewy process to restart its child
-// (server-starter handles the SIGHUP-driven graceful swap).
-func (d *Dewy) restartServer() error {
-	d.Lock()
-	defer d.Unlock()
-
-	pid := os.Getpid()
-	p, _ := os.FindProcess(pid)
-	err := p.Signal(syscall.SIGHUP)
-	if err != nil {
-		return err
-	}
-	d.logger.Info("Send SIGHUP for server restart", slog.String("version", d.cVer), slog.Int("pid", pid))
-
-	return nil
-}
-
-// startServer launches the managed application via server-starter and marks
-// d.isServerRunning. Errors during NewStarter are returned synchronously;
-// errors from the actual Run() goroutine flip isServerRunning back to false.
-func (d *Dewy) startServer() error {
-	d.Lock()
-	defer d.Unlock()
-
-	d.logger.Info("Start server", slog.String("version", d.cVer))
-
-	// Try to create starter first (synchronous validation)
-	s, err := starter.NewStarter(d.config.Starter)
-	if err != nil {
-		d.logger.Error("Starter failure", slog.String("error", err.Error()))
-		return err
-	}
-
-	// Start server in background
-	go func() {
-		err := s.Run()
-		if err != nil {
-			d.logger.Error("Server run failure", slog.String("error", err.Error()))
-			d.Lock()
-			d.isServerRunning = false
-			d.Unlock()
-		}
-	}()
-
-	d.isServerRunning = true
-	return nil
 }
 
 // keepReleases prunes old release directories under d.root, retaining the

@@ -59,3 +59,17 @@ func TestServerRestartsAndDeploymentCommand(t *testing.T) {
 		t.Errorf("deployments.total = %+v, want a single server-command series", dps)
 	}
 }
+
+func TestServerCrashes(t *testing.T) {
+	p, reader := newTestProvider(t, fixedClock())
+	m := p.Metrics()
+	ctx := context.Background()
+
+	m.ServerCrashes.Add(ctx, 1)
+	m.ServerCrashes.Add(ctx, 1)
+
+	dps := collectSum(t, reader, "dewy.server.crashes.total")
+	if len(dps) != 1 || dps[0].Value != 2 {
+		t.Errorf("server.crashes.total = %+v, want a single series with value 2", dps)
+	}
+}

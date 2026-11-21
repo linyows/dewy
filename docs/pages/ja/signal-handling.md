@@ -12,15 +12,15 @@ dewyは以下のUnixシグナルに対応しており、それぞれ異なる動
 
 ### SIGHUP
 
-SIGHUPシグナルは受信されますが、dewy自体では特別な処理は行わずに無視されます。これは、SIGHUPが子プロセス（管理対象のアプリケーション）に送信されることを想定しているためです。アプリケーション側でSIGHUPを受け取り、グレースフルリスタートや設定再読み込みなどの処理を実行することが期待されています。
+SIGHUPシグナルは受信されますが、dewyは何もせずに無視します。dewyはSIGHUPをアプリケーションに転送せず、アプリケーションの再起動にもSIGHUPを使いません。アプリケーションを再起動する場合はSIGUSR1を送信してください。
 
 ### SIGUSR1
 
-SIGUSR1シグナルを受信すると、現在実行中のサーバーアプリケーションをグレースフルに再起動します。このシグナルは、新しいバージョンのアプリケーションがデプロイされた際に手動でサーバーを再起動したい場合に使用できます。
+SIGUSR1シグナルを受信すると、`server`コマンドで管理しているアプリケーションを、待ち受けソケットを閉じずに再起動します。このシグナルは、起動時に読み込むファイルを変更した場合など、アプリケーションを手動で再起動したい場合に使用できます。`assets`モードの場合や、アプリケーションが起動していない場合は、警告（`Restart skipped`）をログに出力するだけで何もしません。
 
 ### SIGINT
 
-SIGINTシグナル（通常はCtrl+Cで送信）を受信すると、dewyプロセスを正常に終了します。この際、スケジューラーの停止や通知システムへの終了メッセージ送信などのクリーンアップ処理が実行されます。
+SIGINTシグナル（通常はCtrl+Cで送信）を受信すると、dewyプロセスを正常に終了します。この際、スケジューラーの停止、アプリケーションの停止、通知システムへの終了メッセージ送信などのクリーンアップ処理が実行されます。
 
 ### SIGTERM
 
@@ -32,7 +32,7 @@ SIGQUITシグナルも強制終了シグナルとして扱われ、SIGINTやSIGT
 
 ## シグナルハンドリングの実装詳細
 
-dewyのシグナルハンドリングは`waitSigs()`関数（dewy.go:125-153）で実装されています。この関数は、指定されたシグナルを監視し続けるゴルーチンで実行されます。
+dewyのシグナルハンドリングはdewy.goの`waitSigs()`関数で実装されています。この関数は、指定されたシグナルを監視し続けるゴルーチンで実行されます。
 
 ```go
 func (d *Dewy) waitSigs(ctx context.Context) {
@@ -57,9 +57,18 @@ func (d *Dewy) waitSigs(ctx context.Context) {
 
 ## サーバー再起動メカニズム
 
-SIGUSR1シグナルによるサーバー再起動は、`restartServer()`関数で処理されます。この機能により、ダウンタイムなしでアプリケーションを新しいバージョンに切り替えることができます。
+SIGUSR1シグナルによるサーバー再起動は、`restartServer()`関数で処理されます。新しいバージョンのデプロイとロールバックも同じ再起動処理を使います。
 
-再起動処理では、現在のプロセスに対してSIGHUPシグナルを送信します。これにより、server-starterライブラリを使用して管理されているサーバープロセスがグレースフルリスタートを実行します。
+dewyはアプリケーションをworkerプロセスとして実行します。dewyは`--port`の待ち受けソケットをサーバー起動時に一度だけ開き、dewy自身が終了するまで開いたままにします。各workerはこのソケットを継承するため、workerを入れ替える間もポートは開いたままです。入れ替え中に届いた接続は拒否されず、カーネルのacceptキューで待機します。
+
+再起動は次の順序で進みます。
+
+1. dewyは現在のworkerと並べて新しいworkerを起動します。両者は同じソケットで待ち受けます。
+2. dewyは起動待ち時間（`--startup-wait`、デフォルト1秒）だけ待ちます。`--health-before-switch`を指定した場合は、続けて新しいworker専用のヘルスソケットで`--health-path`にリクエストを送ります。
+3. 新しいworkerが現在のworkerになり、dewyは以前のworkerにSIGTERMを送信します。
+4. 以前のworkerは処理中のリクエストを完了して終了します。`--drain-time`（デフォルト30秒）を過ぎても動作している場合、dewyはSIGKILLで強制終了します。
+
+新しいworkerが起動待ち時間内に終了した場合や、`--health-before-switch`の指定時にヘルスチェックに失敗した場合、再起動は失敗します。dewyは新しいworkerを停止し、以前のworkerはそのままリクエストを処理し続け、dewyは失敗をログに記録します。デプロイ中の再起動が失敗した場合はデプロイの失敗として扱われ、ロールバックの処理に進みます。以前のworkerが動作し続けているため、ロールバックはサーバーを再起動せずに`current`シンボリックリンクを戻します。[デプロイメントワークフロー](/ja/deployment-workflow#verification-before-the-switch)を参照してください。
 
 ```bash
 # 手動でサーバーを再起動する例
@@ -68,11 +77,18 @@ kill -USR1 <dewy_process_id>
 
 再起動が成功すると、通知システム経由で再起動完了のメッセージが送信されます。
 
+### workerの予期しない終了
+
+現在のworkerが停止を指示されていないのに終了した場合、dewyはWARNレベルで`Worker exited unexpectedly`をログに出力し、待機時間をおいて新しいworkerを起動します。待機時間は1秒から始まり、連続して終了するたびに2倍になり、最大30秒です。30秒以上動作したworkerが終了した場合、待機時間は1秒に戻ります。他に動作しているworkerがないため、新しいworkerは起動待ち時間やヘルスチェックを経ずにすぐ現在のworkerになります。
+
 ## 終了処理
 
 終了シグナル（SIGINT、SIGTERM、SIGQUIT）を受信すると、dewyは以下の順序でクリーンアップ処理を実行します。
 
-まず、定期実行されているジョブスケジューラーを停止します。これにより、新しいデプロイメント処理の開始を防ぎます。次に、通知システムを通じて終了メッセージを送信し、システム管理者に対してdewyが停止することを通知します。最後に、メインの処理ループを終了してプロセスを完全に停止します。
+1. 定期実行されているジョブスケジューラーを停止します。これにより、新しいデプロイメント処理の開始を防ぎます。
+2. workerにSIGTERMを送信し、終了を最大`--drain-time`（デフォルト30秒）待ちます。この時間を過ぎても動作しているworkerはSIGKILLで強制終了します。その後、待ち受けソケットを閉じます。
+3. 通知システムを通じて終了メッセージを送信し、システム管理者に対してdewyが停止することを通知します。
+4. メインの処理ループを終了してプロセスを完全に停止します。
 
 ## アプリケーション実装例
 
@@ -87,40 +103,20 @@ package main
 
 import (
     "context"
-    "fmt"
     "log"
-    "net"
     "net/http"
     "os"
     "os/signal"
-    "strconv"
-    "strings"
     "syscall"
     "time"
+
+    "github.com/linyows/dewy/sock"
 )
 
-// listenはserver-starterから渡された待ち受けソケットを返す。
-// dewyの外で起動した場合は:8080を開く。
-func listen() (net.Listener, error) {
-    spec := os.Getenv("SERVER_STARTER_PORT") // e.g. "8080=3"
-    if spec == "" {
-        return net.Listen("tcp", ":8080")
-    }
-    entry := strings.Split(spec, ";")[0]
-    i := strings.LastIndex(entry, "=")
-    if i < 0 {
-        return nil, fmt.Errorf("invalid SERVER_STARTER_PORT: %q", spec)
-    }
-        // "="の後の数値はポート番号ではなくファイルディスクリプタ
-    fd, err := strconv.Atoi(entry[i+1:])
-    if err != nil {
-        return nil, fmt.Errorf("invalid SERVER_STARTER_PORT: %q", spec)
-    }
-    return net.FileListener(os.NewFile(uintptr(fd), entry[:i]))
-}
-
 func main() {
-    listener, err := listen()
+    // dewyの下ではdewyがポート8080に開いたソケットを返し、
+    // それ以外では:8080を開く。
+    listener, err := sock.Listen("tcp", ":8080")
     if err != nil {
         log.Fatal(err)
     }
@@ -131,7 +127,7 @@ func main() {
 
     // シグナルチャンネルを作成
     sigCh := make(chan os.Signal, 1)
-    signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
+    signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
 
     go func() {
         sig := <-sigCh
@@ -153,9 +149,9 @@ func main() {
 }
 ```
 
-このサンプルでは、SIGHUPシグナルを受信した際にGraceful shutdownを実行し、既存のリクエストを完了させてからサーバーを停止します。
+このサンプルでは、SIGTERMシグナルを受信した際にGraceful shutdownを実行し、既存のリクエストを完了させてからサーバーを停止します。dewyは再起動後に以前のworkerへ、dewyの終了時にはすべてのworkerへSIGTERMを送信します。
 
-dewyの下では、`--port`で指定したポートはserver-starterがすでに開いており、その待ち受けソケットがアプリケーションに渡されます。`listen`はポートを開き直さずに、そのソケットを`net.Listener`として使います。server-starterが開いているポートを開こうとすると、Linuxでは「address already in use」で失敗します。また、渡されたソケットを使うことで、グレースフルリスタートの間もポートが開いたままになります。`--port`を複数指定した場合、`SERVER_STARTER_PORT`にはポートごとのエントリが`;`区切りで並びます。
+dewyの下では、`--port`で指定したポートはdewyがすでに開いており、その待ち受けソケットがファイルディスクリプタ3としてアプリケーションに渡されます。`github.com/linyows/dewy/sock`モジュールの`sock.Listen`は、ポートを開き直さずに、そのソケットを`net.Listener`として返します。dewyが開いているポートを開こうとすると、Linuxでは「address already in use」で失敗します。また、渡されたソケットを使うことで、再起動の間もポートが開いたままになります。`--port`を複数指定した場合、`DEWY_PORT`にはポートごとのエントリが`;`区切りで並びます。詳しくは[マルチポート](/ja/multi-port#inherited-sockets)を参照してください。
 
 ### データベース接続を持つアプリケーション
 
@@ -195,7 +191,7 @@ func main() {
 
     // シグナルハンドリング
     sigCh := make(chan os.Signal, 1)
-    signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
+    signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
 
     go func() {
         sig := <-sigCh
@@ -259,7 +255,7 @@ func main() {
 
     // シグナルハンドリング
     sigCh := make(chan os.Signal, 1)
-    signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
+    signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
 
     go func() {
         sig := <-sigCh
@@ -290,6 +286,7 @@ import (
     "syscall"
 
     "github.com/gorilla/websocket"
+    "github.com/linyows/dewy/sock"
 )
 
 type WebSocketServer struct {
@@ -348,7 +345,7 @@ func main() {
 
     // シグナルハンドリング
     sigCh := make(chan os.Signal, 1)
-    signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
+    signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
 
     go func() {
         sig := <-sigCh
@@ -357,8 +354,7 @@ func main() {
         os.Exit(0)
     }()
 
-    // listenは上のHTTPサーバーのサンプルの関数
-    listener, err := listen()
+    listener, err := sock.Listen("tcp", ":8080")
     if err != nil {
         log.Fatal(err)
     }
@@ -436,9 +432,11 @@ tail -f /var/log/dewy.log
 
 ### 再起動が失敗する場合
 
-SIGUSR1による再起動が失敗する場合は、アプリケーション側のシグナルハンドリング実装に問題がある可能性があります。アプリケーションのログを確認し、SIGHUPシグナルが適切に処理されているかを検証してください。
+再起動は、新しいworkerが起動待ち時間（`--startup-wait`、デフォルト1秒）内に終了した場合と、`--health-before-switch`の指定時にヘルスチェックに失敗した場合に失敗します。dewyはエラーとともに`Restart failure`をログに出力し、以前のworkerはそのままリクエストを処理し続けます。設定の誤りや`--`以降のコマンドパスの誤りなど、新しいworkerが終了した原因をアプリケーションのログで確認してください。
 
-また、server-starterライブラリの設定が正しいかどうかも確認が必要です。ポートバインドの問題や、プロセスの起動パスの設定ミスが原因となることがあります。
+再起動は成功するのに古いworkerが残る場合は、アプリケーションがSIGTERMで終了するかを確認してください。dewyは再起動のたびに以前のworkerへSIGTERMを送信します。
+
+dewyはソケットを起動時に一度だけ開いて保持するため、ポートを開けない問題は再起動時ではなくdewyの起動時に報告されます。
 
 ### ログの確認方法
 

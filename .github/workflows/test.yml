@@ -16,5 +16,8 @@ jobs:
       run: go test -v ./... -coverprofile=coverage.out -covermode=count
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Go test (sock module)
+      run: go test -v -race ./...
+      working-directory: sock
     - name: Run octocov
       uses: k1LoW/octocov-action@b3b6ee60482a667950f87553abf1df63217235d9 # v1.5.1
