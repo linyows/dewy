@@ -370,20 +370,6 @@ WantedBy=multi-user.target
 
 This configuration enables application restart via the `systemctl reload dewy` command.
 
-### Monitoring and Log Output
-
-Log output during signal reception provides important information for system operation monitoring.
-
-```bash
-# Monitor dewy logs
-journalctl -u dewy -f
-
-# Display only signal reception logs
-journalctl -u dewy | grep "received signal"
-```
-
-Logs record received signal types, process IDs, and execution results, which can be utilized for troubleshooting and operational monitoring.
-
 ## Troubleshooting
 
 This section covers common signal handling issues and their solutions.
@@ -412,14 +398,3 @@ A restart fails when the new worker exits within the startup wait (`--startup-wa
 If the restart succeeds but old workers remain, check that the application exits on SIGTERM. Dewy sends SIGTERM to the previous worker after each restart.
 
 A port that cannot be bound is reported when dewy starts, not at restart, because dewy binds the sockets once and keeps them open.
-
-### Log Verification Methods
-
-For detailed problem identification, debug-level output is effective.
-
-```bash
-# Start dewy with debug level
-dewy server --log-level debug --registry ghr://myorg/myapp --port 8080 -- /opt/myapp/current/myapp
-```
-
-Debug-level logs record detailed signal reception information and inter-process communication status, making it easier to identify root causes of problems.
