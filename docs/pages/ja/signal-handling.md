@@ -30,31 +30,6 @@ SIGTERMシグナルは、プロセス管理システム（systemdなど）から
 
 SIGQUITシグナルも強制終了シグナルとして扱われ、SIGINTやSIGTERMと同様の終了処理を実行します。
 
-## シグナルハンドリングの実装詳細
-
-dewyのシグナルハンドリングはdewy.goの`waitSigs()`関数で実装されています。この関数は、指定されたシグナルを監視し続けるゴルーチンで実行されます。
-
-```go
-func (d *Dewy) waitSigs(ctx context.Context) {
-    sigCh := make(chan os.Signal, 1)
-    signal.Notify(sigCh, syscall.SIGHUP, syscall.SIGUSR1, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
-
-    for sig := range sigCh {
-        d.logger.Debug("PID received signal", slog.Int("pid", os.Getpid()), slog.String("signal", sig.String()))
-        switch sig {
-        case syscall.SIGHUP:
-            continue
-        case syscall.SIGUSR1:
-            // サーバー再起動処理
-        case syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:
-            // 終了処理
-        }
-    }
-}
-```
-
-シグナル受信時には、プロセスIDとシグナル名がログに記録され、受信したシグナルに応じて適切な処理が実行されます。
-
 ## サーバー再起動メカニズム
 
 SIGUSR1シグナルによるサーバー再起動は、`restartServer()`関数で処理されます。新しいバージョンのデプロイとロールバックも同じ再起動処理を使います。

@@ -30,31 +30,6 @@ SIGTERM signals are treated as termination requests from process management syst
 
 SIGQUIT signals are also treated as termination signals, executing the same shutdown procedures as SIGINT and SIGTERM.
 
-## Signal Handling Implementation
-
-Dewy's signal handling is implemented in the `waitSigs()` function in dewy.go. This function runs in a goroutine that continuously monitors specified signals.
-
-```go
-func (d *Dewy) waitSigs(ctx context.Context) {
-    sigCh := make(chan os.Signal, 1)
-    signal.Notify(sigCh, syscall.SIGHUP, syscall.SIGUSR1, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
-
-    for sig := range sigCh {
-        d.logger.Debug("PID received signal", slog.Int("pid", os.Getpid()), slog.String("signal", sig.String()))
-        switch sig {
-        case syscall.SIGHUP:
-            continue
-        case syscall.SIGUSR1:
-            // Server restart processing
-        case syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:
-            // Termination processing
-        }
-    }
-}
-```
-
-When signals are received, the process ID and signal name are logged, and appropriate actions are executed based on the signal type.
-
 ## Server Restart Mechanism
 
 Server restarts triggered by SIGUSR1 signals are handled by the `restartServer()` function. A deployment of a new version and a rollback use the same restart.
