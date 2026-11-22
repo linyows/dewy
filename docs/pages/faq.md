@@ -69,20 +69,6 @@ The application is most likely serving on a socket other than the ones dewy pass
 
 With `--health-before-switch`, every deployment also fails when the application does not serve its health endpoint on the `DEWY_HEALTH_PORT` socket; see [Health Checks](/application#health-checks).
 
-## Why does the previous version keep running after a deployment?
-
-The process that dewy started has probably exited while the application kept running. This happens when the command is a shell script that starts the application as a child process: dewy sends SIGTERM to the shell only, the shell exits, and the application continues to run with the inherited sockets, serving the previous version next to the new one. Start the application with `exec` in the script, so that the application replaces the shell and receives the signals itself:
-
-```sh
-#!/bin/sh
-export APP_ENV=production
-exec /opt/myapp/current/myapp
-```
-
-## Why does each deployment take 30 seconds to stop the previous process?
-
-The previous process does not exit on SIGTERM. Dewy waits for `--drain-time` (30 seconds by default) and then kills it with SIGKILL, which also cuts off the requests in progress. Handle SIGTERM by finishing the requests in progress and exiting; see [Signal Handling](/signal-handling).
-
 ## Next Steps
 
 For more information and detailed documentation, refer to the following resources:
