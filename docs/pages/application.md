@@ -4,7 +4,7 @@ title: Application Integration for the Server Command
 
 # {% $markdoc.frontmatter.title %} {% #overview %}
 
-This page describes what an application needs to do to run under the `server` command. The problems that occur without these changes are listed in the [FAQ](/faq#why-does-my-application-not-start-under-the-server-command). Dewy opens the ports given by `--port` before it starts the application, keeps them open while it replaces one process with the next, and stops the previous process with SIGTERM. The application therefore serves on the sockets that dewy passes to it and exits when it receives SIGTERM.
+This page describes what an application needs to do to run under the `server` command. Dewy opens the ports given by `--port` before it starts the application, keeps them open while it replaces one process with the next, and stops the previous process with SIGTERM. The application therefore serves on the sockets that dewy passes to it and exits when it receives SIGTERM.
 
 The `assets` command does not start a process, and the `container` command runs the application in a container that listens on its own port, so neither needs the changes on this page.
 
