@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="100%" height="100%" viewBox="0 0 1080 900" version="1.1" xmlns="http://www.w3.org/2000/svg" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:1.5;">
+    <style>
+        .t { font-family:'AvenirNext-Medium', 'Avenir Next', sans-serif; font-weight:500; fill:rgb(35,31,32); }
+        .b { font-family:'AvenirNext-Bold', 'Avenir Next', sans-serif; font-weight:700; fill:rgb(35,31,32); }
+        .d { font-family:'AvenirNext-DemiBold', 'Avenir Next', sans-serif; font-weight:600; fill:rgb(35,31,32); }
+        .dot { font-family:'HiraginoSans-W5', 'Hiragino Sans', sans-serif; font-weight:500; fill:rgb(35,31,32); }
+        .list { font-size:29.167px; letter-spacing:-0.7px; }
+        .box { font-size:37.5px; }
+        .step { font-size:20.833px; letter-spacing:-0.3px; }
+        .note { font-size:16px; }
+        .ln { fill:none; stroke:rgb(35,31,32); stroke-width:4.17px; }
+        .head { fill:none; stroke:rgb(35,31,32); stroke-width:4.17px; stroke-linejoin:miter; stroke-miterlimit:10; }
+    </style>
+    <rect x="0" y="0" width="1080" height="900" style="fill:white;"/>
+
+    <!-- Registry / artifact stores -->
+    <g class="list">
+        <text class="dot" x="69.7" y="68.4">・</text>
+        <text class="t" x="98.2" y="68.4">GitHub Releases</text>
+        <text class="dot" x="69.7" y="110.1">・</text>
+        <text class="t" x="98.2" y="110.1">AWS S3</text>
+        <text class="dot" x="69.7" y="151.8">・</text>
+        <text class="t" x="98.2" y="151.8">Google Cloud Storage</text>
+        <text class="dot" x="69.7" y="193.4">・</text>
+        <text class="t" x="98.2" y="193.4">Container Registry<tspan class="note" dy="-12">*1</tspan></text>
+        <text class="dot" x="69.7" y="235.1">・</text>
+        <text class="t" x="98.2" y="235.1">gRPC Server</text>
+    </g>
+    <!-- Bracket: artifact stores (gRPC Server returns an artifact URL of another store) -->
+    <path d="M384,50L401.5,50L401.5,197L384,197" style="fill:none;stroke:rgb(35,31,32);stroke-width:2.5px;"/>
+
+    <!-- Dewy frame -->
+    <rect x="32.5" y="306.2" width="663.8" height="332.3" rx="32" ry="32" class="ln" style="stroke-width:4.3px;"/>
+    <rect x="300" y="615" width="128" height="46" style="fill:white;"/>
+    <text class="d list" x="364" y="649" text-anchor="middle">Dewy</text>
+
+    <!-- Components -->
+    <rect x="70.7" y="356.2" width="260.8" height="93.1" rx="23.3" ry="23.3" class="ln"/>
+    <text class="t box" x="201.1" y="412.9" text-anchor="middle">Registry</text>
+    <rect x="397.3" y="356.2" width="260.8" height="93.1" rx="23.3" ry="23.3" class="ln"/>
+    <text class="t box" x="527.7" y="412.9" text-anchor="middle">Artifact</text>
+    <rect x="70.7" y="490" width="260.8" height="93.1" rx="23.3" ry="23.3" class="ln"/>
+    <text class="t box" x="201.1" y="549.8" text-anchor="middle">Notifier</text>
+    <rect x="397.3" y="490" width="260.8" height="93.1" rx="23.3" ry="23.3" class="ln"/>
+    <text class="t box" x="527.7" y="549.8" text-anchor="middle">Cache</text>
+
+    <!-- 1. Polling -->
+    <path d="M140,356.2L140,258" class="ln"/>
+    <path d="M133.8,267.4L140,258L146.2,267.4" class="head"/>
+    <text class="step" x="146.2" y="346.9"><tspan class="b">1.</tspan><tspan class="t"> Polling</tspan></text>
+
+    <!-- 5. Reporting -->
+    <path d="M248,356.2L248,258" class="ln"/>
+    <path d="M241.8,267.4L248,258L254.2,267.4" class="head"/>
+    <text class="step" x="255.2" y="346.9"><tspan class="b">5.</tspan><tspan class="t"> Reporting<tspan dy="-9" style="font-size:14px;">*1</tspan></tspan></text>
+
+    <!-- 2. Download -->
+    <path d="M469,356.2L469,149C469,135.2 460,124.5 446,124.5L410,124.5" class="ln"/>
+    <path d="M419.4,118.3L410,124.5L419.4,130.7" class="head"/>
+    <text class="step" x="476.5" y="346.9"><tspan class="b">2.</tspan><tspan class="t"> Download</tspan></text>
+
+    <!-- Notify: sent at each step, not once at the end -->
+    <path d="M140,583.1L140,683" class="ln"/>
+    <path d="M133.8,673.6L140,683L146.2,673.6" class="head"/>
+    <text class="t step" x="146.2" y="604.6">Notify at each step</text>
+
+    <!-- 3. Store -->
+    <path d="M467,583.1L467,683" class="ln"/>
+    <path d="M460.8,673.6L467,683L473.2,673.6" class="head"/>
+    <text class="step" x="476.5" y="604.6"><tspan class="b">3.</tspan><tspan class="t"> Store<tspan dy="-9" style="font-size:14px;">*2</tspan></tspan></text>
+
+    <!-- Notification channels -->
+    <g class="list">
+        <text class="dot" x="69.7" y="734.2">・</text>
+        <text class="t" x="98.2" y="734.2">Slack</text>
+        <text class="dot" x="69.7" y="775.9">・</text>
+        <text class="t" x="98.2" y="775.9">Mail</text>
+    </g>
+
+    <!-- Cache stores -->
+    <g class="list">
+        <text class="dot" x="399.7" y="734.2">・</text>
+        <text class="t" x="428.2" y="734.2">File system</text>
+        <text class="dot" x="399.7" y="775.9">・</text>
+        <text class="t" x="428.2" y="775.9">AWS S3</text>
+        <text class="dot" x="399.7" y="817.6">・</text>
+        <text class="t" x="428.2" y="817.6">Google Cloud Storage</text>
+    </g>
+
+    <!-- Previous release (rollback target) -->
+    <circle cx="947.2" cy="335.7" r="101.8" style="fill:none;stroke:rgb(35,31,32);stroke-width:5px;stroke-dasharray:5,15;"/>
+    <text class="t" x="947.2" y="311.8" text-anchor="middle" style="font-size:25px;">App, Files</text>
+    <text class="t" x="947.2" y="345.2" text-anchor="middle" style="font-size:25px;">or Containers</text>
+    <text class="b" x="947.2" y="378.5" text-anchor="middle" style="font-size:29.167px;">v1.2.2</text>
+
+    <!-- New release -->
+    <circle cx="947.2" cy="602.3" r="101.8" style="fill:none;stroke:rgb(35,31,32);stroke-width:5px;"/>
+    <text class="t" x="947.2" y="578.4" text-anchor="middle" style="font-size:25px;">App, Files</text>
+    <text class="t" x="947.2" y="611.8" text-anchor="middle" style="font-size:25px;">or Containers</text>
+    <text class="b" x="947.2" y="645.1" text-anchor="middle" style="font-size:29.167px;">v1.2.3</text>
+
+    <!-- 4. Deployment and rollback -->
+    <path d="M697,471L839,391" class="ln" style="stroke-dasharray:4.17,8.33;"/>
+    <path d="M825.1,390.8L839,391L832,403" class="head"/>
+    <text class="t step" x="708" y="408">Rollback<tspan dy="-9" style="font-size:14px;">*3</tspan></text>
+    <path d="M697,471L839,552" class="ln"/>
+    <path d="M832.1,540L839,552L825.1,552.2" class="head"/>
+    <text class="step" x="739" y="477"><tspan class="b">4.</tspan><tspan class="t"> Deployment</tspan></text>
+
+    <!-- Notes -->
+    <g class="t note">
+        <text x="740" y="750">*1 Container Registry receives no report</text>
+        <text x="740" y="780">*2 App and Files only; container images</text>
+        <text x="764" y="801">are pulled by Docker or Podman</text>
+        <text x="740" y="831">*3 Restores the previous release when</text>
+        <text x="764" y="852">the new one fails its health check</text>
+    </g>
+</svg>
