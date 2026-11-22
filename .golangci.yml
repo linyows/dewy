@@ -1,4 +1,10 @@
 version: "2"
+run:
+  # Report paths relative to the directory golangci-lint runs in. The sock
+  # module is linted from its own directory with this config, and reviewdog
+  # adds that directory to each path, so paths relative to this file would
+  # name sock twice.
+  relative-path-mode: wd
 linters:
   enable:
     - errorlint

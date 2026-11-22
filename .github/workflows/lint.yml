@@ -21,6 +21,8 @@ jobs:
         uses: reviewdog/action-golangci-lint@c76cceaaab89abe74e649d2e34c6c9adc26662d2 # v2.10.0
         with:
           workdir: sock
+          # A name of its own, so this report does not replace the root one.
+          tool_name: golangci (sock)
   probe-fmt:
     name: Probe fmt
     runs-on: ubuntu-latest

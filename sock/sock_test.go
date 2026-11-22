@@ -32,7 +32,11 @@ func inheritTCP(t *testing.T) (port string, fd int, addr string) {
 	t.Cleanup(func() { _ = ln.Close() })
 	addr = ln.Addr().String()
 	_, port, _ = net.SplitHostPort(addr)
-	return port, dupFD(t, ln.(*net.TCPListener)), addr
+	tl, ok := ln.(*net.TCPListener)
+	if !ok {
+		t.Fatalf("listener is %T, not *net.TCPListener", ln)
+	}
+	return port, dupFD(t, tl), addr
 }
 
 func inheritUDP(t *testing.T) (port string, fd int, addr string) {
@@ -44,7 +48,11 @@ func inheritUDP(t *testing.T) (port string, fd int, addr string) {
 	t.Cleanup(func() { _ = pc.Close() })
 	addr = pc.LocalAddr().String()
 	_, port, _ = net.SplitHostPort(addr)
-	return port, dupFD(t, pc.(*net.UDPConn)), addr
+	uc, ok := pc.(*net.UDPConn)
+	if !ok {
+		t.Fatalf("packet conn is %T, not *net.UDPConn", pc)
+	}
+	return port, dupFD(t, uc), addr
 }
 
 type syscallConn interface {

@@ -182,12 +182,12 @@ func (d *Dewy) probeHealth(ctx context.Context, healthURL string, budget time.Du
 // treated as healthy; the caller's client is expected not to follow redirects,
 // so a 3xx is judged as itself.
 func probeOnce(ctx context.Context, client *http.Client, healthURL string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, healthURL, nil)
+	// The URL is built from localhost, a port dewy resolved from the runtime
+	// and the operator's own --health-path, so it is not attacker-controlled.
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, healthURL, nil) //nolint:gosec // G704
 	if err != nil {
 		return err
 	}
-	// The URL is built from localhost, a port dewy resolved from the runtime
-	// and the operator's own --health-path, so it is not attacker-controlled.
 	resp, err := client.Do(req) //nolint:gosec // G704
 	if err != nil {
 		return err
