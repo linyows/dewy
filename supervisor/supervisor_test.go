@@ -611,7 +611,7 @@ func (p *probe) check(ctx context.Context, addr net.Addr) error {
 		}
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("%w (last: %v)", ctx.Err(), err)
+			return fmt.Errorf("%w (last: %w)", ctx.Err(), err)
 		case <-time.After(50 * time.Millisecond):
 		}
 	}
