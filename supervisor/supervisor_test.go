@@ -61,6 +61,13 @@ func runHelper() int {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/exit", func(http.ResponseWriter, *http.Request) { os.Exit(1) })
+	mux.HandleFunc("/env/{name}", func(w http.ResponseWriter, r *http.Request) {
+		v, ok := os.LookupEnv(r.PathValue("name"))
+		if !ok {
+			v = "<unset>"
+		}
+		fmt.Fprint(w, v)
+	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		fmt.Fprintf(w, "%s %d", mode, os.Getpid())
 	})
@@ -77,7 +84,7 @@ func runHelper() int {
 				return 2
 			}
 			f := os.NewFile(uintptr(fd), entry[:i])
-			if strings.HasSuffix(entry[:i], udpSuffix) {
+			if !isUnixAddr(entry[:i]) && strings.HasSuffix(entry[:i], udpSuffix) {
 				pc, err := net.FilePacketConn(f)
 				if err != nil {
 					return 2
@@ -184,15 +191,31 @@ func (h *harness) start(cfg Config) *Supervisor {
 	return s
 }
 
-// get returns the body served at addr: an HTTP response for a TCP address,
-// or the reply datagram for a UDP address.
+// get returns the body served at addr: an HTTP response for a TCP address
+// or a Unix domain socket, or the reply datagram for a UDP address.
 func get(t *testing.T, addr net.Addr) string {
+	t.Helper()
+	return getPath(t, addr, "/")
+}
+
+// getPath is get for an HTTP path other than "/".
+func getPath(t *testing.T, addr net.Addr, path string) string {
 	t.Helper()
 	if _, ok := addr.(*net.UDPAddr); ok {
 		return query(t, addr)
 	}
 	c := http.Client{Timeout: 2 * time.Second}
-	res, err := c.Get("http://" + addr.String() + "/")
+	url := "http://" + addr.String() + path
+	if _, ok := addr.(*net.UnixAddr); ok {
+		c.Transport = &http.Transport{
+			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+				var d net.Dialer
+				return d.DialContext(ctx, "unix", addr.String())
+			},
+		}
+		url = "http://unix" + path
+	}
+	res, err := c.Get(url)
 	if err != nil {
 		t.Fatalf("GET %s: %v", addr, err)
 	}
@@ -236,6 +259,18 @@ func eventually(t *testing.T, timeout time.Duration, cond func() bool) bool {
 	return cond()
 }
 
+// shortTempDir returns a directory for Unix domain sockets. t.TempDir is
+// too long on macOS for the 104-byte limit on a socket path.
+func shortTempDir(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("/tmp", "dewy-sv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	return dir
+}
+
 func ipv6Available() bool {
 	ln, err := net.Listen("tcp6", "[::1]:0")
 	if err != nil {
@@ -272,6 +307,12 @@ func TestResolveAddr(t *testing.T) {
 		{"[::1]:53/udp", "udp6", "[::1]:53", false},
 		{"53/sctp", "", "", true},
 		{"localhost:53/udp", "", "", true},
+		{"/run/app.sock", "unix", "/run/app.sock", false},
+		{"/srv/udp", "unix", "/srv/udp", false},
+		{"/run/app;1.sock", "", "", true},
+		{"/run/a=b.sock", "", "", true},
+		{"/run/../app.sock", "", "", true},
+		{"/run/", "", "", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.addr, func(t *testing.T) {
@@ -291,7 +332,8 @@ func TestListenersEnv(t *testing.T) {
 		{addr: "8080"}, {addr: "127.0.0.1:8081"}, {addr: "[::1]:8082"}, {addr: "53/udp"},
 		{addr: "0.0.0.0:8083"}, {addr: "[::]:8084"}, {addr: "0.0.0.0:54/udp"},
 	}
-	want := "8080=3;127.0.0.1:8081=4;[::1]:8082=5;53/udp=6;8083=7;8084=8;54/udp=9"
+	lns = append(lns, &listener{addr: "/run/app.sock"}, &listener{addr: "/srv/udp"})
+	want := "8080=3;127.0.0.1:8081=4;[::1]:8082=5;53/udp=6;8083=7;8084=8;54/udp=9;/run/app.sock=10;/srv/udp=11"
 	if got := listenersEnv(lns); got != want {
 		t.Errorf("listenersEnv() = %q, want %q", got, want)
 	}

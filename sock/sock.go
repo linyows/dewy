@@ -1,8 +1,9 @@
 // Package sock gives an application the sockets that dewy opened for it.
 //
-// The dewy server command binds every --port before it starts the
-// application and passes the sockets as inherited file descriptors, listed in
-// the DEWY_PORT environment variable ("8080=3;53/udp=4"). Serving on these
+// The dewy server command binds every --port and --socket before it starts
+// the application and passes the sockets as inherited file descriptors,
+// listed in the DEWY_PORT environment variable
+// ("8080=3;53/udp=4;/run/app.sock=5"). Serving on these
 // sockets, instead of binding the ports again, is what keeps the ports open
 // while dewy replaces one process with the next.
 //
@@ -25,6 +26,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -43,6 +45,13 @@ const (
 	udpSuffix = "/udp"
 )
 
+// isUnixAddr reports whether a DEWY_PORT address names a Unix domain socket:
+// a path ("/run/app.sock"), or a name in the Linux abstract namespace
+// ("@app").
+func isUnixAddr(addr string) bool {
+	return strings.HasPrefix(addr, "/") || strings.HasPrefix(addr, "@")
+}
+
 // ErrTaken is returned when an inherited socket has already been returned
 // by an earlier call. A file descriptor can be turned into a socket once.
 var ErrTaken = errors.New("sock: inherited socket already taken")
@@ -50,16 +59,22 @@ var ErrTaken = errors.New("sock: inherited socket already taken")
 // Entry describes one socket listed in DEWY_PORT.
 type Entry struct {
 	// Addr is the address as dewy lists it, without the "/udp" suffix:
-	// "8080", "127.0.0.1:8080" or "[::1]:8080".
+	// "8080", "127.0.0.1:8080" or "[::1]:8080", or the path of a Unix
+	// domain socket ("/run/app.sock", or "@app" in the Linux abstract
+	// namespace).
 	Addr string
-	// Network is "tcp" or "udp".
+	// Network is "tcp", "udp" or "unix".
 	Network string
 	// FD is the inherited file descriptor.
 	FD uintptr
 }
 
-// Port returns the port number of the socket.
+// Port returns the port number of the socket. It returns "" for a Unix
+// domain socket.
 func (s Entry) Port() string {
+	if s.Network == "unix" {
+		return ""
+	}
 	if _, port, err := net.SplitHostPort(s.Addr); err == nil {
 		return port
 	}
@@ -101,15 +116,20 @@ func Entries() ([]Entry, error) {
 }
 
 // Listen returns the inherited TCP socket whose port matches address, or
-// calls net.Listen(network, address) when there is none.
+// the inherited Unix domain socket whose path matches address, or calls
+// net.Listen(network, address) when there is none.
 //
-// Only the port of address is compared. The interface a socket listens on is
-// chosen with dewy's --host, so ":8080" and "127.0.0.1:8080" both return the
-// socket dewy opened for port 8080. A port that dewy did not open, a port of
-// 0 and a network other than "tcp", "tcp4" or "tcp6" are bound with
-// net.Listen.
+// For TCP only the port of address is compared. The interface a socket
+// listens on is chosen with dewy's --host, so ":8080" and "127.0.0.1:8080"
+// both return the socket dewy opened for port 8080. A port that dewy did not
+// open, a port of 0 and a network other than "tcp", "tcp4", "tcp6" or "unix"
+// are bound with net.Listen. For "unix" the path must equal the one given
+// to --socket.
 func Listen(network, address string) (net.Listener, error) {
 	s, ok, err := find("tcp", network, address)
+	if network == "unix" {
+		s, ok, err = findUnix(address)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -133,11 +153,11 @@ func ListenPacket(network, address string) (net.PacketConn, error) {
 	return filePacketConn(s)
 }
 
-// Listeners returns every inherited TCP socket not yet returned by an
-// earlier call, in the order DEWY_PORT lists them. It returns nil when the
-// process was not given sockets.
+// Listeners returns every inherited TCP and Unix domain socket not yet
+// returned by an earlier call, in the order DEWY_PORT lists them. It returns
+// nil when the process was not given sockets.
 func Listeners() ([]net.Listener, error) {
-	socks, err := untaken("tcp")
+	socks, err := untaken("tcp", "unix")
 	if err != nil {
 		return nil, err
 	}
@@ -218,8 +238,14 @@ func parseEntry(entry string) (Entry, error) {
 		return Entry{}, fmt.Errorf("entry %q: bad file descriptor: %w", entry, err)
 	}
 	s := Entry{Addr: entry[:i], Network: "tcp", FD: uintptr(fd)}
-	if a, ok := strings.CutSuffix(s.Addr, udpSuffix); ok {
-		s.Addr, s.Network = a, "udp"
+	switch {
+	case isUnixAddr(s.Addr):
+		// Checked first: a path such as "/srv/udp" is not a UDP socket.
+		s.Network = "unix"
+	default:
+		if a, ok := strings.CutSuffix(s.Addr, udpSuffix); ok {
+			s.Addr, s.Network = a, "udp"
+		}
 	}
 	if s.Addr == "" {
 		return Entry{}, fmt.Errorf("entry %q has no address", entry)
@@ -251,7 +277,21 @@ func find(proto, network, address string) (Entry, bool, error) {
 	return Entry{}, false, nil
 }
 
-func untaken(proto string) ([]Entry, error) {
+// findUnix looks up the untaken inherited Unix domain socket at path.
+func findUnix(path string) (Entry, bool, error) {
+	socks, err := Entries()
+	if err != nil {
+		return Entry{}, false, err
+	}
+	for _, s := range socks {
+		if s.Network == "unix" && s.Addr == path {
+			return s, true, nil
+		}
+	}
+	return Entry{}, false, nil
+}
+
+func untaken(protos ...string) ([]Entry, error) {
 	socks, err := Entries()
 	if err != nil {
 		return nil, err
@@ -260,7 +300,7 @@ func untaken(proto string) ([]Entry, error) {
 	defer mu.Unlock()
 	var out []Entry
 	for _, s := range socks {
-		if s.Network == proto && !taken[s.FD] {
+		if slices.Contains(protos, s.Network) && !taken[s.FD] {
 			out = append(out, s)
 		}
 	}

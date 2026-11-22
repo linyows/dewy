@@ -79,8 +79,14 @@ type Config struct {
 	Env []string
 	// Addrs are the listen addresses: "8080", "127.0.0.1:8080" or
 	// "[::1]:8080" for TCP, and the same with a "/udp" suffix for UDP
-	// ("53/udp", "[::1]:53/udp"). Empty runs the application without
-	// sockets.
+	// ("53/udp", "[::1]:53/udp"). An absolute path ("/run/app.sock") is a
+	// Unix domain socket, and on Linux so is a name starting with "@"
+	// ("@app"), which lives in the abstract namespace. Empty runs the
+	// application without sockets.
+	//
+	// A socket file left at the path by a process that exited without
+	// removing it is replaced; any other file there is an error. The file
+	// is removed on Shutdown.
 	Addrs []string
 	// StartupWindow is how long a new worker must stay up before it is
 	// considered started. Zero means DefaultStartupWindow.
@@ -211,7 +217,8 @@ func New(cfg Config) (*Supervisor, error) {
 }
 
 // Addrs returns the bound address of each socket, in configuration order: a
-// *net.TCPAddr for a TCP address and a *net.UDPAddr for a UDP one.
+// *net.TCPAddr for a TCP address, a *net.UDPAddr for a UDP one and a
+// *net.UnixAddr for a Unix domain socket.
 // It differs from Config.Addrs when a port of 0 was configured.
 func (s *Supervisor) Addrs() []net.Addr {
 	addrs := make([]net.Addr, len(s.listeners))

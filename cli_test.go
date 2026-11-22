@@ -2,6 +2,8 @@ package dewy
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -70,13 +72,19 @@ func TestRunCLI(t *testing.T) {
 			name:        "health path requires a port on the server command",
 			args:        []string{"--registry", "ghr://o/r", "--health-path", "/health", "server", "myapp"},
 			expectExit:  ExitErr,
-			expectError: "Error: --health-path requires a TCP --port",
+			expectError: "Error: --health-path requires a TCP --port or a --socket",
 		},
 		{
 			name:        "health path requires a TCP port on the server command",
 			args:        []string{"--registry", "ghr://o/r", "--health-path", "/health", "--port", "53/udp", "server", "myapp"},
 			expectExit:  ExitErr,
-			expectError: "Error: --health-path requires a TCP --port",
+			expectError: "Error: --health-path requires a TCP --port or a --socket",
+		},
+		{
+			name:        "socket is rejected outside the server command",
+			args:        []string{"--registry", "ghr://o/r", "--socket", "/run/app.sock", "assets"},
+			expectExit:  ExitErr,
+			expectError: "Error: --socket is only supported by the server command",
 		},
 		{
 			name:        "host is rejected outside the server command",
@@ -1107,4 +1115,91 @@ func TestCLI_ConfigureServerCommand_SwitchOptions(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestCLI_ConfigureServerCommand_Sockets(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("sockets are carried into the server config", func(t *testing.T) {
+		var errBuf bytes.Buffer
+		c := &cli{
+			Ports:   []string{"8080"},
+			Sockets: []string{"/run/app.sock", "tmp/app.sock", "@app"},
+			args:    []string{"/opt/app/current/app"},
+			env:     Env{Err: &errBuf},
+		}
+		conf := DefaultConfig()
+		if err := c.configureServerCommand(&conf); err != nil {
+			t.Fatalf("configureServerCommand() error = %v (%s)", err, errBuf.String())
+		}
+		wantSockets := []string{"/run/app.sock", filepath.Join(wd, "tmp/app.sock"), "@app"}
+		if !reflect.DeepEqual(conf.Server.Sockets, wantSockets) {
+			t.Errorf("Sockets = %q, want %q", conf.Server.Sockets, wantSockets)
+		}
+		if !reflect.DeepEqual(conf.Server.Addrs, []string{"8080"}) {
+			t.Errorf("Addrs = %q, want only the port", conf.Server.Addrs)
+		}
+	})
+
+	t.Run("a socket alone needs no port", func(t *testing.T) {
+		var errBuf bytes.Buffer
+		c := &cli{Sockets: []string{"/run/app.sock"}, args: []string{"app"}, env: Env{Err: &errBuf}}
+		conf := DefaultConfig()
+		if err := c.configureServerCommand(&conf); err != nil {
+			t.Fatalf("configureServerCommand() error = %v", err)
+		}
+		if !conf.Server.listens() {
+			t.Error("listens() = false, want true for a server with a socket")
+		}
+	})
+
+	t.Run("a socket is enough for a health path", func(t *testing.T) {
+		var errBuf bytes.Buffer
+		c := &cli{
+			Sockets:    []string{"/run/app.sock"},
+			HealthPath: "/health",
+			args:       []string{"app"},
+			env:        Env{Err: &errBuf},
+		}
+		conf := DefaultConfig()
+		if err := c.configureServerCommand(&conf); err != nil {
+			t.Fatalf("configureServerCommand() error = %v (%s), want the socket to be probed", err, errBuf.String())
+		}
+	})
+
+	t.Run("invalid sockets", func(t *testing.T) {
+		for _, socks := range [][]string{
+			{""},
+			{"/run/app.sock", "/run/app.sock"},
+			{"/run/app.sock", "/run/../run/app.sock"},
+		} {
+			var errBuf bytes.Buffer
+			c := &cli{Sockets: socks, args: []string{"app"}, env: Env{Err: &errBuf}}
+			conf := DefaultConfig()
+			if err := c.configureServerCommand(&conf); err == nil {
+				t.Errorf("configureServerCommand(--socket %q) error = nil, want an error", socks)
+			}
+		}
+	})
+}
+
+func TestSupervisorConfigListsSocketsAfterPorts(t *testing.T) {
+	d := &Dewy{
+		config: Config{Server: &ServerConfig{
+			Command: "app",
+			Addrs:   []string{"8080", "53/udp"},
+			Sockets: []string{"/run/app.sock"},
+		}},
+		logger: testLogger(),
+	}
+	cfg := d.supervisorConfig()
+	if want := []string{"8080", "53/udp", "/run/app.sock"}; !reflect.DeepEqual(cfg.Addrs, want) {
+		t.Errorf("Addrs = %q, want %q", cfg.Addrs, want)
+	}
+	if got := d.config.Server.Addrs; len(got) != 2 {
+		t.Errorf("supervisorConfig modified ServerConfig.Addrs to %q", got)
+	}
 }

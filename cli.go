@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net"
 	"net/http"
 	"net/netip"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"sort"
@@ -44,6 +46,7 @@ type cli struct {
 	Interval           int      `long:"interval" arg:"seconds" short:"i" description:"Polling interval in seconds for checking registry updates (default: 10)"`
 	MaxBackoffInterval int      `long:"max-backoff-interval" arg:"seconds" description:"Stretch the polling interval exponentially while checks keep failing, up to this many seconds (default: 0, disabled; 300 is a reasonable choice)"`
 	Ports              []string `long:"port" short:"p" description:"For server: ports to listen on; append /udp for UDP (e.g., 8080,53/udp). For container: port mappings in format 'proxy' or 'proxy:container' (multiple flags supported)"`
+	Sockets            []string `long:"socket" description:"Unix domain socket path the server command listens on, in addition to any --port (e.g., /run/app.sock); on Linux, @name listens in the abstract namespace (multiple flags supported)"`
 	Host               string   `long:"host" description:"IPv4 or IPv6 address the server command listens on for every --port (e.g., 127.0.0.1, ::1). 0.0.0.0 listens on every IPv4 interface and :: on every IPv6 one; when omitted, listens on both"`
 	Registry           string   `long:"registry" description:"Registry URL (e.g., ghr://owner/repo, s3://region/bucket/prefix, docker://registry/repo)"`
 	Cache              string   `long:"cache" short:"c" description:"Cache backend URL (e.g., file:///path, s3://region/bucket/prefix, gs://bucket/prefix). Defaults to local file."`
@@ -51,7 +54,7 @@ type cli struct {
 	VerifyChecksum     string   `long:"verify-checksum" arg:"(off|auto|required)" description:"How to check a downloaded artifact against the SHA-256 checksum file published next to it: auto verifies when one is published, required also fails when none is, off skips the check (default: auto)"`
 	BeforeDeployHook   string   `long:"before-deploy-hook" description:"Shell command to execute before deployment begins"`
 	AfterDeployHook    string   `long:"after-deploy-hook" description:"Shell command to execute after successful deployment"`
-	HealthPath         string   `long:"health-path" description:"HTTP path to probe after a deployment (e.g., /health). For server: probed on the lowest TCP --port after the switch, or on the new process before it with --health-before-switch; a failure rolls the release back. For container: probed on every new replica"`
+	HealthPath         string   `long:"health-path" description:"HTTP path to probe after a deployment (e.g., /health). For server: probed on the lowest TCP --port (or the first --socket without one) after the switch, or on the new process before it with --health-before-switch; a failure rolls the release back. For container: probed on every new replica"`
 	HealthTimeout      int      `long:"health-timeout" description:"Overall health check budget in seconds, covering every attempt (default: 30)"`
 	NoRollback         bool     `long:"no-rollback" description:"Keep the new release in place when its health check fails (server command). The failed version is still recorded so it is not deployed again"`
 	HealthBeforeSwitch bool     `long:"health-before-switch" description:"Probe --health-path on each new process through a socket of its own, announced in DEWY_HEALTH_PORT, before it replaces the previous process (server command). The application must serve its health endpoint on that socket"`
@@ -173,6 +176,7 @@ func (c *cli) showHelp() {
 
 	serverOpts := strings.Join(c.buildHelp([]string{
 		"Ports",
+		"Sockets",
 		"Host",
 		"NoRollback",
 		"HealthBeforeSwitch",
@@ -303,6 +307,10 @@ func (c *cli) run() int {
 		fmt.Fprintf(c.env.Err, "Error: --no-rollback is only supported by the server command\n")
 		return ExitErr
 	}
+	if len(c.Sockets) > 0 && c.command != "server" {
+		fmt.Fprintf(c.env.Err, "Error: --socket is only supported by the server command\n")
+		return ExitErr
+	}
 	if c.Host != "" && c.command != "server" {
 		fmt.Fprintf(c.env.Err, "Error: --host is only supported by the server command\n")
 		return ExitErr
@@ -401,6 +409,12 @@ func (c *cli) configureServerCommand(conf *Config) error {
 		parsedPorts = joinHostPorts(c.Host, parsedPorts)
 	}
 
+	sockets, err := parseSockets(c.Sockets)
+	if err != nil {
+		fmt.Fprintf(c.env.Err, "Error: invalid socket: %s\n", err)
+		return err
+	}
+
 	var command string
 	var cmdArgs []string
 	if len(c.args) > 0 {
@@ -417,6 +431,7 @@ func (c *cli) configureServerCommand(conf *Config) error {
 		Command:            command,
 		Args:               cmdArgs,
 		Addrs:              parsedPorts,
+		Sockets:            sockets,
 		StartupWait:        time.Duration(c.StartupWait) * time.Second,
 		DrainTime:          time.Duration(c.DrainTime) * time.Second,
 		HealthBeforeSwitch: c.HealthBeforeSwitch,
@@ -434,14 +449,14 @@ func (c *cli) configureServerCommand(conf *Config) error {
 		fmt.Fprintf(c.env.Err, "Error: --health-before-switch requires --health-path\n")
 		return fmt.Errorf("--health-before-switch requires --health-path")
 	}
-	// Probing through the shared port needs a TCP port to probe. With
-	// --health-before-switch each process is probed on a socket of its own,
-	// so any --port, or none, will do.
-	if c.HealthPath != "" && !c.HealthBeforeSwitch && !slices.ContainsFunc(parsedPorts, func(p string) bool {
+	// Probing through the shared sockets needs a TCP port or a Unix domain
+	// socket to probe. With --health-before-switch each process is probed
+	// on a socket of its own, so any --port, or none, will do.
+	if c.HealthPath != "" && !c.HealthBeforeSwitch && len(sockets) == 0 && !slices.ContainsFunc(parsedPorts, func(p string) bool {
 		return !strings.HasSuffix(p, udpSuffix)
 	}) {
-		fmt.Fprintf(c.env.Err, "Error: --health-path requires a TCP --port\n")
-		return fmt.Errorf("--health-path requires a TCP --port")
+		fmt.Fprintf(c.env.Err, "Error: --health-path requires a TCP --port or a --socket\n")
+		return fmt.Errorf("--health-path requires a TCP --port or a --socket")
 	}
 
 	conf.Server = server
@@ -532,6 +547,35 @@ func validateHost(host string) error {
 		return fmt.Errorf("%q is not a unicast address", host)
 	}
 	return nil
+}
+
+// parseSockets turns --socket values into the Unix domain socket addresses
+// the supervisor binds. A relative path is made absolute against the working
+// directory. A name starting with "@" is kept as is and selects the Linux
+// abstract namespace. Duplicates are rejected; the supervisor checks the
+// rest when it binds.
+func parseSockets(specs []string) ([]string, error) {
+	var out []string
+	seen := make(map[string]bool, len(specs))
+	for _, spec := range specs {
+		if spec == "" {
+			return nil, errors.New("empty --socket")
+		}
+		addr := spec
+		if !strings.HasPrefix(spec, "@") {
+			abs, err := filepath.Abs(spec)
+			if err != nil {
+				return nil, fmt.Errorf("%s: %w", spec, err)
+			}
+			addr = abs
+		}
+		if seen[addr] {
+			return nil, fmt.Errorf("duplicate --socket %q", spec)
+		}
+		seen[addr] = true
+		out = append(out, addr)
+	}
+	return out, nil
 }
 
 // joinHostPorts prefixes each port with host in the "host:port" form, with an

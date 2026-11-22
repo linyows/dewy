@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"slices"
 	"time"
 
 	"github.com/linyows/dewy/supervisor"
@@ -30,6 +31,10 @@ type ServerConfig struct {
 	// listens on every interface; "host:port" listens on that IP address.
 	// The list is deduplicated and sorted by port.
 	Addrs []string
+	// Sockets are the Unix domain socket addresses, one per --socket: an
+	// absolute path, or "@name" in the Linux abstract namespace. They are
+	// listed in DEWY_PORT after Addrs.
+	Sockets []string
 	// StartupWait is how long a new process must stay up before it can
 	// replace the previous one. Zero means supervisor.DefaultStartupWindow.
 	StartupWait time.Duration
@@ -65,6 +70,11 @@ type managedServer interface {
 	Shutdown(ctx context.Context) error
 }
 
+// listens reports whether the managed application is given any socket.
+func (c *ServerConfig) listens() bool {
+	return c != nil && (len(c.Addrs) > 0 || len(c.Sockets) > 0)
+}
+
 // supervisorConfig builds the supervisor configuration for the managed
 // application.
 func (d *Dewy) supervisorConfig() supervisor.Config {
@@ -75,7 +85,7 @@ func (d *Dewy) supervisorConfig() supervisor.Config {
 	if c := d.config.Server; c != nil {
 		cfg.Command = c.Command
 		cfg.Args = c.Args
-		cfg.Addrs = c.Addrs
+		cfg.Addrs = append(slices.Clip(c.Addrs), c.Sockets...)
 		cfg.StartupWindow = c.StartupWait
 	}
 	if d.healthBeforeSwitch() {

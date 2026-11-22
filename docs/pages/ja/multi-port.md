@@ -87,7 +87,7 @@ dewy server --registry ghr://myorg/dns \
 dewy server --registry ghr://myorg/app --port 6000-6002/udp -- /opt/app/current/app
 ```
 
-`/udp`サフィックスは`server`コマンドでのみ使用できます。`--health-path`は最も小さいTCPポートに対してリクエストを送るため、TCPポートが1つ以上必要です。UDPポートにはリクエストを送りません。
+`/udp`サフィックスは`server`コマンドでのみ使用できます。`--health-path`は最も小さいTCPポートに、TCPポートがない場合は最初の`--socket`にリクエストを送るため、どちらかが1つ以上必要です。UDPポートにはリクエストを送りません。
 
 ## dewyから渡されたソケットの使い方 {% #inherited-sockets %}
 

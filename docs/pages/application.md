@@ -43,9 +43,11 @@ func main() {
 
 `sock.Listen` and `sock.ListenPacket` take the same arguments as `net.Listen` and `net.ListenPacket`. Under dewy, they return the inherited socket whose port matches the address. The host part of the address is ignored, because `--host` decides the interface. Without dewy, or for a port that dewy did not open, they bind the address themselves, so the same code runs on a development machine.
 
+For a Unix domain socket given with [`--socket`](/reference#--socket), call `sock.Listen("unix", path)` with the same path. Under dewy it returns the inherited socket; without dewy it creates the socket itself.
+
 The module also provides the following functions.
 
-- **`sock.Listeners`** and **`sock.PacketConns`**: return every inherited TCP or UDP socket, in the order of `DEWY_PORT`. They suit an application that serves whatever `--port` lists, as in the [Multi-Port](/multi-port#inherited-sockets) sample.
+- **`sock.Listeners`** and **`sock.PacketConns`**: return every inherited TCP and Unix domain socket, or every UDP socket, in the order of `DEWY_PORT`. They suit an application that serves whatever `--port` lists, as in the [Multi-Port](/multi-port#inherited-sockets) sample.
 - **`sock.HealthListener`**: returns the health check socket described in [Health Checks](#health-checks), or nil when there is none.
 - **`sock.Inherited`** and **`sock.Entries`**: report whether the process was started with sockets from dewy, and return the parsed entries.
 
@@ -55,7 +57,7 @@ Each inherited socket can be returned once; a second request for it returns `soc
 
 Dewy lists the sockets in the `DEWY_PORT` environment variable. It also sets the same value in `SERVER_STARTER_PORT`, whose name and format are compatible with server-starter, so applications written for server-starter work without changes.
 
-Entries are joined by `;`, and each entry is `<address>=<fd>`. `<address>` is the port as configured: `port`, or `host:port` when `--host` is set to an address other than `0.0.0.0` or `::`, with an IPv6 address in brackets. A UDP socket carries a `/udp` suffix on the address. The entries are sorted by port number, with the TCP port before the UDP port of the same number.
+Entries are joined by `;`, and each entry is `<address>=<fd>`. `<address>` is the port as configured: `port`, or `host:port` when `--host` is set to an address other than `0.0.0.0` or `::`, with an IPv6 address in brackets. A UDP socket carries a `/udp` suffix on the address. The entries are sorted by port number, with the TCP port before the UDP port of the same number. Unix domain sockets from `--socket` follow, in the order given, each listed by its path (or by its `@name` in the Linux abstract namespace). An address that starts with `/` or `@` is a Unix domain socket, even when it ends in `/udp`.
 
 | `--port` and `--host` | `DEWY_PORT` |
 |---|---|
@@ -65,6 +67,7 @@ Entries are joined by `;`, and each entry is `<address>=<fd>`. `<address>` is th
 | `--port 8080 --host ::1` | `[::1]:8080=3` |
 | `--port 53,53/udp` | `53=3;53/udp=4` |
 | `--port 53/udp --host ::1` | `[::1]:53/udp=3` |
+| `--port 8080 --socket /run/app.sock` | `8080=3;/run/app.sock=4` |
 
 The number after `=` is a file descriptor, not a port.
 
@@ -107,7 +110,7 @@ See [Signal Handling](/signal-handling) for graceful shutdown samples.
 
 ## Health Checks {% #health-checks %}
 
-With `--health-path`, dewy sends an HTTP GET request to that path after each deployment and treats a 2xx or 3xx response as healthy. The request goes to the lowest TCP `--port`, on the `--host` address, or on `127.0.0.1` when `--host` is omitted or `0.0.0.0` and on `::1` when it is `::`. The application serves the path on its regular port, and needs nothing else.
+With `--health-path`, dewy sends an HTTP GET request to that path after each deployment and treats a 2xx or 3xx response as healthy. The request goes to the lowest TCP `--port`, on the `--host` address, or on `127.0.0.1` when `--host` is omitted or `0.0.0.0` and on `::1` when it is `::`. Without a TCP port, the request goes to the first `--socket`. The application serves the path on its regular port or socket, and needs nothing else.
 
 With [`--health-before-switch`](/reference#--health-before-switch), dewy checks each new process before it replaces the previous one. Dewy passes each new process one more TCP socket, on the loopback interface, and announces it in the `DEWY_HEALTH_PORT` environment variable as a single `<address>=<fd>` entry, for example `127.0.0.1:41234=5`. The descriptor follows the `DEWY_PORT` sockets, or is 3 when there is no `--port`. Dewy sends `--health-path` requests to this socket after the startup wait, so the application must serve its health endpoint there. Serve the same handler as on the regular port, so that the check reflects the state of the process that will receive traffic.
 

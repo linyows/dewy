@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -55,6 +57,28 @@ func inheritUDP(t *testing.T) (port string, fd int, addr string) {
 	return port, dupFD(t, uc), addr
 }
 
+// inheritUnix binds a Unix domain socket and returns its path and a
+// duplicate of its descriptor.
+func inheritUnix(t *testing.T) (path string, fd int) {
+	t.Helper()
+	dir, err := os.MkdirTemp("/tmp", "dewy-sock")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	path = filepath.Join(dir, "app.sock")
+	ln, err := net.Listen("unix", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+	ul, ok := ln.(*net.UnixListener)
+	if !ok {
+		t.Fatalf("listener is %T, not *net.UnixListener", ln)
+	}
+	return path, dupFD(t, ul)
+}
+
 type syscallConn interface {
 	SyscallConn() (syscall.RawConn, error)
 }
@@ -91,7 +115,10 @@ func TestParseEntry(t *testing.T) {
 		{"8080", Entry{}, true},
 		{"=3", Entry{}, true},
 		{"8080=x", Entry{}, true},
-		{"/udp=3", Entry{}, true},
+		{"/udp=3", Entry{Addr: "/udp", Network: "unix", FD: 3}, false},
+		{"/run/app.sock=8", Entry{Addr: "/run/app.sock", Network: "unix", FD: 8}, false},
+		{"/srv/udp=9", Entry{Addr: "/srv/udp", Network: "unix", FD: 9}, false},
+		{"@app=10", Entry{Addr: "@app", Network: "unix", FD: 10}, false},
 	}
 	for _, tt := range tests {
 		got, err := parseEntry(tt.in)
@@ -344,4 +371,67 @@ func TestHealthListener(t *testing.T) {
 			t.Error("HealthListener() error = nil, want an error")
 		}
 	})
+}
+
+func TestListenUnixInherited(t *testing.T) {
+	reset(t)
+	tport, tfd, _ := inheritTCP(t)
+	path, ufd := inheritUnix(t)
+	t.Setenv(EnvPort, fmt.Sprintf("%s=%d;%s=%d", tport, tfd, path, ufd))
+
+	if e, err := Entries(); err != nil || len(e) != 2 || e[1].Network != "unix" || e[1].Port() != "" {
+		t.Fatalf("Entries() = %+v, %v, want the Unix socket second, without a port", e, err)
+	}
+
+	ln, err := Listen("unix", path)
+	if err != nil {
+		t.Fatalf("Listen(unix) error = %v", err)
+	}
+	defer func() { _ = ln.Close() }()
+	go func() {
+		c, err := ln.Accept()
+		if err == nil {
+			_, _ = c.Write([]byte("ok"))
+			_ = c.Close()
+		}
+	}()
+	c, err := net.Dial("unix", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = c.Close() }()
+	buf := make([]byte, 2)
+	if _, err := c.Read(buf); err != nil || string(buf) != "ok" {
+		t.Errorf("read %q, %v from the inherited socket, want ok", buf, err)
+	}
+
+	if _, err := Listen("unix", path); !errors.Is(err, ErrTaken) {
+		t.Errorf("second Listen(unix) error = %v, want ErrTaken", err)
+	}
+	// The TCP socket is still untaken; the Unix one is not returned again.
+	lns, err := Listeners()
+	if err != nil || len(lns) != 1 {
+		t.Fatalf("Listeners() = %v, %v, want only the TCP socket", lns, err)
+	}
+	_ = lns[0].Close()
+}
+
+func TestListenersIncludeUnix(t *testing.T) {
+	reset(t)
+	tport, tfd, taddr := inheritTCP(t)
+	path, ufd := inheritUnix(t)
+	t.Setenv(EnvPort, fmt.Sprintf("%s=%d;%s=%d", tport, tfd, path, ufd))
+
+	lns, err := Listeners()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		for _, l := range lns {
+			_ = l.Close()
+		}
+	}()
+	if len(lns) != 2 || lns[0].Addr().String() != taddr || lns[1].Addr().String() != path {
+		t.Errorf("Listeners() = %v, want %s and %s in order", lns, taddr, path)
+	}
 }

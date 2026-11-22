@@ -38,6 +38,17 @@
         {"addr": "[::1]:5353", "network": "udp", "fd": 5},
         {"addr": "6000", "network": "udp", "fd": 6}
       ]
+    },
+    {
+      "name": "Unix domain sockets are listed by path",
+      "addrs": ["8080", "/run/app.sock", "/srv/udp", "@app"],
+      "env": "8080=3;/run/app.sock=4;/srv/udp=5;@app=6",
+      "entries": [
+        {"addr": "8080", "network": "tcp", "fd": 3},
+        {"addr": "/run/app.sock", "network": "unix", "fd": 4},
+        {"addr": "/srv/udp", "network": "unix", "fd": 5},
+        {"addr": "@app", "network": "unix", "fd": 6}
+      ]
     }
   ],
   "health": [

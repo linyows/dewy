@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -115,12 +116,21 @@ func (d *Dewy) healthCheckTimeout() time.Duration {
 // only for loopback targets, so a server bound to another interface would be
 // probed through the proxy, and the proxy's own response would decide the
 // health of the release. The transport therefore disables the proxy.
-func newProbeClient() *http.Client {
+//
+// When socket is set, every request is sent over that Unix domain socket,
+// whatever host the URL names.
+func newProbeClient(socket string) *http.Client {
 	transport := &http.Transport{}
 	if base, ok := http.DefaultTransport.(*http.Transport); ok {
 		transport = base.Clone()
 	}
 	transport.Proxy = nil
+	if socket != "" {
+		transport.DialContext = func(ctx context.Context, _, _ string) (net.Conn, error) {
+			var d net.Dialer
+			return d.DialContext(ctx, "unix", socket)
+		}
+	}
 
 	return &http.Client{
 		Timeout:   defaultHealthCheckProbeTimeout,
@@ -140,10 +150,16 @@ func newProbeClient() *http.Client {
 // between them, so an operator raising --health-timeout buys more attempts
 // rather than a longer wait on a single hung request.
 func (d *Dewy) probeHealth(ctx context.Context, healthURL string, budget time.Duration) error {
+	return d.probeHealthVia(ctx, healthURL, "", budget)
+}
+
+// probeHealthVia is probeHealth over the Unix domain socket at socket, or
+// over TCP to the host of healthURL when socket is empty.
+func (d *Dewy) probeHealthVia(ctx context.Context, healthURL, socket string, budget time.Duration) error {
 	deadlineCtx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
 
-	client := newProbeClient()
+	client := newProbeClient(socket)
 	defer client.CloseIdleConnections()
 	attempts := 0
 
