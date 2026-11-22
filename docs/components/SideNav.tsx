@@ -179,7 +179,7 @@ export function SideNav({ className }) {
           ul:before {
             content: '⎿';
             position: absolute;
-            left: -.1rem;
+            left: -.3rem;
             top: 0;
             bottom: 0;
             width: 1px;
