@@ -47,6 +47,7 @@ type cli struct {
 	MaxBackoffInterval int      `long:"max-backoff-interval" arg:"seconds" description:"Stretch the polling interval exponentially while checks keep failing, up to this many seconds (default: 0, disabled; 300 is a reasonable choice)"`
 	Ports              []string `long:"port" short:"p" description:"For server: ports to listen on; append /udp for UDP (e.g., 8080,53/udp). For container: port mappings in format 'proxy' or 'proxy:container' (multiple flags supported)"`
 	Sockets            []string `long:"socket" description:"Unix domain socket path the server command listens on, in addition to any --port (e.g., /run/app.sock); on Linux, @name listens in the abstract namespace (multiple flags supported)"`
+	EnvDir             string   `long:"envdir" description:"Directory of environment variables for the application in the daemontools envdir format, one file per variable (server command). It is read again each time a process starts, so edit it and send SIGUSR1 to apply new values"`
 	Host               string   `long:"host" description:"IPv4 or IPv6 address the server command listens on for every --port (e.g., 127.0.0.1, ::1). 0.0.0.0 listens on every IPv4 interface and :: on every IPv6 one; when omitted, listens on both"`
 	Registry           string   `long:"registry" description:"Registry URL (e.g., ghr://owner/repo, s3://region/bucket/prefix, docker://registry/repo)"`
 	Cache              string   `long:"cache" short:"c" description:"Cache backend URL (e.g., file:///path, s3://region/bucket/prefix, gs://bucket/prefix). Defaults to local file."`
@@ -178,6 +179,7 @@ func (c *cli) showHelp() {
 		"Ports",
 		"Sockets",
 		"Host",
+		"EnvDir",
 		"NoRollback",
 		"HealthBeforeSwitch",
 		"StartupWait",
@@ -311,6 +313,10 @@ func (c *cli) run() int {
 		fmt.Fprintf(c.env.Err, "Error: --socket is only supported by the server command\n")
 		return ExitErr
 	}
+	if c.EnvDir != "" && c.command != "server" {
+		fmt.Fprintf(c.env.Err, "Error: --envdir is only supported by the server command\n")
+		return ExitErr
+	}
 	if c.Host != "" && c.command != "server" {
 		fmt.Fprintf(c.env.Err, "Error: --host is only supported by the server command\n")
 		return ExitErr
@@ -415,6 +421,16 @@ func (c *cli) configureServerCommand(conf *Config) error {
 		return err
 	}
 
+	envDir := c.EnvDir
+	if envDir != "" {
+		// The application may run in another directory, and the envdir is
+		// read again on every start, so pin it to an absolute path now.
+		if envDir, err = filepath.Abs(envDir); err != nil {
+			fmt.Fprintf(c.env.Err, "Error: invalid envdir: %s\n", err)
+			return err
+		}
+	}
+
 	var command string
 	var cmdArgs []string
 	if len(c.args) > 0 {
@@ -432,6 +448,7 @@ func (c *cli) configureServerCommand(conf *Config) error {
 		Args:               cmdArgs,
 		Addrs:              parsedPorts,
 		Sockets:            sockets,
+		EnvDir:             envDir,
 		StartupWait:        time.Duration(c.StartupWait) * time.Second,
 		DrainTime:          time.Duration(c.DrainTime) * time.Second,
 		HealthBeforeSwitch: c.HealthBeforeSwitch,

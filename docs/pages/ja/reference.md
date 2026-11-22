@@ -180,6 +180,26 @@ dewy server --registry ghr://owner/repo --socket /run/app/app.sock -- /opt/app/c
 dewy server --registry ghr://owner/repo --port 8000 --socket /run/app/app.sock -- /opt/app/current/app
 ```
 
+### --envdir
+
+アプリケーションに渡す環境変数のディレクトリを指定します。`server`コマンドだけで使えます。
+
+ディレクトリの形式はdaemontoolsの`envdir`と同じです。通常のファイルごとに、ファイル名と同じ名前の環境変数を設定します。値はファイルの1行目で、末尾の空白とタブを取り除き、NUL文字を改行に変換したものです。空のファイルは、その環境変数をアプリケーションの環境から削除します。名前が`.`で始まるファイルとディレクトリは読み飛ばします。シンボリックリンクはたどるため、マウントしたKubernetesのSecretやConfigMapをそのまま指定できます。
+
+dewyは、プロセスを起動するたびにディレクトリを読み直します。対象は、最初の起動、デプロイ、ロールバック、`SIGUSR1`、終了したプロセスの再起動です。デプロイせずに環境変数を変える場合は、ファイルを編集してからdewyに`SIGUSR1`を送ります。ディレクトリから削除したファイルは次のプロセスには適用されず、dewy自身の環境に同じ変数があればその値になります。
+
+ディレクトリの環境変数は、dewy自身の環境変数より優先されます。ただし、dewyがアプリケーションに設定する環境変数（`DEWY_PORT`、`SERVER_STARTER_PORT`、`DEWY_HEALTH_PORT`）は上書きできません。ディレクトリを読めない場合、dewyは起動に失敗します。再起動の場合は再起動が失敗し、以前のプロセスがそのまま提供を続けます。
+
+```bash
+mkdir -p /etc/app/env
+echo 'postgres://db.internal/app' > /etc/app/env/DATABASE_URL
+dewy server --registry ghr://owner/repo --port 8000 --envdir /etc/app/env -- /opt/app/current/app
+
+# デプロイせずに新しい値を反映する
+echo 'debug' > /etc/app/env/LOG_LEVEL
+kill -USR1 $(pidof dewy)
+```
+
 ### --startup-wait
 
 新しいプロセスが以前のプロセスと入れ替わるまでに動作し続けている必要がある時間を秒単位で指定します。`server`コマンドでのみ使用できます。デフォルトは1秒です。`0`を指定した場合もデフォルトになり、負の値はエラーになります。
@@ -571,7 +591,7 @@ S3とGCSは、`AWS_ACCESS_KEY_ID`、`AWS_SECRET_ACCESS_KEY`、`AWS_PROFILE`、`G
 
 ### dewyがアプリケーションに設定する環境変数 {% #variables-dewy-sets %}
 
-`server`コマンドは、dewy自身の環境変数に加えて、以下の環境変数をアプリケーションのプロセスに設定します。Goのアプリケーションは`github.com/linyows/dewy/sock`モジュールでこれらを読めます。[serverコマンドでのアプリの対応](/ja/application#inherited-sockets)を参照してください。
+`server`コマンドは、dewy自身の環境変数と[`--envdir`](/ja/reference#--envdir)の環境変数に加えて、以下の環境変数をアプリケーションのプロセスに設定します。Goのアプリケーションは`github.com/linyows/dewy/sock`モジュールでこれらを読めます。[serverコマンドでのアプリの対応](/ja/application#inherited-sockets)を参照してください。
 
 | 環境変数 | 説明 |
 |----------|------|

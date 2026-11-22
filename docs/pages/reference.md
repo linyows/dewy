@@ -180,6 +180,26 @@ dewy server --registry ghr://owner/repo --socket /run/app/app.sock -- /opt/app/c
 dewy server --registry ghr://owner/repo --port 8000 --socket /run/app/app.sock -- /opt/app/current/app
 ```
 
+### --envdir
+
+Specifies a directory of environment variables for the application. Applies to the `server` command only.
+
+The directory uses the format of daemontools `envdir`. Each regular file sets the variable of the same name. The value is the first line of the file, with trailing spaces and tabs removed and each NUL character converted to a newline. An empty file removes the variable from the application's environment. Files whose names start with `.`, and directories, are skipped. A symbolic link is followed, so a mounted Kubernetes Secret or ConfigMap can be used as the directory.
+
+Dewy reads the directory each time it starts a process: on the first start, on a deployment, on a rollback, on `SIGUSR1`, and when it restarts a process that exited. To change a variable without a deployment, edit the file and send `SIGUSR1` to Dewy. A file removed from the directory no longer applies to the next process, which gets the value from Dewy's own environment, if any.
+
+The variables in the directory take precedence over Dewy's own environment. They cannot override the variables Dewy sets for the application (`DEWY_PORT`, `SERVER_STARTER_PORT`, and `DEWY_HEALTH_PORT`). When the directory cannot be read, Dewy fails to start; on a restart, the restart fails and the previous process keeps serving.
+
+```bash
+mkdir -p /etc/app/env
+echo 'postgres://db.internal/app' > /etc/app/env/DATABASE_URL
+dewy server --registry ghr://owner/repo --port 8000 --envdir /etc/app/env -- /opt/app/current/app
+
+# Apply a new value without a deployment
+echo 'debug' > /etc/app/env/LOG_LEVEL
+kill -USR1 $(pidof dewy)
+```
+
 ### --startup-wait
 
 Specifies, in seconds, how long a new process must stay up before it can replace the previous one. Applies to the `server` command only. Default is 1 second; `0` also selects the default, and a negative value is rejected.
@@ -583,7 +603,7 @@ S3 and GCS also read the standard credentials of each SDK, such as `AWS_ACCESS_K
 
 ### Variables Dewy Sets for the Application {% #variables-dewy-sets %}
 
-The `server` command sets these variables in the environment of the application process, in addition to the environment Dewy itself runs with. A Go application can read them with the `github.com/linyows/dewy/sock` module; see [Application Integration for the Server Command](/application#inherited-sockets).
+The `server` command sets these variables in the environment of the application process, in addition to the environment Dewy itself runs with and the variables in [`--envdir`](#--envdir). A Go application can read them with the `github.com/linyows/dewy/sock` module; see [Application Integration for the Server Command](/application#inherited-sockets).
 
 | Variable | Description |
 |----------|-------------|

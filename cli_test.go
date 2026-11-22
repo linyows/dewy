@@ -87,6 +87,12 @@ func TestRunCLI(t *testing.T) {
 			expectError: "Error: --socket is only supported by the server command",
 		},
 		{
+			name:        "envdir is rejected outside the server command",
+			args:        []string{"--registry", "img://ghcr.io/o/r", "--envdir", "/etc/app/env", "--port", "8080", "container"},
+			expectExit:  ExitErr,
+			expectError: "Error: --envdir is only supported by the server command",
+		},
+		{
 			name:        "host is rejected outside the server command",
 			args:        []string{"--registry", "img://ghcr.io/o/r", "--host", "127.0.0.1", "--port", "8080", "container"},
 			expectExit:  ExitErr,
@@ -1201,5 +1207,27 @@ func TestSupervisorConfigListsSocketsAfterPorts(t *testing.T) {
 	}
 	if got := d.config.Server.Addrs; len(got) != 2 {
 		t.Errorf("supervisorConfig modified ServerConfig.Addrs to %q", got)
+	}
+}
+
+func TestCLI_ConfigureServerCommand_EnvDir(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var errBuf bytes.Buffer
+	c := &cli{EnvDir: "env", args: []string{"app"}, env: Env{Err: &errBuf}}
+	conf := DefaultConfig()
+	if err := c.configureServerCommand(&conf); err != nil {
+		t.Fatalf("configureServerCommand() error = %v (%s)", err, errBuf.String())
+	}
+	want := filepath.Join(wd, "env")
+	if conf.Server.EnvDir != want {
+		t.Errorf("EnvDir = %q, want %q", conf.Server.EnvDir, want)
+	}
+
+	d := &Dewy{config: conf, logger: testLogger()}
+	if got := d.supervisorConfig().EnvDir; got != want {
+		t.Errorf("supervisorConfig().EnvDir = %q, want %q", got, want)
 	}
 }
