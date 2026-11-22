@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -172,6 +173,83 @@ func TestVerifyServerHealth(t *testing.T) {
 		d.config.Health.Timeout = 100 * time.Millisecond
 		if err := d.verifyServerHealth(context.Background()); err == nil {
 			t.Error("verifyServerHealth() = nil, want an error for a 503 response")
+		}
+	})
+}
+
+func TestVerifyServerHealthOverUnixSocket(t *testing.T) {
+	// A short directory: t.TempDir is too long on macOS for a socket path.
+	dir, err := os.MkdirTemp("/tmp", "dewy-health")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+
+	serve := func(t *testing.T, name string, h http.HandlerFunc) string {
+		t.Helper()
+		path := filepath.Join(dir, name)
+		ln, err := net.Listen("unix", path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		srv := &http.Server{Handler: h, ReadHeaderTimeout: time.Second}
+		go func() { _ = srv.Serve(ln) }()
+		t.Cleanup(func() { _ = srv.Close() })
+		return path
+	}
+
+	t.Run("probes the first socket without a TCP port", func(t *testing.T) {
+		var gotPath, gotHost string
+		first := serve(t, "first.sock", func(w http.ResponseWriter, r *http.Request) {
+			gotPath, gotHost = r.URL.Path, r.Host
+			w.WriteHeader(http.StatusOK)
+		})
+		second := serve(t, "second.sock", func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		})
+
+		d := newPhaseTestDewy(t)
+		d.config.Command = SERVER
+		d.config.Server = &ServerConfig{Addrs: []string{"53/udp"}, Sockets: []string{first, second}}
+		d.config.Health.Path = "health"
+		if err := d.verifyServerHealth(context.Background()); err != nil {
+			t.Fatalf("verifyServerHealth() = %v, want nil", err)
+		}
+		if gotPath != "/health" || gotHost != "localhost" {
+			t.Errorf("request path %q host %q, want /health on localhost", gotPath, gotHost)
+		}
+	})
+
+	t.Run("fails on an error status", func(t *testing.T) {
+		path := serve(t, "unhealthy.sock", func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		})
+		d := newPhaseTestDewy(t)
+		d.config.Command = SERVER
+		d.config.Server = &ServerConfig{Sockets: []string{path}}
+		d.config.Health.Path = "/health"
+		d.config.Health.Timeout = 100 * time.Millisecond
+		if err := d.verifyServerHealth(context.Background()); err == nil {
+			t.Error("verifyServerHealth() = nil, want an error for a 503 response")
+		}
+	})
+
+	t.Run("a TCP port takes precedence over a socket", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer srv.Close()
+		path := serve(t, "ignored.sock", func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		})
+
+		d := newPhaseTestDewy(t)
+		d.config.Command = SERVER
+		d.config.Server = &ServerConfig{Addrs: []string{portOf(t, srv.URL)}, Sockets: []string{path}}
+		d.config.Health.Path = "/health"
+		d.config.Health.Timeout = 2 * time.Second
+		if err := d.verifyServerHealth(context.Background()); err != nil {
+			t.Errorf("verifyServerHealth() = %v, want the TCP port to be probed", err)
 		}
 	})
 }

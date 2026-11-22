@@ -116,7 +116,7 @@ dewy server --registry ghr://myorg/dns \
 dewy server --registry ghr://myorg/app --port 6000-6002/udp -- /opt/app/current/app
 ```
 
-The `/udp` suffix is available for the `server` command only. `--health-path` probes the lowest TCP port and requires at least one TCP port; UDP ports are not probed.
+The `/udp` suffix is available for the `server` command only. `--health-path` probes the lowest TCP port, or the first `--socket` without one, and requires at least one of them; UDP ports are not probed.
 
 ## Practical Configuration Examples
 

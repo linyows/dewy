@@ -4,11 +4,16 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net"
 	"net/netip"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
+	"time"
 )
 
 // EnvListeners names the environment variable that lists the inherited
@@ -19,7 +24,9 @@ import (
 // address exactly as configured ("8080", "127.0.0.1:8080", "[::1]:8080") and
 // <fd> is the file descriptor number the socket has in the worker. A UDP
 // socket is marked with a "/udp" suffix on the address ("53/udp=4"); the
-// worker opens it with net.FilePacketConn instead of net.FileListener.
+// worker opens it with net.FilePacketConn instead of net.FileListener. A Unix
+// domain socket is listed by its path ("/run/app.sock=5"), or on Linux by
+// its abstract name ("@app=5"); the worker opens it with net.FileListener.
 const EnvListeners = "DEWY_PORT"
 
 // EnvHealthPort names the environment variable that announces the worker's
@@ -44,6 +51,9 @@ const firstListenerFD = 3
 // udpSuffix marks a UDP address ("53/udp", "[::1]:53/udp").
 const udpSuffix = "/udp"
 
+// abstractPrefix marks a socket in the Linux abstract namespace ("@app").
+const abstractPrefix = "@"
+
 // listener is a socket the supervisor owns for the whole life of the managed
 // application: a listening TCP socket or a bound UDP socket. Workers come and
 // go; the socket stays open, so a TCP connection arriving during a worker
@@ -54,11 +64,77 @@ type listener struct {
 	local net.Addr
 	sock  io.Closer // the net.Listener or net.PacketConn
 	file  *os.File  // dup of the socket's descriptor, handed to each worker
+
+	// path and info identify the socket file of a Unix domain socket bound
+	// to a filesystem path, so close removes the file only while it is the
+	// one this listener created.
+	path string
+	info os.FileInfo
 }
 
 func (l *listener) close() {
 	_ = l.file.Close()
 	_ = l.sock.Close()
+	if l.info == nil {
+		return
+	}
+	if fi, err := os.Lstat(l.path); err == nil && os.SameFile(fi, l.info) {
+		_ = os.Remove(l.path)
+	}
+}
+
+// isUnixAddr reports whether addr names a Unix domain socket: an absolute
+// path, or a name in the Linux abstract namespace starting with "@".
+func isUnixAddr(addr string) bool {
+	return strings.HasPrefix(addr, "/") || strings.HasPrefix(addr, abstractPrefix)
+}
+
+// checkUnixAddr validates a Unix domain socket address. ";" and "=" are
+// rejected because they delimit the entries of EnvListeners.
+func checkUnixAddr(addr string) error {
+	if strings.ContainsAny(addr, ";=") {
+		return fmt.Errorf("invalid unix socket %q: \";\" and \"=\" are not allowed", addr)
+	}
+	if strings.HasPrefix(addr, abstractPrefix) {
+		if runtime.GOOS != "linux" {
+			return fmt.Errorf("invalid unix socket %q: abstract sockets are supported only on Linux", addr)
+		}
+		if addr == abstractPrefix {
+			return fmt.Errorf("invalid unix socket %q: abstract name is empty", addr)
+		}
+		return nil
+	}
+	if filepath.Clean(addr) != addr || strings.HasSuffix(addr, "/") {
+		return fmt.Errorf("invalid unix socket %q: path must be clean and name a file", addr)
+	}
+	return nil
+}
+
+// removeStaleSocket prepares path for binding. A missing path is fine. A
+// socket file that refuses connections was left behind by a process that
+// exited without removing it, such as a previous dewy that was killed, and
+// is removed. Any other file, and a socket that accepts connections, is an
+// error: the path belongs to someone else.
+func removeStaleSocket(path string) error {
+	fi, err := os.Lstat(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if fi.Mode().Type() != fs.ModeSocket {
+		return fmt.Errorf("%s exists and is not a socket", path)
+	}
+	c, err := net.DialTimeout("unix", path, time.Second)
+	if err == nil {
+		_ = c.Close()
+		return fmt.Errorf("%s is in use by another process", path)
+	}
+	if !errors.Is(err, syscall.ECONNREFUSED) {
+		return fmt.Errorf("%s: %w", path, err)
+	}
+	return os.Remove(path)
 }
 
 // resolveAddr maps a configured address to the network and address passed to
@@ -74,11 +150,20 @@ func (l *listener) close() {
 //     ("tcp6").
 //   - "0.0.0.0:8080" listens on every IPv4 interface ("tcp4") and "[::]:8080"
 //     on every IPv6 interface ("tcp6", which Go opens with IPV6_V6ONLY).
+//   - "/run/app.sock" or, on Linux, "@app" listens on that Unix domain socket
+//     ("unix").
 //
 // The host part must be an IP literal. A hostname may resolve to several
 // addresses, or to a different one on each start, and would make the bound
 // interface depend on DNS.
 func resolveAddr(addr string) (network, address string, err error) {
+	if isUnixAddr(addr) {
+		if err := checkUnixAddr(addr); err != nil {
+			return "", "", err
+		}
+		return "unix", addr, nil
+	}
+
 	proto := "tcp"
 	hostport := addr
 	if a, ok := strings.CutSuffix(addr, udpSuffix); ok {
@@ -138,6 +223,11 @@ func openListeners(addrs []string) ([]*listener, error) {
 		if err != nil {
 			return fail(err)
 		}
+		if network == "unix" && !strings.HasPrefix(address, abstractPrefix) {
+			if err := removeStaleSocket(address); err != nil {
+				return fail(fmt.Errorf("listen %s: %w", addr, err))
+			}
+		}
 		l, err := bind(network, address)
 		if err != nil {
 			return fail(fmt.Errorf("listen %s: %w", addr, err))
@@ -148,7 +238,8 @@ func openListeners(addrs []string) ([]*listener, error) {
 	return lns, nil
 }
 
-// filer is implemented by *net.TCPListener and *net.UDPConn.
+// filer is implemented by *net.TCPListener, *net.UnixListener and
+// *net.UDPConn.
 type filer interface {
 	File() (*os.File, error)
 }
@@ -174,17 +265,31 @@ func bind(network, address string) (*listener, error) {
 		sock, local = ln, ln.Addr()
 	}
 
+	l := &listener{local: local, sock: sock}
+	if ul, ok := sock.(*net.UnixListener); ok && !strings.HasPrefix(address, abstractPrefix) {
+		fi, err := os.Lstat(address)
+		if err != nil {
+			_ = sock.Close()
+			return nil, err
+		}
+		// Close would remove the path even after another process replaced
+		// the file; listener.close removes it only while it is ours.
+		ul.SetUnlinkOnClose(false)
+		l.path, l.info = address, fi
+	}
+
 	fl, ok := sock.(filer)
 	if !ok {
-		_ = sock.Close()
+		l.close()
 		return nil, fmt.Errorf("%T cannot hand over its descriptor", sock)
 	}
 	f, err := fl.File()
 	if err != nil {
-		_ = sock.Close()
+		l.close()
 		return nil, err
 	}
-	return &listener{local: local, sock: sock, file: f}, nil
+	l.file = f
+	return l, nil
 }
 
 // openHealthListener binds a TCP socket on a free loopback port, on IPv4 when
@@ -220,8 +325,12 @@ func listenersEnv(lns []*listener) string {
 // ("0.0.0.0:8080" or "[::]:8080") is listed as the bare port, the same as an
 // address without a host, so an application that reads only the port keeps
 // working when the address family is narrowed. Other addresses are listed as
-// configured.
+// configured, and so are Unix domain sockets, whose path may end in "/udp"
+// without being UDP.
 func envAddr(addr string) string {
+	if isUnixAddr(addr) {
+		return addr
+	}
 	hostport, udp := strings.CutSuffix(addr, udpSuffix)
 	host, port, err := net.SplitHostPort(hostport)
 	if err != nil {

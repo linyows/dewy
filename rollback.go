@@ -27,20 +27,44 @@ const blockedkeyName = "blocked"
 
 // verifyServerHealth probes the managed server after a start or restart and
 // returns an error when it does not answer in time. It is a no-op unless the
-// server command is running with --health-path and at least one port.
+// server command is running with --health-path and a TCP port or a Unix
+// domain socket.
+//
+// The probe goes to the lowest TCP port (see serverHealthURL). Without one,
+// it goes to the first --socket.
 func (d *Dewy) verifyServerHealth(ctx context.Context) error {
 	if d.config.Command != SERVER || d.config.Health.Path == "" {
 		return nil
 	}
 
-	u := d.serverHealthURL()
+	u, socket := d.serverHealthURL(), ""
 	if u == "" {
-		d.logger.Warn("Health check skipped: --health-path is set but no port is configured")
-		return nil
+		socket = d.serverHealthSocket()
+		if socket == "" {
+			d.logger.Warn("Health check skipped: --health-path is set but no TCP port or socket is configured")
+			return nil
+		}
+		// The host is only for the URL and the Host header; the request
+		// is sent over the socket.
+		u = "http://localhost" + healthPath(d.config.Health.Path)
 	}
 
-	d.logger.Debug("Verifying deployment", slog.String("url", u))
-	return d.probeHealth(ctx, u, d.serverHealthTimeout())
+	attrs := []any{slog.String("url", u)}
+	if socket != "" {
+		attrs = append(attrs, slog.String("socket", socket))
+	}
+	d.logger.Debug("Verifying deployment", attrs...)
+	return d.probeHealthVia(ctx, u, socket, d.serverHealthTimeout())
+}
+
+// serverHealthSocket returns the Unix domain socket the health check probes
+// when the server has no TCP port: the first --socket, or "" when there is
+// none.
+func (d *Dewy) serverHealthSocket() string {
+	if d.config.Server == nil || len(d.config.Server.Sockets) == 0 {
+		return ""
+	}
+	return d.config.Server.Sockets[0]
 }
 
 // serverHealthURL builds the probe URL from the lowest configured TCP port

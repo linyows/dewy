@@ -306,7 +306,7 @@ func (d *Dewy) startOrRestartServer(ctx context.Context) error {
 		if err == nil {
 			d.recordServerRestart(ctx, "deploy")
 			msg := fmt.Sprintf("Server restarted for `%s`", d.cVer)
-			if d.config.Server == nil || len(d.config.Server.Addrs) == 0 {
+			if !d.config.Server.listens() {
 				msg += " without port"
 			}
 			d.logger.Info("Restart notification", slog.String("message", msg))
@@ -316,7 +316,7 @@ func (d *Dewy) startOrRestartServer(ctx context.Context) error {
 		err = d.startServer(ctx)
 		if err == nil {
 			msg := fmt.Sprintf("Server started for `%s`", d.cVer)
-			if d.config.Server == nil || len(d.config.Server.Addrs) == 0 {
+			if !d.config.Server.listens() {
 				msg += " without port"
 			}
 			d.logger.Info("Start notification", slog.String("message", msg))

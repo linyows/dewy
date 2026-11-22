@@ -160,6 +160,26 @@ dewy server --registry ghr://owner/repo --host 192.168.10.11 --port 8000-8001 --
 dewy server --registry ghr://owner/repo --host ::1 --port 8000 -- /opt/app/current/app
 ```
 
+### --socket
+
+Specifies a Unix domain socket the `server` command listens on. Applies to the `server` command only, and can be repeated. It can be used together with `--port` or alone.
+
+A relative path is resolved against the working directory when Dewy starts. On Linux, a name starting with `@` (for example, `@app`) listens in the abstract namespace and creates no file. `;` and `=` cannot appear in the path, because they separate the entries of `DEWY_PORT`.
+
+Dewy binds the socket when the server starts and keeps it open until Dewy shuts down, as it does for `--port`. A connection that arrives while one process replaces another waits in the socket's accept queue. When Dewy starts and a socket file exists at the path, Dewy connects to it: if the connection is refused, the file is left over from a process that exited without removing it, and Dewy removes it; if the connection succeeds, or the path is not a socket, Dewy fails to start. Dewy removes the socket file when it shuts down, unless another file has replaced it.
+
+The socket file is created with the permissions that Dewy's umask allows. A client such as a reverse proxy that runs as another user needs write permission on the file; set the umask of the Dewy process, or put the socket in a directory that the client can reach.
+
+`DEWY_PORT` lists each socket by its path after the `--port` entries (for example, `8080=3;/run/app.sock=4`). The application opens it with `net.FileListener`. Without a TCP `--port`, `--health-path` probes the first `--socket`, sending the request with the host `localhost`. With a TCP `--port`, the probe goes to the port as before.
+
+```bash
+# Behind a reverse proxy on the same host
+dewy server --registry ghr://owner/repo --socket /run/app/app.sock -- /opt/app/current/app
+
+# A TCP port and a Unix domain socket
+dewy server --registry ghr://owner/repo --port 8000 --socket /run/app/app.sock -- /opt/app/current/app
+```
+
 ### --startup-wait
 
 Specifies, in seconds, how long a new process must stay up before it can replace the previous one. Applies to the `server` command only. Default is 1 second; `0` also selects the default, and a negative value is rejected.
@@ -331,9 +351,9 @@ Specifies the HTTP path for health checks. Optional in both commands.
 
 For the `container` command, each new replica is probed at this path and traffic is switched only after it returns a successful response.
 
-For the `server` command, the path is probed after the managed process starts or restarts, on the lowest TCP port among the configured `--port` values. On a restart, the probe is sent after the previous process has exited, so that the answer comes from the new process. A failure triggers a rollback to the previous release. The option requires at least one TCP `--port`; UDP ports are not probed, and a server running without a port (a job worker, for example) cannot be probed over HTTP. The `assets` command rejects it.
+For the `server` command, the path is probed after the managed process starts or restarts, on the lowest TCP port among the configured `--port` values. On a restart, the probe is sent after the previous process has exited, so that the answer comes from the new process. A failure triggers a rollback to the previous release. Without a TCP port, the path is probed on the first [`--socket`](#--socket). The option requires at least one TCP `--port` or a `--socket`; UDP ports are not probed, and a server running without either (a job worker, for example) cannot be probed over HTTP. The `assets` command rejects it.
 
-Because this probe runs after the switch, a new process that starts but does not answer (for example, one that is deadlocked) receives traffic until the probe fails and the rollback restarts the previous release. Requests sent during that time get no answer. [`--health-before-switch`](#--health-before-switch) probes each new process on a socket of its own before the switch, so the previous process keeps serving when the new one fails. With that option, `--health-path` does not require a TCP `--port`.
+Because this probe runs after the switch, a new process that starts but does not answer (for example, one that is deadlocked) receives traffic until the probe fails and the rollback restarts the previous release. Requests sent during that time get no answer. [`--health-before-switch`](#--health-before-switch) probes each new process on a socket of its own before the switch, so the previous process keeps serving when the new one fails. With that option, `--health-path` does not require a TCP `--port` or a `--socket`.
 
 A response with status 2xx or 3xx counts as success. Redirects are not followed, so a 3xx is judged by its own status.
 
@@ -567,7 +587,7 @@ The `server` command sets these variables in the environment of the application 
 
 | Variable | Description |
 |----------|-------------|
-| `DEWY_PORT` | The sockets passed to the application, one `<address>=<fd>` entry per `--port`, joined by `;` (for example, `8080=3;53/udp=4`). Set only when `--port` is given. See [Application Integration for the Server Command](/application#inherited-sockets) |
+| `DEWY_PORT` | The sockets passed to the application, one `<address>=<fd>` entry per `--port` and `--socket`, joined by `;` (for example, `8080=3;53/udp=4;/run/app.sock=5`). Set only when `--port` or `--socket` is given. See [Application Integration for the Server Command](/application#inherited-sockets) |
 | `SERVER_STARTER_PORT` | The same value as `DEWY_PORT`, for applications written for server-starter |
 | `DEWY_HEALTH_PORT` | The health check socket of this process in the `<address>=<fd>` form (for example, `127.0.0.1:41234=5`). Set only with `--health-before-switch`. See [Application Integration for the Server Command](/application#health-checks) |
 

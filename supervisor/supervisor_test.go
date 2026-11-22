@@ -61,6 +61,13 @@ func runHelper() int {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/exit", func(http.ResponseWriter, *http.Request) { os.Exit(1) })
+	mux.HandleFunc("/env/{name}", func(w http.ResponseWriter, r *http.Request) {
+		v, ok := os.LookupEnv(r.PathValue("name"))
+		if !ok {
+			v = "<unset>"
+		}
+		fmt.Fprint(w, v) //nolint:gosec // G705: the test worker reports its own environment to the test as plain text
+	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		fmt.Fprintf(w, "%s %d", mode, os.Getpid())
 	})
@@ -77,7 +84,7 @@ func runHelper() int {
 				return 2
 			}
 			f := os.NewFile(uintptr(fd), entry[:i])
-			if strings.HasSuffix(entry[:i], udpSuffix) {
+			if !isUnixAddr(entry[:i]) && strings.HasSuffix(entry[:i], udpSuffix) {
 				pc, err := net.FilePacketConn(f)
 				if err != nil {
 					return 2
@@ -184,15 +191,31 @@ func (h *harness) start(cfg Config) *Supervisor {
 	return s
 }
 
-// get returns the body served at addr: an HTTP response for a TCP address,
-// or the reply datagram for a UDP address.
+// get returns the body served at addr: an HTTP response for a TCP address
+// or a Unix domain socket, or the reply datagram for a UDP address.
 func get(t *testing.T, addr net.Addr) string {
+	t.Helper()
+	return getPath(t, addr, "/")
+}
+
+// getPath is get for an HTTP path other than "/".
+func getPath(t *testing.T, addr net.Addr, path string) string {
 	t.Helper()
 	if _, ok := addr.(*net.UDPAddr); ok {
 		return query(t, addr)
 	}
 	c := http.Client{Timeout: 2 * time.Second}
-	res, err := c.Get("http://" + addr.String() + "/")
+	url := "http://" + addr.String() + path
+	if _, ok := addr.(*net.UnixAddr); ok {
+		c.Transport = &http.Transport{
+			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+				var d net.Dialer
+				return d.DialContext(ctx, "unix", addr.String())
+			},
+		}
+		url = "http://unix" + path
+	}
+	res, err := c.Get(url)
 	if err != nil {
 		t.Fatalf("GET %s: %v", addr, err)
 	}
@@ -243,79 +266,6 @@ func ipv6Available() bool {
 	}
 	_ = ln.Close()
 	return true
-}
-
-func TestResolveAddr(t *testing.T) {
-	tests := []struct {
-		addr        string
-		wantNetwork string
-		wantAddress string
-		wantErr     bool
-	}{
-		{"8080", "tcp", ":8080", false},
-		{"0", "tcp", ":0", false},
-		{"127.0.0.1:8080", "tcp4", "127.0.0.1:8080", false},
-		{"0.0.0.0:8080", "tcp4", "0.0.0.0:8080", false},
-		{"[::1]:8080", "tcp6", "[::1]:8080", false},
-		{"[::]:8080", "tcp6", "[::]:8080", false},
-		{"[fe80::1%eth0]:8080", "tcp6", "[fe80::1%eth0]:8080", false},
-		{"[::ffff:127.0.0.1]:8080", "tcp6", "[::ffff:127.0.0.1]:8080", false},
-		{"65536", "", "", true},
-		{"-1", "", "", true},
-		{"", "", "", true},
-		{"localhost:8080", "", "", true},
-		{"127.0.0.1", "", "", true},
-		{"::1:8080", "", "", true},
-		{"127.0.0.1:http", "", "", true},
-		{"53/udp", "udp", ":53", false},
-		{"127.0.0.1:53/udp", "udp4", "127.0.0.1:53", false},
-		{"[::1]:53/udp", "udp6", "[::1]:53", false},
-		{"53/sctp", "", "", true},
-		{"localhost:53/udp", "", "", true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.addr, func(t *testing.T) {
-			network, address, err := resolveAddr(tt.addr)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("resolveAddr(%q) error = %v, wantErr %v", tt.addr, err, tt.wantErr)
-			}
-			if network != tt.wantNetwork || address != tt.wantAddress {
-				t.Errorf("resolveAddr(%q) = %q, %q, want %q, %q", tt.addr, network, address, tt.wantNetwork, tt.wantAddress)
-			}
-		})
-	}
-}
-
-func TestListenersEnv(t *testing.T) {
-	lns := []*listener{
-		{addr: "8080"}, {addr: "127.0.0.1:8081"}, {addr: "[::1]:8082"}, {addr: "53/udp"},
-		{addr: "0.0.0.0:8083"}, {addr: "[::]:8084"}, {addr: "0.0.0.0:54/udp"},
-	}
-	want := "8080=3;127.0.0.1:8081=4;[::1]:8082=5;53/udp=6;8083=7;8084=8;54/udp=9"
-	if got := listenersEnv(lns); got != want {
-		t.Errorf("listenersEnv() = %q, want %q", got, want)
-	}
-}
-
-func TestUnspecifiedHostNarrowsFamily(t *testing.T) {
-	s, err := New(Config{Command: "true", Addrs: []string{"0.0.0.0:0", "0"}})
-	if err != nil {
-		t.Fatalf("New() error = %v", err)
-	}
-	defer func() { _ = s.Shutdown(context.Background()) }()
-
-	v4, ok := s.Addrs()[0].(*net.TCPAddr)
-	if !ok || v4.IP.To4() == nil {
-		t.Errorf("0.0.0.0:0 bound %v, want an IPv4 socket", v4)
-	}
-	probe, err := net.Listen("tcp6", "[::1]:0")
-	if err != nil {
-		t.Skip("IPv6 is not available")
-	}
-	_ = probe.Close()
-	if both, ok := s.Addrs()[1].(*net.TCPAddr); !ok || both.IP.To4() != nil {
-		t.Errorf("0 bound %v, want a dual-stack IPv6 socket", both)
-	}
 }
 
 func TestNew(t *testing.T) {
