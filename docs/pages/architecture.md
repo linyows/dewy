@@ -39,7 +39,7 @@ In Supervisor Mode, Dewy acts as the main process and launches applications as c
 
 ### Zero-Downtime Restart with Socket Inheritance
 
-For the `server` command, Dewy binds the listening sockets for `--port` once when the server starts and keeps them open until Dewy shuts down. The application runs as a worker process that inherits these sockets. When a new version is detected:
+For the `server` command, Dewy binds the listening sockets for `--port` once when the server starts and keeps them open until Dewy shuts down. The application runs as a worker process that inherits these sockets, so it serves on them instead of binding the ports itself; see [Application Integration for the Server Command](/application) for what the application needs to do. When a new version is detected:
 
 1. Dewy starts a new worker process beside the current one; it inherits the same listening sockets
 2. Once the new worker has stayed up for the startup wait (`--startup-wait`, 1 second by default), and has passed the health check on its own socket when `--health-before-switch` is set, Dewy sends SIGTERM to the previous worker
