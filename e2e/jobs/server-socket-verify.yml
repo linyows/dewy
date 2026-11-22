@@ -80,7 +80,9 @@ steps:
     max_attempts: 30
     interval: 2s
   with:
-    cmd: grep -q 'msg="Restart notification"' "{{ vars.log }}"
+    # The deployment of the new version also logs "Restart notification", so
+    # match the message of the SIGUSR1 restart only.
+    cmd: grep -q 'Restarted receiving by `SIGUSR1` signal' "{{ vars.log }}"
   test: status == 0
 - name: Verify the restarted application got the new value
   id: reload
