@@ -26,10 +26,11 @@ The following diagram illustrates Dewy's deployment process and configuration.
 
 1. Registry polls the specified registry to detect the latest version of the application
 2. Artifact downloads and extracts artifacts from the specified artifact store
-3. Cache stores the latest version and artifacts
-4. Dewy creates child processes for new version applications and begins processing requests with the new application
-5. Registry saves information about when, where, and what was deployed as files
-6. Notifier sends notifications to specified notification destinations
+3. Cache stores the latest version and artifacts (server / assets only; for container, Docker or Podman pulls the image instead)
+4. Dewy creates child processes for new version applications and begins processing requests with the new application. If the new version fails its health check, Dewy rolls back to the previous release
+5. Registry saves information about when, where, and what was deployed as files (an OCI registry receives no report)
+
+Notifier sends notifications to the specified destinations at each step: when a deployment starts, succeeds, fails, or rolls back.
 
 ## Supervisor Mode (server / assets)
 
