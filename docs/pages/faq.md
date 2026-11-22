@@ -12,7 +12,18 @@ Dewy will change to the latest version after deletion. While deleting or overwri
 
 ## Where are the audit logs?
 
-Audit logs are saved as text file names where artifacts are hosted. Currently there is no searchability. If I think of a good method, I will change it. Separately from auditing, it may also be necessary to send notifications to observability products like OTEL.
+Dewy records each deployment in the registry it deployed from. The record names the host, the command and the time, for example `shipped_to_web-1_server_at_20261122T083000.123456789Z.txt`.
+
+| Registry | Where the record is kept |
+|---|---|
+| GitHub Releases | A text file with that name, uploaded as an asset of the deployed release |
+| S3 / GCS | An empty object with that name under `<prefix><tag>/` |
+| gRPC | Sent to the gRPC server with the `Report` call; the server decides how to store it |
+| OCI | Not recorded |
+
+The record is kept next to the release it refers to, so the hosts that run a version can be listed from that release. Listing deployments across releases means reading the assets or objects of every release; to keep the history in a database of your own, use the [gRPC registry](/registry#grpc), whose server receives every record. Recording on GitHub Releases needs write permission on the repository contents; see [Registry](/registry#github-releases).
+
+[Telemetry](/telemetry) does not replace these records. Dewy exports OpenTelemetry metrics, such as `dewy.deployments.total` and `dewy.deployments.rollbacks.total`, which count deployments for each command and suit dashboards and alerts, but a metric does not identify the version or the host of each deployment. To receive each deployment as an event outside the registry, use [notifications](/notifier), or collect the [JSON logs](/structured-logging) with a log platform.
 
 ## How can I handle registry rate limits caused by polling from multiple Dewy instances?
 
@@ -43,6 +54,20 @@ dewy server --registry ghr://owner/repo1 --port 8001 -- /opt/app1/current/app
 mkdir -p /opt/app2 && cd /opt/app2
 dewy server --registry ghr://owner/repo2 --port 8002 -- /opt/app2/current/app
 ```
+
+## Why does my application not start under the server command?
+
+Dewy reports a start that failed with an error such as `worker exited during the 1s startup window: exit status 1`. The application exited before `--startup-wait` (1 second by default) passed. The common causes are:
+
+- **The application binds the port itself.** Dewy has already opened the `--port` ports, so a second bind fails with "address already in use". Serve on the socket that dewy passes instead; see [Application Integration for the Server Command](/application#inherited-sockets).
+- **The application runs in the background.** An application that forks into the background, for example with a daemon option, ends the process that dewy started. Run it in the foreground.
+- **The application fails while it starts**, for example while it reads its configuration or connects to a database. Dewy passes the application's stdout and stderr through to its own, so the reason appears in the same output as dewy's logs. If it only needs longer to become ready, set `--startup-wait` longer than that.
+
+## Why does my application start but not answer requests?
+
+The application is most likely serving on a socket other than the ones dewy passes, for example on a port written in its configuration. Connections to `--port` are accepted by dewy's socket and wait there, because no process reads from it, so clients hang instead of being refused. With `--health-path`, the health check fails after `--health-timeout`. Serve on the inherited sockets; see [Application Integration for the Server Command](/application#inherited-sockets).
+
+With `--health-before-switch`, every deployment also fails when the application does not serve its health endpoint on the `DEWY_HEALTH_PORT` socket; see [Health Checks](/application#health-checks).
 
 ## Next Steps
 

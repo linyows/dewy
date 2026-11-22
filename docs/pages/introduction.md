@@ -22,7 +22,7 @@ Go can compile code into a single binary tailored to each environment. In distri
 - **Declarative pull-based deployment**: Applications automatically stay up-to-date
 - **Multiple deployment modes**: Binary, assets, and container images
 - **Zero-downtime deployment**: Rolling update deployment for container images with automatic health checks
-- **Graceful restarts**: Smooth application updates without dropping connections
+- **Zero-downtime restarts**: Binary applications are replaced without dropping connections, because the new process inherits the listening sockets
 - **Multiple registry support**: GitHub Releases, S3, GCS, Docker Hub, GitHub Container Registry, Google Artifact Registry, AWS ECR
 - **Deployment notifications**: Slack, email, and other notification channels
 - **Structured logging**: JSON format support for easy log aggregation

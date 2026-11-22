@@ -126,7 +126,7 @@ dewy server --notifier slack://webhook-url -- /opt/app/current/app
 | `--port 53,53/udp` | `53=3;53/udp=4` |
 | `--port 53/udp --host ::1` | `[::1]:53/udp=3` |
 
-アプリケーションは、TCPのエントリを`net.FileListener`で、UDPのエントリを`net.FilePacketConn`で開きます。サンプルコードは[マルチポート](/ja/multi-port#inherited-sockets)を参照してください。
+アプリケーションは、TCPのエントリを`net.FileListener`で、UDPのエントリを`net.FilePacketConn`で開きます。サンプルコードは[serverコマンドでのアプリの対応](/ja/application#inherited-sockets)を参照してください。
 
 ```bash
 # ポートあり（HTTPサーバー）
@@ -185,7 +185,7 @@ dewyは`--startup-wait`の時間が経過した後、成功するか`--health-ti
 
 `dewy server`が最初に起動するプロセスにも、同じ方法でヘルスソケットへのリクエストを送ります。失敗した場合は起動に失敗します。
 
-アプリケーションは`DEWY_HEALTH_PORT`のソケットでヘルスチェックのエンドポイントを提供する必要があります。dewyは、このソケットに対応していないアプリケーションと応答しなくなったアプリケーションを区別できないため、このオプションを指定すると、対応していないアプリケーションのデプロイはすべて失敗します。そのため、このオプションはデフォルトでは有効になっていません。サンプルコードは[マルチポート](/ja/multi-port#health-socket)を参照してください。
+アプリケーションは`DEWY_HEALTH_PORT`のソケットでヘルスチェックのエンドポイントを提供する必要があります。dewyは、このソケットに対応していないアプリケーションと応答しなくなったアプリケーションを区別できないため、このオプションを指定すると、対応していないアプリケーションのデプロイはすべて失敗します。そのため、このオプションはデフォルトでは有効になっていません。サンプルコードは[serverコマンドでのアプリの対応](/ja/application#health-checks)を参照してください。
 
 リクエストは`--port`を経由しないため、このオプションを指定した場合、`--health-path`にTCPの`--port`は必要ありません。UDPポートだけで待ち受けるアプリケーションや、`--port`のないジョブワーカーも、ヘルスソケットに対応していればヘルスチェックできます。
 
@@ -551,13 +551,13 @@ S3とGCSは、`AWS_ACCESS_KEY_ID`、`AWS_SECRET_ACCESS_KEY`、`AWS_PROFILE`、`G
 
 ### dewyがアプリケーションに設定する環境変数 {% #variables-dewy-sets %}
 
-`server`コマンドは、dewy自身の環境変数に加えて、以下の環境変数をアプリケーションのプロセスに設定します。Goのアプリケーションは`github.com/linyows/dewy/sock`モジュールでこれらを読めます。[マルチポート](/ja/multi-port#inherited-sockets)を参照してください。
+`server`コマンドは、dewy自身の環境変数に加えて、以下の環境変数をアプリケーションのプロセスに設定します。Goのアプリケーションは`github.com/linyows/dewy/sock`モジュールでこれらを読めます。[serverコマンドでのアプリの対応](/ja/application#inherited-sockets)を参照してください。
 
 | 環境変数 | 説明 |
 |----------|------|
-| `DEWY_PORT` | アプリケーションに渡すソケット。`--port`ごとに`<address>=<fd>`のエントリが`;`区切りで並びます（例: `8080=3;53/udp=4`）。`--port`を指定した場合だけ設定します。[マルチポート](/ja/multi-port#inherited-sockets)を参照 |
+| `DEWY_PORT` | アプリケーションに渡すソケット。`--port`ごとに`<address>=<fd>`のエントリが`;`区切りで並びます（例: `8080=3;53/udp=4`）。`--port`を指定した場合だけ設定します。[serverコマンドでのアプリの対応](/ja/application#inherited-sockets)を参照 |
 | `SERVER_STARTER_PORT` | `DEWY_PORT`と同じ値。server-starter向けに書かれたアプリケーションのためのものです |
-| `DEWY_HEALTH_PORT` | このプロセスのヘルスチェック用ソケット。`<address>=<fd>`の形式です（例: `127.0.0.1:41234=5`）。`--health-before-switch`を指定した場合だけ設定します。[マルチポート](/ja/multi-port#health-socket)を参照 |
+| `DEWY_HEALTH_PORT` | このプロセスのヘルスチェック用ソケット。`<address>=<fd>`の形式です（例: `127.0.0.1:41234=5`）。`--health-before-switch`を指定した場合だけ設定します。[serverコマンドでのアプリの対応](/ja/application#health-checks)を参照 |
 
 ## 終了コード
 

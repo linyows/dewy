@@ -6,7 +6,7 @@ title: Architecture
 
 Dewy provides two distinct deployment modes for different use cases:
 
-1. **Supervisor Mode** (`server` / `assets` commands): Dewy acts as a process supervisor, managing applications as child processes with graceful restart capabilities.
+1. **Supervisor Mode** (`server` / `assets` commands): Dewy deploys onto the host directly. The `server` command runs the application as a child process and restarts it without downtime by passing the listening sockets to the new process. The `assets` command replaces files and runs no process.
 2. **Proxy Mode** (`container` command): Dewy runs a built-in TCP reverse proxy and manages Docker/Podman containers with rolling update deployments.
 
 ## Interfaces
@@ -35,11 +35,15 @@ The following diagram illustrates Dewy's deployment process and configuration.
 
 In Supervisor Mode, Dewy acts as the main process and launches applications as child processes. This mode is ideal for deploying binary applications directly on VMs or bare-metal servers.
 
-![Supervisor Architecture](/images/supervisor-architecture.svg)
+![Server Command Architecture](/images/server-architecture.svg)
 
-### Graceful Restart
+{% caption %}
+The `server` command replaces the application in this order: 1. Start the new process on the same sockets. 2. Wait for `--startup-wait` and, with `--health-before-switch`, the health check. 3. Send SIGTERM to the previous process, and SIGKILL after `--drain-time`. The sockets never close, so no connection is refused during the replacement.
+{% /caption %}
 
-For the `server` command, Dewy binds the listening sockets for `--port` once when the server starts and keeps them open until Dewy shuts down. The application runs as a worker process that inherits these sockets. When a new version is detected:
+### Zero-Downtime Restart with Socket Inheritance
+
+For the `server` command, Dewy binds the listening sockets for `--port` once when the server starts and keeps them open until Dewy shuts down. The application runs as a worker process that inherits these sockets, so it serves on them instead of binding the ports itself; see [Application Integration for the Server Command](/application) for what the application needs to do. When a new version is detected:
 
 1. Dewy starts a new worker process beside the current one; it inherits the same listening sockets
 2. Once the new worker has stayed up for the startup wait (`--startup-wait`, 1 second by default), and has passed the health check on its own socket when `--health-before-switch` is set, Dewy sends SIGTERM to the previous worker
@@ -53,6 +57,10 @@ If the new worker exits within the startup wait or fails that health check, the 
 In Proxy Mode, Dewy manages containerized applications using Docker or Podman. It runs a built-in TCP reverse proxy that routes traffic to container backends, enabling zero-downtime rolling updates.
 
 ![Proxy Architecture](/images/proxy-architecture.svg)
+
+{% caption %}
+The `container` command replaces the replicas in this order: 1. Start a new container, published on a random `127.0.0.1` port. 2. Once it is running, and has passed the health check when `--health-path` is set, add it to the proxy, and repeat until `--replicas` new containers run. 3. Remove each old container from the proxy, then stop it with SIGTERM and SIGKILL after `--drain-time`. Old and new containers receive traffic together until step 3, so the proxy always has a running container to forward to.
+{% /caption %}
 
 ### Components
 
@@ -101,7 +109,7 @@ Containers are started with localhost-only port bindings (`127.0.0.1::containerP
 | Deployment unit | Archive (tar.gz, zip) | OCI image |
 | Process management | Child process | Container runtime |
 | Load balancing | External (or single process) | Built-in TCP proxy |
-| Graceful restart | Worker replacement on Dewy-owned sockets | Rolling update |
+| Zero-downtime update | Worker replacement on Dewy-owned sockets | Rolling update |
 | Replicas | Single process | Multiple containers |
 | Health check | HTTP endpoint (`--health-path`) | HTTP endpoint |
 

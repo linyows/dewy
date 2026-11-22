@@ -32,6 +32,8 @@ dewy server --registry ghr://owner/repo --port 8000 -- /opt/myapp/current/myapp
 - `--port 8000`: アプリケーションが使用するポート
 - `/opt/myapp/current/myapp`: 実行するアプリケーションのパス
 
+dewyはアプリケーションを起動する前に8000番ポートを開き、そのソケットをアプリケーションに渡します。アプリケーションはポートを自分で開かず、渡されたソケットで待ち受けます。取得方法は[serverコマンドでのアプリの対応](/ja/application)を参照してください。
+
 ### 静的アセットのデプロイ
 
 HTMLやCSS、JavaScriptファイルなどの静的ファイルをデプロイする場合：

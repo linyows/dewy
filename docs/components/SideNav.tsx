@@ -10,6 +10,7 @@ const jaItems = [
       { href: '/ja/introduction', children: 'はじめに' },
       { href: '/ja/getting-started', children: '使ってみよう' },
       { href: '/ja/installation', children: 'インストール' },
+      { href: '/ja/application', children: 'アプリの対応' },
       { href: '/ja/faq', children: 'よくある質問' },
       { href: '/ja/contributing', children: 'コントリビューション' },
     ],
@@ -47,6 +48,7 @@ const enItems = [
       { href: '/introduction', children: 'Introduction' },
       { href: '/getting-started', children: 'Getting Started' },
       { href: '/installation', children: 'Installation' },
+      { href: '/application', children: 'App Integration' },
       { href: '/faq', children: 'FAQ' },
       { href: '/contributing', children: 'Contributing' },
     ],
@@ -156,28 +158,28 @@ export function SideNav({ className }) {
             position: relative;
           }
           span {
+            display: flex;
+            align-items: center;
             font-weight: bold;
-            padding: 0.5rem 0 0.5rem 1.6rem;
-            poisition: relative;
+            margin-left: -0.2rem;
           }
           span:before {
             content: '⚫︎';
-            display: block;
-            position: absolute;
-            top: .2rem;
-            left: -0.2rem;
+            flex: none;
+            width: 1.8rem;
             font-size: 1.2rem;
-            line-height: 1.2rem;
+            line-height: 1;
             color: var(--primary-color);
           }
           ul {
+            margin-top: .4rem;
             padding: 0 0 1.5rem 1.7rem;
             position: relative;
           }
           ul:before {
             content: '⎿';
             position: absolute;
-            left: -.1rem;
+            left: -.3rem;
             top: 0;
             bottom: 0;
             width: 1px;

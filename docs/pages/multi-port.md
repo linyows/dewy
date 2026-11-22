@@ -251,27 +251,7 @@ This design provides different functionality on each port while implementing uni
 
 ### Using the Sockets Passed by dewy {% #inherited-sockets %}
 
-Dewy passes the sockets to the application as inherited file descriptors, starting from 3, and lists them in the `DEWY_PORT` environment variable. Dewy also sets the same value in `SERVER_STARTER_PORT`, whose name and format are compatible with server-starter, so applications written for server-starter work without changes. New applications should read `DEWY_PORT`.
-
-Entries are joined by `;`, and each entry is `<address>=<fd>`. `<address>` is the port as configured: `port`, or `host:port` when `--host` is set to an address other than `0.0.0.0` or `::`, with an IPv6 address in brackets. A UDP socket carries a `/udp` suffix on the address. The entries are sorted by port number, with the TCP port before the UDP port of the same number.
-
-| `--port` and `--host` | `DEWY_PORT` |
-|---|---|
-| `--port 8080,8090` | `8080=3;8090=4` |
-| `--port 8080 --host 127.0.0.1` | `127.0.0.1:8080=3` |
-| `--port 8080 --host ::1` | `[::1]:8080=3` |
-| `--port 53,53/udp` | `53=3;53/udp=4` |
-| `--port 53/udp --host ::1` | `[::1]:53/udp=3` |
-
-The number after `=` is a file descriptor, not a port. The application turns a TCP descriptor into a `net.Listener` with `os.NewFile` and `net.FileListener`, and a UDP descriptor into a `net.PacketConn` with `net.FilePacketConn`.
-
-A Go application can use the `github.com/linyows/dewy/sock` module instead of parsing the variable itself. The module depends only on the standard library.
-
-```bash
-go get github.com/linyows/dewy/sock
-```
-
-`sock.Listen` and `sock.ListenPacket` take the same arguments as `net.Listen` and `net.ListenPacket`. Under dewy, they return the inherited socket whose port matches the address; the host part is ignored, because `--host` decides the interface. Without dewy, or for a port that dewy did not open, they bind the address themselves, so the same code runs on a development machine. `sock.Listeners` and `sock.PacketConns` return every inherited TCP or UDP socket, for an application that serves whatever `--port` lists. Each inherited socket can be returned once; a second request for it returns `sock.ErrTaken`. When `DEWY_PORT` is not set, the module reads `SERVER_STARTER_PORT`.
+Dewy lists the sockets it opened in the `DEWY_PORT` environment variable, and a Go application gets them with the `github.com/linyows/dewy/sock` module; see [Application Integration for the Server Command](/application) for the variable, the module, and other languages. A multi-port application can take every inherited socket with `sock.Listeners` and `sock.PacketConns` instead of listing its ports:
 
 ```go
 package main
@@ -342,51 +322,6 @@ func main() {
 The sockets follow the configuration, so the application does not need its own list of ports: changing `--port` changes the sockets it serves on.
 
 Dewy keeps these sockets open while it replaces the application process. A UDP datagram that arrives during the replacement is queued on the socket and read by whichever worker reads next. During the replacement, the previous and the new worker read from the same UDP socket, so each datagram is received by only one of them.
-
-### Serving the Health Check Socket {% #health-socket %}
-
-With [`--health-before-switch`](/reference#--health-before-switch), dewy passes each new process one more TCP socket, on the loopback interface, and announces it in the `DEWY_HEALTH_PORT` environment variable as a single `<address>=<fd>` entry, for example `127.0.0.1:41234=5`. The descriptor follows the `DEWY_PORT` sockets, or is 3 when there is no `--port`. Dewy sends `--health-path` requests to this socket before the new process replaces the previous one, so the application must serve its health endpoint there. Serve the same handler as on the regular port, so that the check reflects the state of the process that will receive traffic.
-
-`sock.HealthListener` returns this socket, or nil when `DEWY_HEALTH_PORT` is not set.
-
-```go
-package main
-
-import (
-    "log"
-    "net/http"
-
-    "github.com/linyows/dewy/sock"
-)
-
-func healthHandler(w http.ResponseWriter, r *http.Request) {
-    // Report the state the application depends on, such as its database
-    // connection, so that a process that cannot serve fails the check.
-    w.WriteHeader(http.StatusOK)
-}
-
-func main() {
-    mux := http.NewServeMux()
-    mux.HandleFunc("/health", healthHandler)
-
-    // The health socket is set only under --health-before-switch.
-    health, err := sock.HealthListener()
-    if err != nil {
-        log.Fatal(err)
-    }
-    if health != nil {
-        go http.Serve(health, mux)
-    }
-
-    ln, err := sock.Listen("tcp", ":8080")
-    if err != nil {
-        log.Fatal(err)
-    }
-    log.Fatal(http.Serve(ln, mux))
-}
-```
-
-The health socket belongs to one process only, so the answer always comes from the new process, not from the previous one. An application that does not serve this socket fails every health check under `--health-before-switch`.
 
 ### Port-Specific Routing Configuration
 

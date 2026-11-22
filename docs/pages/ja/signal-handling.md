@@ -30,31 +30,6 @@ SIGTERMシグナルは、プロセス管理システム（systemdなど）から
 
 SIGQUITシグナルも強制終了シグナルとして扱われ、SIGINTやSIGTERMと同様の終了処理を実行します。
 
-## シグナルハンドリングの実装詳細
-
-dewyのシグナルハンドリングはdewy.goの`waitSigs()`関数で実装されています。この関数は、指定されたシグナルを監視し続けるゴルーチンで実行されます。
-
-```go
-func (d *Dewy) waitSigs(ctx context.Context) {
-    sigCh := make(chan os.Signal, 1)
-    signal.Notify(sigCh, syscall.SIGHUP, syscall.SIGUSR1, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
-
-    for sig := range sigCh {
-        d.logger.Debug("PID received signal", slog.Int("pid", os.Getpid()), slog.String("signal", sig.String()))
-        switch sig {
-        case syscall.SIGHUP:
-            continue
-        case syscall.SIGUSR1:
-            // サーバー再起動処理
-        case syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:
-            // 終了処理
-        }
-    }
-}
-```
-
-シグナル受信時には、プロセスIDとシグナル名がログに記録され、受信したシグナルに応じて適切な処理が実行されます。
-
 ## サーバー再起動メカニズム
 
 SIGUSR1シグナルによるサーバー再起動は、`restartServer()`関数で処理されます。新しいバージョンのデプロイとロールバックも同じ再起動処理を使います。
@@ -151,7 +126,7 @@ func main() {
 
 このサンプルでは、SIGTERMシグナルを受信した際にGraceful shutdownを実行し、既存のリクエストを完了させてからサーバーを停止します。dewyは再起動後に以前のworkerへ、dewyの終了時にはすべてのworkerへSIGTERMを送信します。
 
-dewyの下では、`--port`で指定したポートはdewyがすでに開いており、その待ち受けソケットがファイルディスクリプタ3としてアプリケーションに渡されます。`github.com/linyows/dewy/sock`モジュールの`sock.Listen`は、ポートを開き直さずに、そのソケットを`net.Listener`として返します。dewyが開いているポートを開こうとすると、Linuxでは「address already in use」で失敗します。また、渡されたソケットを使うことで、再起動の間もポートが開いたままになります。`--port`を複数指定した場合、`DEWY_PORT`にはポートごとのエントリが`;`区切りで並びます。詳しくは[マルチポート](/ja/multi-port#inherited-sockets)を参照してください。
+dewyの下では、`--port`で指定したポートはdewyがすでに開いており、その待ち受けソケットがファイルディスクリプタ3としてアプリケーションに渡されます。`github.com/linyows/dewy/sock`モジュールの`sock.Listen`は、ポートを開き直さずに、そのソケットを`net.Listener`として返します。dewyが開いているポートを開こうとすると、Linuxでは「address already in use」で失敗します。また、渡されたソケットを使うことで、再起動の間もポートが開いたままになります。`--port`を複数指定した場合、`DEWY_PORT`にはポートごとのエントリが`;`区切りで並びます。詳しくは[serverコマンドでのアプリの対応](/ja/application#inherited-sockets)を参照してください。
 
 ### データベース接続を持つアプリケーション
 
@@ -395,20 +370,6 @@ WantedBy=multi-user.target
 
 この設定により、`systemctl reload dewy`コマンドでアプリケーションの再起動が可能になります。
 
-### モニタリングとログ出力
-
-シグナル受信時のログ出力は、システムの動作を監視する上で重要な情報源となります。
-
-```bash
-# dewyのログを監視
-journalctl -u dewy -f
-
-# 特定のシグナル受信ログのみを表示
-journalctl -u dewy | grep "received signal"
-```
-
-ログには受信したシグナルの種類、プロセスID、実行された処理の結果が記録されるため、トラブルシューティングや運用監視に活用できます。
-
 ## トラブルシューティング
 
 シグナルハンドリングに関する一般的な問題と解決方法について説明します。
@@ -437,14 +398,3 @@ tail -f /var/log/dewy.log
 再起動は成功するのに古いworkerが残る場合は、アプリケーションがSIGTERMで終了するかを確認してください。dewyは再起動のたびに以前のworkerへSIGTERMを送信します。
 
 dewyはソケットを起動時に一度だけ開いて保持するため、ポートを開けない問題は再起動時ではなくdewyの起動時に報告されます。
-
-### ログの確認方法
-
-問題の特定には、詳細なログレベルでの出力が有効です。
-
-```bash
-# デバッグレベルでdewyを起動
-dewy server --log-level debug --registry ghr://myorg/myapp --port 8080 -- /opt/myapp/current/myapp
-```
-
-デバッグレベルのログには、シグナル受信の詳細やプロセス間通信の状況が記録されるため、問題の根本原因を特定しやすくなります。

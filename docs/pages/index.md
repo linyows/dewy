@@ -24,7 +24,7 @@ Dewy is software for declaratively deploying applications in non-Kubernetes envi
 
   ![Dewy Server](/images/dewy-server.png)
 
-  Dewy continuously monitors for new releases and automatically deploys them with graceful restarts, ensuring zero interruption to your running processes.
+  Dewy continuously monitors for new releases and automatically deploys them with zero-downtime restarts, ensuring zero interruption to your running processes.
   Signal-based manual restarts and multi-port configurations are also supported.
   {% /item %}
 - {% item %}

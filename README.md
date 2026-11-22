@@ -42,7 +42,7 @@ Features
 - Pull-based declarative deployment
 - Multiple deployment modes (binary, assets, container images)
 - Zero-downtime rolling update deployment for containers
-- Graceful restarts
+- Zero-downtime restarts for binaries, with listening sockets passed from the old process to the new one
 - Configurable registries and artifact stores
 - Support for Docker Hub, GHCR, GAR, ECR, and other OCI registries
 - SHA-256 verification of downloaded artifacts
@@ -62,6 +62,8 @@ The following Server command demonstrates how to use GitHub Releases as a regist
 $ dewy server --registry ghr://linyows/myapp \
   --notifier slack://general?title=myapp -p 8000 -l info -- /opt/myapp/current/myapp
 ```
+
+Dewy opens the port before it starts the application and passes the socket to it, so the application serves on that socket instead of binding the port itself. See [Application Integration for the Server Command](https://dewy.linyo.ws/application) for how to get the socket, including the `github.com/linyows/dewy/sock` module for Go.
 
 Add `--health-path` to verify the application after a deployment. Dewy probes the path on the lowest TCP `--port` once the process has started, and restores the previous release if the probe does not succeed within `--health-timeout` (30 seconds by default):
 

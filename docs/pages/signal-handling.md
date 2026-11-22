@@ -30,31 +30,6 @@ SIGTERM signals are treated as termination requests from process management syst
 
 SIGQUIT signals are also treated as termination signals, executing the same shutdown procedures as SIGINT and SIGTERM.
 
-## Signal Handling Implementation
-
-Dewy's signal handling is implemented in the `waitSigs()` function in dewy.go. This function runs in a goroutine that continuously monitors specified signals.
-
-```go
-func (d *Dewy) waitSigs(ctx context.Context) {
-    sigCh := make(chan os.Signal, 1)
-    signal.Notify(sigCh, syscall.SIGHUP, syscall.SIGUSR1, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
-
-    for sig := range sigCh {
-        d.logger.Debug("PID received signal", slog.Int("pid", os.Getpid()), slog.String("signal", sig.String()))
-        switch sig {
-        case syscall.SIGHUP:
-            continue
-        case syscall.SIGUSR1:
-            // Server restart processing
-        case syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:
-            // Termination processing
-        }
-    }
-}
-```
-
-When signals are received, the process ID and signal name are logged, and appropriate actions are executed based on the signal type.
-
 ## Server Restart Mechanism
 
 Server restarts triggered by SIGUSR1 signals are handled by the `restartServer()` function. A deployment of a new version and a rollback use the same restart.
@@ -151,7 +126,7 @@ func main() {
 
 This example implements graceful shutdown when receiving SIGTERM, allowing existing requests to complete before stopping the server. Dewy sends SIGTERM to the previous worker after a restart and to every worker when dewy shuts down.
 
-Under dewy, dewy has already opened the port given by `--port` and passes the listening socket to the application as file descriptor 3. `sock.Listen` from the `github.com/linyows/dewy/sock` module turns that socket into a `net.Listener` instead of binding the port again; binding a port that dewy holds fails with "address already in use" on Linux, and the inherited socket is what keeps the port open across a restart. With several `--port` values, `DEWY_PORT` has one entry per port; see [Multi-Port](/multi-port#inherited-sockets).
+Under dewy, dewy has already opened the port given by `--port` and passes the listening socket to the application as file descriptor 3. `sock.Listen` from the `github.com/linyows/dewy/sock` module turns that socket into a `net.Listener` instead of binding the port again; binding a port that dewy holds fails with "address already in use" on Linux, and the inherited socket is what keeps the port open across a restart. With several `--port` values, `DEWY_PORT` has one entry per port; see [Application Integration for the Server Command](/application#inherited-sockets).
 
 ### Applications with Database Connections
 
@@ -395,20 +370,6 @@ WantedBy=multi-user.target
 
 This configuration enables application restart via the `systemctl reload dewy` command.
 
-### Monitoring and Log Output
-
-Log output during signal reception provides important information for system operation monitoring.
-
-```bash
-# Monitor dewy logs
-journalctl -u dewy -f
-
-# Display only signal reception logs
-journalctl -u dewy | grep "received signal"
-```
-
-Logs record received signal types, process IDs, and execution results, which can be utilized for troubleshooting and operational monitoring.
-
 ## Troubleshooting
 
 This section covers common signal handling issues and their solutions.
@@ -437,14 +398,3 @@ A restart fails when the new worker exits within the startup wait (`--startup-wa
 If the restart succeeds but old workers remain, check that the application exits on SIGTERM. Dewy sends SIGTERM to the previous worker after each restart.
 
 A port that cannot be bound is reported when dewy starts, not at restart, because dewy binds the sockets once and keeps them open.
-
-### Log Verification Methods
-
-For detailed problem identification, debug-level output is effective.
-
-```bash
-# Start dewy with debug level
-dewy server --log-level debug --registry ghr://myorg/myapp --port 8080 -- /opt/myapp/current/myapp
-```
-
-Debug-level logs record detailed signal reception information and inter-process communication status, making it easier to identify root causes of problems.

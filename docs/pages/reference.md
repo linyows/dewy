@@ -126,7 +126,7 @@ The application finds the sockets in the `DEWY_PORT` environment variable. The v
 | `--port 53,53/udp` | `53=3;53/udp=4` |
 | `--port 53/udp --host ::1` | `[::1]:53/udp=3` |
 
-An application opens a TCP entry with `net.FileListener` and a UDP entry with `net.FilePacketConn`. See [Multi-Port](/multi-port#inherited-sockets) for sample code.
+An application opens a TCP entry with `net.FileListener` and a UDP entry with `net.FilePacketConn`. See [Application Integration for the Server Command](/application#inherited-sockets) for sample code.
 
 ```bash
 # With port (HTTP server)
@@ -185,7 +185,7 @@ After the `--startup-wait` time, Dewy sends requests to `--health-path` on that 
 
 The first process that `dewy server` starts is probed on its health socket in the same way. If it fails, the start fails.
 
-The application must serve its health endpoint on the `DEWY_HEALTH_PORT` socket. Dewy cannot distinguish an application that does not serve the socket from one that is hung, so with this option every deployment of such an application fails. For that reason the option is not enabled by default. See [Multi-Port](/multi-port#health-socket) for sample code.
+The application must serve its health endpoint on the `DEWY_HEALTH_PORT` socket. Dewy cannot distinguish an application that does not serve the socket from one that is hung, so with this option every deployment of such an application fails. For that reason the option is not enabled by default. See [Application Integration for the Server Command](/application#health-checks) for sample code.
 
 Because the probe does not use `--port`, `--health-path` with this option does not require a TCP `--port`. An application that listens only on UDP ports, or a job worker without `--port`, can be health checked as long as it serves the health socket.
 
@@ -563,13 +563,13 @@ S3 and GCS also read the standard credentials of each SDK, such as `AWS_ACCESS_K
 
 ### Variables Dewy Sets for the Application {% #variables-dewy-sets %}
 
-The `server` command sets these variables in the environment of the application process, in addition to the environment Dewy itself runs with. A Go application can read them with the `github.com/linyows/dewy/sock` module; see [Multi-Port](/multi-port#inherited-sockets).
+The `server` command sets these variables in the environment of the application process, in addition to the environment Dewy itself runs with. A Go application can read them with the `github.com/linyows/dewy/sock` module; see [Application Integration for the Server Command](/application#inherited-sockets).
 
 | Variable | Description |
 |----------|-------------|
-| `DEWY_PORT` | The sockets passed to the application, one `<address>=<fd>` entry per `--port`, joined by `;` (for example, `8080=3;53/udp=4`). Set only when `--port` is given. See [Multi-Port](/multi-port#inherited-sockets) |
+| `DEWY_PORT` | The sockets passed to the application, one `<address>=<fd>` entry per `--port`, joined by `;` (for example, `8080=3;53/udp=4`). Set only when `--port` is given. See [Application Integration for the Server Command](/application#inherited-sockets) |
 | `SERVER_STARTER_PORT` | The same value as `DEWY_PORT`, for applications written for server-starter |
-| `DEWY_HEALTH_PORT` | The health check socket of this process in the `<address>=<fd>` form (for example, `127.0.0.1:41234=5`). Set only with `--health-before-switch`. See [Multi-Port](/multi-port#health-socket) |
+| `DEWY_HEALTH_PORT` | The health check socket of this process in the `<address>=<fd>` form (for example, `127.0.0.1:41234=5`). Set only with `--health-before-switch`. See [Application Integration for the Server Command](/application#health-checks) |
 
 ## Exit Codes
 

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="100%" height="100%" viewBox="0 0 900 470" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <style>
+        .t { font-family: 'AvenirNext-DemiBold', 'Avenir Next', sans-serif; font-weight: 600; fill: rgb(35,31,32); }
+        .s { font-family: 'AvenirNext-Medium', 'Avenir Next', sans-serif; font-weight: 500; fill: rgb(35,31,32); }
+        .line { fill: none; stroke: rgb(35,31,32); stroke-width: 2.6px; stroke-linecap: round; stroke-linejoin: round; }
+        .dash { stroke-dasharray: 6 6; }
+        .fill { fill: rgb(35,31,32); }
+    </style>
+    <rect x="0" y="0" width="900" height="470" style="fill: white;"/>
+
+    <!-- process tree -->
+    <path d="M30,48L52,48L41,70Z" class="fill"/>
+    <text x="70" y="68" class="t" font-size="29">systemd</text>
+
+    <path d="M41,84L41,120L72,120" class="line"/>
+    <path d="M84,108L106,108L95,130Z" class="fill"/>
+    <text x="124" y="128" class="t" font-size="29">dewy</text>
+    <text x="124" y="152" class="s" font-size="14">supervisor runs inside the dewy process</text>
+
+    <!-- previous app -->
+    <path d="M95,146L95,350L130,350" class="line"/>
+    <path d="M95,250L130,250" class="line"/>
+    <circle cx="152" cy="250" r="16" class="line dash"/>
+    <text x="182" y="259" class="t" font-size="26">Previous app</text>
+    <rect x="182" y="272" width="80" height="20" rx="4" class="fill"/>
+    <text x="222" y="287" class="t" font-size="12" text-anchor="middle" style="fill: white;">SIGTERM</text>
+    <text x="270" y="287" class="s" font-size="13">after the new app is ready, SIGKILL after --drain-time</text>
+
+    <!-- new app -->
+    <circle cx="152" cy="350" r="16" class="fill"/>
+    <text x="182" y="359" class="t" font-size="26">New app</text>
+    <text x="182" y="382" class="s" font-size="13">started beside the previous app</text>
+
+    <!-- health socket of the new app -->
+    <path d="M152,366L152,428L182,428" class="line dash"/>
+    <rect x="182" y="412" width="300" height="32" rx="4" class="line dash"/>
+    <text x="194" y="433" class="s" font-size="14">Health socket (--health-before-switch only)</text>
+
+    <!-- listening sockets -->
+    <text x="860" y="94" class="s" font-size="13" text-anchor="end">Opened once, kept open across restarts</text>
+    <rect x="560" y="104" width="300" height="96" rx="6" class="line"/>
+    <text x="580" y="136" class="t" font-size="24">Listening sockets</text>
+    <text x="580" y="164" class="s" font-size="16">:8000 → fd 3</text>
+    <text x="580" y="188" class="s" font-size="16">:8443 → fd 4</text>
+    <path d="M222,120L544,120" class="line"/>
+    <path d="M533,111L544,120L533,129" class="line"/>
+    <text x="383" y="110" class="s" font-size="13" text-anchor="middle">binds --port</text>
+
+    <!-- inheritance -->
+    <path d="M710,200L710,350L470,350" class="line"/>
+    <path d="M710,250L470,250" class="line dash"/>
+    <text x="722" y="290" class="s" font-size="13">inherited as fd 3, 4, …</text>
+    <text x="722" y="308" class="s" font-size="13">listed in DEWY_PORT</text>
+</svg>
