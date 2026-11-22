@@ -1,0 +1,147 @@
+name: Server Socket Verify
+
+# The instance listens only on a Unix domain socket and reads the application
+# environment from an envdir. Its start step put two files in the envdir:
+# DEWY_E2E_VALUE, which overrides the value of the same name in dewy's own
+# environment, and an empty DEWY_E2E_UNSET, which removes it.
+#
+# The application's environment is read from /proc, so this job runs on Linux
+# only. The worker PID is the one in the last "Worker started" or "Worker
+# replaced" log line: the first start logs the former, a deployment or a
+# restart the latter.
+steps:
+- name: Wait for new version to start
+  uses: shell
+  retry:
+    max_attempts: 60
+    interval: 5s
+  with:
+    cmd: |
+      if [ -f "{{ vars.log }}" ]; then
+        grep "starting version" "{{ vars.log }}" | \
+          grep -q "{{ replace(vars.new_version, 'v', '') }}" && exit 0
+      fi
+      exit 1
+  test: status == 0
+- name: Wait for stabilization
+  wait: 30s
+  uses: shell
+  with:
+    cmd: "echo 'Waiting for system stabilization after new version detection'"
+  test: status == 0
+- name: Verify the new version answers on the socket
+  id: serve
+  uses: shell
+  with:
+    cmd: curl -sS --fail --unix-socket "{{ vars.socket }}" http://localhost/version
+  test: status == 0 && res.stdout contains replace(vars.new_version, 'v', '')
+  outputs:
+    ok: status == 0 && res.stdout contains replace(vars.new_version, 'v', '')
+  echo: "{{ res.stdout }}"
+- name: Verify the health check probed the socket
+  id: health
+  uses: shell
+  with:
+    # One probe for the initial version and one for the new version.
+    cmd: |
+      n=$(grep 'msg="Verifying deployment"' "{{ vars.log }}" | grep -c 'socket={{ vars.socket }}' || true)
+      echo "probes over the socket: ${n:-0}"
+      [ "${n:-0}" -ge 2 ]
+  test: status == 0
+  outputs:
+    ok: status == 0
+  echo: "{{ res.stdout }}"
+- name: Verify the application environment from the envdir
+  id: envdir
+  uses: shell
+  with:
+    cmd: |
+      pid=$(sed -En 's/.*msg="Worker (started|replaced)".* pid=([0-9]+).*/\2/p' "{{ vars.log }}" | tail -n 1)
+      env=$(tr '\0' '\n' < "/proc/${pid}/environ") || exit 1
+      echo "${env}" | grep '^DEWY_E2E_'
+      echo "${env}" | grep -qx 'DEWY_E2E_VALUE=from-envdir' || exit 1
+      ! echo "${env}" | grep -q '^DEWY_E2E_UNSET='
+  test: status == 0
+  outputs:
+    ok: status == 0
+  echo: "{{ res.stdout }}"
+- name: Change the envdir and restart with SIGUSR1
+  uses: shell
+  with:
+    # The PID from the start step is the process group, which also holds the
+    # application. SIGUSR1 goes to dewy alone; the application would exit on it.
+    cmd: |
+      printf 'reloaded\n' > "{{ vars.envdir }}/DEWY_E2E_VALUE" || exit 1
+      kill -USR1 "$(pgrep -g {{ vars.pid }} -x dewy)"
+  test: status == 0
+- name: Wait for the restart
+  uses: shell
+  retry:
+    max_attempts: 30
+    interval: 2s
+  with:
+    # The deployment of the new version also logs "Restart notification", so
+    # match the message of the SIGUSR1 restart only.
+    cmd: grep -q 'Restarted receiving by `SIGUSR1` signal' "{{ vars.log }}"
+  test: status == 0
+- name: Verify the restarted application got the new value
+  id: reload
+  uses: shell
+  with:
+    cmd: |
+      pid=$(sed -En 's/.*msg="Worker (started|replaced)".* pid=([0-9]+).*/\2/p' "{{ vars.log }}" | tail -n 1)
+      env=$(tr '\0' '\n' < "/proc/${pid}/environ") || exit 1
+      echo "${env}" | grep '^DEWY_E2E_'
+      echo "${env}" | grep -qx 'DEWY_E2E_VALUE=reloaded'
+  test: status == 0
+  outputs:
+    ok: status == 0
+  echo: "{{ res.stdout }}"
+- name: Verify the socket still answers after the restart
+  id: serveagain
+  uses: shell
+  with:
+    cmd: curl -sS --fail --unix-socket "{{ vars.socket }}" http://localhost/version
+  test: status == 0 && res.stdout contains replace(vars.new_version, 'v', '')
+  outputs:
+    ok: status == 0 && res.stdout contains replace(vars.new_version, 'v', '')
+  echo: "{{ res.stdout }}"
+- name: Stop dewy
+  uses: shell
+  with: # Use Process Group ID
+    cmd: "kill -TERM -{{ vars.pid }}"
+  test: status == 0
+- name: Verify the socket file is removed on shutdown
+  id: removed
+  uses: shell
+  retry:
+    max_attempts: 15
+    interval: 2s
+  with:
+    cmd: '! test -e "{{ vars.socket }}"'
+  test: status == 0
+  outputs:
+    ok: status == 0
+- name: Verify no error
+  id: noerr
+  uses: shell
+  with:
+    cmd: "grep 'level=ERROR' {{ vars.log }}"
+  test: status == 1
+  outputs:
+    ok: status == 1
+- name: Verify two symlinks creates
+  id: twosyml
+  uses: shell
+  with:
+    cmd: |
+      grep -c 'Create symlink' {{ vars.log }} | tr -d '\n'
+  test: res.stdout == "2"
+  outputs:
+    ok: res.stdout == "2"
+- name: Show log
+  skipif: outputs.serve.ok && outputs.health.ok && outputs.envdir.ok && outputs.reload.ok && outputs.serveagain.ok && outputs.removed.ok && outputs.noerr.ok && outputs.twosyml.ok
+  uses: shell
+  with:
+    cmd: "cat {{ vars.log }}"
+  echo: "{{ res.stdout }}"
