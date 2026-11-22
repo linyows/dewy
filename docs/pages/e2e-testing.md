@@ -24,6 +24,7 @@ Each run follows the same path as a real release:
 | `server` | Google Cloud Storage (`gs`) | Same as above, sourced from GCS |
 | `server` | GitHub Releases + S3 shared cache | Two instances on the same S3 cache prefix with `registry-ttl` |
 | `server` | GitHub Releases + GCS shared cache | Same as above for the GCS cache backend |
+| `server` (socket) | GitHub Releases (`ghr`) | `--socket` without a TCP port, the health check over the socket, and `--envdir` reloaded on `SIGUSR1` |
 | `assets` | GitHub Releases (`ghr`) | Static asset download and symlink management |
 | `assets` | AWS S3 (`s3`) | Same as above, sourced from S3 |
 | `assets` | Google Cloud Storage (`gs`) | Same as above, sourced from GCS |
@@ -69,6 +70,7 @@ flowchart LR
     start_srv_ghr_s3cache_b["Start server by Github-Releases registry with S3 shared cache (B)"]
     start_srv_ghr_gscache_a["Start server by Github-Releases registry with GCS shared cache (A)"]
     start_srv_ghr_gscache_b["Start server by Github-Releases registry with GCS shared cache (B)"]
+    start_srv_ghr_socket["Start server by Github-Releases registry on a Unix domain socket with an envdir"]
     start_ast_ghr["Start assets by Github-Releases registry"]
     start_ast_s3["Start assets by AWS S3 registry"]
     start_ast_gs["Start assets by GCloud Storage registry"]
@@ -87,6 +89,7 @@ flowchart LR
     start_srv_ghr_s3cache_a --> start_srv_ghr_s3cache_b
     build --> start_srv_ghr_gscache_a
     start_srv_ghr_gscache_a --> start_srv_ghr_gscache_b
+    build --> start_srv_ghr_socket
     build --> start_ast_ghr
     build --> start_ast_s3
     build --> start_ast_gs
@@ -99,6 +102,7 @@ flowchart LR
     start_srv_gs --> create_release
     start_srv_ghr_s3cache_b --> create_release
     start_srv_ghr_gscache_b --> create_release
+    start_srv_ghr_socket --> create_release
     start_ast_ghr --> create_release
     start_ast_s3 --> create_release
     start_ast_gs --> create_release
@@ -157,37 +161,39 @@ Phase 3 runs the following jobs.
 flowchart LR
     start_ctr_healthfail["Start container with a failing health check"]
     create_release["Create new version"]
-    job_19["Verify server by Github-Releases registry"]
-    job_20["Verify server by AWS S3 registry"]
-    job_21["Verify server by GCloud Storage registry"]
+    job_20["Verify server by Github-Releases registry"]
+    job_21["Verify server by AWS S3 registry"]
+    job_22["Verify server by GCloud Storage registry"]
     verify_srv_ghr_s3cache_a["Verify server by Github-Releases registry with S3 shared cache (A)"]
     verify_srv_ghr_s3cache_b["Verify server by Github-Releases registry with S3 shared cache (B)"]
     verify_srv_ghr_gscache_a["Verify server by Github-Releases registry with GCS shared cache (A)"]
     verify_srv_ghr_gscache_b["Verify server by Github-Releases registry with GCS shared cache (B)"]
-    job_26["Verify assets by Github-Releases registry"]
+    job_27["Verify server on a Unix domain socket with an envdir"]
+    job_28["Verify assets by Github-Releases registry"]
     verify_ast_s3["Verify assets by AWS S3 registry"]
     verify_ast_gs["Verify assets by GCloud Storage registry"]
-    job_29["Verify container by OCI registry"]
-    job_30["Verify container by OCI registry with Podman runtime"]
-    job_31["Verify container by Docker Hub registry"]
-    job_32["Verify container with multiple ports by OCI registry"]
-    job_33["Verify container health check failure handling"]
+    job_31["Verify container by OCI registry"]
+    job_32["Verify container by OCI registry with Podman runtime"]
+    job_33["Verify container by Docker Hub registry"]
+    job_34["Verify container with multiple ports by OCI registry"]
+    job_35["Verify container health check failure handling"]
 
-    create_release --> job_19
     create_release --> job_20
     create_release --> job_21
+    create_release --> job_22
     create_release --> verify_srv_ghr_s3cache_a
     create_release --> verify_srv_ghr_s3cache_b
     create_release --> verify_srv_ghr_gscache_a
     create_release --> verify_srv_ghr_gscache_b
-    create_release --> job_26
+    create_release --> job_27
+    create_release --> job_28
     create_release --> verify_ast_s3
     create_release --> verify_ast_gs
-    create_release --> job_29
-    create_release --> job_30
     create_release --> job_31
     create_release --> job_32
-    start_ctr_healthfail --> job_33
+    create_release --> job_33
+    create_release --> job_34
+    start_ctr_healthfail --> job_35
 ```
 
 
@@ -196,6 +202,7 @@ Each variant has a verify job that runs a shared job definition from `e2e/jobs/`
 | Job definition | Used by |
 |---|---|
 | `server-verify.yml` | `server` variants |
+| `server-socket-verify.yml` | `server` (socket) |
 | `assets-verify.yml` | `assets` variants |
 | `container-verify.yml` | `container` variants on ghcr.io, Podman and Docker Hub |
 | `container-multiport-verify.yml` | `container` (multi-port) |
@@ -217,10 +224,10 @@ flowchart LR
     verify_srv_ghr_gscache_b["Verify server by Github-Releases registry with GCS shared cache (B)"]
     verify_ast_s3["Verify assets by AWS S3 registry"]
     verify_ast_gs["Verify assets by GCloud Storage registry"]
-    job_34["Verify shared cache reduces upstream downloads (S3 pair)"]
-    job_35["Verify shared cache reduces upstream downloads (GCS pair)"]
-    job_36["Verify registry result cache reduces upstream polls (S3 pair)"]
-    job_37["Verify registry result cache reduces upstream polls (GCS pair)"]
+    job_36["Verify shared cache reduces upstream downloads (S3 pair)"]
+    job_37["Verify shared cache reduces upstream downloads (GCS pair)"]
+    job_38["Verify registry result cache reduces upstream polls (S3 pair)"]
+    job_39["Verify registry result cache reduces upstream polls (GCS pair)"]
     prepare_slot_s3["Prepare slot versions on AWS S3"]
     prepare_slot_gs["Prepare slot versions on GCloud Storage"]
     start_ast_s3_slot_blue["Start assets by AWS S3 registry on the blue slot"]
@@ -239,16 +246,16 @@ flowchart LR
     verify_srv_s3_slot_green["Verify server by AWS S3 registry on the green slot"]
     verify_srv_gs_slot_blue["Verify server by GCloud Storage registry on the blue slot"]
     verify_srv_gs_slot_green["Verify server by GCloud Storage registry on the green slot"]
-    job_56["Remove slot versions"]
+    job_58["Remove slot versions"]
 
-    verify_srv_ghr_s3cache_a --> job_34
-    verify_srv_ghr_s3cache_b --> job_34
-    verify_srv_ghr_gscache_a --> job_35
-    verify_srv_ghr_gscache_b --> job_35
     verify_srv_ghr_s3cache_a --> job_36
     verify_srv_ghr_s3cache_b --> job_36
     verify_srv_ghr_gscache_a --> job_37
     verify_srv_ghr_gscache_b --> job_37
+    verify_srv_ghr_s3cache_a --> job_38
+    verify_srv_ghr_s3cache_b --> job_38
+    verify_srv_ghr_gscache_a --> job_39
+    verify_srv_ghr_gscache_b --> job_39
     verify_ast_s3 --> prepare_slot_s3
     verify_ast_gs --> prepare_slot_gs
     prepare_slot_s3 --> start_ast_s3_slot_blue
@@ -267,14 +274,14 @@ flowchart LR
     start_srv_s3_slot_green --> verify_srv_s3_slot_green
     start_srv_gs_slot_blue --> verify_srv_gs_slot_blue
     start_srv_gs_slot_green --> verify_srv_gs_slot_green
-    verify_ast_s3_slot_blue --> job_56
-    verify_ast_s3_slot_green --> job_56
-    verify_ast_gs_slot_blue --> job_56
-    verify_ast_gs_slot_green --> job_56
-    verify_srv_s3_slot_blue --> job_56
-    verify_srv_s3_slot_green --> job_56
-    verify_srv_gs_slot_blue --> job_56
-    verify_srv_gs_slot_green --> job_56
+    verify_ast_s3_slot_blue --> job_58
+    verify_ast_s3_slot_green --> job_58
+    verify_ast_gs_slot_blue --> job_58
+    verify_ast_gs_slot_green --> job_58
+    verify_srv_s3_slot_blue --> job_58
+    verify_srv_s3_slot_green --> job_58
+    verify_srv_gs_slot_blue --> job_58
+    verify_srv_gs_slot_green --> job_58
 ```
 
 
@@ -298,6 +305,15 @@ The slot versions are copied in the bucket rather than released from `dewy-testa
 - Two symlinks were created, for the initial and the new version.
 - Two versions were started or downloaded.
 - The variant that runs with `--telemetry` exposes `dewy_deployments_total{command="server"}` and `dewy_server_restarts_total{reason="deploy"}` on `/metrics`.
+
+**`server` (socket):**
+
+- The instance listens only on `--socket`, and the new version answers an HTTP request over the socket.
+- The health check probed the socket for the initial and the new version.
+- The application's environment, read from `/proc/<pid>/environ`, has the value from the envdir instead of the one in Dewy's environment, and not the variable that an empty file removes.
+- After the envdir file is changed and Dewy receives `SIGUSR1`, the new process has the new value, and the socket still answers.
+- Dewy removes the socket file on shutdown.
+- The log has no errors, and two symlinks were created.
 
 **`container`:**
 

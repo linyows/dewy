@@ -12,6 +12,7 @@ The E2E tests ensure that dewy can:
 4. **Manage containers** including health checks, replica scaling, and non-root execution
 5. **Handle multiple port mappings** with TCP proxy for container deployments
 6. **Deploy each blue/green slot** (`--slot`) its own version, even when both slots carry the same version
+7. **Serve on a Unix domain socket** (`--socket`) without a TCP port, and **reload the application environment** from `--envdir` on every start
 
 All of the above are verified across every supported combination of commands and registries:
 
@@ -22,6 +23,7 @@ All of the above are verified across every supported combination of commands and
 | `server` | Google Cloud Storage (`gs`) | Same as above, sourced from GCS |
 | `server` | GitHub Releases + S3 shared cache | Pair of instances pointed at the same S3 cache prefix; verifies the new S3 cache backend deploys correctly and reduces upstream downloads when shared |
 | `server` | GitHub Releases + GCS shared cache | Same as above for the GCS cache backend |
+| `server` (socket) | GitHub Releases (`ghr`) | `--socket` without a TCP port, `--health-path` probed over the socket, and `--envdir` reloaded on `SIGUSR1` |
 | `assets` | GitHub Releases (`ghr`) | Static asset download and symlink management |
 | `assets` | AWS S3 (`s3`) | Same as above, sourced from S3 |
 | `assets` | Google Cloud Storage (`gs`) | Same as above, sourced from GCS |
@@ -53,6 +55,14 @@ All of the above are verified across every supported combination of commands and
 - All of the above for each instance in the pair
 - Total `Cached artifact` log lines across the pair is `<= 3` (ideal `2`). Each instance only logs `Cached artifact` when it actually downloads from upstream and writes to the cache, so without sharing the total would be `4` (2 instances × 2 versions). With sharing, the second instance hits the cache and skips the download. The `<= 3` bound tolerates a single race on either deploy cycle.
 - Total `Registry result refreshed from upstream` log lines across the pair is `>= 1` and `<= 20`. The decorator only logs this when an instance acquires the refresh lock and actually calls upstream. Without the registry-result cache the pair would log it on every poll (~36-60 across the run), so the upper bound demonstrates that single-flight refresh is working. The lower bound asserts that the cache fired at least once.
+
+**Server on a Unix domain socket (`--socket` and `--envdir`):**
+- The new version answers `curl --unix-socket` on the socket, and the log shows a `Verifying deployment` probe over the socket for both versions
+- The application's environment is read from `/proc/<pid>/environ` of the worker in the last `Worker started` or `Worker replaced` log line. `DEWY_E2E_VALUE` is set in both dewy's environment and the envdir, and the application gets the envdir value. `DEWY_E2E_UNSET` is set in dewy's environment and removed by an empty envdir file
+- After the envdir file is changed and dewy receives `SIGUSR1`, the new worker has the new value and the socket still answers
+- The socket file is removed on shutdown
+- No errors in log output, and two symlinks created
+- The socket and the envdir are under `/tmp/dewy-e2e-socket`, because the path of a Unix domain socket is limited to about 100 bytes. `/proc` makes this job Linux only
 
 **Container command:**
 - No errors in log output (excluding transient `context deadline exceeded`)
@@ -119,6 +129,10 @@ flowchart LR
         direction TB
         start_srv_ghr_gscache_b_step0["Start dewy"]
     end
+    subgraph start_srv_ghr_socket["Start server by Github-Releases registry on a Unix domain socket with an envdir"]
+        direction TB
+        start_srv_ghr_socket_step0["Start dewy"]
+    end
     subgraph start_ast_ghr["Start assets by Github-Releases registry"]
         direction TB
         start_ast_ghr_step0["Start dewy"]
@@ -157,29 +171,7 @@ flowchart LR
         create_release_step1["Verify release exists"]
         create_release_step0 --> create_release_step1
     end
-    subgraph job_19["Verify server by Github-Releases registry"]
-        direction TB
-        job_19_step0["Server verify"]
-        job_19_step1["Wait for new version to start"]
-        job_19_step2["Wait for stabilization"]
-        job_19_step3["Verify server telemetry metrics"]
-        job_19_step4["Stop dewy"]
-        job_19_step5["Verify no error"]
-        job_19_step6["Verify two symlinks creates"]
-        job_19_step7["Verify starting two version"]
-        job_19_step8["Verify starting new version"]
-        job_19_step9["Show log"]
-        job_19_step0 --> job_19_step1
-        job_19_step1 --> job_19_step2
-        job_19_step2 --> job_19_step3
-        job_19_step3 --> job_19_step4
-        job_19_step4 --> job_19_step5
-        job_19_step5 --> job_19_step6
-        job_19_step6 --> job_19_step7
-        job_19_step7 --> job_19_step8
-        job_19_step8 --> job_19_step9
-    end
-    subgraph job_20["Verify server by AWS S3 registry"]
+    subgraph job_20["Verify server by Github-Releases registry"]
         direction TB
         job_20_step0["Server verify"]
         job_20_step1["Wait for new version to start"]
@@ -201,7 +193,7 @@ flowchart LR
         job_20_step7 --> job_20_step8
         job_20_step8 --> job_20_step9
     end
-    subgraph job_21["Verify server by GCloud Storage registry"]
+    subgraph job_21["Verify server by AWS S3 registry"]
         direction TB
         job_21_step0["Server verify"]
         job_21_step1["Wait for new version to start"]
@@ -222,6 +214,28 @@ flowchart LR
         job_21_step6 --> job_21_step7
         job_21_step7 --> job_21_step8
         job_21_step8 --> job_21_step9
+    end
+    subgraph job_22["Verify server by GCloud Storage registry"]
+        direction TB
+        job_22_step0["Server verify"]
+        job_22_step1["Wait for new version to start"]
+        job_22_step2["Wait for stabilization"]
+        job_22_step3["Verify server telemetry metrics"]
+        job_22_step4["Stop dewy"]
+        job_22_step5["Verify no error"]
+        job_22_step6["Verify two symlinks creates"]
+        job_22_step7["Verify starting two version"]
+        job_22_step8["Verify starting new version"]
+        job_22_step9["Show log"]
+        job_22_step0 --> job_22_step1
+        job_22_step1 --> job_22_step2
+        job_22_step2 --> job_22_step3
+        job_22_step3 --> job_22_step4
+        job_22_step4 --> job_22_step5
+        job_22_step5 --> job_22_step6
+        job_22_step6 --> job_22_step7
+        job_22_step7 --> job_22_step8
+        job_22_step8 --> job_22_step9
     end
     subgraph verify_srv_ghr_s3cache_a["Verify server by Github-Releases registry with S3 shared cache (A)"]
         direction TB
@@ -311,25 +325,57 @@ flowchart LR
         verify_srv_ghr_gscache_b_step7 --> verify_srv_ghr_gscache_b_step8
         verify_srv_ghr_gscache_b_step8 --> verify_srv_ghr_gscache_b_step9
     end
-    subgraph job_26["Verify assets by Github-Releases registry"]
+    subgraph job_27["Verify server on a Unix domain socket with an envdir"]
         direction TB
-        job_26_step0["Assets verify"]
-        job_26_step1["Wait for new version download"]
-        job_26_step2["Wait for stabilization"]
-        job_26_step3["Stop dewy"]
-        job_26_step4["Verify no error"]
-        job_26_step5["Verify two symlinks creates"]
-        job_26_step6["Verify starting two version"]
-        job_26_step7["Verify starting new version"]
-        job_26_step8["Show log"]
-        job_26_step0 --> job_26_step1
-        job_26_step1 --> job_26_step2
-        job_26_step2 --> job_26_step3
-        job_26_step3 --> job_26_step4
-        job_26_step4 --> job_26_step5
-        job_26_step5 --> job_26_step6
-        job_26_step6 --> job_26_step7
-        job_26_step7 --> job_26_step8
+        job_27_step0["Server socket verify"]
+        job_27_step1["Wait for new version to start"]
+        job_27_step2["Wait for stabilization"]
+        job_27_step3["Verify the new version answers on the socket"]
+        job_27_step4["Verify the health check probed the socket"]
+        job_27_step5["Verify the application environment from the envdir"]
+        job_27_step6["Change the envdir and restart with SIGUSR1"]
+        job_27_step7["Wait for the restart"]
+        job_27_step8["Verify the restarted application got the new value"]
+        job_27_step9["Verify the socket still answers after the restart"]
+        job_27_step10["Stop dewy"]
+        job_27_step11["Verify the socket file is removed on shutdown"]
+        job_27_step12["Verify no error"]
+        job_27_step13["Verify two symlinks creates"]
+        job_27_step14["Show log"]
+        job_27_step0 --> job_27_step1
+        job_27_step1 --> job_27_step2
+        job_27_step2 --> job_27_step3
+        job_27_step3 --> job_27_step4
+        job_27_step4 --> job_27_step5
+        job_27_step5 --> job_27_step6
+        job_27_step6 --> job_27_step7
+        job_27_step7 --> job_27_step8
+        job_27_step8 --> job_27_step9
+        job_27_step9 --> job_27_step10
+        job_27_step10 --> job_27_step11
+        job_27_step11 --> job_27_step12
+        job_27_step12 --> job_27_step13
+        job_27_step13 --> job_27_step14
+    end
+    subgraph job_28["Verify assets by Github-Releases registry"]
+        direction TB
+        job_28_step0["Assets verify"]
+        job_28_step1["Wait for new version download"]
+        job_28_step2["Wait for stabilization"]
+        job_28_step3["Stop dewy"]
+        job_28_step4["Verify no error"]
+        job_28_step5["Verify two symlinks creates"]
+        job_28_step6["Verify starting two version"]
+        job_28_step7["Verify starting new version"]
+        job_28_step8["Show log"]
+        job_28_step0 --> job_28_step1
+        job_28_step1 --> job_28_step2
+        job_28_step2 --> job_28_step3
+        job_28_step3 --> job_28_step4
+        job_28_step4 --> job_28_step5
+        job_28_step5 --> job_28_step6
+        job_28_step6 --> job_28_step7
+        job_28_step7 --> job_28_step8
     end
     subgraph verify_ast_s3["Verify assets by AWS S3 registry"]
         direction TB
@@ -371,59 +417,7 @@ flowchart LR
         verify_ast_gs_step6 --> verify_ast_gs_step7
         verify_ast_gs_step7 --> verify_ast_gs_step8
     end
-    subgraph job_29["Verify container by OCI registry"]
-        direction TB
-        job_29_step0["Container verify"]
-        job_29_step1["Wait for new version to start"]
-        job_29_step2["Wait for stabilization"]
-        job_29_step3["Verify containers are not running as root"]
-        job_29_step4["Verify container telemetry metrics"]
-        job_29_step5["Verify --drain-time is used when replacing old containers"]
-        job_29_step6["Stop dewy"]
-        job_29_step7["Verify shutdown keeps the fixed stop window"]
-        job_29_step8["Verify no error"]
-        job_29_step9["Verify current 3 containers creates"]
-        job_29_step10["Verify new 3 containers creates"]
-        job_29_step11["Show log"]
-        job_29_step0 --> job_29_step1
-        job_29_step1 --> job_29_step2
-        job_29_step2 --> job_29_step3
-        job_29_step3 --> job_29_step4
-        job_29_step4 --> job_29_step5
-        job_29_step5 --> job_29_step6
-        job_29_step6 --> job_29_step7
-        job_29_step7 --> job_29_step8
-        job_29_step8 --> job_29_step9
-        job_29_step9 --> job_29_step10
-        job_29_step10 --> job_29_step11
-    end
-    subgraph job_30["Verify container by OCI registry with Podman runtime"]
-        direction TB
-        job_30_step0["Container verify"]
-        job_30_step1["Wait for new version to start"]
-        job_30_step2["Wait for stabilization"]
-        job_30_step3["Verify containers are not running as root"]
-        job_30_step4["Verify container telemetry metrics"]
-        job_30_step5["Verify --drain-time is used when replacing old containers"]
-        job_30_step6["Stop dewy"]
-        job_30_step7["Verify shutdown keeps the fixed stop window"]
-        job_30_step8["Verify no error"]
-        job_30_step9["Verify current 3 containers creates"]
-        job_30_step10["Verify new 3 containers creates"]
-        job_30_step11["Show log"]
-        job_30_step0 --> job_30_step1
-        job_30_step1 --> job_30_step2
-        job_30_step2 --> job_30_step3
-        job_30_step3 --> job_30_step4
-        job_30_step4 --> job_30_step5
-        job_30_step5 --> job_30_step6
-        job_30_step6 --> job_30_step7
-        job_30_step7 --> job_30_step8
-        job_30_step8 --> job_30_step9
-        job_30_step9 --> job_30_step10
-        job_30_step10 --> job_30_step11
-    end
-    subgraph job_31["Verify container by Docker Hub registry"]
+    subgraph job_31["Verify container by OCI registry"]
         direction TB
         job_31_step0["Container verify"]
         job_31_step1["Wait for new version to start"]
@@ -449,23 +443,20 @@ flowchart LR
         job_31_step9 --> job_31_step10
         job_31_step10 --> job_31_step11
     end
-    subgraph job_32["Verify container with multiple ports by OCI registry"]
+    subgraph job_32["Verify container by OCI registry with Podman runtime"]
         direction TB
-        job_32_step0["Container multi-port verify"]
+        job_32_step0["Container verify"]
         job_32_step1["Wait for new version to start"]
         job_32_step2["Wait for stabilization"]
-        job_32_step3["Verify TCP proxy started on port1"]
-        job_32_step4["Verify TCP proxy started on port2"]
-        job_32_step5["Verify all TCP proxies started"]
-        job_32_step6["Verify backends added to port1"]
-        job_32_step7["Verify backends added to port2"]
-        job_32_step8["Test connection to port1"]
-        job_32_step9["Test connection to port2"]
-        job_32_step10["Verify containers are not running as root"]
-        job_32_step11["Stop dewy"]
-        job_32_step12["Verify no error"]
-        job_32_step13["Verify new containers created"]
-        job_32_step14["Show log"]
+        job_32_step3["Verify containers are not running as root"]
+        job_32_step4["Verify container telemetry metrics"]
+        job_32_step5["Verify --drain-time is used when replacing old containers"]
+        job_32_step6["Stop dewy"]
+        job_32_step7["Verify shutdown keeps the fixed stop window"]
+        job_32_step8["Verify no error"]
+        job_32_step9["Verify current 3 containers creates"]
+        job_32_step10["Verify new 3 containers creates"]
+        job_32_step11["Show log"]
         job_32_step0 --> job_32_step1
         job_32_step1 --> job_32_step2
         job_32_step2 --> job_32_step3
@@ -477,20 +468,21 @@ flowchart LR
         job_32_step8 --> job_32_step9
         job_32_step9 --> job_32_step10
         job_32_step10 --> job_32_step11
-        job_32_step11 --> job_32_step12
-        job_32_step12 --> job_32_step13
-        job_32_step13 --> job_32_step14
     end
-    subgraph job_33["Verify container health check failure handling"]
+    subgraph job_33["Verify container by Docker Hub registry"]
         direction TB
-        job_33_step0["Container health check failure verify"]
-        job_33_step1["Wait for the health check to fail"]
-        job_33_step2["Verify --health-timeout bounds the probe"]
-        job_33_step3["Wait for the deploy to fail three times"]
-        job_33_step4["Verify the failed replica is rolled back"]
-        job_33_step5["Stop dewy"]
-        job_33_step6["Verify the deploy was never reported successful"]
-        job_33_step7["Show log"]
+        job_33_step0["Container verify"]
+        job_33_step1["Wait for new version to start"]
+        job_33_step2["Wait for stabilization"]
+        job_33_step3["Verify containers are not running as root"]
+        job_33_step4["Verify container telemetry metrics"]
+        job_33_step5["Verify --drain-time is used when replacing old containers"]
+        job_33_step6["Stop dewy"]
+        job_33_step7["Verify shutdown keeps the fixed stop window"]
+        job_33_step8["Verify no error"]
+        job_33_step9["Verify current 3 containers creates"]
+        job_33_step10["Verify new 3 containers creates"]
+        job_33_step11["Show log"]
         job_33_step0 --> job_33_step1
         job_33_step1 --> job_33_step2
         job_33_step2 --> job_33_step3
@@ -498,22 +490,76 @@ flowchart LR
         job_33_step4 --> job_33_step5
         job_33_step5 --> job_33_step6
         job_33_step6 --> job_33_step7
+        job_33_step7 --> job_33_step8
+        job_33_step8 --> job_33_step9
+        job_33_step9 --> job_33_step10
+        job_33_step10 --> job_33_step11
     end
-    subgraph job_34["Verify shared cache reduces upstream downloads (S3 pair)"]
+    subgraph job_34["Verify container with multiple ports by OCI registry"]
         direction TB
-        job_34_step0["Count #quot;Cached artifact#quot; log lines across S3 pair"]
+        job_34_step0["Container multi-port verify"]
+        job_34_step1["Wait for new version to start"]
+        job_34_step2["Wait for stabilization"]
+        job_34_step3["Verify TCP proxy started on port1"]
+        job_34_step4["Verify TCP proxy started on port2"]
+        job_34_step5["Verify all TCP proxies started"]
+        job_34_step6["Verify backends added to port1"]
+        job_34_step7["Verify backends added to port2"]
+        job_34_step8["Test connection to port1"]
+        job_34_step9["Test connection to port2"]
+        job_34_step10["Verify containers are not running as root"]
+        job_34_step11["Stop dewy"]
+        job_34_step12["Verify no error"]
+        job_34_step13["Verify new containers created"]
+        job_34_step14["Show log"]
+        job_34_step0 --> job_34_step1
+        job_34_step1 --> job_34_step2
+        job_34_step2 --> job_34_step3
+        job_34_step3 --> job_34_step4
+        job_34_step4 --> job_34_step5
+        job_34_step5 --> job_34_step6
+        job_34_step6 --> job_34_step7
+        job_34_step7 --> job_34_step8
+        job_34_step8 --> job_34_step9
+        job_34_step9 --> job_34_step10
+        job_34_step10 --> job_34_step11
+        job_34_step11 --> job_34_step12
+        job_34_step12 --> job_34_step13
+        job_34_step13 --> job_34_step14
     end
-    subgraph job_35["Verify shared cache reduces upstream downloads (GCS pair)"]
+    subgraph job_35["Verify container health check failure handling"]
         direction TB
-        job_35_step0["Count #quot;Cached artifact#quot; log lines across GCS pair"]
+        job_35_step0["Container health check failure verify"]
+        job_35_step1["Wait for the health check to fail"]
+        job_35_step2["Verify --health-timeout bounds the probe"]
+        job_35_step3["Wait for the deploy to fail three times"]
+        job_35_step4["Verify the failed replica is rolled back"]
+        job_35_step5["Stop dewy"]
+        job_35_step6["Verify the deploy was never reported successful"]
+        job_35_step7["Show log"]
+        job_35_step0 --> job_35_step1
+        job_35_step1 --> job_35_step2
+        job_35_step2 --> job_35_step3
+        job_35_step3 --> job_35_step4
+        job_35_step4 --> job_35_step5
+        job_35_step5 --> job_35_step6
+        job_35_step6 --> job_35_step7
     end
-    subgraph job_36["Verify registry result cache reduces upstream polls (S3 pair)"]
+    subgraph job_36["Verify shared cache reduces upstream downloads (S3 pair)"]
         direction TB
-        job_36_step0["Count #quot;Registry result refreshed from upstream#quot; log lines across S3 pair"]
+        job_36_step0["Count #quot;Cached artifact#quot; log lines across S3 pair"]
     end
-    subgraph job_37["Verify registry result cache reduces upstream polls (GCS pair)"]
+    subgraph job_37["Verify shared cache reduces upstream downloads (GCS pair)"]
         direction TB
-        job_37_step0["Count #quot;Registry result refreshed from upstream#quot; log lines across GCS pair"]
+        job_37_step0["Count #quot;Cached artifact#quot; log lines across GCS pair"]
+    end
+    subgraph job_38["Verify registry result cache reduces upstream polls (S3 pair)"]
+        direction TB
+        job_38_step0["Count #quot;Registry result refreshed from upstream#quot; log lines across S3 pair"]
+    end
+    subgraph job_39["Verify registry result cache reduces upstream polls (GCS pair)"]
+        direction TB
+        job_39_step0["Count #quot;Registry result refreshed from upstream#quot; log lines across GCS pair"]
     end
     subgraph prepare_slot_s3["Prepare slot versions on AWS S3"]
         direction TB
@@ -691,11 +737,11 @@ flowchart LR
         verify_srv_gs_slot_green_step5 --> verify_srv_gs_slot_green_step6
         verify_srv_gs_slot_green_step6 --> verify_srv_gs_slot_green_step7
     end
-    subgraph job_56["Remove slot versions"]
+    subgraph job_58["Remove slot versions"]
         direction TB
-        job_56_step0["Remove from AWS S3"]
-        job_56_step1["Remove from GCloud Storage"]
-        job_56_step0 --> job_56_step1
+        job_58_step0["Remove from AWS S3"]
+        job_58_step1["Remove from GCloud Storage"]
+        job_58_step0 --> job_58_step1
     end
 
     check --> generate_version
@@ -707,6 +753,7 @@ flowchart LR
     start_srv_ghr_s3cache_a --> start_srv_ghr_s3cache_b
     build --> start_srv_ghr_gscache_a
     start_srv_ghr_gscache_a --> start_srv_ghr_gscache_b
+    build --> start_srv_ghr_socket
     build --> start_ast_ghr
     build --> start_ast_s3
     build --> start_ast_gs
@@ -720,6 +767,7 @@ flowchart LR
     start_srv_gs --> create_release
     start_srv_ghr_s3cache_b --> create_release
     start_srv_ghr_gscache_b --> create_release
+    start_srv_ghr_socket --> create_release
     start_ast_ghr --> create_release
     start_ast_s3 --> create_release
     start_ast_gs --> create_release
@@ -727,29 +775,30 @@ flowchart LR
     start_ctr_podman --> create_release
     start_ctr_dockerhub --> create_release
     start_ctr_mp_oci --> create_release
-    create_release --> job_19
     create_release --> job_20
     create_release --> job_21
+    create_release --> job_22
     create_release --> verify_srv_ghr_s3cache_a
     create_release --> verify_srv_ghr_s3cache_b
     create_release --> verify_srv_ghr_gscache_a
     create_release --> verify_srv_ghr_gscache_b
-    create_release --> job_26
+    create_release --> job_27
+    create_release --> job_28
     create_release --> verify_ast_s3
     create_release --> verify_ast_gs
-    create_release --> job_29
-    create_release --> job_30
     create_release --> job_31
     create_release --> job_32
-    start_ctr_healthfail --> job_33
-    verify_srv_ghr_s3cache_a --> job_34
-    verify_srv_ghr_s3cache_b --> job_34
-    verify_srv_ghr_gscache_a --> job_35
-    verify_srv_ghr_gscache_b --> job_35
+    create_release --> job_33
+    create_release --> job_34
+    start_ctr_healthfail --> job_35
     verify_srv_ghr_s3cache_a --> job_36
     verify_srv_ghr_s3cache_b --> job_36
     verify_srv_ghr_gscache_a --> job_37
     verify_srv_ghr_gscache_b --> job_37
+    verify_srv_ghr_s3cache_a --> job_38
+    verify_srv_ghr_s3cache_b --> job_38
+    verify_srv_ghr_gscache_a --> job_39
+    verify_srv_ghr_gscache_b --> job_39
     verify_ast_s3 --> prepare_slot_s3
     verify_ast_gs --> prepare_slot_gs
     prepare_slot_s3 --> start_ast_s3_slot_blue
@@ -768,14 +817,14 @@ flowchart LR
     start_srv_s3_slot_green --> verify_srv_s3_slot_green
     start_srv_gs_slot_blue --> verify_srv_gs_slot_blue
     start_srv_gs_slot_green --> verify_srv_gs_slot_green
-    verify_ast_s3_slot_blue --> job_56
-    verify_ast_s3_slot_green --> job_56
-    verify_ast_gs_slot_blue --> job_56
-    verify_ast_gs_slot_green --> job_56
-    verify_srv_s3_slot_blue --> job_56
-    verify_srv_s3_slot_green --> job_56
-    verify_srv_gs_slot_blue --> job_56
-    verify_srv_gs_slot_green --> job_56
+    verify_ast_s3_slot_blue --> job_58
+    verify_ast_s3_slot_green --> job_58
+    verify_ast_gs_slot_blue --> job_58
+    verify_ast_gs_slot_green --> job_58
+    verify_srv_s3_slot_blue --> job_58
+    verify_srv_s3_slot_green --> job_58
+    verify_srv_gs_slot_blue --> job_58
+    verify_srv_gs_slot_green --> job_58
 ```
 
 ### Phase Details
@@ -806,12 +855,13 @@ e2e/
 ├── jobs/                              # Reusable verification job definitions
 │   ├── server-verify.yml              # Server verification steps
 │   ├── server-slot-verify.yml         # Blue/green slot verification steps for server
+│   ├── server-socket-verify.yml       # Unix domain socket and envdir verification steps for server
 │   ├── assets-verify.yml              # Assets verification steps
 │   ├── assets-slot-verify.yml         # Blue/green slot verification steps for assets
 │   ├── container-verify.yml           # Container verification steps
 │   ├── container-multiport-verify.yml # Multi-port verification steps
 │   └── container-healthfail-verify.yml # Health check failure verification steps
-├── server/{ghr,s3,gs,ghr-s3cache-{a,b},ghr-gscache-{a,b},s3-slot-{blue,green},gs-slot-{blue,green}}/  # Working directories for server tests
+├── server/{ghr,s3,gs,ghr-s3cache-{a,b},ghr-gscache-{a,b},s3-slot-{blue,green},gs-slot-{blue,green},ghr-socket}/  # Working directories for server tests
 ├── assets/{ghr,s3,gs,s3-slot-{blue,green},gs-slot-{blue,green}}/  # Working directories for assets tests
 └── container/{img,dockerhub,multiport,podman,healthfail}/  # Working directories for container tests
 ```

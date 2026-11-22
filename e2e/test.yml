@@ -85,6 +85,7 @@ jobs:
     - { command: 'server', variant: 's3-slot-green' }
     - { command: 'server', variant: 'gs-slot-blue' }
     - { command: 'server', variant: 'gs-slot-green' }
+    - { command: 'server', variant: 'ghr-socket' }
     - { command: 'assets', variant: 'ghr' }
     - { command: 'assets', variant: 's3' }
     - { command: 'assets', variant: 'gs' }
@@ -288,6 +289,48 @@ jobs:
         ./dewy server -p 8006 -l debug \
         --registry "ghr://linyows/dewy-testapp?pre-release=true" \
         --cache "gs://dewy-testapp/.cache/{{ outputs.genver.version }}-gs?registry-ttl=30s" \
+        -- $PWD/current/dewy-testapp
+    test: status == -1
+    timeout: 6m
+    outputs:
+      pid: res.pid
+      log: res.log
+    echo: |
+      PID: {{ res.pid }}
+      Log: {{ res.log }}
+
+- name: Start server by Github-Releases registry on a Unix domain socket with an envdir
+  id: start_srv_ghr_socket
+  needs: [build]
+  steps:
+  - name: Start dewy
+    id: srv_ghr_socket
+    uses: shell
+    with:
+      workdir: ./e2e/server/ghr-socket
+      background: true
+      ready:
+        log: Create symlink
+      timeout: 5m
+      # The server listens only on --socket, so the health check probes the
+      # socket. The socket and the envdir are under /tmp to keep the socket
+      # path short, and the paths must match the verify job's vars.
+      #
+      # Both variables are also set in dewy's own environment. The envdir
+      # overrides DEWY_E2E_VALUE, and its empty DEWY_E2E_UNSET file removes
+      # the other one.
+      env:
+        DEWY_E2E_VALUE: from-dewy
+        DEWY_E2E_UNSET: from-dewy
+      cmd: |
+        rm -rf /tmp/dewy-e2e-socket && mkdir -p /tmp/dewy-e2e-socket/env &&
+        printf 'from-envdir\n' > /tmp/dewy-e2e-socket/env/DEWY_E2E_VALUE &&
+        : > /tmp/dewy-e2e-socket/env/DEWY_E2E_UNSET &&
+        ./dewy server -l debug \
+        --registry "ghr://linyows/dewy-testapp?pre-release=true" \
+        --socket /tmp/dewy-e2e-socket/app.sock \
+        --envdir /tmp/dewy-e2e-socket/env \
+        --health-path /health \
         -- $PWD/current/dewy-testapp
     test: status == -1
     timeout: 6m
@@ -539,7 +582,7 @@ jobs:
 # Phase 2: Create new version (after ALL dewy instances have deployed initial version)
 - name: Create new version
   id: create_release
-  needs: [start_srv_ghr, start_srv_s3, start_srv_gs, start_srv_ghr_s3cache_b, start_srv_ghr_gscache_b, start_ast_ghr, start_ast_s3, start_ast_gs, start_ctr_oci, start_ctr_podman, start_ctr_dockerhub, start_ctr_mp_oci]
+  needs: [start_srv_ghr, start_srv_s3, start_srv_gs, start_srv_ghr_s3cache_b, start_srv_ghr_gscache_b, start_srv_ghr_socket, start_ast_ghr, start_ast_s3, start_ast_gs, start_ctr_oci, start_ctr_podman, start_ctr_dockerhub, start_ctr_mp_oci]
   steps:
   - name: Create release
     uses: shell
@@ -662,6 +705,23 @@ jobs:
         pid: "{{ outputs.srv_ghr_gscache_b.pid }}"
         log: "{{ outputs.srv_ghr_gscache_b.log }}"
         new_version: "{{ outputs.genver.version }}"
+    test: res.code == 0
+    timeout: 15m
+
+- name: Verify server on a Unix domain socket with an envdir
+  needs: [create_release]
+  steps:
+  - name: Server socket verify
+    uses: embedded
+    with:
+      path: ./e2e/jobs/server-socket-verify.yml
+      vars:
+        pid: "{{ outputs.srv_ghr_socket.pid }}"
+        log: "{{ outputs.srv_ghr_socket.log }}"
+        new_version: "{{ outputs.genver.version }}"
+        # Must match --socket and --envdir in start_srv_ghr_socket.
+        socket: /tmp/dewy-e2e-socket/app.sock
+        envdir: /tmp/dewy-e2e-socket/env
     test: res.code == 0
     timeout: 15m
 
