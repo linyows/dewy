@@ -11,6 +11,86 @@ import (
 	"time"
 )
 
+func TestResolveAddr(t *testing.T) {
+	tests := []struct {
+		addr        string
+		wantNetwork string
+		wantAddress string
+		wantErr     bool
+	}{
+		{"8080", "tcp", ":8080", false},
+		{"0", "tcp", ":0", false},
+		{"127.0.0.1:8080", "tcp4", "127.0.0.1:8080", false},
+		{"0.0.0.0:8080", "tcp4", "0.0.0.0:8080", false},
+		{"[::1]:8080", "tcp6", "[::1]:8080", false},
+		{"[::]:8080", "tcp6", "[::]:8080", false},
+		{"[fe80::1%eth0]:8080", "tcp6", "[fe80::1%eth0]:8080", false},
+		{"[::ffff:127.0.0.1]:8080", "tcp6", "[::ffff:127.0.0.1]:8080", false},
+		{"65536", "", "", true},
+		{"-1", "", "", true},
+		{"", "", "", true},
+		{"localhost:8080", "", "", true},
+		{"127.0.0.1", "", "", true},
+		{"::1:8080", "", "", true},
+		{"127.0.0.1:http", "", "", true},
+		{"53/udp", "udp", ":53", false},
+		{"127.0.0.1:53/udp", "udp4", "127.0.0.1:53", false},
+		{"[::1]:53/udp", "udp6", "[::1]:53", false},
+		{"53/sctp", "", "", true},
+		{"localhost:53/udp", "", "", true},
+		{"/run/app.sock", "unix", "/run/app.sock", false},
+		{"/srv/udp", "unix", "/srv/udp", false},
+		{"/run/app;1.sock", "", "", true},
+		{"/run/a=b.sock", "", "", true},
+		{"/run/../app.sock", "", "", true},
+		{"/run/", "", "", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.addr, func(t *testing.T) {
+			network, address, err := resolveAddr(tt.addr)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("resolveAddr(%q) error = %v, wantErr %v", tt.addr, err, tt.wantErr)
+			}
+			if network != tt.wantNetwork || address != tt.wantAddress {
+				t.Errorf("resolveAddr(%q) = %q, %q, want %q, %q", tt.addr, network, address, tt.wantNetwork, tt.wantAddress)
+			}
+		})
+	}
+}
+
+func TestListenersEnv(t *testing.T) {
+	lns := []*listener{
+		{addr: "8080"}, {addr: "127.0.0.1:8081"}, {addr: "[::1]:8082"}, {addr: "53/udp"},
+		{addr: "0.0.0.0:8083"}, {addr: "[::]:8084"}, {addr: "0.0.0.0:54/udp"},
+	}
+	lns = append(lns, &listener{addr: "/run/app.sock"}, &listener{addr: "/srv/udp"})
+	want := "8080=3;127.0.0.1:8081=4;[::1]:8082=5;53/udp=6;8083=7;8084=8;54/udp=9;/run/app.sock=10;/srv/udp=11"
+	if got := listenersEnv(lns); got != want {
+		t.Errorf("listenersEnv() = %q, want %q", got, want)
+	}
+}
+
+func TestUnspecifiedHostNarrowsFamily(t *testing.T) {
+	s, err := New(Config{Command: "true", Addrs: []string{"0.0.0.0:0", "0"}})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer func() { _ = s.Shutdown(context.Background()) }()
+
+	v4, ok := s.Addrs()[0].(*net.TCPAddr)
+	if !ok || v4.IP.To4() == nil {
+		t.Errorf("0.0.0.0:0 bound %v, want an IPv4 socket", v4)
+	}
+	probe, err := net.Listen("tcp6", "[::1]:0")
+	if err != nil {
+		t.Skip("IPv6 is not available")
+	}
+	_ = probe.Close()
+	if both, ok := s.Addrs()[1].(*net.TCPAddr); !ok || both.IP.To4() != nil {
+		t.Errorf("0 bound %v, want a dual-stack IPv6 socket", both)
+	}
+}
+
 func TestResolveAbstractAddr(t *testing.T) {
 	network, address, err := resolveAddr("@dewy-test")
 	if runtime.GOOS != "linux" {
@@ -143,4 +223,16 @@ func TestShutdownKeepsReplacedSocketFile(t *testing.T) {
 	if b, err := os.ReadFile(path); err != nil || string(b) != "someone else" {
 		t.Errorf("after Shutdown the file at the path is %q, %v, want it untouched", b, err)
 	}
+}
+
+// shortTempDir returns a directory for Unix domain sockets. t.TempDir is
+// too long on macOS for the 104-byte limit on a socket path.
+func shortTempDir(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("/tmp", "dewy-sv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	return dir
 }
