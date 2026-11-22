@@ -164,7 +164,7 @@ dewy server --registry ghr://owner/repo --host ::1 --port 8000 -- /opt/app/curre
 
 Specifies a Unix domain socket the `server` command listens on. Applies to the `server` command only, and can be repeated. It can be used together with `--port` or alone.
 
-A relative path is resolved against the working directory when Dewy starts. On Linux, a name starting with `@` (for example, `@app`) listens in the abstract namespace and creates no file. `;` and `=` cannot appear in the path, because they separate the entries of `DEWY_PORT`.
+A relative path is resolved against the working directory when Dewy starts. On Linux, a name starting with `@` (for example, `@app`) listens in the abstract namespace and creates no file. `;` and `=` cannot appear in the path, because they separate the entries of `DEWY_PORT`. The absolute path can be at most 107 bytes on Linux and 103 bytes on macOS, and an abstract name at most 108 bytes including `@`; Dewy fails to start with a longer one.
 
 Dewy binds the socket when the server starts and keeps it open until Dewy shuts down, as it does for `--port`. A connection that arrives while one process replaces another waits in the socket's accept queue. When Dewy starts and a socket file exists at the path, Dewy connects to it: if the connection is refused, the file is left over from a process that exited without removing it, and Dewy removes it; if the connection succeeds, or the path is not a socket, Dewy fails to start. Dewy removes the socket file when it shuts down, unless another file has replaced it.
 

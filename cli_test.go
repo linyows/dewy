@@ -2,9 +2,12 @@ package dewy
 
 import (
 	"bytes"
+	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -1190,6 +1193,111 @@ func TestCLI_ConfigureServerCommand_Sockets(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestParseSocketsAddressLength(t *testing.T) {
+	limit := maxSocketAddrLen("/run/app.sock")
+	abstractLimit := maxSocketAddrLen("@app")
+	switch runtime.GOOS {
+	case "linux":
+		if limit != 107 || abstractLimit != 108 {
+			t.Errorf("maxSocketAddrLen() = %d for a path and %d for an abstract name, want 107 and 108 on Linux", limit, abstractLimit)
+		}
+	case "darwin":
+		if limit != 103 {
+			t.Errorf("maxSocketAddrLen() = %d for a path, want 103 on macOS", limit)
+		}
+	}
+
+	// pathOf returns an absolute path of exactly n bytes.
+	pathOf := func(n int) string {
+		return "/" + strings.Repeat("a", n-1)
+	}
+	// abstractOf returns an abstract name of exactly n bytes, "@" included.
+	abstractOf := func(n int) string {
+		return "@" + strings.Repeat("a", n-1)
+	}
+
+	t.Run("a path at the limit is accepted", func(t *testing.T) {
+		got, err := parseSockets([]string{pathOf(limit)})
+		if err != nil {
+			t.Fatalf("parseSockets(%d bytes) error = %v, want nil", limit, err)
+		}
+		if len(got) != 1 || len(got[0]) != limit {
+			t.Errorf("parseSockets(%d bytes) = %q, want the path unchanged", limit, got)
+		}
+	})
+
+	t.Run("a path over the limit is rejected", func(t *testing.T) {
+		_, err := parseSockets([]string{pathOf(limit + 1)})
+		if err == nil {
+			t.Fatalf("parseSockets(%d bytes) error = nil, want an error", limit+1)
+		}
+		want := fmt.Sprintf("is %d bytes; a Unix domain socket address on %s is limited to %d bytes", limit+1, runtime.GOOS, limit)
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("parseSockets(%d bytes) error = %q, want it to contain %q", limit+1, err, want)
+		}
+	})
+
+	t.Run("a relative path is measured after it is made absolute", func(t *testing.T) {
+		wd, err := os.Getwd()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(wd)+2 > limit {
+			t.Skipf("working directory %q leaves no room for a relative path", wd)
+		}
+		// Short enough as given, too long once joined to the working directory.
+		rel := strings.Repeat("a", limit-len(wd))
+		if _, err := parseSockets([]string{rel}); err == nil {
+			t.Errorf("parseSockets(%q) error = nil, want an error for the %d-byte absolute path", rel, len(wd)+1+len(rel))
+		}
+	})
+
+	t.Run("an abstract name has its own limit", func(t *testing.T) {
+		if _, err := parseSockets([]string{abstractOf(abstractLimit)}); err != nil {
+			t.Errorf("parseSockets(%d-byte abstract name) error = %v, want nil", abstractLimit, err)
+		}
+		if _, err := parseSockets([]string{abstractOf(abstractLimit + 1)}); err == nil {
+			t.Errorf("parseSockets(%d-byte abstract name) error = nil, want an error", abstractLimit+1)
+		}
+	})
+
+	t.Run("the path limit is what bind accepts", func(t *testing.T) {
+		// The default temporary directory on macOS is too long to leave
+		// room for padding, so the sockets go under /tmp.
+		dir, err := os.MkdirTemp("/tmp", "dewy-sock")
+		if err != nil {
+			t.Skipf("no temporary directory under /tmp: %v", err)
+		}
+		t.Cleanup(func() { _ = os.RemoveAll(dir) })
+		padded := func(n int) string {
+			return dir + "/" + strings.Repeat("a", n-len(dir)-1)
+		}
+		assertBindLimit(t, padded, limit)
+	})
+
+	t.Run("the abstract limit is what bind accepts", func(t *testing.T) {
+		if runtime.GOOS != "linux" {
+			t.Skip("abstract sockets are supported only on Linux")
+		}
+		assertBindLimit(t, abstractOf, abstractLimit)
+	})
+}
+
+// assertBindLimit checks that addr(limit) can be bound and addr(limit+1)
+// cannot.
+func assertBindLimit(t *testing.T, addr func(n int) string, limit int) {
+	t.Helper()
+	l, err := net.Listen("unix", addr(limit))
+	if err != nil {
+		t.Fatalf("Listen(%d bytes) error = %v, want the limit to be bindable", limit, err)
+	}
+	_ = l.Close()
+	if l, err := net.Listen("unix", addr(limit+1)); err == nil {
+		_ = l.Close()
+		t.Fatalf("Listen(%d bytes) error = nil, want the limit to be the longest bindable address", limit+1)
+	}
 }
 
 func TestSupervisorConfigListsSocketsAfterPorts(t *testing.T) {
