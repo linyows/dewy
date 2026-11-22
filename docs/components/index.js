@@ -13,4 +13,4 @@ export * from './Section';
 export * from './SideBySide';
 export * from './Keyword';
 export * from './Item';
-export * from './VersionAnimation';
+export * from './VersionAnimation';export * from './Caption';

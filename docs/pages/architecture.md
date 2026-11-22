@@ -35,7 +35,11 @@ The following diagram illustrates Dewy's deployment process and configuration.
 
 In Supervisor Mode, Dewy acts as the main process and launches applications as child processes. This mode is ideal for deploying binary applications directly on VMs or bare-metal servers.
 
-![Supervisor Architecture](/images/supervisor-architecture.svg)
+![Server Command Architecture](/images/server-architecture.svg)
+
+{% caption %}
+The `server` command replaces the application in this order: 1. Start the new process on the same sockets. 2. Wait for `--startup-wait` and, with `--health-before-switch`, the health check. 3. Send SIGTERM to the previous process, and SIGKILL after `--drain-time`. The sockets never close, so no connection is refused during the replacement.
+{% /caption %}
 
 ### Zero-Downtime Restart with Socket Inheritance
 

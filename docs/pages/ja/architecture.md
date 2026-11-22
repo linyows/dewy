@@ -35,7 +35,11 @@ Dewyは、プラグガブルな抽象化として、Registry, Artifact, Cache, N
 
 Supervisor型では、Dewyがメインプロセスとなり、アプリケーションを子プロセスとして起動します。このモードは、VMやベアメタルサーバー上でバイナリアプリケーションを直接デプロイする場合に最適です。
 
-![Supervisor Architecture](/images/supervisor-architecture.svg)
+![Server Command Architecture](/images/server-architecture.svg)
+
+{% caption %}
+`server`コマンドは次の順でアプリケーションを入れ替えます。1. 同じソケットで新しいプロセスを起動する。2. `--startup-wait`と、`--health-before-switch`の指定時はヘルスチェックを待つ。3. 以前のプロセスにSIGTERMを送り、`--drain-time`の後はSIGKILLを送る。ソケットは閉じないため、入れ替えの間も接続は拒否されません。
+{% /caption %}
 
 ### ソケットの引き継ぎによるゼロダウンタイム再起動
 
