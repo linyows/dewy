@@ -35,6 +35,9 @@ type ServerConfig struct {
 	// absolute path, or "@name" in the Linux abstract namespace. They are
 	// listed in DEWY_PORT after Addrs.
 	Sockets []string
+	// EnvDir is the --envdir directory, read again each time a process
+	// starts. Empty disables it.
+	EnvDir string
 	// StartupWait is how long a new process must stay up before it can
 	// replace the previous one. Zero means supervisor.DefaultStartupWindow.
 	StartupWait time.Duration
@@ -86,6 +89,7 @@ func (d *Dewy) supervisorConfig() supervisor.Config {
 		cfg.Command = c.Command
 		cfg.Args = c.Args
 		cfg.Addrs = append(slices.Clip(c.Addrs), c.Sockets...)
+		cfg.EnvDir = c.EnvDir
 		cfg.StartupWindow = c.StartupWait
 	}
 	if d.healthBeforeSwitch() {

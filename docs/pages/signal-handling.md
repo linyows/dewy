@@ -16,7 +16,7 @@ Dewy receives SIGHUP and ignores it. Dewy does not forward SIGHUP to the applica
 
 ### SIGUSR1
 
-When dewy receives a SIGUSR1 signal, it restarts the application managed by the `server` command without closing the listening sockets. This signal can be used to restart the application manually, for example after changing a file it reads at startup. In `assets` mode, or when no application is running, dewy logs a warning (`Restart skipped`) and does nothing.
+When dewy receives a SIGUSR1 signal, it restarts the application managed by the `server` command without closing the listening sockets. This signal can be used to restart the application manually, for example after changing a file it reads at startup. With [`--envdir`](/reference#--envdir), the new process gets the variables the directory holds at that time. In `assets` mode, or when no application is running, dewy logs a warning (`Restart skipped`) and does nothing.
 
 ### SIGINT
 

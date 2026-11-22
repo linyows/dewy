@@ -77,6 +77,15 @@ type Config struct {
 	Dir string
 	// Env is appended to the supervisor's environment for each worker.
 	Env []string
+	// EnvDir, when set, is a directory read in the format of daemontools
+	// envdir(8) each time a worker starts: every file names a variable and
+	// holds its value on the first line, and an empty file removes the
+	// variable. Its variables override Env and the supervisor's
+	// environment, but not the variables the supervisor sets for the
+	// worker (EnvListeners, EnvListenersCompat and EnvHealthPort). Because
+	// it is read again for every worker, editing the files and then
+	// calling Restart hands the new values to the application.
+	EnvDir string
 	// Addrs are the listen addresses: "8080", "127.0.0.1:8080" or
 	// "[::1]:8080" for TCP, and the same with a "/udp" suffix for UDP
 	// ("53/udp", "[::1]:53/udp"). An absolute path ("/run/app.sock") is a
@@ -154,7 +163,8 @@ type Supervisor struct {
 	cfg       Config
 	log       *slog.Logger
 	listeners []*listener
-	env       []string
+	baseEnv   []string // the supervisor's environment followed by Config.Env
+	protoEnv  []string // EnvListeners and EnvListenersCompat, when listening
 
 	// opMu serializes operations that start workers (Start, Restart and
 	// crash recovery), so two of them never race to become current.
@@ -195,22 +205,29 @@ func New(cfg Config) (*Supervisor, error) {
 		log = slog.New(slog.DiscardHandler)
 	}
 
+	// Read the envdir once here so a missing or unreadable directory is
+	// reported before anything is bound or spawned.
+	if _, err := readEnvDir(cfg.EnvDir); err != nil {
+		return nil, err
+	}
+
 	lns, err := openListeners(cfg.Addrs)
 	if err != nil {
 		return nil, err
 	}
 
-	env := append(os.Environ(), cfg.Env...)
+	var proto []string
 	if len(lns) > 0 {
 		v := listenersEnv(lns)
-		env = append(env, EnvListeners+"="+v, EnvListenersCompat+"="+v)
+		proto = []string{EnvListeners + "=" + v, EnvListenersCompat + "=" + v}
 	}
 
 	return &Supervisor{
 		cfg:       cfg,
 		log:       log,
 		listeners: lns,
-		env:       env,
+		baseEnv:   append(os.Environ(), cfg.Env...),
+		protoEnv:  proto,
 		closed:    make(chan struct{}),
 		workers:   make(map[*worker]struct{}),
 	}, nil
@@ -419,14 +436,23 @@ func (s *Supervisor) Shutdown(ctx context.Context) error {
 // spawn starts a new worker process. The worker is registered as live but
 // is not made current; the caller decides that.
 //
+// The envdir is read again for every worker, so the worker gets the values
+// the files hold at the time of its start. A read failure is returned and
+// no worker is started.
+//
 // With a health check configured, the worker also inherits a health socket
 // of its own, placed after the shared sockets. The supervisor closes its copy
 // once the worker has started, so the socket lives exactly as long as the
 // worker holds it.
 func (s *Supervisor) spawn() (*worker, error) {
+	vars, err := readEnvDir(s.cfg.EnvDir)
+	if err != nil {
+		return nil, err
+	}
+	proto := slices.Clip(s.protoEnv)
+
 	cmd := exec.Command(s.cfg.Command, s.cfg.Args...) //nolint:gosec // G204: the command is the operator's own application
 	cmd.Dir = s.cfg.Dir
-	cmd.Env = s.env
 	cmd.Stdout = s.cfg.Stdout
 	cmd.Stderr = s.cfg.Stderr
 	for _, l := range s.listeners {
@@ -435,15 +461,15 @@ func (s *Supervisor) spawn() (*worker, error) {
 
 	var health *listener
 	if s.cfg.HealthCheck != nil {
-		var err error
 		if health, err = openHealthListener(); err != nil {
 			return nil, fmt.Errorf("open health socket: %w", err)
 		}
 		defer health.close()
 		fd := firstListenerFD + len(cmd.ExtraFiles)
 		cmd.ExtraFiles = append(cmd.ExtraFiles, health.file)
-		cmd.Env = append(slices.Clip(cmd.Env), EnvHealthPort+"="+healthEnv(health.local, fd))
+		proto = append(proto, EnvHealthPort+"="+healthEnv(health.local, fd))
 	}
+	cmd.Env = mergeEnv(s.baseEnv, vars, proto)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
