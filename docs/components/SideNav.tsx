@@ -161,7 +161,6 @@ export function SideNav({ className }) {
             display: flex;
             align-items: center;
             font-weight: bold;
-            padding: 0.5rem 0;
             margin-left: -0.2rem;
           }
           span:before {
@@ -173,6 +172,7 @@ export function SideNav({ className }) {
             color: var(--primary-color);
           }
           ul {
+            margin-top: .4rem;
             padding: 0 0 1.5rem 1.7rem;
             position: relative;
           }
