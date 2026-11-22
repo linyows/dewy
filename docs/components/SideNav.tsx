@@ -158,18 +158,18 @@ export function SideNav({ className }) {
             position: relative;
           }
           span {
+            display: flex;
+            align-items: center;
             font-weight: bold;
-            padding: 0.5rem 0 0.5rem 1.6rem;
-            poisition: relative;
+            padding: 0.5rem 0;
+            margin-left: -0.2rem;
           }
           span:before {
             content: '⚫︎';
-            display: block;
-            position: absolute;
-            top: .2rem;
-            left: -0.2rem;
+            flex: none;
+            width: 1.8rem;
             font-size: 1.2rem;
-            line-height: 1.2rem;
+            line-height: 1;
             color: var(--primary-color);
           }
           ul {
