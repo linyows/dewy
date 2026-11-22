@@ -251,7 +251,7 @@ This design provides different functionality on each port while implementing uni
 
 ### Using the Sockets Passed by dewy {% #inherited-sockets %}
 
-Dewy lists the sockets it opened in the `DEWY_PORT` environment variable, and a Go application gets them with the `github.com/linyows/dewy/sock` module; see [Application Integration](/application) for the variable, the module, and other languages. A multi-port application can take every inherited socket with `sock.Listeners` and `sock.PacketConns` instead of listing its ports:
+Dewy lists the sockets it opened in the `DEWY_PORT` environment variable, and a Go application gets them with the `github.com/linyows/dewy/sock` module; see [Application Integration for the Server Command](/application) for the variable, the module, and other languages. A multi-port application can take every inherited socket with `sock.Listeners` and `sock.PacketConns` instead of listing its ports:
 
 ```go
 package main

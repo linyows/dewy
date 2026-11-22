@@ -91,7 +91,7 @@ dewy server --registry ghr://myorg/app --port 6000-6002/udp -- /opt/app/current/
 
 ## dewyから渡されたソケットの使い方 {% #inherited-sockets %}
 
-dewyは開いたソケットを環境変数`DEWY_PORT`に列挙し、Goのアプリケーションは`github.com/linyows/dewy/sock`モジュールでそれらを取得できます。環境変数の形式、モジュール、Go以外の言語での扱いは[アプリの対応](/ja/application)を参照してください。複数のポートを使うアプリケーションは、ポートの一覧を持つ代わりに`sock.Listeners`と`sock.PacketConns`で引き継いだソケットをすべて受け取れます。
+dewyは開いたソケットを環境変数`DEWY_PORT`に列挙し、Goのアプリケーションは`github.com/linyows/dewy/sock`モジュールでそれらを取得できます。環境変数の形式、モジュール、Go以外の言語での扱いは[serverコマンドでのアプリの対応](/ja/application)を参照してください。複数のポートを使うアプリケーションは、ポートの一覧を持つ代わりに`sock.Listeners`と`sock.PacketConns`で引き継いだソケットをすべて受け取れます。
 
 ```go
 package main

@@ -1,5 +1,5 @@
 ---
-title: Application Integration
+title: Application Integration for the Server Command
 ---
 
 # {% $markdoc.frontmatter.title %} {% #overview %}

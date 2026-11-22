@@ -32,7 +32,7 @@ In this example:
 - `--port 8000`: Port used by the application
 - `/opt/myapp/current/myapp`: Path to the application to execute
 
-Dewy opens port 8000 before it starts the application and passes the socket to it. The application serves on that socket instead of binding the port itself; see [Application Integration](/application) for how to get it.
+Dewy opens port 8000 before it starts the application and passes the socket to it. The application serves on that socket instead of binding the port itself; see [Application Integration for the Server Command](/application) for how to get it.
 
 ### Static Asset Deployment
 

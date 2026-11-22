@@ -68,7 +68,7 @@ $ dewy server --registry ghr://linyows/myapp \
   --notifier slack://general?title=myapp -p 8000 -l info -- /opt/myapp/current/myapp
 ```
 
-dewyはアプリケーションを起動する前にポートを開き、そのソケットをアプリケーションに渡します。アプリケーションはポートを自分で開かず、渡されたソケットで待ち受けます。ソケットの取得方法は、Go向けの`github.com/linyows/dewy/sock`モジュールを含めて[アプリの対応](https://dewy.linyo.ws/ja/application)を参照してください。
+dewyはアプリケーションを起動する前にポートを開き、そのソケットをアプリケーションに渡します。アプリケーションはポートを自分で開かず、渡されたソケットで待ち受けます。ソケットの取得方法は、Go向けの`github.com/linyows/dewy/sock`モジュールを含めて[serverコマンドでのアプリの対応](https://dewy.linyo.ws/ja/application)を参照してください。
 
 ### Assetsコマンド
 

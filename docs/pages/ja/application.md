@@ -1,5 +1,5 @@
 ---
-title: アプリの対応
+title: serverコマンドでのアプリの対応
 ---
 
 # {% $markdoc.frontmatter.title %} {% #overview %}
