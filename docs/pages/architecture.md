@@ -6,7 +6,7 @@ title: Architecture
 
 Dewy provides two distinct deployment modes for different use cases:
 
-1. **Supervisor Mode** (`server` / `assets` commands): Dewy acts as a process supervisor, managing applications as child processes with graceful restart capabilities.
+1. **Supervisor Mode** (`server` / `assets` commands): Dewy deploys onto the host directly. The `server` command runs the application as a child process and restarts it without downtime by passing the listening sockets to the new process. The `assets` command replaces files and runs no process.
 2. **Proxy Mode** (`container` command): Dewy runs a built-in TCP reverse proxy and manages Docker/Podman containers with rolling update deployments.
 
 ## Interfaces
@@ -37,7 +37,7 @@ In Supervisor Mode, Dewy acts as the main process and launches applications as c
 
 ![Supervisor Architecture](/images/supervisor-architecture.svg)
 
-### Graceful Restart
+### Zero-Downtime Restart with Socket Inheritance
 
 For the `server` command, Dewy binds the listening sockets for `--port` once when the server starts and keeps them open until Dewy shuts down. The application runs as a worker process that inherits these sockets. When a new version is detected:
 
@@ -101,7 +101,7 @@ Containers are started with localhost-only port bindings (`127.0.0.1::containerP
 | Deployment unit | Archive (tar.gz, zip) | OCI image |
 | Process management | Child process | Container runtime |
 | Load balancing | External (or single process) | Built-in TCP proxy |
-| Graceful restart | Worker replacement on Dewy-owned sockets | Rolling update |
+| Zero-downtime update | Worker replacement on Dewy-owned sockets | Rolling update |
 | Replicas | Single process | Multiple containers |
 | Health check | HTTP endpoint (`--health-path`) | HTTP endpoint |
 

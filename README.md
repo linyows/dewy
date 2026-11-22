@@ -42,7 +42,7 @@ Features
 - Pull-based declarative deployment
 - Multiple deployment modes (binary, assets, container images)
 - Zero-downtime rolling update deployment for containers
-- Graceful restarts
+- Zero-downtime restarts for binaries, with listening sockets passed from the old process to the new one
 - Configurable registries and artifact stores
 - Support for Docker Hub, GHCR, GAR, ECR, and other OCI registries
 - SHA-256 verification of downloaded artifacts
