@@ -13,10 +13,12 @@ import (
 	"net/netip"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"slices"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/fatih/color"
@@ -569,8 +571,8 @@ func validateHost(host string) error {
 // parseSockets turns --socket values into the Unix domain socket addresses
 // the supervisor binds. A relative path is made absolute against the working
 // directory. A name starting with "@" is kept as is and selects the Linux
-// abstract namespace. Duplicates are rejected; the supervisor checks the
-// rest when it binds.
+// abstract namespace. Duplicates and addresses longer than the operating
+// system allows are rejected; the supervisor checks the rest when it binds.
 func parseSockets(specs []string) ([]string, error) {
 	var out []string
 	seen := make(map[string]bool, len(specs))
@@ -586,6 +588,9 @@ func parseSockets(specs []string) ([]string, error) {
 			}
 			addr = abs
 		}
+		if n, limit := len(addr), maxSocketAddrLen(addr); n > limit {
+			return nil, fmt.Errorf("%q is %d bytes; a Unix domain socket address on %s is limited to %d bytes", addr, n, runtime.GOOS, limit)
+		}
 		if seen[addr] {
 			return nil, fmt.Errorf("duplicate --socket %q", spec)
 		}
@@ -593,6 +598,20 @@ func parseSockets(specs []string) ([]string, error) {
 		out = append(out, addr)
 	}
 	return out, nil
+}
+
+// maxSocketAddrLen returns the longest Unix domain socket address, in bytes,
+// that the operating system binds. The address is stored in the fixed-size
+// sun_path field: 108 bytes on Linux and 104 on macOS. A path needs a
+// terminating NUL in the field, so it gets one byte less: 107 on Linux and
+// 103 on macOS. An abstract name ("@name", Linux only) is stored with a NUL in
+// place of "@" and no terminator, so it can fill the field.
+func maxSocketAddrLen(addr string) int {
+	n := len(syscall.RawSockaddrUnix{}.Path)
+	if !strings.HasPrefix(addr, "@") {
+		n--
+	}
+	return n
 }
 
 // joinHostPorts prefixes each port with host in the "host:port" form, with an
