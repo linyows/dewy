@@ -58,6 +58,10 @@ In Proxy Mode, Dewy manages containerized applications using Docker or Podman. I
 
 ![Proxy Architecture](/images/proxy-architecture.svg)
 
+{% caption %}
+The `container` command replaces the replicas in this order: 1. Start a new container, published on a random `127.0.0.1` port. 2. Once it is running, and has passed the health check when `--health-path` is set, add it to the proxy, and repeat until `--replicas` new containers run. 3. Remove each old container from the proxy, then stop it with SIGTERM and SIGKILL after `--drain-time`. Old and new containers receive traffic together until step 3, so the proxy always has a running container to forward to.
+{% /caption %}
+
 ### Components
 
 - **TCP Reverse Proxy**: Listens on configured ports and load-balances traffic across container backends using round-robin

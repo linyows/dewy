@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="100%" height="100%" viewBox="0 0 900 510" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <style>
+        .t { font-family: 'AvenirNext-DemiBold', 'Avenir Next', sans-serif; font-weight: 600; fill: rgb(35,31,32); }
+        .s { font-family: 'AvenirNext-Medium', 'Avenir Next', sans-serif; font-weight: 500; fill: rgb(35,31,32); }
+        .line { fill: none; stroke: rgb(35,31,32); stroke-width: 2.6px; stroke-linecap: round; stroke-linejoin: round; }
+        .dash { stroke-dasharray: 6 6; }
+        .fill { fill: rgb(35,31,32); }
+    </style>
+    <rect x="0" y="0" width="900" height="510" style="fill: white;"/>
+
+    <!-- process tree -->
+    <path d="M30,48L52,48L41,70Z" class="fill"/>
+    <text x="70" y="68" class="t" font-size="29">systemd</text>
+
+    <path d="M41,84L41,120L72,120" class="line"/>
+    <path d="M84,108L106,108L95,130Z" class="fill"/>
+    <text x="124" y="128" class="t" font-size="29">dewy</text>
+    <text x="124" y="152" class="s" font-size="14">reverse proxy runs inside the dewy process</text>
+
+    <!-- reverse proxy -->
+    <text x="860" y="94" class="s" font-size="13" text-anchor="end">The only port reachable from outside</text>
+    <rect x="560" y="104" width="300" height="96" rx="6" class="line"/>
+    <text x="580" y="136" class="t" font-size="24">Reverse proxy</text>
+    <text x="580" y="164" class="s" font-size="16">:8080 → 127.0.0.1:random</text>
+    <text x="580" y="188" class="s" font-size="16">round-robin across replicas</text>
+    <path d="M222,120L544,120" class="line"/>
+    <path d="M533,111L544,120L533,129" class="line"/>
+    <text x="383" y="110" class="s" font-size="13" text-anchor="middle">listens on --port</text>
+
+    <!-- container runtime -->
+    <path d="M140,166L140,220" class="line"/>
+    <path d="M131,209L140,220L149,209" class="line"/>
+    <text x="156" y="198" class="s" font-size="13">runs docker / podman (run, stop, rm)</text>
+    <path d="M41,120L41,244L72,244" class="line"/>
+    <path d="M84,232L106,232L95,254Z" class="fill"/>
+    <text x="124" y="252" class="t" font-size="24">Containers</text>
+    <text x="124" y="274" class="s" font-size="14">Docker or Podman, each published on 127.0.0.1 only</text>
+
+    <!-- old replicas -->
+    <text x="140" y="308" class="s" font-size="13">Old: removed from the proxy one by one, then SIGTERM, SIGKILL after --drain-time</text>
+    <circle cx="152" cy="331" r="12" class="line dash"/>
+    <text x="176" y="338" class="t" font-size="20">Old replica 1</text>
+    <text x="360" y="338" class="s" font-size="14">127.0.0.1:49153</text>
+    <circle cx="152" cy="367" r="12" class="line dash"/>
+    <text x="176" y="374" class="t" font-size="20">Old replica 2</text>
+    <text x="360" y="374" class="s" font-size="14">127.0.0.1:49154</text>
+
+    <!-- new replicas -->
+    <text x="140" y="414" class="s" font-size="13">New: started one by one, added to the proxy once running (and healthy with --health-path)</text>
+    <circle cx="152" cy="437" r="12" class="fill"/>
+    <text x="176" y="444" class="t" font-size="20">New replica 1</text>
+    <text x="360" y="444" class="s" font-size="14">127.0.0.1:49161</text>
+    <circle cx="152" cy="473" r="12" class="fill"/>
+    <text x="176" y="480" class="t" font-size="20">New replica 2</text>
+    <text x="360" y="480" class="s" font-size="14">127.0.0.1:49162</text>
+
+    <!-- forwarding -->
+    <path d="M840,200L840,473L520,473" class="line"/>
+    <path d="M840,437L520,437" class="line"/>
+    <path d="M840,331L520,331" class="line dash"/>
+    <path d="M840,367L520,367" class="line dash"/>
+    <text x="828" y="232" class="s" font-size="13" text-anchor="end">forwards to each replica</text>
+</svg>

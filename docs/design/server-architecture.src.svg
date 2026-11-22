@@ -13,7 +13,7 @@
     <path d="M30,48L52,48L41,70Z" class="fill"/>
     <text x="70" y="68" class="t" font-size="29">systemd</text>
 
-    <path d="M41,84L41,128L72,128" class="line"/>
+    <path d="M41,84L41,120L72,120" class="line"/>
     <path d="M84,108L106,108L95,130Z" class="fill"/>
     <text x="124" y="128" class="t" font-size="29">dewy</text>
     <text x="124" y="152" class="s" font-size="14">supervisor runs inside the dewy process</text>
