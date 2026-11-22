@@ -53,7 +53,7 @@ Each inherited socket can be returned once; a second request for it returns `soc
 
 ### The DEWY_PORT Environment Variable {% #dewy-port %}
 
-Dewy lists the sockets in the `DEWY_PORT` environment variable. It also sets the same value in `SERVER_STARTER_PORT`, whose name and format are compatible with server-starter, so applications written for server-starter work without changes. New applications should read `DEWY_PORT`.
+Dewy lists the sockets in the `DEWY_PORT` environment variable. It also sets the same value in `SERVER_STARTER_PORT`, whose name and format are compatible with server-starter, so applications written for server-starter work without changes.
 
 Entries are joined by `;`, and each entry is `<address>=<fd>`. `<address>` is the port as configured: `port`, or `host:port` when `--host` is set to an address other than `0.0.0.0` or `::`, with an IPv6 address in brackets. A UDP socket carries a `/udp` suffix on the address. The entries are sorted by port number, with the TCP port before the UDP port of the same number.
 

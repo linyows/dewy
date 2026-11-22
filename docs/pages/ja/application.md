@@ -53,7 +53,7 @@ func main() {
 
 ### 環境変数DEWY_PORT {% #dewy-port %}
 
-dewyは渡したソケットを環境変数`DEWY_PORT`に列挙します。同じ値を`SERVER_STARTER_PORT`にも設定します。この変数名と形式はserver-starterと互換性があるため、server-starter向けに書かれたアプリケーションは変更なしで動作します。新しく書くアプリケーションは`DEWY_PORT`を読んでください。
+dewyは渡したソケットを環境変数`DEWY_PORT`に列挙します。同じ値を`SERVER_STARTER_PORT`にも設定します。この変数名と形式はserver-starterと互換性があるため、server-starter向けに書かれたアプリケーションは変更なしで動作します。
 
 各エントリは`<address>=<fd>`の形式で、`;`で区切られます。`<address>`は指定したポートそのままです。`--host`に`0.0.0.0`または`::`以外のアドレスを指定した場合は`host:port`の形式になり、IPv6アドレスは角括弧で囲まれます。UDPソケットのアドレスには`/udp`が付きます。エントリはポート番号の順に並び、同じ番号ではTCPがUDPより先になります。
 
