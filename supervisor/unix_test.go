@@ -76,8 +76,12 @@ func TestUnixSocketPathInUse(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		ln.(*net.UnixListener).SetUnlinkOnClose(false)
-		_ = ln.Close()
+		ul, ok := ln.(*net.UnixListener)
+		if !ok {
+			t.Fatalf("listener is %T, not *net.UnixListener", ln)
+		}
+		ul.SetUnlinkOnClose(false)
+		_ = ul.Close()
 
 		s, err := New(Config{Command: "true", Addrs: []string{path}})
 		if err != nil {

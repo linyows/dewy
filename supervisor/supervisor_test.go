@@ -66,7 +66,7 @@ func runHelper() int {
 		if !ok {
 			v = "<unset>"
 		}
-		fmt.Fprint(w, v)
+		fmt.Fprint(w, v) //nolint:gosec // G705: the test worker reports its own environment to the test as plain text
 	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		fmt.Fprintf(w, "%s %d", mode, os.Getpid())
