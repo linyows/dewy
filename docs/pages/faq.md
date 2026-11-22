@@ -55,6 +55,34 @@ mkdir -p /opt/app2 && cd /opt/app2
 dewy server --registry ghr://owner/repo2 --port 8002 -- /opt/app2/current/app
 ```
 
+## Why does my application not start under the server command?
+
+Dewy reports a start that failed with an error such as `worker exited during the 1s startup window: exit status 1`. The application exited before `--startup-wait` (1 second by default) passed. The common causes are:
+
+- **The application binds the port itself.** Dewy has already opened the `--port` ports, so a second bind fails with "address already in use". Serve on the socket that dewy passes instead; see [Application Integration for the Server Command](/application#inherited-sockets).
+- **The application runs in the background.** An application that forks into the background, for example with a daemon option, ends the process that dewy started. Run it in the foreground.
+- **The application fails while it starts**, for example while it reads its configuration or connects to a database. Dewy passes the application's stdout and stderr through to its own, so the reason appears in the same output as dewy's logs. If it only needs longer to become ready, set `--startup-wait` longer than that.
+
+## Why does my application start but not answer requests?
+
+The application is most likely serving on a socket other than the ones dewy passes, for example on a port written in its configuration. Connections to `--port` are accepted by dewy's socket and wait there, because no process reads from it, so clients hang instead of being refused. With `--health-path`, the health check fails after `--health-timeout`. Serve on the inherited sockets; see [Application Integration for the Server Command](/application#inherited-sockets).
+
+With `--health-before-switch`, every deployment also fails when the application does not serve its health endpoint on the `DEWY_HEALTH_PORT` socket; see [Health Checks](/application#health-checks).
+
+## Why does the previous version keep running after a deployment?
+
+The process that dewy started has probably exited while the application kept running. This happens when the command is a shell script that starts the application as a child process: dewy sends SIGTERM to the shell only, the shell exits, and the application continues to run with the inherited sockets, serving the previous version next to the new one. Start the application with `exec` in the script, so that the application replaces the shell and receives the signals itself:
+
+```sh
+#!/bin/sh
+export APP_ENV=production
+exec /opt/myapp/current/myapp
+```
+
+## Why does each deployment take 30 seconds to stop the previous process?
+
+The previous process does not exit on SIGTERM. Dewy waits for `--drain-time` (30 seconds by default) and then kills it with SIGKILL, which also cuts off the requests in progress. Handle SIGTERM by finishing the requests in progress and exiting; see [Signal Handling](/signal-handling).
+
 ## Next Steps
 
 For more information and detailed documentation, refer to the following resources:
