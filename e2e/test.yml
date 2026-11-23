@@ -878,9 +878,13 @@ jobs:
       timeout: 3m
       cmd: |
         rm -rf .dewy dewy.log
+        # The marker is put together at run time: the shell that runs this
+        # step has the step text in its command line, so a literal marker
+        # would make pgrep find that shell.
+        marker="dewy-e2e-slow""stop"
         ./dewy server -p 8011 -i 2 --drain-time 20 -l debug \
           --registry "ghr://linyows/dewy-testapp?pre-release=true" \
-          -- /bin/sh -c 'trap "sleep 15; exit 0" TERM; while :; do sleep 1; done # dewy-e2e-slowstop' \
+          -- /bin/sh -c "trap 'sleep 15; exit 0' TERM; while :; do sleep 1; done # ${marker}" \
           > dewy.log 2>&1 &
         pid=$!
         until grep -q 'msg="Start server"' dewy.log; do
@@ -892,9 +896,9 @@ jobs:
         wait "${pid}"
         elapsed=$(( $(date +%s) - start ))
         echo "dewy exited ${elapsed}s after SIGTERM"
-        if pgrep -f dewy-e2e-slowstop >/dev/null; then
+        if pgrep -f "${marker}" >/dev/null; then
           echo "the command is still running after dewy exited"
-          pkill -KILL -f dewy-e2e-slowstop
+          pkill -KILL -f "${marker}"
           exit 1
         fi
         # The command takes 15 seconds to stop, so a shorter shutdown did
