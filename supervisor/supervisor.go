@@ -584,8 +584,10 @@ func (s *Supervisor) wait(w *worker) {
 	crashed := s.current == w && !w.stopping && !s.closing
 	stopping := w.stopping
 	s.mu.Unlock()
-	close(w.done)
 
+	// The exit is logged before done is closed. Shutdown returns when every
+	// done is closed, and the process may exit right after it, which would
+	// lose a line logged later.
 	attrs := []any{
 		slog.Int("generation", w.gen),
 		slog.Int("pid", w.cmd.Process.Pid),
@@ -594,12 +596,16 @@ func (s *Supervisor) wait(w *worker) {
 	switch {
 	case crashed:
 		s.log.Warn("Worker exited unexpectedly", attrs...)
+	case stopping:
+		s.log.Info("Worker stopped", attrs...)
+	}
+	close(w.done)
+
+	if crashed {
 		if s.cfg.OnCrash != nil {
 			s.cfg.OnCrash(Worker{Generation: w.gen, PID: w.cmd.Process.Pid, StartedAt: w.started}, exitError(err))
 		}
 		go s.recover(w)
-	case stopping:
-		s.log.Info("Worker stopped", attrs...)
 	}
 	// A worker that is neither current nor stopping is still settling;
 	// settle reports its exit.
