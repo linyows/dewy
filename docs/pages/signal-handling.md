@@ -60,7 +60,7 @@ When the current worker exits without being asked to, dewy logs `Worker exited u
 
 When termination signals (SIGINT, SIGTERM, SIGQUIT) are received, dewy performs cleanup in the following sequence:
 
-1. The periodic job scheduler is stopped to prevent new deployment processes from starting.
+1. The polling loop is stopped: no new check or deployment starts, and a check or deployment already running is allowed to finish first. A deployment that is starting the application finishes starting it, so the next step stops it rather than leaving it running.
 2. Dewy sends SIGTERM to the workers and waits up to `--drain-time` (30 seconds by default) for them to exit. Workers still running after that are killed with SIGKILL. Dewy then closes the listening sockets.
 3. Termination messages are sent through the notification system to alert administrators that dewy is shutting down.
 4. The main processing loop is terminated and the process is completely stopped.

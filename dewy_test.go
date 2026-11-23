@@ -92,7 +92,7 @@ func TestNew(t *testing.T) {
 		cmp.AllowUnexported(Dewy{}, cache.File{}),
 		// backoff holds a func field that cmp cannot compare; it is asserted
 		// separately below.
-		cmpopts.IgnoreFields(Dewy{}, "RWMutex", "logger", "tcpProxies", "proxyMutex", "containerRuntime", "backoff"),
+		cmpopts.IgnoreFields(Dewy{}, "RWMutex", "logger", "tcpProxies", "proxyMutex", "containerRuntime", "backoff", "tickMu", "stopping"),
 		cmpopts.IgnoreFields(cache.File{}, "mutex", "logger"),
 	}
 	if diff := cmp.Diff(dewy, expect, opts...); diff != "" {
@@ -1450,6 +1450,79 @@ func TestTickSkipsWhileBackingOff(t *testing.T) {
 	d.tick()
 	if got := calls.Load(); got != 3 {
 		t.Errorf("registry calls after the window elapsed = %d, want 3", got)
+	}
+}
+
+func TestTickDoesNothingAfterShutdownBegins(t *testing.T) {
+	var calls atomic.Int32
+	d, notify := newBackoffTestDewy(t, testClock(), func(ctx context.Context) (*registry.CurrentResponse, error) {
+		calls.Add(1)
+		return nil, errors.New("registry down")
+	})
+
+	d.tick()
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("registry calls before the shutdown = %d, want 1", got)
+	}
+	before := notify.errorCount
+
+	// beginShutdown keeps tickMu, so set only the flag to drive the tick
+	// that would run while the server is being stopped.
+	d.stopping.Store(true)
+	d.tick()
+
+	if got := calls.Load(); got != 1 {
+		t.Errorf("registry calls after the shutdown began = %d, want 1: a tick must not deploy while dewy stops", got)
+	}
+	if notify.errorCount != before {
+		t.Errorf("notifier error count = %d after the shutdown began, want %d", notify.errorCount, before)
+	}
+}
+
+func TestBeginShutdownWaitsForRunningTick(t *testing.T) {
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	var calls atomic.Int32
+	d, _ := newBackoffTestDewy(t, testClock(), func(ctx context.Context) (*registry.CurrentResponse, error) {
+		if calls.Add(1) == 1 {
+			close(entered)
+			<-release
+		}
+		return nil, errors.New("registry down")
+	})
+
+	tickDone := make(chan struct{})
+	go func() {
+		d.tick()
+		close(tickDone)
+	}()
+	<-entered
+
+	shutdownDone := make(chan struct{})
+	go func() {
+		d.beginShutdown()
+		close(shutdownDone)
+	}()
+
+	select {
+	case <-shutdownDone:
+		t.Fatal("beginShutdown returned while a tick was running")
+	case <-time.After(100 * time.Millisecond):
+	}
+	if !d.stopping.Load() {
+		t.Error("stopping = false while beginShutdown waits, want true so no new tick starts")
+	}
+
+	close(release)
+	select {
+	case <-shutdownDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("beginShutdown did not return after the running tick finished")
+	}
+	<-tickDone
+
+	if got := calls.Load(); got != 1 {
+		t.Errorf("registry calls = %d, want 1", got)
 	}
 }
 
