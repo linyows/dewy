@@ -2,18 +2,14 @@ name: Container Multi-Port Verify
 
 steps:
 - name: Wait for new version to start
-  uses: shell
+  uses: file
   retry:
     max_attempts: 180
     interval: 5s
   with:
-    cmd: |
-      if [ -f "{{ vars.log }}" ]; then
-        grep "Starting new container" "{{ vars.log }}" | \
-          grep -q "{{ vars.new_version }}" && exit 0
-      fi
-      exit 1
-  test: status == 0
+    path: "{{ vars.log }}"
+  test: |
+    any(lines(res.content), # contains "Starting new container" && # contains vars.new_version)
 - name: Wait for stabilization
   wait: 60s
   uses: shell
@@ -22,54 +18,54 @@ steps:
   test: status == 0
 - name: Verify TCP proxy started on port1
   id: proxy1
-  uses: shell
+  uses: file
   with:
-    cmd: |
-      grep 'TCP proxy started' {{ vars.log }} | \
-        grep -c 'proxy_port={{ vars.port1 }}' | tr -d '\n'
-  test: res.stdout == "1"
+    path: "{{ vars.log }}"
+  test: |
+    count(lines(res.content), # contains "TCP proxy started" && # contains "proxy_port=" + string(vars.port1)) == 1
   outputs:
-    ok: res.stdout == "1"
+    ok: |
+      count(lines(res.content), # contains "TCP proxy started" && # contains "proxy_port=" + string(vars.port1)) == 1
 - name: Verify TCP proxy started on port2
   id: proxy2
-  uses: shell
+  uses: file
   with:
-    cmd: |
-      grep 'TCP proxy started' {{ vars.log }} | \
-        grep -c 'proxy_port={{ vars.port2 }}' | tr -d '\n'
-  test: res.stdout == "1"
+    path: "{{ vars.log }}"
+  test: |
+    count(lines(res.content), # contains "TCP proxy started" && # contains "proxy_port=" + string(vars.port2)) == 1
   outputs:
-    ok: res.stdout == "1"
+    ok: |
+      count(lines(res.content), # contains "TCP proxy started" && # contains "proxy_port=" + string(vars.port2)) == 1
 - name: Verify all TCP proxies started
   id: allproxies
-  uses: shell
+  uses: file
   with:
-    cmd: |
-      grep 'All TCP proxies started successfully' {{ vars.log }} | \
-        grep -c 'count=2' | tr -d '\n'
-  test: res.stdout == "1"
+    path: "{{ vars.log }}"
+  test: |
+    count(lines(res.content), # contains "All TCP proxies started successfully" && # contains "count=2") == 1
   outputs:
-    ok: res.stdout == "1"
+    ok: |
+      count(lines(res.content), # contains "All TCP proxies started successfully" && # contains "count=2") == 1
 - name: Verify backends added to port1
   id: backend1
-  uses: shell
+  uses: file
   with:
-    cmd: |
-      grep 'Backend added to TCP proxy' {{ vars.log }} | \
-        grep -c 'proxy_port={{ vars.port1 }}' | tr -d '\n'
-  test: int(res.stdout) >= int(vars.replicas)
+    path: "{{ vars.log }}"
+  test: |
+    count(lines(res.content), # contains "Backend added to TCP proxy" && # contains "proxy_port=" + string(vars.port1)) >= int(vars.replicas)
   outputs:
-    ok: int(res.stdout) >= int(vars.replicas)
+    ok: |
+      count(lines(res.content), # contains "Backend added to TCP proxy" && # contains "proxy_port=" + string(vars.port1)) >= int(vars.replicas)
 - name: Verify backends added to port2
   id: backend2
-  uses: shell
+  uses: file
   with:
-    cmd: |
-      grep 'Backend added to TCP proxy' {{ vars.log }} | \
-        grep -c 'proxy_port={{ vars.port2 }}' | tr -d '\n'
-  test: int(res.stdout) >= int(vars.replicas)
+    path: "{{ vars.log }}"
+  test: |
+    count(lines(res.content), # contains "Backend added to TCP proxy" && # contains "proxy_port=" + string(vars.port2)) >= int(vars.replicas)
   outputs:
-    ok: int(res.stdout) >= int(vars.replicas)
+    ok: |
+      count(lines(res.content), # contains "Backend added to TCP proxy" && # contains "proxy_port=" + string(vars.port2)) >= int(vars.replicas)
 - name: Test connection to port1
   id: conn1
   uses: shell
@@ -123,25 +119,27 @@ steps:
   test: status == 0
 - name: Verify no error
   id: noerr
-  uses: shell
+  uses: file
   with:
-    cmd: "grep 'level=ERROR' {{ vars.log }} | grep -v 'context deadline exceeded' | grep -v 'status 429'"
-  test: status == 1
+    path: "{{ vars.log }}"
+  test: |
+    res.exists && none(lines(res.content), # contains "level=ERROR" && !(# contains "context deadline exceeded") && !(# contains "status 429"))
   outputs:
-    ok: status == 1
+    ok: |
+      res.exists && none(lines(res.content), # contains "level=ERROR" && !(# contains "context deadline exceeded") && !(# contains "status 429"))
 - name: Verify new containers created
   id: nver
-  uses: shell
+  uses: file
   with:
-    cmd: |
-      grep 'Starting new container' {{ vars.log }} | \
-        grep -c {{ vars.new_version }} | tr -d '\n'
-  test: int(res.stdout) == int(vars.replicas)
+    path: "{{ vars.log }}"
+  test: |
+    count(lines(res.content), # contains "Starting new container" && # contains vars.new_version) == int(vars.replicas)
   outputs:
-    ok: int(res.stdout) == int(vars.replicas)
+    ok: |
+      count(lines(res.content), # contains "Starting new container" && # contains vars.new_version) == int(vars.replicas)
 - name: Show log
   skipif: outputs.noerr.ok && outputs.proxy1.ok && outputs.proxy2.ok && outputs.allproxies.ok && outputs.backend1.ok && outputs.backend2.ok && outputs.conn1.ok && outputs.conn2.ok && outputs.notroot.ok && outputs.nver.ok
-  uses: shell
+  uses: file
   with:
-    cmd: "cat {{ vars.log }}"
-  echo: "{{ res.stdout }}"
+    path: "{{ vars.log }}"
+  echo: "{{ res.content }}"

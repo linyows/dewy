@@ -2,18 +2,14 @@ name: Container Verify
 
 steps:
 - name: Wait for new version to start
-  uses: shell
+  uses: file
   retry:
     max_attempts: 180
     interval: 5s
   with:
-    cmd: |
-      if [ -f "{{ vars.log }}" ]; then
-        grep "Starting new container" "{{ vars.log }}" | \
-          grep -q "{{ vars.new_version }}" && exit 0
-      fi
-      exit 1
-  test: status == 0
+    path: "{{ vars.log }}"
+  test: |
+    any(lines(res.content), # contains "Starting new container" && # contains vars.new_version)
 - name: Wait for stabilization
   wait: 60s
   uses: shell
@@ -78,20 +74,16 @@ steps:
   id: drain
   # Only the variant that passes --drain-time checks it.
   skipif: "!('drain_time' in vars)"
-  uses: shell
+  uses: file
   with:
-    # The three old replicas are stopped once the new version is healthy and
-    # their backends have been pulled from the proxy. Counting via the shell
-    # exit code rather than probe's stdout avoids the empty-stdout flake that
-    # bites `grep -c` here.
-    cmd: |
-      n=$(grep -c 'Stopping container gracefully.*timeout={{ vars.drain_time }}s' \
-        "{{ vars.log }}" 2>/dev/null || true)
-      echo "stops at the configured drain window: $n"
-      [ "$n" = "3" ]
-  test: status == 0
+    path: "{{ vars.log }}"
+  # The three old replicas are stopped once the new version is healthy and
+  # their backends have been pulled from the proxy.
+  test: |
+    count(lines(res.content), # matches "Stopping container gracefully.*timeout=" + string(vars.drain_time) + "s") == 3
   outputs:
-    ok: status == 0
+    ok: |
+      count(lines(res.content), # matches "Stopping container gracefully.*timeout=" + string(vars.drain_time) + "s") == 3
 - name: Stop dewy
   uses: shell
   with: # Use Process Group ID
@@ -104,50 +96,50 @@ steps:
 - name: Verify shutdown keeps the fixed stop window
   id: shutdown_drain
   skipif: "!('drain_time' in vars)"
-  uses: shell
+  uses: file
   retry:
     max_attempts: 30
     interval: 2s
   with:
-    cmd: |
-      n=$(grep -c 'Stopping container gracefully.*timeout=10s' \
-        "{{ vars.log }}" 2>/dev/null || true)
-      echo "stops at the fixed shutdown window: $n"
-      [ "$n" = "3" ]
-  test: status == 0
+    path: "{{ vars.log }}"
+  test: |
+    count(lines(res.content), # matches "Stopping container gracefully.*timeout=10s") == 3
   outputs:
-    ok: status == 0
+    ok: |
+      count(lines(res.content), # matches "Stopping container gracefully.*timeout=10s") == 3
 - name: Verify no error
   id: noerr
-  uses: shell
+  uses: file
   with:
-    cmd: "grep 'level=ERROR' {{ vars.log }} | grep -v 'context deadline exceeded' | grep -v 'status 429'"
-  test: status == 1
+    path: "{{ vars.log }}"
+  test: |
+    res.exists && none(lines(res.content), # contains "level=ERROR" && !(# contains "context deadline exceeded") && !(# contains "status 429"))
   outputs:
-    ok: status == 1
+    ok: |
+      res.exists && none(lines(res.content), # contains "level=ERROR" && !(# contains "context deadline exceeded") && !(# contains "status 429"))
 - name: Verify current 3 containers creates
   id: cver
-  uses: shell
+  uses: file
   with:
-    cmd: |
-      grep 'Starting new container' {{ vars.log }} | \
-        grep -vc {{ vars.new_version }} | tr -d '\n'
-  test: res.stdout == "3"
+    path: "{{ vars.log }}"
+  test: |
+    count(lines(res.content), # contains "Starting new container" && !(# contains vars.new_version)) == 3
   outputs:
-    ok: res.stdout == "3"
+    ok: |
+      count(lines(res.content), # contains "Starting new container" && !(# contains vars.new_version)) == 3
 - name: Verify new 3 containers creates
   id: nver
-  uses: shell
+  uses: file
   with:
-    cmd: |
-      grep 'Starting new container' {{ vars.log }} | \
-        grep -c {{ vars.new_version }} | tr -d '\n'
-  test: res.stdout == "3"
+    path: "{{ vars.log }}"
+  test: |
+    count(lines(res.content), # contains "Starting new container" && # contains vars.new_version) == 3
   outputs:
-    ok: res.stdout == "3"
+    ok: |
+      count(lines(res.content), # contains "Starting new container" && # contains vars.new_version) == 3
 - name: Show log
   skipif: outputs.noerr.ok && outputs.notroot.ok && outputs.cver.ok && outputs.nver.ok
-  uses: shell
+  uses: file
   with:
-    cmd: "cat {{ vars.log }}"
-  echo: "{{ res.stdout }}"
+    path: "{{ vars.log }}"
+  echo: "{{ res.content }}"

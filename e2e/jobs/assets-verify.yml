@@ -2,18 +2,14 @@ name: Assets Verify
 
 steps:
 - name: Wait for new version download
-  uses: shell
+  uses: file
   retry:
     max_attempts: 60
     interval: 5s
   with:
-    cmd: |
-      if [ -f "{{ vars.log }}" ]; then
-        grep "Download notification" "{{ vars.log }}" | \
-          grep -q "{{ replace(vars.new_version, 'v', '') }}" && exit 0
-      fi
-      exit 1
-  test: status == 0
+    path: "{{ vars.log }}"
+  test: |
+    any(lines(res.content), # contains "Download notification" && # contains replace(vars.new_version, 'v', ''))
 - name: Wait for stabilization
   wait: 30s
   uses: shell
@@ -27,44 +23,42 @@ steps:
   test: status == 0
 - name: Verify no error
   id: noerr
-  uses: shell
+  uses: file
   with:
-    # Match only level=ERROR (consistent with server-verify.yml).
-    cmd: "grep 'level=ERROR' {{ vars.log }}"
-  test: status == 1
+    path: "{{ vars.log }}"
+  # Match only level=ERROR (consistent with server-verify.yml).
+  test: res.exists && !(res.content contains "level=ERROR")
   outputs:
-    ok: status == 1
+    ok: res.exists && !(res.content contains "level=ERROR")
 - name: Verify two symlinks creates
   id: twosyml
-  uses: shell
+  uses: file
   with:
-    cmd: |
-      grep -c 'Create symlink' {{ vars.log }} | tr -d '\n'
-  test: res.stdout == "2"
+    path: "{{ vars.log }}"
+  test: 'count(lines(res.content), # contains "Create symlink") == 2'
   outputs:
-    ok: res.stdout == "2"
+    ok: 'count(lines(res.content), # contains "Create symlink") == 2'
 - name: Verify starting two version
   id: twover
-  uses: shell
+  uses: file
   with:
-    cmd: |
-      grep -c 'Download notification' {{ vars.log }} | tr -d '\n'
-  test: res.stdout == "2"
+    path: "{{ vars.log }}"
+  test: 'count(lines(res.content), # contains "Download notification") == 2'
   outputs:
-    ok: res.stdout == "2"
+    ok: 'count(lines(res.content), # contains "Download notification") == 2'
 - name: Verify starting new version
   id: newver
-  uses: shell
+  uses: file
   with:
-    cmd: |
-      grep 'Download notification' {{ vars.log }} | \
-        grep {{ replace(vars.new_version, 'v', '') }}
-  test: status == 0
+    path: "{{ vars.log }}"
+  test: |
+    any(lines(res.content), # contains "Download notification" && # contains replace(vars.new_version, 'v', ''))
   outputs:
-    ok: status == 0
+    ok: |
+      any(lines(res.content), # contains "Download notification" && # contains replace(vars.new_version, 'v', ''))
 - name: Show log
   skipif: outputs.noerr.ok && outputs.twosyml.ok && outputs.twover.ok && outputs.newver.ok
-  uses: shell
+  uses: file
   with:
-    cmd: "cat {{ vars.log }}"
-  echo: "{{ res.stdout }}"
+    path: "{{ vars.log }}"
+  echo: "{{ res.content }}"

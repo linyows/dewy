@@ -140,7 +140,13 @@ flowchart LR
     end
     subgraph start_srv_ghr_socket["Start server by Github-Releases registry on a Unix domain socket with an envdir"]
         direction TB
-        start_srv_ghr_socket_step0["Start dewy"]
+        start_srv_ghr_socket_step0["Remove what an earlier run left"]
+        start_srv_ghr_socket_step1["Write DEWY_E2E_VALUE to the envdir"]
+        start_srv_ghr_socket_step2["Write an empty DEWY_E2E_UNSET to the envdir"]
+        start_srv_ghr_socket_step3["Start dewy"]
+        start_srv_ghr_socket_step0 --> start_srv_ghr_socket_step1
+        start_srv_ghr_socket_step1 --> start_srv_ghr_socket_step2
+        start_srv_ghr_socket_step2 --> start_srv_ghr_socket_step3
     end
     subgraph start_ast_ghr["Start assets by Github-Releases registry"]
         direction TB
@@ -342,15 +348,16 @@ flowchart LR
         job_27_step3["Verify the new version answers on the socket"]
         job_27_step4["Verify the health check probed the socket"]
         job_27_step5["Verify the application environment from the envdir"]
-        job_27_step6["Change the envdir and restart with SIGUSR1"]
-        job_27_step7["Wait for the restart"]
-        job_27_step8["Verify the restarted application got the new value"]
-        job_27_step9["Verify the socket still answers after the restart"]
-        job_27_step10["Stop dewy"]
-        job_27_step11["Verify the socket file is removed on shutdown"]
-        job_27_step12["Verify no error"]
-        job_27_step13["Verify two symlinks creates"]
-        job_27_step14["Show log"]
+        job_27_step6["Change the envdir"]
+        job_27_step7["Restart with SIGUSR1"]
+        job_27_step8["Wait for the restart"]
+        job_27_step9["Verify the restarted application got the new value"]
+        job_27_step10["Verify the socket still answers after the restart"]
+        job_27_step11["Stop dewy"]
+        job_27_step12["Verify the socket file is removed on shutdown"]
+        job_27_step13["Verify no error"]
+        job_27_step14["Verify two symlinks creates"]
+        job_27_step15["Show log"]
         job_27_step0 --> job_27_step1
         job_27_step1 --> job_27_step2
         job_27_step2 --> job_27_step3
@@ -365,6 +372,7 @@ flowchart LR
         job_27_step11 --> job_27_step12
         job_27_step12 --> job_27_step13
         job_27_step13 --> job_27_step14
+        job_27_step14 --> job_27_step15
     end
     subgraph job_28["Verify assets by Github-Releases registry"]
         direction TB
@@ -570,19 +578,27 @@ flowchart LR
     end
     subgraph job_37["Verify shared cache reduces upstream downloads (S3 pair)"]
         direction TB
-        job_37_step0["Count #quot;Cached artifact#quot; log lines across S3 pair"]
+        job_37_step0["Count #quot;Cached artifact#quot; log lines of A"]
+        job_37_step1["Count #quot;Cached artifact#quot; log lines across S3 pair"]
+        job_37_step0 --> job_37_step1
     end
     subgraph job_38["Verify shared cache reduces upstream downloads (GCS pair)"]
         direction TB
-        job_38_step0["Count #quot;Cached artifact#quot; log lines across GCS pair"]
+        job_38_step0["Count #quot;Cached artifact#quot; log lines of A"]
+        job_38_step1["Count #quot;Cached artifact#quot; log lines across GCS pair"]
+        job_38_step0 --> job_38_step1
     end
     subgraph job_39["Verify registry result cache reduces upstream polls (S3 pair)"]
         direction TB
-        job_39_step0["Count #quot;Registry result refreshed from upstream#quot; log lines across S3 pair"]
+        job_39_step0["Count #quot;Registry result refreshed from upstream#quot; log lines of A"]
+        job_39_step1["Count #quot;Registry result refreshed from upstream#quot; log lines across S3 pair"]
+        job_39_step0 --> job_39_step1
     end
     subgraph job_40["Verify registry result cache reduces upstream polls (GCS pair)"]
         direction TB
-        job_40_step0["Count #quot;Registry result refreshed from upstream#quot; log lines across GCS pair"]
+        job_40_step0["Count #quot;Registry result refreshed from upstream#quot; log lines of A"]
+        job_40_step1["Count #quot;Registry result refreshed from upstream#quot; log lines across GCS pair"]
+        job_40_step0 --> job_40_step1
     end
     subgraph prepare_slot_s3["Prepare slot versions on AWS S3"]
         direction TB
