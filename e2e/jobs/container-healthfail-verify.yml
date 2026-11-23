@@ -12,43 +12,35 @@ name: Container Health Check Failure Verify
 #    behind. Deploy has no unit test, so this is the only coverage of that path.
 steps:
 - name: Wait for the health check to fail
-  uses: shell
+  uses: file
   retry:
     max_attempts: 60
     interval: 5s
   with:
-    cmd: |
-      if [ -f "{{ vars.log }}" ]; then
-        grep -q 'health check failed after' "{{ vars.log }}" && exit 0
-      fi
-      exit 1
-  test: status == 0
+    path: "{{ vars.log }}"
+  test: res.content contains "health check failed after"
 - name: Verify --health-timeout bounds the probe
   id: budget
-  uses: shell
+  uses: file
   with:
-    # Before the flag was wired the probe ran a fixed five retries and reported
-    # "health check failed after 5 retries", with no budget in the message at
-    # all. Matching the configured budget pins the flag to the behavior.
-    cmd: |
-      grep -q "health check failed after .* attempts within {{ vars.health_timeout }}s" \
-        "{{ vars.log }}"
-  test: status == 0
+    path: "{{ vars.log }}"
+  # Before the flag was wired the probe ran a fixed five retries and reported
+  # "health check failed after 5 retries", with no budget in the message at
+  # all. Matching the configured budget pins the flag to the behavior.
+  test: |
+    any(lines(res.content), # matches "health check failed after .* attempts within " + string(vars.health_timeout) + "s")
   outputs:
-    ok: status == 0
+    ok: |
+      any(lines(res.content), # matches "health check failed after .* attempts within " + string(vars.health_timeout) + "s")
 - name: Wait for the deploy to fail three times
-  uses: shell
+  uses: file
   retry:
     max_attempts: 60
     interval: 5s
   with:
-    # Three cycles give a container leak room to become visible. Counting via
-    # the shell exit code rather than probe's stdout avoids the empty-stdout
-    # flake that bites `grep -c` here.
-    cmd: |
-      n=$(grep -c 'Container deployment failed' "{{ vars.log }}" 2>/dev/null || true)
-      [ -n "$n" ] && [ "$n" -ge 3 ]
-  test: status == 0
+    path: "{{ vars.log }}"
+  # Three cycles give a container leak room to become visible.
+  test: 'count(lines(res.content), # contains "Container deployment failed") >= 3'
 - name: Verify the failed replica is rolled back
   id: rollback
   uses: shell
@@ -75,15 +67,15 @@ steps:
   test: status == 0
 - name: Verify the deploy was never reported successful
   id: nosuccess
-  uses: shell
+  uses: file
   with:
-    cmd: "grep 'Container deployed successfully' {{ vars.log }}"
-  test: status == 1
+    path: "{{ vars.log }}"
+  test: res.exists && !(res.content contains "Container deployed successfully")
   outputs:
-    ok: status == 1
+    ok: res.exists && !(res.content contains "Container deployed successfully")
 - name: Show log
   skipif: outputs.budget.ok && outputs.rollback.ok && outputs.nosuccess.ok
-  uses: shell
+  uses: file
   with:
-    cmd: "cat {{ vars.log }}"
-  echo: "{{ res.stdout }}"
+    path: "{{ vars.log }}"
+  echo: "{{ res.content }}"

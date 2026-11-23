@@ -303,7 +303,34 @@ jobs:
 - name: Start server by Github-Releases registry on a Unix domain socket with an envdir
   id: start_srv_ghr_socket
   needs: [build]
+  # The socket and the envdir are under /tmp to keep the socket path short,
+  # and the paths must match the verify job's vars.
+  #
+  # Both variables are also set in dewy's own environment. The envdir
+  # overrides DEWY_E2E_VALUE, and its empty DEWY_E2E_UNSET file removes the
+  # other one.
   steps:
+  - name: Remove what an earlier run left
+    uses: file
+    with:
+      path: /tmp/dewy-e2e-socket
+      op: delete
+      recursive: true
+    test: '!res.exists'
+  - name: Write DEWY_E2E_VALUE to the envdir
+    uses: file
+    with:
+      path: /tmp/dewy-e2e-socket/env/DEWY_E2E_VALUE
+      op: write
+      content: |
+        from-envdir
+    test: res.content == "from-envdir\n"
+  - name: Write an empty DEWY_E2E_UNSET to the envdir
+    uses: file
+    with:
+      path: /tmp/dewy-e2e-socket/env/DEWY_E2E_UNSET
+      op: write
+    test: res.exists && res.size == 0
   - name: Start dewy
     id: srv_ghr_socket
     uses: shell
@@ -314,19 +341,11 @@ jobs:
         log: Create symlink
       timeout: 5m
       # The server listens only on --socket, so the health check probes the
-      # socket. The socket and the envdir are under /tmp to keep the socket
-      # path short, and the paths must match the verify job's vars.
-      #
-      # Both variables are also set in dewy's own environment. The envdir
-      # overrides DEWY_E2E_VALUE, and its empty DEWY_E2E_UNSET file removes
-      # the other one.
+      # socket.
       env:
         DEWY_E2E_VALUE: from-dewy
         DEWY_E2E_UNSET: from-dewy
       cmd: |
-        rm -rf /tmp/dewy-e2e-socket && mkdir -p /tmp/dewy-e2e-socket/env &&
-        printf 'from-envdir\n' > /tmp/dewy-e2e-socket/env/DEWY_E2E_VALUE &&
-        : > /tmp/dewy-e2e-socket/env/DEWY_E2E_UNSET &&
         ./dewy server -l debug \
         --registry "ghr://linyows/dewy-testapp?pre-release=true" \
         --socket /tmp/dewy-e2e-socket/app.sock \
@@ -910,48 +929,46 @@ jobs:
     echo: "{{ res.stdout }}"
   - name: Verify the command was stopped, not killed
     id: slowstop_stopped
-    uses: shell
+    uses: file
     with:
-      workdir: ./e2e/server/ghr-slowstop
-      cmd: grep 'msg="Worker stopped"' dewy.log | grep -q 'status="exit status 0"'
-    test: status == 0
+      path: ./e2e/server/ghr-slowstop/dewy.log
+    test: |
+      any(lines(res.content), # contains 'msg="Worker stopped"' && # contains 'status="exit status 0"')
     outputs:
-      ok: status == 0
+      ok: |
+        any(lines(res.content), # contains 'msg="Worker stopped"' && # contains 'status="exit status 0"')
   - name: Verify the command was started once
     id: slowstop_once
-    uses: shell
+    uses: file
     with:
-      workdir: ./e2e/server/ghr-slowstop
-      cmd: |
-        grep -c 'msg="Start server"' dewy.log | tr -d '\n'
-    test: res.stdout == "1"
+      path: ./e2e/server/ghr-slowstop/dewy.log
+    test: |
+      count(lines(res.content), # contains 'msg="Start server"') == 1
     outputs:
-      ok: res.stdout == "1"
+      ok: |
+        count(lines(res.content), # contains 'msg="Start server"') == 1
   - name: Verify the version is not blocked
     id: slowstop_notblocked
-    uses: shell
+    uses: file
     with:
-      workdir: ./e2e/server/ghr-slowstop
-      cmd: '! test -e .dewy/cache/blocked'
-    test: status == 0
+      path: ./e2e/server/ghr-slowstop/.dewy/cache/blocked
+    test: '!res.exists'
     outputs:
-      ok: status == 0
+      ok: '!res.exists'
   - name: Verify no error
     id: slowstop_noerr
-    uses: shell
+    uses: file
     with:
-      workdir: ./e2e/server/ghr-slowstop
-      cmd: grep 'level=ERROR' dewy.log
-    test: status == 1
+      path: ./e2e/server/ghr-slowstop/dewy.log
+    test: res.exists && !(res.content contains "level=ERROR")
     outputs:
-      ok: status == 1
+      ok: res.exists && !(res.content contains "level=ERROR")
   - name: Show log
     skipif: outputs.slowstop.ok && outputs.slowstop_stopped.ok && outputs.slowstop_once.ok && outputs.slowstop_notblocked.ok && outputs.slowstop_noerr.ok
-    uses: shell
+    uses: file
     with:
-      workdir: ./e2e/server/ghr-slowstop
-      cmd: cat dewy.log
-    echo: "{{ res.stdout }}"
+      path: ./e2e/server/ghr-slowstop/dewy.log
+    echo: "{{ res.content }}"
 
 # Phase 4: Verify shared cache reduced upstream downloads.
 # Each instance writes "Cached artifact" only when it downloads from upstream
@@ -961,32 +978,42 @@ jobs:
 - name: Verify shared cache reduces upstream downloads (S3 pair)
   needs: [verify_srv_ghr_s3cache_a, verify_srv_ghr_s3cache_b]
   steps:
-  - name: Count "Cached artifact" log lines across S3 pair
-    uses: shell
+  - name: Count "Cached artifact" log lines of A
+    id: cached_s3_a
+    uses: file
     with:
-      cmd: |
-        a=$(grep -c 'Cached artifact' "{{ outputs.srv_ghr_s3cache_a.log }}" 2>/dev/null || true); a=${a:-0}
-        b=$(grep -c 'Cached artifact' "{{ outputs.srv_ghr_s3cache_b.log }}" 2>/dev/null || true); b=${b:-0}
-        total=$((a + b))
-        echo "A=${a} B=${b} total=${total} (ideal=2, allowed<=3)"
-        [ "${total}" -le 3 ]
-    test: status == 0
-    echo: "{{ res.stdout }}"
+      path: "{{ outputs.srv_ghr_s3cache_a.log }}"
+    test: res.exists
+    outputs:
+      n: 'count(lines(res.content), # contains "Cached artifact")'
+  - name: Count "Cached artifact" log lines across S3 pair
+    uses: file
+    with:
+      path: "{{ outputs.srv_ghr_s3cache_b.log }}"
+    test: |
+      outputs.cached_s3_a.n + count(lines(res.content), # contains "Cached artifact") <= 3
+    echo: |
+      A={{ outputs.cached_s3_a.n }} B={{ count(lines(res.content), # contains "Cached artifact") }} total={{ outputs.cached_s3_a.n + count(lines(res.content), # contains "Cached artifact") }} (ideal=2, allowed<=3)
 
 - name: Verify shared cache reduces upstream downloads (GCS pair)
   needs: [verify_srv_ghr_gscache_a, verify_srv_ghr_gscache_b]
   steps:
-  - name: Count "Cached artifact" log lines across GCS pair
-    uses: shell
+  - name: Count "Cached artifact" log lines of A
+    id: cached_gs_a
+    uses: file
     with:
-      cmd: |
-        a=$(grep -c 'Cached artifact' "{{ outputs.srv_ghr_gscache_a.log }}" 2>/dev/null || true); a=${a:-0}
-        b=$(grep -c 'Cached artifact' "{{ outputs.srv_ghr_gscache_b.log }}" 2>/dev/null || true); b=${b:-0}
-        total=$((a + b))
-        echo "A=${a} B=${b} total=${total} (ideal=2, allowed<=3)"
-        [ "${total}" -le 3 ]
-    test: status == 0
-    echo: "{{ res.stdout }}"
+      path: "{{ outputs.srv_ghr_gscache_a.log }}"
+    test: res.exists
+    outputs:
+      n: 'count(lines(res.content), # contains "Cached artifact")'
+  - name: Count "Cached artifact" log lines across GCS pair
+    uses: file
+    with:
+      path: "{{ outputs.srv_ghr_gscache_b.log }}"
+    test: |
+      outputs.cached_gs_a.n + count(lines(res.content), # contains "Cached artifact") <= 3
+    echo: |
+      A={{ outputs.cached_gs_a.n }} B={{ count(lines(res.content), # contains "Cached artifact") }} total={{ outputs.cached_gs_a.n + count(lines(res.content), # contains "Cached artifact") }} (ideal=2, allowed<=3)
 
 # Phase 5: Verify the registry-result cache deduplicated upstream polls.
 # Each instance polls every 10s. Without sharing, two instances over the
@@ -997,32 +1024,42 @@ jobs:
 - name: Verify registry result cache reduces upstream polls (S3 pair)
   needs: [verify_srv_ghr_s3cache_a, verify_srv_ghr_s3cache_b]
   steps:
-  - name: Count "Registry result refreshed from upstream" log lines across S3 pair
-    uses: shell
+  - name: Count "Registry result refreshed from upstream" log lines of A
+    id: refreshed_s3_a
+    uses: file
     with:
-      cmd: |
-        a=$(grep -c 'Registry result refreshed from upstream' "{{ outputs.srv_ghr_s3cache_a.log }}" 2>/dev/null || true); a=${a:-0}
-        b=$(grep -c 'Registry result refreshed from upstream' "{{ outputs.srv_ghr_s3cache_b.log }}" 2>/dev/null || true); b=${b:-0}
-        total=$((a + b))
-        echo "A=${a} B=${b} total=${total} (allowed<=20)"
-        [ "${total}" -ge 1 ] && [ "${total}" -le 20 ]
-    test: status == 0
-    echo: "{{ res.stdout }}"
+      path: "{{ outputs.srv_ghr_s3cache_a.log }}"
+    test: res.exists
+    outputs:
+      n: 'count(lines(res.content), # contains "Registry result refreshed from upstream")'
+  - name: Count "Registry result refreshed from upstream" log lines across S3 pair
+    uses: file
+    with:
+      path: "{{ outputs.srv_ghr_s3cache_b.log }}"
+    test: |
+      outputs.refreshed_s3_a.n + count(lines(res.content), # contains "Registry result refreshed from upstream") >= 1 && outputs.refreshed_s3_a.n + count(lines(res.content), # contains "Registry result refreshed from upstream") <= 20
+    echo: |
+      A={{ outputs.refreshed_s3_a.n }} B={{ count(lines(res.content), # contains "Registry result refreshed from upstream") }} total={{ outputs.refreshed_s3_a.n + count(lines(res.content), # contains "Registry result refreshed from upstream") }} (allowed<=20)
 
 - name: Verify registry result cache reduces upstream polls (GCS pair)
   needs: [verify_srv_ghr_gscache_a, verify_srv_ghr_gscache_b]
   steps:
-  - name: Count "Registry result refreshed from upstream" log lines across GCS pair
-    uses: shell
+  - name: Count "Registry result refreshed from upstream" log lines of A
+    id: refreshed_gs_a
+    uses: file
     with:
-      cmd: |
-        a=$(grep -c 'Registry result refreshed from upstream' "{{ outputs.srv_ghr_gscache_a.log }}" 2>/dev/null || true); a=${a:-0}
-        b=$(grep -c 'Registry result refreshed from upstream' "{{ outputs.srv_ghr_gscache_b.log }}" 2>/dev/null || true); b=${b:-0}
-        total=$((a + b))
-        echo "A=${a} B=${b} total=${total} (allowed<=20)"
-        [ "${total}" -ge 1 ] && [ "${total}" -le 20 ]
-    test: status == 0
-    echo: "{{ res.stdout }}"
+      path: "{{ outputs.srv_ghr_gscache_a.log }}"
+    test: res.exists
+    outputs:
+      n: 'count(lines(res.content), # contains "Registry result refreshed from upstream")'
+  - name: Count "Registry result refreshed from upstream" log lines across GCS pair
+    uses: file
+    with:
+      path: "{{ outputs.srv_ghr_gscache_b.log }}"
+    test: |
+      outputs.refreshed_gs_a.n + count(lines(res.content), # contains "Registry result refreshed from upstream") >= 1 && outputs.refreshed_gs_a.n + count(lines(res.content), # contains "Registry result refreshed from upstream") <= 20
+    echo: |
+      A={{ outputs.refreshed_gs_a.n }} B={{ count(lines(res.content), # contains "Registry result refreshed from upstream") }} total={{ outputs.refreshed_gs_a.n + count(lines(res.content), # contains "Registry result refreshed from upstream") }} (allowed<=20)
 
 # Phase 6: Blue/green slots with the same version.
 #

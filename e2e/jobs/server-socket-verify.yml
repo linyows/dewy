@@ -11,18 +11,14 @@ name: Server Socket Verify
 # restart the latter.
 steps:
 - name: Wait for new version to start
-  uses: shell
+  uses: file
   retry:
     max_attempts: 60
     interval: 5s
   with:
-    cmd: |
-      if [ -f "{{ vars.log }}" ]; then
-        grep "starting version" "{{ vars.log }}" | \
-          grep -q "{{ replace(vars.new_version, 'v', '') }}" && exit 0
-      fi
-      exit 1
-  test: status == 0
+    path: "{{ vars.log }}"
+  test: |
+    any(lines(res.content), # contains "starting version" && # contains replace(vars.new_version, 'v', ''))
 - name: Wait for stabilization
   wait: 30s
   uses: shell
@@ -40,17 +36,17 @@ steps:
   echo: "{{ res.stdout }}"
 - name: Verify the health check probed the socket
   id: health
-  uses: shell
+  uses: file
   with:
-    # One probe for the initial version and one for the new version.
-    cmd: |
-      n=$(grep 'msg="Verifying deployment"' "{{ vars.log }}" | grep -c 'socket={{ vars.socket }}' || true)
-      echo "probes over the socket: ${n:-0}"
-      [ "${n:-0}" -ge 2 ]
-  test: status == 0
+    path: "{{ vars.log }}"
+  # One probe for the initial version and one for the new version.
+  test: |
+    count(lines(res.content), # contains 'msg="Verifying deployment"' && # contains "socket=" + vars.socket) >= 2
   outputs:
-    ok: status == 0
-  echo: "{{ res.stdout }}"
+    ok: |
+      count(lines(res.content), # contains 'msg="Verifying deployment"' && # contains "socket=" + vars.socket) >= 2
+  echo: |
+    probes over the socket: {{ count(lines(res.content), # contains 'msg="Verifying deployment"' && # contains "socket=" + vars.socket) }}
 - name: Verify the application environment from the envdir
   id: envdir
   uses: shell
@@ -65,25 +61,31 @@ steps:
   outputs:
     ok: status == 0
   echo: "{{ res.stdout }}"
-- name: Change the envdir and restart with SIGUSR1
+- name: Change the envdir
+  uses: file
+  with:
+    path: "{{ vars.envdir }}/DEWY_E2E_VALUE"
+    op: write
+    content: |
+      reloaded
+  test: res.content == "reloaded\n"
+- name: Restart with SIGUSR1
   uses: shell
   with:
     # The PID from the start step is the process group, which also holds the
     # application. SIGUSR1 goes to dewy alone; the application would exit on it.
-    cmd: |
-      printf 'reloaded\n' > "{{ vars.envdir }}/DEWY_E2E_VALUE" || exit 1
-      kill -USR1 "$(pgrep -g {{ vars.pid }} -x dewy)"
+    cmd: kill -USR1 "$(pgrep -g {{ vars.pid }} -x dewy)"
   test: status == 0
 - name: Wait for the restart
-  uses: shell
+  uses: file
   retry:
     max_attempts: 30
     interval: 2s
   with:
-    # The deployment of the new version also logs "Restart notification", so
-    # match the message of the SIGUSR1 restart only.
-    cmd: grep -q 'Restarted receiving by `SIGUSR1` signal' "{{ vars.log }}"
-  test: status == 0
+    path: "{{ vars.log }}"
+  # The deployment of the new version also logs "Restart notification", so
+  # match the message of the SIGUSR1 restart only.
+  test: res.content contains "Restarted receiving by `SIGUSR1` signal"
 - name: Verify the restarted application got the new value
   id: reload
   uses: shell
@@ -113,35 +115,34 @@ steps:
   test: status == 0
 - name: Verify the socket file is removed on shutdown
   id: removed
-  uses: shell
+  uses: file
   retry:
     max_attempts: 15
     interval: 2s
   with:
-    cmd: '! test -e "{{ vars.socket }}"'
-  test: status == 0
+    path: "{{ vars.socket }}"
+  test: '!res.exists'
   outputs:
-    ok: status == 0
+    ok: '!res.exists'
 - name: Verify no error
   id: noerr
-  uses: shell
+  uses: file
   with:
-    cmd: "grep 'level=ERROR' {{ vars.log }}"
-  test: status == 1
+    path: "{{ vars.log }}"
+  test: res.exists && !(res.content contains "level=ERROR")
   outputs:
-    ok: status == 1
+    ok: res.exists && !(res.content contains "level=ERROR")
 - name: Verify two symlinks creates
   id: twosyml
-  uses: shell
+  uses: file
   with:
-    cmd: |
-      grep -c 'Create symlink' {{ vars.log }} | tr -d '\n'
-  test: res.stdout == "2"
+    path: "{{ vars.log }}"
+  test: 'count(lines(res.content), # contains "Create symlink") == 2'
   outputs:
-    ok: res.stdout == "2"
+    ok: 'count(lines(res.content), # contains "Create symlink") == 2'
 - name: Show log
   skipif: outputs.serve.ok && outputs.health.ok && outputs.envdir.ok && outputs.reload.ok && outputs.serveagain.ok && outputs.removed.ok && outputs.noerr.ok && outputs.twosyml.ok
-  uses: shell
+  uses: file
   with:
-    cmd: "cat {{ vars.log }}"
-  echo: "{{ res.stdout }}"
+    path: "{{ vars.log }}"
+  echo: "{{ res.content }}"
