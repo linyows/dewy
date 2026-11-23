@@ -13,6 +13,7 @@ The E2E tests ensure that dewy can:
 5. **Handle multiple port mappings** with TCP proxy for container deployments
 6. **Deploy each blue/green slot** (`--slot`) its own version, even when both slots carry the same version
 7. **Serve on a Unix domain socket** (`--socket`) without a TCP port, and **reload the application environment** from `--envdir` on every start
+8. **Shut down cleanly while a poll is deploying**, stopping the application it started instead of leaving it running
 
 All of the above are verified across every supported combination of commands and registries:
 
@@ -24,6 +25,7 @@ All of the above are verified across every supported combination of commands and
 | `server` | GitHub Releases + S3 shared cache | Pair of instances pointed at the same S3 cache prefix; verifies the new S3 cache backend deploys correctly and reduces upstream downloads when shared |
 | `server` | GitHub Releases + GCS shared cache | Same as above for the GCS cache backend |
 | `server` (socket) | GitHub Releases (`ghr`) | `--socket` without a TCP port, `--health-path` probed over the socket, and `--envdir` reloaded on `SIGUSR1` |
+| `server` (shutdown during start) | GitHub Releases (`ghr`) | `SIGTERM` while the first deployment starts a command that takes 15 seconds to stop |
 | `assets` | GitHub Releases (`ghr`) | Static asset download and symlink management |
 | `assets` | AWS S3 (`s3`) | Same as above, sourced from S3 |
 | `assets` | Google Cloud Storage (`gs`) | Same as above, sourced from GCS |
@@ -63,6 +65,13 @@ All of the above are verified across every supported combination of commands and
 - The socket file is removed on shutdown
 - No errors in log output, and two symlinks created
 - The socket and the envdir are under `/tmp/dewy-e2e-socket`, because the path of a Unix domain socket is limited to about 100 bytes. `/proc` makes this job Linux only
+
+**Server shutdown during the first start:**
+- A shutdown that begins while a poll is deploying must wait for that poll. Without that, a poll in progress found no server once the shutdown dropped it, and started one again from the cache, or dewy exited while the poll was starting the server and left the application running
+- dewy runs a shell loop that takes 15 seconds to exit on `SIGTERM`, with `--drain-time 20`. After dewy logs `Start server`, it waits a 1-second startup window; `SIGTERM` is sent to dewy alone within it, which catches the deploying poll every time
+- dewy exits at least 10 seconds after `SIGTERM`, no process of the command is left, and the command logs `Worker stopped` with `exit status 0`
+- `Start server` appears once, `.dewy/cache/blocked` is not written, and the log has no errors
+- The job runs after the build, on its own, and finishes long before the new release is created
 
 **Container command:**
 - No errors in log output (excluding transient `context deadline exceeded`)
@@ -545,21 +554,35 @@ flowchart LR
         job_35_step5 --> job_35_step6
         job_35_step6 --> job_35_step7
     end
-    subgraph job_36["Verify shared cache reduces upstream downloads (S3 pair)"]
+    subgraph job_36["Verify server shutdown during the first start"]
         direction TB
-        job_36_step0["Count #quot;Cached artifact#quot; log lines across S3 pair"]
+        job_36_step0["Stop dewy while it starts the command"]
+        job_36_step1["Verify the command was stopped, not killed"]
+        job_36_step2["Verify the command was started once"]
+        job_36_step3["Verify the version is not blocked"]
+        job_36_step4["Verify no error"]
+        job_36_step5["Show log"]
+        job_36_step0 --> job_36_step1
+        job_36_step1 --> job_36_step2
+        job_36_step2 --> job_36_step3
+        job_36_step3 --> job_36_step4
+        job_36_step4 --> job_36_step5
     end
-    subgraph job_37["Verify shared cache reduces upstream downloads (GCS pair)"]
+    subgraph job_37["Verify shared cache reduces upstream downloads (S3 pair)"]
         direction TB
-        job_37_step0["Count #quot;Cached artifact#quot; log lines across GCS pair"]
+        job_37_step0["Count #quot;Cached artifact#quot; log lines across S3 pair"]
     end
-    subgraph job_38["Verify registry result cache reduces upstream polls (S3 pair)"]
+    subgraph job_38["Verify shared cache reduces upstream downloads (GCS pair)"]
         direction TB
-        job_38_step0["Count #quot;Registry result refreshed from upstream#quot; log lines across S3 pair"]
+        job_38_step0["Count #quot;Cached artifact#quot; log lines across GCS pair"]
     end
-    subgraph job_39["Verify registry result cache reduces upstream polls (GCS pair)"]
+    subgraph job_39["Verify registry result cache reduces upstream polls (S3 pair)"]
         direction TB
-        job_39_step0["Count #quot;Registry result refreshed from upstream#quot; log lines across GCS pair"]
+        job_39_step0["Count #quot;Registry result refreshed from upstream#quot; log lines across S3 pair"]
+    end
+    subgraph job_40["Verify registry result cache reduces upstream polls (GCS pair)"]
+        direction TB
+        job_40_step0["Count #quot;Registry result refreshed from upstream#quot; log lines across GCS pair"]
     end
     subgraph prepare_slot_s3["Prepare slot versions on AWS S3"]
         direction TB
@@ -737,11 +760,11 @@ flowchart LR
         verify_srv_gs_slot_green_step5 --> verify_srv_gs_slot_green_step6
         verify_srv_gs_slot_green_step6 --> verify_srv_gs_slot_green_step7
     end
-    subgraph job_58["Remove slot versions"]
+    subgraph job_59["Remove slot versions"]
         direction TB
-        job_58_step0["Remove from AWS S3"]
-        job_58_step1["Remove from GCloud Storage"]
-        job_58_step0 --> job_58_step1
+        job_59_step0["Remove from AWS S3"]
+        job_59_step1["Remove from GCloud Storage"]
+        job_59_step0 --> job_59_step1
     end
 
     check --> generate_version
@@ -791,14 +814,15 @@ flowchart LR
     create_release --> job_33
     create_release --> job_34
     start_ctr_healthfail --> job_35
-    verify_srv_ghr_s3cache_a --> job_36
-    verify_srv_ghr_s3cache_b --> job_36
-    verify_srv_ghr_gscache_a --> job_37
-    verify_srv_ghr_gscache_b --> job_37
-    verify_srv_ghr_s3cache_a --> job_38
-    verify_srv_ghr_s3cache_b --> job_38
-    verify_srv_ghr_gscache_a --> job_39
-    verify_srv_ghr_gscache_b --> job_39
+    build --> job_36
+    verify_srv_ghr_s3cache_a --> job_37
+    verify_srv_ghr_s3cache_b --> job_37
+    verify_srv_ghr_gscache_a --> job_38
+    verify_srv_ghr_gscache_b --> job_38
+    verify_srv_ghr_s3cache_a --> job_39
+    verify_srv_ghr_s3cache_b --> job_39
+    verify_srv_ghr_gscache_a --> job_40
+    verify_srv_ghr_gscache_b --> job_40
     verify_ast_s3 --> prepare_slot_s3
     verify_ast_gs --> prepare_slot_gs
     prepare_slot_s3 --> start_ast_s3_slot_blue
@@ -817,14 +841,14 @@ flowchart LR
     start_srv_s3_slot_green --> verify_srv_s3_slot_green
     start_srv_gs_slot_blue --> verify_srv_gs_slot_blue
     start_srv_gs_slot_green --> verify_srv_gs_slot_green
-    verify_ast_s3_slot_blue --> job_58
-    verify_ast_s3_slot_green --> job_58
-    verify_ast_gs_slot_blue --> job_58
-    verify_ast_gs_slot_green --> job_58
-    verify_srv_s3_slot_blue --> job_58
-    verify_srv_s3_slot_green --> job_58
-    verify_srv_gs_slot_blue --> job_58
-    verify_srv_gs_slot_green --> job_58
+    verify_ast_s3_slot_blue --> job_59
+    verify_ast_s3_slot_green --> job_59
+    verify_ast_gs_slot_blue --> job_59
+    verify_ast_gs_slot_green --> job_59
+    verify_srv_s3_slot_blue --> job_59
+    verify_srv_s3_slot_green --> job_59
+    verify_srv_gs_slot_blue --> job_59
+    verify_srv_gs_slot_green --> job_59
 ```
 
 ### Phase Details
@@ -843,7 +867,7 @@ flowchart LR
 
 **Phase 6 (Blue/green slots)** runs after the S3 and GCS assets verifies. It copies the new version to `slot-e2e/<version>/v1.0.0+blue/` and `v1.0.0+green/`, starts one assets instance and one server instance per slot, verifies them with `jobs/assets-slot-verify.yml` and `jobs/server-slot-verify.yml`, and removes the copies even when a slot job failed.
 
-The health check failure variant does not wait for Phase 2: its deployment fails on the first version, so it is verified right after its own start job.
+The health check failure variant does not wait for Phase 2: its deployment fails on the first version, so it is verified right after its own start job. The shutdown-during-start job does not wait either: it starts and stops dewy in one job right after the build.
 
 ## Directory Structure
 
@@ -861,7 +885,7 @@ e2e/
 │   ├── container-verify.yml           # Container verification steps
 │   ├── container-multiport-verify.yml # Multi-port verification steps
 │   └── container-healthfail-verify.yml # Health check failure verification steps
-├── server/{ghr,s3,gs,ghr-s3cache-{a,b},ghr-gscache-{a,b},s3-slot-{blue,green},gs-slot-{blue,green},ghr-socket}/  # Working directories for server tests
+├── server/{ghr,s3,gs,ghr-s3cache-{a,b},ghr-gscache-{a,b},s3-slot-{blue,green},gs-slot-{blue,green},ghr-socket,ghr-slowstop}/  # Working directories for server tests
 ├── assets/{ghr,s3,gs,s3-slot-{blue,green},gs-slot-{blue,green}}/  # Working directories for assets tests
 └── container/{img,dockerhub,multiport,podman,healthfail}/  # Working directories for container tests
 ```

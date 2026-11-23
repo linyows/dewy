@@ -26,6 +26,7 @@ DewyのE2Eテストは、実際のDewyプロセスを実際のレジストリに
 | `server` | GitHub Releases + S3共有キャッシュ | 同じS3キャッシュプレフィックスを`registry-ttl`付きで使う2インスタンス |
 | `server` | GitHub Releases + GCS共有キャッシュ | 同上（GCSキャッシュバックエンド） |
 | `server`（ソケット） | GitHub Releases（`ghr`） | TCPポートなしの`--socket`、ソケット経由のヘルスチェック、`SIGUSR1`での`--envdir`の再読み込み |
+| `server`（起動中の停止） | GitHub Releases（`ghr`） | 停止に15秒かかるコマンドを初回デプロイで起動している最中の`SIGTERM` |
 | `assets` | GitHub Releases（`ghr`） | 静的アセットのダウンロードとシンボリックリンク管理 |
 | `assets` | AWS S3（`s3`） | 同上（S3から取得） |
 | `assets` | Google Cloud Storage（`gs`） | 同上（GCSから取得） |
@@ -186,6 +187,7 @@ flowchart LR
     job_33["Verify container by Docker Hub registry"]
     job_34["Verify container with multiple ports by OCI registry"]
     job_35["Verify container health check failure handling"]
+    job_36["Verify server shutdown during the first start"]
 
     create_release --> job_20
     create_release --> job_21
@@ -223,6 +225,9 @@ flowchart LR
 ヘルスチェック失敗のバリアントは、フェーズ2を待ちません。
 最初のバージョンでデプロイが失敗するので、検証ジョブは自身の起動ジョブの後に実行します。
 
+起動中の停止のバリアントも、フェーズ2を待ちません。
+ビルドの後に1つのジョブでDewyを起動して1分以内に止めるもので、ステップは`e2e/test.yml`に直接書いています。
+
 ### フェーズ4と5：共有キャッシュ
 
 フェーズ4〜6では、次のジョブを実行します。
@@ -235,10 +240,10 @@ flowchart LR
     verify_srv_ghr_gscache_b["Verify server by Github-Releases registry with GCS shared cache (B)"]
     verify_ast_s3["Verify assets by AWS S3 registry"]
     verify_ast_gs["Verify assets by GCloud Storage registry"]
-    job_36["Verify shared cache reduces upstream downloads (S3 pair)"]
-    job_37["Verify shared cache reduces upstream downloads (GCS pair)"]
-    job_38["Verify registry result cache reduces upstream polls (S3 pair)"]
-    job_39["Verify registry result cache reduces upstream polls (GCS pair)"]
+    job_37["Verify shared cache reduces upstream downloads (S3 pair)"]
+    job_38["Verify shared cache reduces upstream downloads (GCS pair)"]
+    job_39["Verify registry result cache reduces upstream polls (S3 pair)"]
+    job_40["Verify registry result cache reduces upstream polls (GCS pair)"]
     prepare_slot_s3["Prepare slot versions on AWS S3"]
     prepare_slot_gs["Prepare slot versions on GCloud Storage"]
     start_ast_s3_slot_blue["Start assets by AWS S3 registry on the blue slot"]
@@ -257,16 +262,16 @@ flowchart LR
     verify_srv_s3_slot_green["Verify server by AWS S3 registry on the green slot"]
     verify_srv_gs_slot_blue["Verify server by GCloud Storage registry on the blue slot"]
     verify_srv_gs_slot_green["Verify server by GCloud Storage registry on the green slot"]
-    job_58["Remove slot versions"]
+    job_59["Remove slot versions"]
 
-    verify_srv_ghr_s3cache_a --> job_36
-    verify_srv_ghr_s3cache_b --> job_36
-    verify_srv_ghr_gscache_a --> job_37
-    verify_srv_ghr_gscache_b --> job_37
-    verify_srv_ghr_s3cache_a --> job_38
-    verify_srv_ghr_s3cache_b --> job_38
-    verify_srv_ghr_gscache_a --> job_39
-    verify_srv_ghr_gscache_b --> job_39
+    verify_srv_ghr_s3cache_a --> job_37
+    verify_srv_ghr_s3cache_b --> job_37
+    verify_srv_ghr_gscache_a --> job_38
+    verify_srv_ghr_gscache_b --> job_38
+    verify_srv_ghr_s3cache_a --> job_39
+    verify_srv_ghr_s3cache_b --> job_39
+    verify_srv_ghr_gscache_a --> job_40
+    verify_srv_ghr_gscache_b --> job_40
     verify_ast_s3 --> prepare_slot_s3
     verify_ast_gs --> prepare_slot_gs
     prepare_slot_s3 --> start_ast_s3_slot_blue
@@ -285,14 +290,14 @@ flowchart LR
     start_srv_s3_slot_green --> verify_srv_s3_slot_green
     start_srv_gs_slot_blue --> verify_srv_gs_slot_blue
     start_srv_gs_slot_green --> verify_srv_gs_slot_green
-    verify_ast_s3_slot_blue --> job_58
-    verify_ast_s3_slot_green --> job_58
-    verify_ast_gs_slot_blue --> job_58
-    verify_ast_gs_slot_green --> job_58
-    verify_srv_s3_slot_blue --> job_58
-    verify_srv_s3_slot_green --> job_58
-    verify_srv_gs_slot_blue --> job_58
-    verify_srv_gs_slot_green --> job_58
+    verify_ast_s3_slot_blue --> job_59
+    verify_ast_s3_slot_green --> job_59
+    verify_ast_gs_slot_blue --> job_59
+    verify_ast_gs_slot_green --> job_59
+    verify_srv_s3_slot_blue --> job_59
+    verify_srv_s3_slot_green --> job_59
+    verify_srv_gs_slot_blue --> job_59
+    verify_srv_gs_slot_green --> job_59
 ```
 
 
@@ -331,6 +336,13 @@ S3とGCSの`assets`バリアントの検証が終わったら、新しいバー�
 - envdirのファイルを書き換えてDewyに`SIGUSR1`を送ると、新しいプロセスが新しい値を持ち、ソケットは引き続き応答する。
 - 終了時にDewyがソケットファイルを削除する。
 - ログにエラーがなく、シンボリックリンクが2回作られる。
+
+**`server`（起動中の停止）：**
+
+- Dewyは初回デプロイで`Start server`をログに出した後、コマンドが動き続けることを1秒待って確かめる。その1秒の間に、Dewyだけに`SIGTERM`を送る。この時点では、デプロイしているポーリングがまだ実行中である。
+- 管理対象のコマンドは、`SIGTERM`を受けてから終了まで15秒かかる。Dewyは`SIGTERM`の10秒以上後に終了する。これは、Dewyがポーリングの完了を待ち、続けてコマンドの終了を待ったことを示す。
+- Dewyの終了後にコマンドが動いておらず、コマンドは強制終了されずに自分で終了している。
+- コマンドの起動は1回だけで、バージョンはブロックされず、ログにエラーがない。
 
 **`container`：**
 
