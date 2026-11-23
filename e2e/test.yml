@@ -86,6 +86,7 @@ jobs:
     - { command: 'server', variant: 'gs-slot-blue' }
     - { command: 'server', variant: 'gs-slot-green' }
     - { command: 'server', variant: 'ghr-socket' }
+    - { command: 'server', variant: 'ghr-slowstop' }
     - { command: 'assets', variant: 'ghr' }
     - { command: 'assets', variant: 's3' }
     - { command: 'assets', variant: 'gs' }
@@ -852,6 +853,105 @@ jobs:
         app_name: dewy-testapp-healthfail
     test: res.code == 0
     timeout: 30m
+
+# A shutdown that begins while a poll is deploying must wait for that poll.
+# Before this was fixed, dewy stopped the server at once: a poll in progress
+# then found no server and started one again from the cache, or, when the
+# shutdown came while the poll was starting the server, dewy exited and left
+# the application running.
+#
+# The poll in progress is caught deterministically in the second case: dewy
+# waits a 1-second startup window after it logs "Start server", and SIGTERM
+# is sent to dewy alone within that window. The managed command takes 15
+# seconds to exit on SIGTERM, inside the 20-second --drain-time, so the
+# shutdown can be told apart from one that does not wait for it. This job
+# runs on its own after the build and stops dewy within a minute, long before
+# the new release is created.
+- name: Verify server shutdown during the first start
+  needs: [build]
+  steps:
+  - name: Stop dewy while it starts the command
+    id: slowstop
+    uses: shell
+    with:
+      workdir: ./e2e/server/ghr-slowstop
+      timeout: 3m
+      cmd: |
+        rm -rf .dewy dewy.log
+        # The marker is put together at run time: the shell that runs this
+        # step has the step text in its command line, so a literal marker
+        # would make pgrep find that shell.
+        marker="dewy-e2e-slow""stop"
+        ./dewy server -p 8011 -i 2 --drain-time 20 -l debug \
+          --registry "ghr://linyows/dewy-testapp?pre-release=true" \
+          -- /bin/sh -c "trap 'sleep 15; exit 0' TERM; while :; do sleep 1; done # ${marker}" \
+          > dewy.log 2>&1 &
+        pid=$!
+        until grep -q 'msg="Start server"' dewy.log; do
+          kill -0 "${pid}" 2>/dev/null || { echo "dewy exited before it started the command"; exit 1; }
+          sleep 0.1
+        done
+        start=$(date +%s)
+        kill -TERM "${pid}"
+        wait "${pid}"
+        elapsed=$(( $(date +%s) - start ))
+        echo "dewy exited ${elapsed}s after SIGTERM"
+        if pgrep -f "${marker}" >/dev/null; then
+          echo "the command is still running after dewy exited"
+          pkill -KILL -f "${marker}"
+          exit 1
+        fi
+        # The command takes 15 seconds to stop, so a shorter shutdown did
+        # not wait for it.
+        [ "${elapsed}" -ge 10 ]
+    test: status == 0
+    outputs:
+      ok: status == 0
+    echo: "{{ res.stdout }}"
+  - name: Verify the command was stopped, not killed
+    id: slowstop_stopped
+    uses: shell
+    with:
+      workdir: ./e2e/server/ghr-slowstop
+      cmd: grep 'msg="Worker stopped"' dewy.log | grep -q 'status="exit status 0"'
+    test: status == 0
+    outputs:
+      ok: status == 0
+  - name: Verify the command was started once
+    id: slowstop_once
+    uses: shell
+    with:
+      workdir: ./e2e/server/ghr-slowstop
+      cmd: |
+        grep -c 'msg="Start server"' dewy.log | tr -d '\n'
+    test: res.stdout == "1"
+    outputs:
+      ok: res.stdout == "1"
+  - name: Verify the version is not blocked
+    id: slowstop_notblocked
+    uses: shell
+    with:
+      workdir: ./e2e/server/ghr-slowstop
+      cmd: '! test -e .dewy/cache/blocked'
+    test: status == 0
+    outputs:
+      ok: status == 0
+  - name: Verify no error
+    id: slowstop_noerr
+    uses: shell
+    with:
+      workdir: ./e2e/server/ghr-slowstop
+      cmd: grep 'level=ERROR' dewy.log
+    test: status == 1
+    outputs:
+      ok: status == 1
+  - name: Show log
+    skipif: outputs.slowstop.ok && outputs.slowstop_stopped.ok && outputs.slowstop_once.ok && outputs.slowstop_notblocked.ok && outputs.slowstop_noerr.ok
+    uses: shell
+    with:
+      workdir: ./e2e/server/ghr-slowstop
+      cmd: cat dewy.log
+    echo: "{{ res.stdout }}"
 
 # Phase 4: Verify shared cache reduced upstream downloads.
 # Each instance writes "Cached artifact" only when it downloads from upstream

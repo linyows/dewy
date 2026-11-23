@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -61,6 +62,13 @@ type Dewy struct {
 	telemetry        *telemetry.Provider
 	backoff          *backoff
 	server           managedServer // Process supervisor of the managed application (server command)
+
+	// tickMu is held for the whole of a tick, and stopping is set when a
+	// shutdown begins. Together they keep the polling loop out of the
+	// shutdown: see beginShutdown.
+	tickMu   sync.Mutex
+	stopping atomic.Bool
+
 	sync.RWMutex
 }
 
@@ -217,6 +225,11 @@ func (d *Dewy) Start(i int) {
 // no work at all while a backoff window is open. It is a named method rather
 // than a closure so tests can drive single ticks without the scheduler.
 func (d *Dewy) tick() {
+	d.tickMu.Lock()
+	defer d.tickMu.Unlock()
+	if d.stopping.Load() {
+		return
+	}
 	if d.backoff.skip() {
 		return
 	}
@@ -273,7 +286,7 @@ func (d *Dewy) waitSigs(ctx context.Context) {
 			continue
 
 		case syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:
-			d.job.Quit <- true
+			d.beginShutdown()
 
 			// Stop the managed application and release its ports. Its
 			// workers may already be gone when the signal was sent to the
@@ -315,6 +328,29 @@ func (d *Dewy) waitSigs(ctx context.Context) {
 			return
 		}
 	}
+}
+
+// beginShutdown stops the polling loop before the managed application and
+// containers are stopped, and returns once no tick is running.
+//
+// Quitting the scheduler is not enough on its own. The scheduler reads its
+// quit channel only between ticks, so a tick that is due runs anyway, and a
+// tick already running carries on. Stopping the server takes up to the drain
+// time, and during that time a tick sees no server, because stopServer
+// drops it first, and starts one again from the cache. That start fails on
+// the port the stopping server still holds, and is recorded as a failed
+// deploy that blocks the version; if it succeeded, it would leave an
+// application running after dewy exits.
+//
+// So stopping is set first, which makes every later tick return at once,
+// and tickMu is then taken to wait for a tick in progress, such as a
+// deploy, to finish. tickMu is kept: no tick runs again in this process.
+func (d *Dewy) beginShutdown() {
+	d.stopping.Store(true)
+	if d.job != nil {
+		d.job.Quit <- true
+	}
+	d.tickMu.Lock()
 }
 
 // cachekeyName is "tag--artifact"

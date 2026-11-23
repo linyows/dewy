@@ -1,10 +1,12 @@
 package supervisor
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -189,6 +191,25 @@ func (h *harness) start(cfg Config) *Supervisor {
 		h.t.Fatalf("Start() error = %v", err)
 	}
 	return s
+}
+
+// lockedBuffer is a bytes.Buffer that the supervisor's goroutines can log
+// to while the test reads it.
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
 }
 
 // get returns the body served at addr: an HTTP response for a TCP address
@@ -488,6 +509,23 @@ func TestShutdown(t *testing.T) {
 		}
 		if err := s.Shutdown(context.Background()); err != nil {
 			t.Errorf("second Shutdown() error = %v, want nil", err)
+		}
+	})
+
+	t.Run("logs the worker exit before it returns", func(t *testing.T) {
+		// dewy exits as soon as Shutdown returns, so a line logged after
+		// that would be lost.
+		var buf lockedBuffer
+		h := newHarness(t, "serve")
+		cfg := h.config("127.0.0.1:0")
+		cfg.Logger = slog.New(slog.NewTextHandler(&buf, nil))
+		s := h.start(cfg)
+
+		if err := s.Shutdown(context.Background()); err != nil {
+			t.Fatalf("Shutdown() error = %v", err)
+		}
+		if got := buf.String(); !strings.Contains(got, `msg="Worker stopped"`) {
+			t.Errorf("log when Shutdown returned = %q, want it to hold the worker exit", got)
 		}
 	})
 

@@ -25,6 +25,7 @@ Each run follows the same path as a real release:
 | `server` | GitHub Releases + S3 shared cache | Two instances on the same S3 cache prefix with `registry-ttl` |
 | `server` | GitHub Releases + GCS shared cache | Same as above for the GCS cache backend |
 | `server` (socket) | GitHub Releases (`ghr`) | `--socket` without a TCP port, the health check over the socket, and `--envdir` reloaded on `SIGUSR1` |
+| `server` (shutdown during start) | GitHub Releases (`ghr`) | `SIGTERM` while the first deployment starts a command that takes 15 seconds to stop |
 | `assets` | GitHub Releases (`ghr`) | Static asset download and symlink management |
 | `assets` | AWS S3 (`s3`) | Same as above, sourced from S3 |
 | `assets` | Google Cloud Storage (`gs`) | Same as above, sourced from GCS |
@@ -177,6 +178,7 @@ flowchart LR
     job_33["Verify container by Docker Hub registry"]
     job_34["Verify container with multiple ports by OCI registry"]
     job_35["Verify container health check failure handling"]
+    job_36["Verify server shutdown during the first start"]
 
     create_release --> job_20
     create_release --> job_21
@@ -212,6 +214,8 @@ Each variant has a verify job that runs a shared job definition from `e2e/jobs/`
 
 The health check failure variant does not wait for Phase 2. Its deployment fails on the first version, so its verify job runs after its own start job.
 
+The shutdown-during-start variant does not wait for Phase 2 either. It is one job that runs after the build, starts Dewy and stops it within a minute, with its steps inline in `e2e/test.yml`.
+
 ### Phase 4 and 5: Shared cache
 
 Phase 4 to 6 run the following jobs.
@@ -224,10 +228,10 @@ flowchart LR
     verify_srv_ghr_gscache_b["Verify server by Github-Releases registry with GCS shared cache (B)"]
     verify_ast_s3["Verify assets by AWS S3 registry"]
     verify_ast_gs["Verify assets by GCloud Storage registry"]
-    job_36["Verify shared cache reduces upstream downloads (S3 pair)"]
-    job_37["Verify shared cache reduces upstream downloads (GCS pair)"]
-    job_38["Verify registry result cache reduces upstream polls (S3 pair)"]
-    job_39["Verify registry result cache reduces upstream polls (GCS pair)"]
+    job_37["Verify shared cache reduces upstream downloads (S3 pair)"]
+    job_38["Verify shared cache reduces upstream downloads (GCS pair)"]
+    job_39["Verify registry result cache reduces upstream polls (S3 pair)"]
+    job_40["Verify registry result cache reduces upstream polls (GCS pair)"]
     prepare_slot_s3["Prepare slot versions on AWS S3"]
     prepare_slot_gs["Prepare slot versions on GCloud Storage"]
     start_ast_s3_slot_blue["Start assets by AWS S3 registry on the blue slot"]
@@ -246,16 +250,16 @@ flowchart LR
     verify_srv_s3_slot_green["Verify server by AWS S3 registry on the green slot"]
     verify_srv_gs_slot_blue["Verify server by GCloud Storage registry on the blue slot"]
     verify_srv_gs_slot_green["Verify server by GCloud Storage registry on the green slot"]
-    job_58["Remove slot versions"]
+    job_59["Remove slot versions"]
 
-    verify_srv_ghr_s3cache_a --> job_36
-    verify_srv_ghr_s3cache_b --> job_36
-    verify_srv_ghr_gscache_a --> job_37
-    verify_srv_ghr_gscache_b --> job_37
-    verify_srv_ghr_s3cache_a --> job_38
-    verify_srv_ghr_s3cache_b --> job_38
-    verify_srv_ghr_gscache_a --> job_39
-    verify_srv_ghr_gscache_b --> job_39
+    verify_srv_ghr_s3cache_a --> job_37
+    verify_srv_ghr_s3cache_b --> job_37
+    verify_srv_ghr_gscache_a --> job_38
+    verify_srv_ghr_gscache_b --> job_38
+    verify_srv_ghr_s3cache_a --> job_39
+    verify_srv_ghr_s3cache_b --> job_39
+    verify_srv_ghr_gscache_a --> job_40
+    verify_srv_ghr_gscache_b --> job_40
     verify_ast_s3 --> prepare_slot_s3
     verify_ast_gs --> prepare_slot_gs
     prepare_slot_s3 --> start_ast_s3_slot_blue
@@ -274,14 +278,14 @@ flowchart LR
     start_srv_s3_slot_green --> verify_srv_s3_slot_green
     start_srv_gs_slot_blue --> verify_srv_gs_slot_blue
     start_srv_gs_slot_green --> verify_srv_gs_slot_green
-    verify_ast_s3_slot_blue --> job_58
-    verify_ast_s3_slot_green --> job_58
-    verify_ast_gs_slot_blue --> job_58
-    verify_ast_gs_slot_green --> job_58
-    verify_srv_s3_slot_blue --> job_58
-    verify_srv_s3_slot_green --> job_58
-    verify_srv_gs_slot_blue --> job_58
-    verify_srv_gs_slot_green --> job_58
+    verify_ast_s3_slot_blue --> job_59
+    verify_ast_s3_slot_green --> job_59
+    verify_ast_gs_slot_blue --> job_59
+    verify_ast_gs_slot_green --> job_59
+    verify_srv_s3_slot_blue --> job_59
+    verify_srv_s3_slot_green --> job_59
+    verify_srv_gs_slot_blue --> job_59
+    verify_srv_gs_slot_green --> job_59
 ```
 
 
@@ -314,6 +318,13 @@ The slot versions are copied in the bucket rather than released from `dewy-testa
 - After the envdir file is changed and Dewy receives `SIGUSR1`, the new process has the new value, and the socket still answers.
 - Dewy removes the socket file on shutdown.
 - The log has no errors, and two symlinks were created.
+
+**`server` (shutdown during start):**
+
+- Dewy logs `Start server` on the first deployment and then waits 1 second to see that the command stays up. `SIGTERM` is sent to Dewy alone within that second, while the poll that deploys is still running.
+- The managed command takes 15 seconds to exit on `SIGTERM`. Dewy exits at least 10 seconds after `SIGTERM`, which shows that it waited for the poll and then for the command.
+- The command is not running after Dewy exits, and it exited on its own rather than being killed.
+- The command was started once, the version is not blocked, and the log has no errors.
 
 **`container`:**
 
