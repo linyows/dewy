@@ -26,7 +26,7 @@ func (d *Dewy) makeRunContext() (context.Context, context.CancelFunc) {
 // resolveCurrent fetches the latest from the registry and applies the two
 // "skip without error" filters (artifact-not-found grace period and slot
 // mismatch). A (nil, nil) return means "skip this tick"; the caller should
-// return nil up to Start so the scheduler does not surface a false error.
+// return nil up to Start so the polling loop does not surface a false error.
 func (d *Dewy) resolveCurrent(ctx context.Context) (*registry.CurrentResponse, error) {
 	res, err := d.registry.Current(ctx)
 	if err != nil {

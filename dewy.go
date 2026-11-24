@@ -16,10 +16,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/carlescere/scheduler"
 	"github.com/linyows/dewy/artifact"
 	"github.com/linyows/dewy/cache"
 	"github.com/linyows/dewy/container"
+	"github.com/linyows/dewy/internal/repeat"
 	"github.com/linyows/dewy/logging"
 	"github.com/linyows/dewy/notifier"
 	"github.com/linyows/dewy/registry"
@@ -51,7 +51,7 @@ type Dewy struct {
 	isServerRunning  bool
 	disableReport    bool
 	root             string
-	job              *scheduler.Job
+	loop             *repeat.Loop
 	notifier         notifier.Notifier
 	logger           *logging.Logger
 	tcpProxies       map[int]*tcpProxy // TCP proxies keyed by proxy port
@@ -213,17 +213,17 @@ func (d *Dewy) Start(i int) {
 			slog.Duration("max_backoff_interval", d.config.MaxBackoffInterval))
 	}
 
-	d.job, err = scheduler.Every(i).Seconds().Run(d.tick)
+	d.loop, err = repeat.Every(time.Duration(i)*time.Second, d.tick)
 	if err != nil {
-		d.logger.Error("Scheduler failure", slog.String("error", err.Error()))
+		d.logger.Error("Polling loop failure", slog.String("error", err.Error()))
 	}
 
 	d.waitSigs(ctx)
 }
 
-// tick is the scheduler's callback: one iteration of the polling loop. It does
-// no work at all while a backoff window is open. It is a named method rather
-// than a closure so tests can drive single ticks without the scheduler.
+// tick is one iteration of the polling loop. It does no work at all while a
+// backoff window is open. It is a named method rather than a closure so tests
+// can drive single ticks without the loop.
 func (d *Dewy) tick() {
 	d.tickMu.Lock()
 	defer d.tickMu.Unlock()
@@ -333,22 +333,20 @@ func (d *Dewy) waitSigs(ctx context.Context) {
 // beginShutdown stops the polling loop before the managed application and
 // containers are stopped, and returns once no tick is running.
 //
-// Quitting the scheduler is not enough on its own. The scheduler reads its
-// quit channel only between ticks, so a tick that is due runs anyway, and a
-// tick already running carries on. Stopping the server takes up to the drain
-// time, and during that time a tick sees no server, because stopServer
-// drops it first, and starts one again from the cache. That start fails on
-// the port the stopping server still holds, and is recorded as a failed
-// deploy that blocks the version; if it succeeded, it would leave an
-// application running after dewy exits.
+// Stopping the server takes up to the drain time, and during that time a
+// tick sees no server, because stopServer drops it first, and starts one
+// again from the cache. That start fails on the port the stopping server
+// still holds, and is recorded as a failed deploy that blocks the version; if
+// it succeeded, it would leave an application running after dewy exits.
 //
 // So stopping is set first, which makes every later tick return at once,
-// and tickMu is then taken to wait for a tick in progress, such as a
-// deploy, to finish. tickMu is kept: no tick runs again in this process.
+// and the loop is then stopped, which waits for a tick in progress, such
+// as a deploy, to finish. tickMu is taken last and kept, so a tick called
+// from anywhere else does not run again in this process either.
 func (d *Dewy) beginShutdown() {
 	d.stopping.Store(true)
-	if d.job != nil {
-		d.job.Quit <- true
+	if d.loop != nil {
+		d.loop.Stop()
 	}
 	d.tickMu.Lock()
 }
