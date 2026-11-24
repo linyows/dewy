@@ -9,7 +9,7 @@ import (
 )
 
 // backoff stretches the effective polling interval after consecutive
-// failures. The scheduler keeps firing at the configured interval; this only
+// failures. The polling loop keeps firing at the configured interval; this only
 // decides whether a tick does any work.
 //
 // The first failure never opens a window: one failed tick is more often a blip

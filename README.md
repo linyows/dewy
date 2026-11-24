@@ -483,7 +483,7 @@ The following sequence diagram illustrates Dewy's deployment workflow from polli
 
 ```mermaid
 sequenceDiagram
-    participant S as Scheduler
+    participant S as Polling Loop
     participant D as Dewy
     participant R as Registry
     participant A as Artifact Store

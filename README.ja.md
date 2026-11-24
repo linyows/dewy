@@ -482,7 +482,7 @@ v1.2.3+green       # Greenスロット用の安定版リリース
 
 ```mermaid
 sequenceDiagram
-    participant S as Scheduler
+    participant S as Polling Loop
     participant D as Dewy
     participant R as Registry
     participant A as Artifact Store
